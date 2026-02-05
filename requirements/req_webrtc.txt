@@ -1,1 +1,7 @@
-django>=6.0.1
+flask
+flask-socketio
+eventlet
+flask-cors
+python-dotenv
+ruff
+flasgger
