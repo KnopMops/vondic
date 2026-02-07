@@ -59,27 +59,23 @@ export default function ProfilePage() {
 							</div>
 							<div className='flex-1 pb-2'>
 								<h1 className='text-2xl font-bold'>{user.username}</h1>
-								<p className='text-sm text-gray-400'>{user.email}</p>
+								{!user.email?.endsWith('@telegram.bot') && (
+									<p className='text-sm text-gray-400'>{user.email}</p>
+								)}
 								<p
 									className={`text-sm capitalize ${
-										user.role === 'admin'
+										user.role === 'Admin'
 											? 'text-red-500 font-bold'
 											: 'text-gray-400'
 									}`}
 								>
-									{user.role === 'admin' ? 'Администратор' : 'Пользователь'}
+									{user.role === 'Admin' ? 'Администратор' : 'Пользователь'}
 								</p>
 								{user.description && (
 									<p className='mt-2 text-sm text-gray-300'>
 										{user.description}
 									</p>
 								)}
-								<p className='mt-1 text-xs text-gray-500'>
-									Д/Р:{' '}
-									{user.birth_date
-										? new Date(user.birth_date).toLocaleDateString('ru-RU')
-										: 'Не указана'}
-								</p>
 							</div>
 						</div>
 

@@ -1,7 +1,7 @@
- 'use client'
+'use client'
 
 import { useAppSelector } from '@/lib/hooks'
-import React, { useState } from 'react'
+import { useState } from 'react'
 import BrandLogo from './BrandLogo'
 
 type Props = {
@@ -18,9 +18,6 @@ export default function Header({ email, onLogout }: Props) {
 			<div className='mx-auto flex max-w-7xl items-center justify-between'>
 				<div className='flex items-center gap-3'>
 					<BrandLogo size={28} />
-					<span className='text-xl font-bold text-gray-900 dark:text-white'>
-						Vondic
-					</span>
 				</div>
 
 				<div className='flex flex-1 justify-center px-4'>

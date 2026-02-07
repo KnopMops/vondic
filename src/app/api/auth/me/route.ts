@@ -16,11 +16,11 @@ export async function GET(req: NextRequest) {
 		console.log(`[API] Fetching user from ${backendUrl}/api/v1/auth/me`)
 
 		const response = await fetch(`${backendUrl}/api/v1/auth/me`, {
-			method: 'GET',
+			method: 'POST',
 			headers: {
-				Authorization: `Bearer ${accessToken}`,
 				'Content-Type': 'application/json',
 			},
+			body: JSON.stringify({ access_token: accessToken }),
 		})
 
 		console.log('[API] Backend response status:', response.status)
