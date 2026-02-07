@@ -14,6 +14,7 @@ interface User {
 interface AuthContextType {
 	user: User | null
 	login: (email: string, password: string) => Promise<void>
+	loginWithTelegram: (key: string) => Promise<void>
 	register: (email: string, username: string, password: string) => Promise<void>
 	logout: () => void
 	isLoading: boolean
@@ -57,6 +58,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			setUser(userData)
 			localStorage.setItem('user', JSON.stringify(userData))
 			// Токены теперь в httpOnly cookies, не сохраняем их в localStorage
+
+			router.push('/')
+		} catch (error) {
+			alert(error instanceof Error ? error.message : 'An error occurred')
+		} finally {
+			setIsLoading(false)
+		}
+	}
+
+	const loginWithTelegram = async (key: string) => {
+		setIsLoading(true)
+		try {
+			const response = await fetch('/api/auth/telegram', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ key }),
+			})
+
+			const data = await response.json()
+
+			if (!response.ok) {
+				throw new Error(data.error || 'Telegram login failed')
+			}
+
+			const userData = data.user
+			setUser(userData)
+			localStorage.setItem('user', JSON.stringify(userData))
 
 			router.push('/')
 		} catch (error) {
@@ -116,7 +144,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 	}
 
 	return (
-		<AuthContext.Provider value={{ user, login, register, logout, isLoading }}>
+		<AuthContext.Provider
+			value={{ user, login, loginWithTelegram, register, logout, isLoading }}
+		>
 			{children}
 		</AuthContext.Provider>
 	)
