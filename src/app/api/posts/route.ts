@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
 		const postsResponse = await fetch(`${BACKEND_URL}/api/v1/posts/`, {
 			method: 'GET',
 			headers,
+			cache: 'no-store',
 		})
 
 		if (!postsResponse.ok) {
@@ -58,7 +59,8 @@ export async function GET(req: NextRequest) {
 						...post,
 						author_name: author?.username || 'Unknown User',
 						author_avatar: author?.avatar_url || null,
-						// Ensure we keep original fields but mapped for frontend convenience if needed
+						is_liked: post.is_liked || post.liked || post.has_liked || false,
+						likes: post.likes || post.like_count || 0,
 					}
 				})
 			: []

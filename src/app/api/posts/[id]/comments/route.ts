@@ -9,13 +9,19 @@ export async function GET(
 	{ params }: { params: { id: string } },
 ) {
 	const { id } = await params
+	const accessToken = await getAccessToken(request)
 
 	try {
+		const headers: HeadersInit = {
+			'Content-Type': 'application/json',
+		}
+		if (accessToken) {
+			headers['Authorization'] = `Bearer ${accessToken}`
+		}
+
 		const res = await fetch(`${BACKEND_URL}/api/v1/posts/${id}/comments`, {
 			method: 'GET',
-			headers: {
-				'Content-Type': 'application/json',
-			},
+			headers,
 		})
 
 		if (res.ok) {
@@ -24,9 +30,7 @@ export async function GET(
 			// Fetch users to map author info
 			const usersResponse = await fetch(`${BACKEND_URL}/api/v1/users/`, {
 				method: 'GET',
-				headers: {
-					'Content-Type': 'application/json',
-				},
+				headers, // Use the same headers with token if available
 			})
 
 			let usersMap: Record<string, any> = {}
@@ -42,10 +46,12 @@ export async function GET(
 			// Merge data
 			const enrichedComments = Array.isArray(comments)
 				? comments.map((comment: any) => {
-						const author = usersMap[comment.user_id]
+						const userId =
+							comment.user_id || comment.posted_by || comment.author_id
+						const author = usersMap[userId]
 						return {
 							...comment,
-							author_name: author?.username || `User ${comment.user_id}`,
+							author_name: author?.username || `User ${userId || '?'}`,
 							author_avatar: author?.avatar_url || null,
 						}
 					})

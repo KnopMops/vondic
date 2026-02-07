@@ -11,15 +11,104 @@ type Comment = {
 	author_name?: string
 	author_avatar?: string
 	parent_id?: string
+	likes?: number
+	is_liked?: boolean
 }
 
-type Props = {
+interface CommentsModalProps {
 	postId: string | number
 	isOpen: boolean
 	onClose: () => void
 }
 
-export default function CommentsModal({ postId, isOpen, onClose }: Props) {
+function CommentItem({
+	comment,
+	onReply,
+	currentUserId,
+}: {
+	comment: Comment
+	onReply: (comment: Comment) => void
+	currentUserId?: string
+}) {
+	const [likeCount, setLikeCount] = useState(comment.likes || 0)
+	const [isLiked, setIsLiked] = useState(comment.is_liked || false)
+	const [isLiking, setIsLiking] = useState(false)
+
+	const handleLike = async () => {
+		if (isLiking || !currentUserId) return
+		setIsLiking(true)
+
+		const newIsLiked = !isLiked
+		const newCount = newIsLiked ? likeCount + 1 : likeCount - 1
+
+		setIsLiked(newIsLiked)
+		setLikeCount(newCount)
+
+		try {
+			const res = await fetch(`/api/comments/${comment.id}/like`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ action: newIsLiked ? 'like' : 'unlike' }),
+			})
+
+			if (!res.ok) {
+				setIsLiked(!newIsLiked)
+				setLikeCount(likeCount)
+			}
+		} catch (e) {
+			console.error(e)
+			setIsLiked(!newIsLiked)
+			setLikeCount(likeCount)
+		} finally {
+			setIsLiking(false)
+		}
+	}
+
+	return (
+		<div className='flex gap-3'>
+			<img
+				src={comment.author_avatar || '/placeholder-user.jpg'}
+				alt={comment.author_name || 'User'}
+				className='w-8 h-8 rounded-full object-cover'
+			/>
+			<div className='flex-1'>
+				<div className='bg-gray-100 dark:bg-gray-700 rounded-lg p-3'>
+					<div className='font-semibold text-sm text-gray-900 dark:text-white'>
+						{comment.author_name || 'User'}
+					</div>
+					<div className='text-sm text-gray-700 dark:text-gray-300 mt-1'>
+						{comment.content}
+					</div>
+				</div>
+				<div className='flex items-center gap-4 mt-1 ml-1 text-xs text-gray-500 dark:text-gray-400'>
+					<span>
+						{new Date(comment.created_at || Date.now()).toLocaleDateString()}
+					</span>
+					<button
+						onClick={handleLike}
+						disabled={isLiking}
+						className={`flex items-center gap-1 font-semibold hover:underline ${isLiked ? 'text-red-500' : ''}`}
+					>
+						{isLiked ? 'Не нравится' : 'Нравится'}
+						{likeCount > 0 && <span className='ml-1'>({likeCount})</span>}
+					</button>
+					<button
+						onClick={() => onReply(comment)}
+						className='font-semibold hover:underline'
+					>
+						Ответить
+					</button>
+				</div>
+			</div>
+		</div>
+	)
+}
+
+export default function CommentsModal({
+	postId,
+	isOpen,
+	onClose,
+}: CommentsModalProps) {
 	const { user } = useAppSelector(state => state.auth)
 	const [comments, setComments] = useState<Comment[]>([])
 	const [newComment, setNewComment] = useState('')
@@ -123,44 +212,12 @@ export default function CommentsModal({ postId, isOpen, onClose }: Props) {
 					) : (
 						<div className='space-y-4'>
 							{comments.map(comment => (
-								<div key={comment.id} className='flex gap-3'>
-									<div className='h-8 w-8 flex-shrink-0 overflow-hidden rounded-full bg-indigo-100 dark:bg-indigo-900'>
-										{comment.author_avatar ? (
-											<img
-												src={comment.author_avatar}
-												alt={comment.author_name}
-												className='h-full w-full object-cover'
-											/>
-										) : (
-											<div className='flex h-full w-full items-center justify-center text-xs font-bold text-indigo-600 dark:text-indigo-300'>
-												{comment.author_name?.[0]?.toUpperCase() || 'U'}
-											</div>
-										)}
-									</div>
-									<div className='flex-1'>
-										<div className='rounded-lg bg-gray-100 p-3 dark:bg-gray-700'>
-											<div className='mb-1 flex items-baseline justify-between'>
-												<span className='text-sm font-semibold text-gray-900 dark:text-white'>
-													{comment.author_name || `User ${comment.user_id}`}
-												</span>
-												{comment.created_at && (
-													<span className='text-xs text-gray-500 dark:text-gray-400'>
-														{new Date(comment.created_at).toLocaleDateString()}
-													</span>
-												)}
-											</div>
-											<p className='text-sm text-gray-700 dark:text-gray-200'>
-												{comment.content}
-											</p>
-										</div>
-										<button
-											onClick={() => setReplyTo(comment)}
-											className='mt-1 text-xs font-medium text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400'
-										>
-											Ответить
-										</button>
-									</div>
-								</div>
+								<CommentItem
+									key={comment.id}
+									comment={comment}
+									onReply={setReplyTo}
+									currentUserId={user?.id}
+								/>
 							))}
 						</div>
 					)}
