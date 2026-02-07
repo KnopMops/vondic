@@ -50,6 +50,15 @@ class AuthService:
             return (None, str(e))
 
     @staticmethod
+    def get_user_by_token(access_token):
+        user = User.query.filter_by(access_token=access_token).first()
+        if not user:
+            return None, "Invalid or expired token"
+        if user.is_blocked:
+            return None, "User is blocked"
+        return user, None
+
+    @staticmethod
     def get_yandex_auth_url():
         client_id = Config.YANDEX_CLIENT_ID
         redirect_uri = Config.YANDEX_REDIRECT_URI

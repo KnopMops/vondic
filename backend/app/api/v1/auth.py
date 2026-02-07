@@ -61,6 +61,33 @@ def login():
     )
 
 
+@auth_bp.route("/me", methods=["GET"])
+def me():
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return jsonify({"error": "Missing Authorization header"}), 401
+
+    if not auth_header.startswith("Bearer "):
+        return jsonify({"error": "Invalid Authorization header format"}), 401
+
+    token = auth_header.split(" ")[1]
+    user, error = AuthService.get_user_by_token(token)
+
+    if error:
+        return jsonify({"error": error, "is_authenticated": False}), 401
+
+    return (
+        jsonify(
+            {
+                "message": "User is authenticated",
+                "is_authenticated": True,
+                "user": user_schema.dump(user),
+            }
+        ),
+        200,
+    )
+
+
 @auth_bp.route("/yandex/login", methods=["GET"])
 def yandex_login():
     auth_url, error = AuthService.get_yandex_auth_url()
