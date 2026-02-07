@@ -23,3 +23,5 @@ uv.lock
 .ruff_cache/
 
 instance/
+
+api_docs.json

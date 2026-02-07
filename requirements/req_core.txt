@@ -10,3 +10,4 @@ werkzeug==3.0.3
 Flask-Mail==0.9.1
 bcrypt
 requests
+flasgger

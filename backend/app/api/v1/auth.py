@@ -7,6 +7,44 @@ auth_bp = Blueprint("auth", __name__, url_prefix="/api/v1/auth")
 
 @auth_bp.route("/register", methods=["POST"])
 def register():
+    """
+    Регистрация нового пользователя
+    ---
+    tags:
+      - Auth
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            username:
+              type: string
+              example: "johndoe"
+            email:
+              type: string
+              example: "john@example.com"
+            password:
+              type: string
+              example: "secret123"
+    responses:
+      201:
+        description: Пользователь успешно создан
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+            user:
+              type: object
+            access_token:
+              type: string
+            refresh_token:
+              type: string
+      400:
+        description: Ошибка валидации или пользователь уже существует
+    """
     data = request.get_json()
     if not data:
         return (jsonify({"error": "No data provided"}), 400)
@@ -36,6 +74,41 @@ def verify_email(token):
 
 @auth_bp.route("/login", methods=["POST"])
 def login():
+    """
+    Аутентификация пользователя
+    ---
+    tags:
+      - Auth
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            email:
+              type: string
+              example: "john@example.com"
+            password:
+              type: string
+              example: "secret123"
+    responses:
+      200:
+        description: Успешный вход
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+            access_token:
+              type: string
+            refresh_token:
+              type: string
+            user:
+              type: object
+      401:
+        description: Неверный email или пароль
+    """
     data = request.get_json()
     if not data:
         return (jsonify({"error": "No data provided"}), 400)
@@ -61,16 +134,46 @@ def login():
     )
 
 
-@auth_bp.route("/me", methods=["GET"])
+@auth_bp.route("/me", methods=["POST"])
 def me():
-    auth_header = request.headers.get("Authorization")
-    if not auth_header:
-        return jsonify({"error": "Missing Authorization header"}), 401
+    """
+    Получить текущего пользователя
+    ---
+    tags:
+      - Auth
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            access_token:
+              type: string
+              required: true
+    responses:
+      200:
+        description: Текущий пользователь
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+            is_authenticated:
+              type: boolean
+            user:
+              type: object
+      400:
+        description: Токен не передан
+      401:
+        description: Неверный токен
+    """
+    data = request.get_json() or {}
+    token = data.get("access_token")
 
-    if not auth_header.startswith("Bearer "):
-        return jsonify({"error": "Invalid Authorization header format"}), 401
+    if not token:
+        return jsonify({"error": "access_token is required"}), 400
 
-    token = auth_header.split(" ")[1]
     user, error = AuthService.get_user_by_token(token)
 
     if error:
@@ -121,6 +224,47 @@ def yandex_callback():
 
 @auth_bp.route("/telegram-login", methods=["POST"])
 def telegram_login():
+    """
+    Аутентификация через Telegram
+    ---
+    tags:
+      - Auth
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            id:
+              type: integer
+            first_name:
+              type: string
+            username:
+              type: string
+            photo_url:
+              type: string
+            auth_date:
+              type: integer
+            hash:
+              type: string
+    responses:
+      200:
+        description: Успешный вход
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+            access_token:
+              type: string
+            refresh_token:
+              type: string
+            user:
+              type: object
+      400:
+        description: Ошибка авторизации или неверная подпись
+    """
     data = request.get_json()
     if not data:
         return (jsonify({"error": "No data provided"}), 400)
