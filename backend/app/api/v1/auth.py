@@ -59,3 +59,24 @@ def login():
         ),
         200,
     )
+
+
+@auth_bp.route("/telegram-login", methods=["POST"])
+def telegram_login():
+    data = request.get_json()
+    if not data:
+        return (jsonify({"error": "No data provided"}), 400)
+    result, error = AuthService.login_telegram_user(data)
+    if error:
+        return (jsonify({"error": error}), 401)
+    return (
+        jsonify(
+            {
+                "message": "Login successful",
+                "access_token": result["access_token"],
+                "refresh_token": result["refresh_token"],
+                "user": user_schema.dump(result["user"]),
+            }
+        ),
+        200,
+    )

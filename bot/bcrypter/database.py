@@ -1,10 +1,11 @@
 import logging
 import os
+import secrets
 import sqlite3
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DEFAULT_DB_PATH = os.path.join(BASE_DIR, "database.db")
 
 
@@ -19,11 +20,11 @@ class AuthRepository:
         return conn
 
     def _init_db(self):
-        """Инициализация таблицы, если она не существует."""
+        """Инициализация таблицы, если она не существует. Используем схему совместимую с бэкендом."""
         conn = self._connect()
         cursor = conn.cursor()
         cursor.execute(
-            "\n        CREATE TABLE IF NOT EXISTS users (\n            id TEXT PRIMARY KEY,\n            username TEXT,\n            email TEXT,\n            password_hash TEXT NOT NULL,\n            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n        );\n        "
+            "\n            CREATE TABLE IF NOT EXISTS users (\n                id TEXT PRIMARY KEY,\n                username TEXT UNIQUE NOT NULL,\n                email TEXT UNIQUE NOT NULL,\n                access_token TEXT,\n                refresh_token TEXT,\n                password_hash TEXT NOT NULL,\n                avatar_url TEXT DEFAULT NULL,\n                is_verified INTEGER DEFAULT 0,\n                socket_id TEXT,\n                is_blocked INTEGER DEFAULT 0,\n                is_blocked_at TIMESTAMP DEFAULT NULL,\n                role TEXT DEFAULT 'User',\n                status TEXT DEFAULT 'offline',\n                is_messaging INTEGER DEFAULT 0,\n                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n            );\n            "
         )
         conn.commit()
         conn.close()
@@ -41,15 +42,24 @@ class AuthRepository:
         conn = self._connect()
         cursor = conn.cursor()
         email = f"{user_id}@telegram.bot"
+        access_token = secrets.token_hex(32)
+        refresh_token = secrets.token_hex(32)
         try:
             cursor.execute(
-                "\n                INSERT INTO users (id, username, email, password_hash, created_at)\n                VALUES (?, ?, ?, ?, ?)\n            ",
-                (user_id, username, email, password_hash, datetime.now().isoformat()),
+                "\n                INSERT INTO users (\n                    id, username, email, password_hash, is_verified, \n                    access_token, refresh_token, \n                    role, status, is_blocked, is_messaging, created_at\n                )\n                VALUES (?, ?, ?, ?, 1, ?, ?, 'User', 'offline', 0, 0, ?)\n                ",
+                (
+                    user_id,
+                    username,
+                    email,
+                    password_hash,
+                    access_token,
+                    refresh_token,
+                    datetime.now().isoformat(),
+                ),
             )
             conn.commit()
             return True
-        except sqlite3.IntegrityError as e:
-            logger.error(f"Ошибка БД (сохранение ключа): {e}")
+        except sqlite3.IntegrityError:
             return False
         finally:
             conn.close()
@@ -64,8 +74,7 @@ class AuthRepository:
             )
             conn.commit()
             return True
-        except sqlite3.Error as e:
-            logger.error(f"Ошибка БД (обновление ключа): {e}")
+        except sqlite3.Error:
             return False
         finally:
             conn.close()

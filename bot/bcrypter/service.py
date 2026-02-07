@@ -43,13 +43,11 @@ class BCrypter:
         Возвращает сгенерированный ключ или None в случае ошибки.
         """
         if self.repo.user_exists(user_id):
-            logger.warning(f"Пользователь {user_id} уже существует.")
             return None
         key = self._generate_random_key()
         hashed_key = self._hash_key(key)
         username = username or f"user_{user_id}"
         if self.repo.save_user_key(user_id, username, hashed_key):
-            logger.info(f"Пользователь {user_id} успешно зарегистрирован.")
             return key
         return None
 
@@ -59,12 +57,10 @@ class BCrypter:
         Возвращает новый ключ или None, если пользователь не найден.
         """
         if not self.repo.user_exists(user_id):
-            logger.warning(f"Пользователь {user_id} не найден.")
             return None
         key = self._generate_random_key()
         hashed_key = self._hash_key(key)
         if self.repo.update_user_key(user_id, hashed_key):
-            logger.info(f"Ключ для пользователя {user_id} обновлен.")
             return key
         return None
 

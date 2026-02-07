@@ -7,14 +7,14 @@ from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from bcrypter.service import BCrypter
 from dotenv import load_dotenv
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from bcrypter.service import BCrypter
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-load_dotenv()
+load_dotenv(".env.bot")
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 dp = Dispatcher()
 bcrypter = BCrypter()
@@ -101,4 +101,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        logger.info("Бот остановлен!")
+        pass
