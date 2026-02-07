@@ -301,9 +301,10 @@ def like_post(current_user):
     if not post_id:
         return jsonify({"error": "post_id is required"}), 400
 
-    post, error = PostService.like_post(post_id)
+    post, error = PostService.like_post(post_id, current_user.id)
     if error:
-        return jsonify({"error": error}), 404
+        status_code = 404 if error == "Post not found" else 400
+        return jsonify({"error": error}), status_code
     return jsonify(post_schema.dump(post)), 200
 
 
@@ -340,9 +341,10 @@ def unlike_post(current_user):
     if not post_id:
         return jsonify({"error": "post_id is required"}), 400
 
-    post, error = PostService.unlike_post(post_id)
+    post, error = PostService.unlike_post(post_id, current_user.id)
     if error:
-        return jsonify({"error": error}), 404
+        status_code = 404 if error == "Post not found" else 400
+        return jsonify({"error": error}), status_code
     return jsonify(post_schema.dump(post)), 200
 
 

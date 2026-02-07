@@ -198,9 +198,10 @@ def like_comment(current_user):
     if not comment_id:
         return jsonify({"error": "comment_id is required"}), 400
 
-    comment, error = CommentService.like_comment(comment_id)
+    comment, error = CommentService.like_comment(comment_id, current_user.id)
     if error:
-        return jsonify({"error": error}), 404
+        status_code = 404 if error == "Comment not found" else 400
+        return jsonify({"error": error}), status_code
     return jsonify(comment_schema.dump(comment)), 200
 
 
@@ -237,7 +238,8 @@ def unlike_comment(current_user):
     if not comment_id:
         return jsonify({"error": "comment_id is required"}), 400
 
-    comment, error = CommentService.unlike_comment(comment_id)
+    comment, error = CommentService.unlike_comment(comment_id, current_user.id)
     if error:
-        return jsonify({"error": error}), 404
+        status_code = 404 if error == "Comment not found" else 400
+        return jsonify({"error": error}), status_code
     return jsonify(comment_schema.dump(comment)), 200

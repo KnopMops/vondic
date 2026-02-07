@@ -2,6 +2,7 @@ from datetime import datetime
 
 from app.core.extensions import db
 from app.models.comment import Comment
+from app.models.like import Like
 from app.models.post import Post
 
 
@@ -93,12 +94,21 @@ class CommentService:
             return None, str(e)
 
     @staticmethod
-    def like_comment(comment_id):
+    def like_comment(comment_id, user_id):
         comment = Comment.query.filter_by(id=comment_id, deleted=False).first()
         if not comment:
             return None, "Comment not found"
+
+        existing_like = Like.query.filter_by(
+            user_id=user_id, comment_id=comment_id).first()
+        if existing_like:
+            return None, "Already liked"
+
+        new_like = Like(user_id=user_id, comment_id=comment_id)
         comment.likes += 1
+
         try:
+            db.session.add(new_like)
             db.session.commit()
             return comment, None
         except Exception as e:
@@ -106,13 +116,21 @@ class CommentService:
             return None, str(e)
 
     @staticmethod
-    def unlike_comment(comment_id):
+    def unlike_comment(comment_id, user_id):
         comment = Comment.query.filter_by(id=comment_id, deleted=False).first()
         if not comment:
             return None, "Comment not found"
+
+        existing_like = Like.query.filter_by(
+            user_id=user_id, comment_id=comment_id).first()
+        if not existing_like:
+            return None, "Not liked"
+
         if comment.likes > 0:
             comment.likes -= 1
+
         try:
+            db.session.delete(existing_like)
             db.session.commit()
             return comment, None
         except Exception as e:
