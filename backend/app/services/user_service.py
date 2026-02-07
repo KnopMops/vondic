@@ -37,12 +37,10 @@ class UserService:
         user = User.query.get(user_id)
         if not user:
             return None
-
         if "username" in data:
             user.username = data["username"]
         if "is_blocked" in data:
             user.is_blocked = int(data["is_blocked"])
-
         try:
             db.session.commit()
             return user

@@ -1,10 +1,9 @@
-import sqlite3
 import logging
 import os
+import sqlite3
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
-
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_DB_PATH = os.path.join(BASE_DIR, "database.db")
 
@@ -23,18 +22,9 @@ class AuthRepository:
         """Инициализация таблицы, если она не существует."""
         conn = self._connect()
         cursor = conn.cursor()
-        # Создаем таблицу users, если её нет. 
-        # Мы включаем основные поля, необходимые для работы системы.
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id TEXT PRIMARY KEY,
-            username TEXT,
-            email TEXT,
-            password_hash TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        """)
+        cursor.execute(
+            "\n        CREATE TABLE IF NOT EXISTS users (\n            id TEXT PRIMARY KEY,\n            username TEXT,\n            email TEXT,\n            password_hash TEXT NOT NULL,\n            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n        );\n        "
+        )
         conn.commit()
         conn.close()
 
@@ -50,14 +40,12 @@ class AuthRepository:
     def save_user_key(self, user_id: str, username: str, password_hash: str) -> bool:
         conn = self._connect()
         cursor = conn.cursor()
-        email = f"{user_id}@telegram.bot"  # Заглушка, если email обязателен
+        email = f"{user_id}@telegram.bot"
         try:
-            # Проверяем, существует ли пользователь, чтобы решить INSERT или UPDATE (для надежности)
-            # Но по ТЗ регистрация - это INSERT. Если юзер есть - ошибка (обрабатывается выше).
-            cursor.execute("""
-                INSERT INTO users (id, username, email, password_hash, created_at)
-                VALUES (?, ?, ?, ?, ?)
-            """, (user_id, username, email, password_hash, datetime.now().isoformat()))
+            cursor.execute(
+                "\n                INSERT INTO users (id, username, email, password_hash, created_at)\n                VALUES (?, ?, ?, ?, ?)\n            ",
+                (user_id, username, email, password_hash, datetime.now().isoformat()),
+            )
             conn.commit()
             return True
         except sqlite3.IntegrityError as e:
@@ -70,11 +58,10 @@ class AuthRepository:
         conn = self._connect()
         cursor = conn.cursor()
         try:
-            cursor.execute("""
-                UPDATE users
-                SET password_hash = ?, updated_at = ?
-                WHERE id = ?
-            """, (password_hash, datetime.now().isoformat(), user_id))
+            cursor.execute(
+                "\n                UPDATE users\n                SET password_hash = ?, updated_at = ?\n                WHERE id = ?\n            ",
+                (password_hash, datetime.now().isoformat(), user_id),
+            )
             conn.commit()
             return True
         except sqlite3.Error as e:

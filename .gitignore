@@ -12,9 +12,11 @@ __pycache__/
 *.pyzwzw
 *.pyzwzwz
 
-database.db
+*.db
 
 uv.lock
 
 .env.webrtc
 .env.backend
+
+.ruff_cache/

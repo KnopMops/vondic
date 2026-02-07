@@ -24,14 +24,7 @@ class EmailService:
     @staticmethod
     def send_verification_email(to_email, token):
         verify_url = url_for("auth.verify_email", token=token, _external=True)
-        html = f"""
-        <p>Добро пожаловать!</p>
-        <p>Пожалуйста, подтвердите вашу почту, перейдя по ссылке:</p>
-        <p><a href="{verify_url}">{verify_url}</a></p>
-        <br>
-        <p>Если вы не регистрировались, проигнорируйте это письмо.</p>
-        """
-
+        html = f'\n        <p>Добро пожаловать!</p>\n        <p>Пожалуйста, подтвердите вашу почту, перейдя по ссылке:</p>\n        <p><a href="{verify_url}">{verify_url}</a></p>\n        <br>\n        <p>Если вы не регистрировались, проигнорируйте это письмо.</p>\n        '
         msg = Message(
             subject="Подтверждение регистрации Vondic", recipients=[to_email], html=html
         )
@@ -39,6 +32,5 @@ class EmailService:
             mail.send(msg)
             return True
         except Exception as e:
-            # В продакшене лучше логировать ошибку
             print(f"Error sending email: {e}")
             return False

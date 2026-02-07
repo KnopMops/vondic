@@ -5,12 +5,24 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "aiogram>=3.24.0",
+    "bcrypt>=5.0.0",
     "django>=6.0.1",
+    "email-validator==2.1.1",
     "eventlet>=0.40.4",
-    "flask>=3.1.2",
-    "flask-cors>=6.0.2",
+    "flasgger>=0.9.7.1",
+    "flask==3.0.3",
+    "flask-cors==4.0.1",
+    "flask-mail==0.9.1",
+    "flask-marshmallow==1.2.1",
+    "flask-migrate==4.0.7",
     "flask-socketio>=5.6.0",
-    "python-dotenv>=1.2.1",
+    "flask-sqlalchemy==3.1.1",
+    "marshmallow<4.0.0",
+    "marshmallow-sqlalchemy==1.0.0",
+    "python-dotenv==1.0.1",
+    "ruff>=0.15.0",
+    "werkzeug==3.0.3",
 ]
 
 [tool.ruff]

@@ -13,19 +13,15 @@ class ConnectionBroker:
 
     def register_session(self, token, socket_id):
         user_data = self.repo.fetch_user_by_token(token)
-
         if not user_data:
             logger.warning(
                 f"Брокер: Ошибка аутентификации для токена {token} (Пользователь не найден)"
             )
             raise ConnectionRefusedError("401 Unauthorized: Пользователь не найден")
-
         if user_data.get("is_blocked"):
             logger.warning(f"Брокер: Пользователь {user_data['username']} заблокирован")
             raise ConnectionRefusedError("401 Unauthorized: Пользователь заблокирован")
-
         self.repo.bind_socket(user_data["id"], socket_id)
-
         role = user_data.get("role", "User")
         logger.info(
             f"Брокер: Пользователь {user_data['username']} ({role}) зарегистрирован с сокетом {socket_id}"
@@ -40,7 +36,6 @@ class ConnectionBroker:
         recipient = self.repo.find_user_by_socket(target_socket_id)
         if recipient:
             return recipient
-
         logger.warning(
             f"Брокер: Целевой сокет {target_socket_id} не найден или неактивен"
         )
