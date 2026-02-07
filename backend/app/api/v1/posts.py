@@ -77,8 +77,6 @@ def create_post(current_user):
     ---
     tags:
       - Posts
-    security:
-      - Bearer: []
     parameters:
       - name: body
         in: body
@@ -86,6 +84,9 @@ def create_post(current_user):
         schema:
           type: object
           properties:
+            access_token:
+              type: string
+              required: true
             title:
               type: string
             content:
@@ -115,8 +116,6 @@ def update_post(current_user):
     ---
     tags:
       - Posts
-    security:
-      - Bearer: []
     parameters:
       - name: body
         in: body
@@ -124,6 +123,9 @@ def update_post(current_user):
         schema:
           type: object
           properties:
+            access_token:
+              type: string
+              required: true
             post_id:
               type: string
               required: true
@@ -164,8 +166,6 @@ def delete_post(current_user):
     ---
     tags:
       - Posts
-    security:
-      - Bearer: []
     parameters:
       - name: body
         in: body
@@ -173,6 +173,9 @@ def delete_post(current_user):
         schema:
           type: object
           properties:
+            access_token:
+              type: string
+              required: true
             post_id:
               type: string
               required: true

@@ -75,8 +75,6 @@ def update_user(current_user):
     ---
     tags:
       - Users
-    security:
-      - Bearer: []
     parameters:
       - name: body
         in: body
@@ -84,6 +82,9 @@ def update_user(current_user):
         schema:
           type: object
           properties:
+            access_token:
+              type: string
+              required: true
             user_id:
               type: string
               required: true

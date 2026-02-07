@@ -7,14 +7,14 @@ from flask import jsonify, request
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        auth_header = request.headers.get("Authorization")
-        if not auth_header:
-            return jsonify({"error": "Missing Authorization header"}), 401
+        data = request.get_json(silent=True)
+        if data is None:
+            return jsonify({"error": "Request body must be JSON"}), 400
 
-        if not auth_header.startswith("Bearer "):
-            return jsonify({"error": "Invalid Authorization header format"}), 401
+        token = data.get("access_token")
+        if not token:
+            return jsonify({"error": "access_token is missing in body"}), 401
 
-        token = auth_header.split(" ")[1]
         user, error = AuthService.get_user_by_token(token)
 
         if error:

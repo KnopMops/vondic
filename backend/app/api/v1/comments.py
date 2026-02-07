@@ -14,8 +14,6 @@ def update_comment(current_user):
     ---
     tags:
       - Comments
-    security:
-      - Bearer: []
     parameters:
       - name: body
         in: body
@@ -23,6 +21,9 @@ def update_comment(current_user):
         schema:
           type: object
           properties:
+            access_token:
+              type: string
+              required: true
             comment_id:
               type: string
               required: true
