@@ -4,7 +4,7 @@ import { setTokens } from "@/lib/auth.utils";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:5050";
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5050";
 
     const response = await fetch(`${backendUrl}/api/v1/auth/register`, {
       method: "POST",

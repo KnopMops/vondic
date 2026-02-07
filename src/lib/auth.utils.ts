@@ -98,7 +98,7 @@ export async function refreshAccessToken(
 ): Promise<{ access_token: string; refresh_token: string } | null> {
 	try {
 		const backendUrl =
-			process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:5050'
+			process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
 		const response = await fetch(`${backendUrl}/api/v1/auth/refresh`, {
 			method: 'POST',
 			headers: {

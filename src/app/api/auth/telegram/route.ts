@@ -6,7 +6,7 @@ export async function POST(req: NextRequest) {
 		const body = await req.json()
 		let { key } = body
 		const backendUrl =
-			process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:5050'
+			process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
 
 		let payload = body
 
