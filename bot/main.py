@@ -27,9 +27,11 @@ async def cmd_start(message: types.Message):
     Отправляет приветственное сообщение с инлайн-кнопками.
     """
     builder = InlineKeyboardBuilder()
-    builder.add(InlineKeyboardButton(text="Регистрация", callback_data="register"))
+    builder.add(InlineKeyboardButton(
+        text="Регистрация", callback_data="register"))
     builder.add(
-        InlineKeyboardButton(text="Войти / Восстановить ключ", callback_data="restore")
+        InlineKeyboardButton(
+            text="Войти / Восстановить ключ", callback_data="restore")
     )
     builder.adjust(1)
     await message.answer(
@@ -53,7 +55,7 @@ async def register_user(callback: types.CallbackQuery):
     key = bcrypter.register_user(user_id, username)
     if key:
         await callback.message.answer(
-            f"✅ Вы успешно зарегистрированы!\n\n🔑 Ваш секретный ключ:\n`{key}`\n\n⚠️ Сохраните его, он показывается только один раз!\nИспользуйте этот ключ для авторизации на сайте.",
+            f"✅ Вы успешно зарегистрированы!\n\n🔑 Ваш секретный ключ:\n`{user_id}:{key}`\n\n⚠️ Сохраните его, он показывается только один раз!\nИспользуйте этот ключ для авторизации на сайте.",
             parse_mode="Markdown",
         )
     else:
@@ -78,7 +80,7 @@ async def restore_key(callback: types.CallbackQuery):
     key = bcrypter.rotate_key(user_id)
     if key:
         await callback.message.answer(
-            f"🔄 Ваш ключ был обновлен!\n\n🔑 Новый секретный ключ:\n`{key}`\n\n⚠️ Старый ключ больше недействителен.",
+            f"🔄 Ваш ключ был обновлен!\n\n🔑 Новый секретный ключ:\n`{user_id}:{key}`\n\n⚠️ Старый ключ больше недействителен.",
             parse_mode="Markdown",
         )
     else:
