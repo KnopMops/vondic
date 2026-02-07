@@ -19,7 +19,8 @@ class UserRepository:
         conn = self._connect()
         cursor = conn.cursor()
         try:
-            cursor.execute("SELECT * FROM users WHERE access_token = ?", (token,))
+            cursor.execute(
+                "SELECT * FROM users WHERE access_token = ?", (token,))
             row = cursor.fetchone()
             return dict(row) if row else None
         except sqlite3.Error as err:
@@ -33,10 +34,12 @@ class UserRepository:
         cursor = conn.cursor()
         try:
             cursor.execute(
-                "UPDATE users SET socket_id = ? WHERE id = ?", (socket_id, user_id)
+                "UPDATE users SET socket_id = ? WHERE id = ?", (
+                    socket_id, user_id)
             )
             conn.commit()
-            logger.info(f"Привязан socket_id для пользователя {user_id} -> {socket_id}")
+            logger.info(
+                f"Привязан socket_id для пользователя {user_id} -> {socket_id}")
         except sqlite3.Error as err:
             logger.error(f"Ошибка БД (привязка сокета): {err}")
         finally:
@@ -47,7 +50,8 @@ class UserRepository:
         cursor = conn.cursor()
         try:
             cursor.execute(
-                "UPDATE users SET socket_id = NULL WHERE socket_id = ?", (socket_id,)
+                "UPDATE users SET socket_id = NULL WHERE socket_id = ?", (
+                    socket_id,)
             )
             conn.commit()
             if cursor.rowcount > 0:
@@ -61,7 +65,8 @@ class UserRepository:
         conn = self._connect()
         cursor = conn.cursor()
         try:
-            cursor.execute("SELECT * FROM users WHERE socket_id = ?", (socket_id,))
+            cursor.execute(
+                "SELECT * FROM users WHERE socket_id = ?", (socket_id,))
             row = cursor.fetchone()
             return dict(row) if row else None
         except sqlite3.Error as err:
@@ -74,11 +79,38 @@ class UserRepository:
         conn = self._connect()
         cursor = conn.cursor()
         try:
-            cursor.execute("SELECT socket_id FROM users WHERE id = ?", (user_id,))
+            cursor.execute(
+                "SELECT socket_id FROM users WHERE id = ?", (user_id,))
             row = cursor.fetchone()
             return row["socket_id"] if row else None
         except sqlite3.Error as err:
             logger.error(f"Ошибка БД (поиск сокета по ID): {err}")
+            return None
+        finally:
+            conn.close()
+
+    def set_user_online(self, user_id, socket_id):
+        conn = self._connect()
+        cursor = conn.cursor()
+        try:
+            # Сначала проверяем существование пользователя
+            cursor.execute("SELECT id FROM users WHERE id = ?", (user_id,))
+            if not cursor.fetchone():
+                return None
+
+            # Обновляем статус и socket_id
+            cursor.execute(
+                "UPDATE users SET socket_id = ?, status = 'online' WHERE id = ?",
+                (socket_id, user_id),
+            )
+            conn.commit()
+
+            # Получаем обновленные данные пользователя
+            cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+        except sqlite3.Error as err:
+            logger.error(f"Ошибка БД (установка онлайн статуса): {err}")
             return None
         finally:
             conn.close()

@@ -2,7 +2,7 @@ import logging
 
 import eventlet
 from flasgger import Swagger
-from flask import Flask
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 from flask_socketio import SocketIO
 
@@ -97,6 +97,66 @@ def create_app():
         if socket_id:
             return ({"socket_id": socket_id}, 200)
         return ({"error": "User not found or offline"}, 404)
+
+    @app.route("/set_socket_id", methods=["POST"])
+    def set_socket_id():
+        """
+        Принудительное назначение socket_id пользователю и перевод в онлайн
+        ---
+        tags:
+          - Users
+        parameters:
+          - name: body
+            in: body
+            required: true
+            schema:
+              type: object
+              required:
+                - user_id
+                - socket_id
+              properties:
+                user_id:
+                  type: string
+                  description: ID пользователя (UUID)
+                socket_id:
+                  type: string
+                  description: Socket ID для привязки
+        responses:
+          200:
+            description: Пользователь успешно обновлен
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                user:
+                  type: object
+          400:
+            description: Некорректные данные
+          404:
+            description: Пользователь не найден
+        """
+        data = request.get_json()
+        if not data:
+            return (jsonify({"error": "No data provided"}), 400)
+
+        user_id = data.get("user_id")
+        socket_id = data.get("socket_id")
+
+        if not user_id or not socket_id:
+            return (jsonify({"error": "Missing user_id or socket_id"}), 400)
+
+        updated_user = user_repo.set_user_online(user_id, socket_id)
+
+        if updated_user:
+            return (
+                jsonify(
+                    {"message": "User socket updated successfully",
+                        "user": updated_user}
+                ),
+                200,
+            )
+        return (jsonify({"error": "User not found or database error"}), 404)
 
     return (app, socketio)
 
