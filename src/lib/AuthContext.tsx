@@ -1,7 +1,13 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import React, { createContext, useContext, useEffect } from 'react'
+import {
+	fetchUser,
+	logout as logoutAction,
+	setUser,
+} from './features/authSlice'
+import { useAppDispatch, useAppSelector } from './hooks'
 
 interface User {
 	id: string
@@ -9,6 +15,9 @@ interface User {
 	username: string
 	role: string
 	avatar_url: string | null
+	description?: string
+	birth_date?: string
+	socket_id?: string | null
 }
 
 interface AuthContextType {
@@ -24,8 +33,8 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-	const [user, setUser] = useState<User | null>(null)
-	const [isLoading, setIsLoading] = useState(true)
+	const dispatch = useAppDispatch()
+	const { user, isLoading, isInitialized } = useAppSelector(state => state.auth)
 	const router = useRouter()
 
 	const backendUrl =
@@ -33,6 +42,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 	useEffect(() => {
 		const initAuth = async () => {
+			if (isInitialized) return
+
 			// 1. Пробуем восстановить из временной cookie (от social auth)
 			const getCookie = (name: string) => {
 				const value = `; ${document.cookie}`
@@ -44,61 +55,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			if (tempUserData) {
 				try {
 					const userData = JSON.parse(decodeURIComponent(tempUserData))
-					setUser(userData)
+					dispatch(setUser(userData))
 					localStorage.setItem('user', JSON.stringify(userData))
 					// Удаляем cookie
 					document.cookie =
 						'temp_user_data=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;'
-					setIsLoading(false)
-					return // Если восстановили из cookie, запрос к me можно пропустить (или сделать фоном)
+					return
 				} catch (e) {
 					console.error('Failed to parse temp_user_data', e)
 				}
 			}
 
 			// 2. Сначала пробуем восстановить из localStorage для быстрого отображения
+			// (Можно добавить setUser здесь, но fetchUser перепишет его если что)
 			const storedUser = localStorage.getItem('user')
-			if (storedUser) {
-				setUser(JSON.parse(storedUser))
+			if (storedUser && !user) {
+				dispatch(setUser(JSON.parse(storedUser)))
 			}
 
-			// 3. Затем пробуем получить актуального пользователя с сервера (по cookies)
-			try {
-				console.log('AuthContext: Fetching /api/auth/me...')
-				const response = await fetch('/api/auth/me')
-				console.log('AuthContext: /api/auth/me status:', response.status)
-
-				if (response.ok) {
-					const data = await response.json()
-					console.log('AuthContext: /api/auth/me data:', data)
-					if (data.user) {
-						setUser(data.user)
-						localStorage.setItem('user', JSON.stringify(data.user))
-					} else {
-						// Если сервер говорит, что мы не авторизованы, но в localStorage что-то есть - чистим
-						// (хотя это спорный момент, может быть оффлайн, но для безопасности лучше почистить)
-						// В данном случае, если API вернул 200 но без юзера, или 401 (который мы тут не поймали в response.ok если статус не 2xx)
-					}
-				} else {
-					// Если 401 - значит токен протух или его нет
-					if (response.status === 401) {
-						console.log('AuthContext: 401 Unauthorized, clearing user')
-						localStorage.removeItem('user')
-						setUser(null)
-					}
-				}
-			} catch (error) {
-				console.error('Failed to fetch user:', error)
-			} finally {
-				setIsLoading(false)
-			}
+			// 3. Загружаем пользователя с сервера через Redux Thunk
+			dispatch(fetchUser())
 		}
 
 		initAuth()
-	}, [])
+	}, [dispatch, isInitialized, user])
 
 	const login = async (email: string, password: string) => {
-		setIsLoading(true)
 		try {
 			// Запрос к нашему API Proxy (который установит cookies)
 			const response = await fetch('/api/auth/login', {
@@ -114,20 +96,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			}
 
 			const userData = data.user
-			setUser(userData)
+			dispatch(setUser(userData))
 			localStorage.setItem('user', JSON.stringify(userData))
 			// Токены теперь в httpOnly cookies, не сохраняем их в localStorage
 
 			router.push('/')
 		} catch (error) {
 			alert(error instanceof Error ? error.message : 'An error occurred')
-		} finally {
-			setIsLoading(false)
 		}
 	}
 
 	const loginWithTelegram = async (key: string) => {
-		setIsLoading(true)
 		try {
 			const response = await fetch('/api/auth/telegram', {
 				method: 'POST',
@@ -142,19 +121,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			}
 
 			const userData = data.user
-			setUser(userData)
+			dispatch(setUser(userData))
 			localStorage.setItem('user', JSON.stringify(userData))
 
 			router.push('/')
 		} catch (error) {
 			alert(error instanceof Error ? error.message : 'An error occurred')
-		} finally {
-			setIsLoading(false)
 		}
 	}
 
 	const loginWithYandex = async () => {
-		setIsLoading(true)
 		try {
 			const response = await fetch('/api/auth/yandex/login', {
 				method: 'POST',
@@ -174,7 +150,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			}
 		} catch (error) {
 			alert(error instanceof Error ? error.message : 'An error occurred')
-			setIsLoading(false)
 		}
 	}
 
@@ -183,7 +158,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		username: string,
 		password: string,
 	) => {
-		setIsLoading(true)
 		try {
 			// Запрос к нашему API Proxy
 			const response = await fetch('/api/auth/register', {
@@ -200,7 +174,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 			// Если бэкенд возвращает пользователя и токены сразу
 			if (data.user) {
-				setUser(data.user)
+				dispatch(setUser(data.user))
 				localStorage.setItem('user', JSON.stringify(data.user))
 			}
 
@@ -208,8 +182,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			router.push('/verify')
 		} catch (error) {
 			alert(error instanceof Error ? error.message : 'An error occurred')
-		} finally {
-			setIsLoading(false)
 		}
 	}
 
@@ -219,7 +191,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		} catch (e) {
 			console.error(e)
 		}
-		setUser(null)
+		dispatch(logoutAction())
 		localStorage.removeItem('user')
 		// Удаляем токены из localStorage на всякий случай, если они там были
 		localStorage.removeItem('access_token')

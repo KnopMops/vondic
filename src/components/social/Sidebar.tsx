@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import BrandLogo from './BrandLogo'
 import { sidebarItems } from './sidebar.items'
+import Link from 'next/link'
 
 export default function Sidebar() {
 	const [isExpanded, setIsExpanded] = useState(false)
@@ -50,22 +51,45 @@ export default function Sidebar() {
 
 				{/* Menu Items */}
 				<nav className='flex w-full flex-col gap-2'>
-					{sidebarItems.map(i => (
-						<button
-							key={i.label}
-							className={`flex items-center gap-4 rounded-lg px-2 py-2 text-gray-300 hover:bg-gray-800 hover:text-white ${
-								!isExpanded ? 'justify-center' : ''
-							}`}
-							title={!isExpanded ? i.label : ''}
-						>
-							<span className='text-xl'>{i.icon}</span>
-							{isExpanded && (
-								<span className='text-sm font-medium whitespace-nowrap overflow-hidden'>
-									{i.label}
-								</span>
-							)}
-						</button>
-					))}
+					{sidebarItems.map(i => {
+						const content = (
+							<>
+								<span className='text-xl'>{i.icon}</span>
+								{isExpanded && (
+									<span className='text-sm font-medium whitespace-nowrap overflow-hidden'>
+										{i.label}
+									</span>
+								)}
+							</>
+						)
+
+						const className = `flex items-center gap-4 rounded-lg px-2 py-2 text-gray-300 hover:bg-gray-800 hover:text-white ${
+							!isExpanded ? 'justify-center' : ''
+						}`
+
+						if (i.href) {
+							return (
+								<Link
+									key={i.label}
+									href={i.href}
+									className={className}
+									title={!isExpanded ? i.label : ''}
+								>
+									{content}
+								</Link>
+							)
+						}
+
+						return (
+							<button
+								key={i.label}
+								className={className}
+								title={!isExpanded ? i.label : ''}
+							>
+								{content}
+							</button>
+						)
+					})}
 				</nav>
 			</div>
 		</aside>

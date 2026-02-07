@@ -2,10 +2,52 @@
 
 import SocialFeed from '@/components/social/SocialFeed'
 import { useAuth } from '@/lib/AuthContext'
+import { setUser } from '@/lib/features/authSlice'
+import { useAppDispatch } from '@/lib/hooks'
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
 
 export default function FeedPage() {
-	const { user, logout, isLoading } = useAuth()
+	const { user, logout, isLoading: isAuthLoading } = useAuth()
+	const dispatch = useAppDispatch()
+	const [isSocketLoading, setIsSocketLoading] = useState(false)
+
+	useEffect(() => {
+		if (user && !user.socket_id && !isSocketLoading) {
+			const fetchSocketId = async () => {
+				setIsSocketLoading(true)
+				try {
+					const webrtcUrl = process.env.NEXT_PUBLIC_WEBRTC_URL
+					if (webrtcUrl) {
+						const socketId = crypto.randomUUID()
+						const res = await fetch(`${webrtcUrl}/set_socket_id`, {
+							method: 'POST',
+							headers: {
+								'Content-Type': 'application/json',
+							},
+							body: JSON.stringify({
+								socket_id: socketId,
+								user_id: user.id,
+							}),
+						})
+						if (res.ok) {
+							const updatedUser = await res.json()
+							dispatch(setUser(updatedUser))
+							localStorage.setItem('user', JSON.stringify(updatedUser))
+						}
+					}
+				} catch (e) {
+					console.error('Failed to fetch socket_id', e)
+				} finally {
+					setIsSocketLoading(false)
+				}
+			}
+			fetchSocketId()
+		}
+	}, [user, dispatch, isSocketLoading])
+
+	// Блокируем отображение, пока загружается авторизация или (если пользователь есть) пока нет socket_id
+	const isLoading = isAuthLoading || (!!user && !user.socket_id)
 
 	if (isLoading) {
 		return (
