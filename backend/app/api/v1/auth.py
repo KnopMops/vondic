@@ -61,6 +61,37 @@ def login():
     )
 
 
+@auth_bp.route("/yandex/login", methods=["GET"])
+def yandex_login():
+    auth_url, error = AuthService.get_yandex_auth_url()
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({"auth_url": auth_url}), 200
+
+
+@auth_bp.route("/yandex/callback", methods=["GET"])
+def yandex_callback():
+    code = request.args.get("code")
+    if not code:
+        return jsonify({"error": "No code provided"}), 400
+
+    result, error = AuthService.login_yandex_user(code)
+    if error:
+        return jsonify({"error": error}), 400
+
+    return (
+        jsonify(
+            {
+                "message": "Login successful",
+                "access_token": result["access_token"],
+                "refresh_token": result["refresh_token"],
+                "user": user_schema.dump(result["user"]),
+            }
+        ),
+        200,
+    )
+
+
 @auth_bp.route("/telegram-login", methods=["POST"])
 def telegram_login():
     data = request.get_json()

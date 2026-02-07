@@ -1,6 +1,7 @@
 import os
 import secrets
 import sys
+import requests
 
 from app.core.config import Config
 from app.core.extensions import db
@@ -47,6 +48,98 @@ class AuthService:
         except Exception as e:
             db.session.rollback()
             return (None, str(e))
+
+    @staticmethod
+    def get_yandex_auth_url():
+        client_id = Config.YANDEX_CLIENT_ID
+        redirect_uri = Config.YANDEX_REDIRECT_URI
+        if not client_id or not redirect_uri:
+            return None, "Yandex OAuth not configured"
+        return (
+            f"https://oauth.yandex.ru/authorize?response_type=code&client_id={client_id}&redirect_uri={redirect_uri}",
+            None,
+        )
+
+    @staticmethod
+    def login_yandex_user(code):
+        client_id = Config.YANDEX_CLIENT_ID
+        client_secret = Config.YANDEX_CLIENT_SECRET
+        redirect_uri = Config.YANDEX_REDIRECT_URI
+
+        if not client_id or not client_secret:
+            return None, "Yandex OAuth not configured"
+
+        # Exchange code for token
+        token_url = "https://oauth.yandex.ru/token"
+        data = {
+            "grant_type": "authorization_code",
+            "code": code,
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "redirect_uri": redirect_uri,
+        }
+
+        try:
+            response = requests.post(token_url, data=data)
+            response.raise_for_status()
+            token_data = response.json()
+            access_token_yandex = token_data.get("access_token")
+        except Exception as e:
+            return None, f"Failed to get token: {str(e)}"
+
+        # Get user info
+        info_url = "https://login.yandex.ru/info"
+        headers = {"Authorization": f"OAuth {access_token_yandex}"}
+
+        try:
+            info_response = requests.get(info_url, headers=headers)
+            info_response.raise_for_status()
+            user_info = info_response.json()
+        except Exception as e:
+            return None, f"Failed to get user info: {str(e)}"
+
+        yandex_id = user_info.get("id")
+        email = user_info.get("default_email") or f"{yandex_id}@yandex.oauth"
+        username = user_info.get("login") or f"yandex_{yandex_id}"
+        avatar_id = user_info.get("default_avatar_id")
+        avatar_url = (
+            f"https://avatars.yandex.net/get-yapic/{avatar_id}/islands-200"
+            if avatar_id and not user_info.get("is_avatar_empty")
+            else None
+        )
+
+        user = User.query.filter_by(email=email).first()
+        if not user:
+            if User.query.filter_by(username=username).first():
+                username = f"{username}_{secrets.token_hex(4)}"
+
+            user = User(email=email, username=username, is_verified=1)
+            user.set_password(secrets.token_hex(16))
+            user.access_token = secrets.token_hex(32)
+            user.refresh_token = secrets.token_hex(32)
+            user.avatar_url = avatar_url
+            db.session.add(user)
+        else:
+            if user.is_blocked:
+                return None, "User is blocked"
+            user.access_token = secrets.token_hex(32)
+            user.refresh_token = secrets.token_hex(32)
+            if avatar_url:
+                user.avatar_url = avatar_url
+
+        try:
+            db.session.commit()
+            return (
+                {
+                    "user": user,
+                    "access_token": user.access_token,
+                    "refresh_token": user.refresh_token,
+                },
+                None,
+            )
+        except Exception as e:
+            db.session.rollback()
+            return None, str(e)
 
     @staticmethod
     def verify_email(token):

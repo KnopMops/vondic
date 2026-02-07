@@ -37,7 +37,7 @@ class BCrypter:
             return False
         return bcrypt.checkpw(key.encode("utf-8"), hashed_key.encode("utf-8"))
 
-    def register_user(self, user_id: str, username: str = None) -> str:
+    def register_user(self, user_id: str, username: str = None, avatar_url: str = None) -> str:
         """
         Регистрирует нового пользователя, генерирует и сохраняет ключ.
         Возвращает сгенерированный ключ или None в случае ошибки.
@@ -47,11 +47,11 @@ class BCrypter:
         key = self._generate_random_key()
         hashed_key = self._hash_key(key)
         username = username or f"user_{user_id}"
-        if self.repo.save_user_key(user_id, username, hashed_key):
+        if self.repo.save_user_key(user_id, username, hashed_key, avatar_url):
             return key
         return None
 
-    def rotate_key(self, user_id: str) -> str:
+    def rotate_key(self, user_id: str, avatar_url: str = None) -> str:
         """
         Генерирует новый ключ для существующего пользователя.
         Возвращает новый ключ или None, если пользователь не найден.
@@ -60,7 +60,7 @@ class BCrypter:
             return None
         key = self._generate_random_key()
         hashed_key = self._hash_key(key)
-        if self.repo.update_user_key(user_id, hashed_key):
+        if self.repo.update_user_key(user_id, hashed_key, avatar_url):
             return key
         return None
 

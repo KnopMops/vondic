@@ -21,6 +21,7 @@ dependencies = [
     "marshmallow<4.0.0",
     "marshmallow-sqlalchemy==1.0.0",
     "python-dotenv==1.0.1",
+    "requests>=2.32.5",
     "ruff>=0.15.0",
     "werkzeug==3.0.3",
 ]

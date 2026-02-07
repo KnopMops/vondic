@@ -46,13 +46,26 @@ async def register_user(callback: types.CallbackQuery):
     """
     user_id = str(callback.from_user.id)
     username = callback.from_user.username or f"user_{user_id}"
+
+    # Попытка получить аватарку
+    avatar_url = None
+    try:
+        user_profile_photos = await callback.bot.get_user_profile_photos(callback.from_user.id, limit=1)
+        if user_profile_photos.total_count > 0:
+            file_id = user_profile_photos.photos[0][-1].file_id
+            file = await callback.bot.get_file(file_id)
+            if file.file_path:
+                avatar_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file.file_path}"
+    except Exception as e:
+        logger.error(f"Не удалось получить аватарку: {e}")
+
     if bcrypter.is_user_registered(user_id):
         await callback.message.answer(
             "Вы уже зарегистрированы. Используйте 'Войти / Восстановить ключ', если забыли ключ."
         )
         await callback.answer()
         return
-    key = bcrypter.register_user(user_id, username)
+    key = bcrypter.register_user(user_id, username, avatar_url)
     if key:
         await callback.message.answer(
             f"✅ Вы успешно зарегистрированы!\n\n🔑 Ваш секретный ключ:\n`{user_id}:{key}`\n\n⚠️ Сохраните его, он показывается только один раз!\nИспользуйте этот ключ для авторизации на сайте.",
@@ -71,13 +84,26 @@ async def restore_key(callback: types.CallbackQuery):
     Обработчик нажатия на кнопку "Войти / Восстановить ключ".
     """
     user_id = str(callback.from_user.id)
+
+    # Попытка получить аватарку
+    avatar_url = None
+    try:
+        user_profile_photos = await callback.bot.get_user_profile_photos(callback.from_user.id, limit=1)
+        if user_profile_photos.total_count > 0:
+            file_id = user_profile_photos.photos[0][-1].file_id
+            file = await callback.bot.get_file(file_id)
+            if file.file_path:
+                avatar_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file.file_path}"
+    except Exception as e:
+        logger.error(f"Не удалось получить аватарку: {e}")
+
     if not bcrypter.is_user_registered(user_id):
         await callback.message.answer(
             "⚠️ Вы еще не зарегистрированы. Нажмите 'Регистрация'."
         )
         await callback.answer()
         return
-    key = bcrypter.rotate_key(user_id)
+    key = bcrypter.rotate_key(user_id, avatar_url)
     if key:
         await callback.message.answer(
             f"🔄 Ваш ключ был обновлен!\n\n🔑 Новый секретный ключ:\n`{user_id}:{key}`\n\n⚠️ Старый ключ больше недействителен.",

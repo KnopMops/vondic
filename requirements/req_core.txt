@@ -9,3 +9,4 @@ email-validator==2.1.1
 werkzeug==3.0.3
 Flask-Mail==0.9.1
 bcrypt
+requests

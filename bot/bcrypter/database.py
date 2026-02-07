@@ -5,7 +5,8 @@ import sqlite3
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+BASE_DIR = os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__))))
 DEFAULT_DB_PATH = os.path.join(BASE_DIR, "database.db")
 
 
@@ -38,7 +39,7 @@ class AuthRepository:
         finally:
             conn.close()
 
-    def save_user_key(self, user_id: str, username: str, password_hash: str) -> bool:
+    def save_user_key(self, user_id: str, username: str, password_hash: str, avatar_url: str = None) -> bool:
         conn = self._connect()
         cursor = conn.cursor()
         email = f"{user_id}@telegram.bot"
@@ -46,7 +47,7 @@ class AuthRepository:
         refresh_token = secrets.token_hex(32)
         try:
             cursor.execute(
-                "\n                INSERT INTO users (\n                    id, username, email, password_hash, is_verified, \n                    access_token, refresh_token, \n                    role, status, is_blocked, is_messaging, created_at\n                )\n                VALUES (?, ?, ?, ?, 1, ?, ?, 'User', 'offline', 0, 0, ?)\n                ",
+                "\n                INSERT INTO users (\n                    id, username, email, password_hash, is_verified, \n                    access_token, refresh_token, \n                    role, status, is_blocked, is_messaging, created_at, avatar_url\n                )\n                VALUES (?, ?, ?, ?, 1, ?, ?, 'User', 'offline', 0, 0, ?, ?)\n                ",
                 (
                     user_id,
                     username,
@@ -55,6 +56,7 @@ class AuthRepository:
                     access_token,
                     refresh_token,
                     datetime.now().isoformat(),
+                    avatar_url,
                 ),
             )
             conn.commit()
@@ -64,14 +66,20 @@ class AuthRepository:
         finally:
             conn.close()
 
-    def update_user_key(self, user_id: str, password_hash: str) -> bool:
+    def update_user_key(self, user_id: str, password_hash: str, avatar_url: str = None) -> bool:
         conn = self._connect()
         cursor = conn.cursor()
         try:
-            cursor.execute(
-                "\n                UPDATE users\n                SET password_hash = ?, updated_at = ?\n                WHERE id = ?\n            ",
-                (password_hash, datetime.now().isoformat(), user_id),
-            )
+            if avatar_url:
+                cursor.execute(
+                    "\n                UPDATE users\n                SET password_hash = ?, updated_at = ?, avatar_url = ?\n                WHERE id = ?\n            ",
+                    (password_hash, datetime.now().isoformat(), avatar_url, user_id),
+                )
+            else:
+                cursor.execute(
+                    "\n                UPDATE users\n                SET password_hash = ?, updated_at = ?\n                WHERE id = ?\n            ",
+                    (password_hash, datetime.now().isoformat(), user_id),
+                )
             conn.commit()
             return True
         except sqlite3.Error:
@@ -83,7 +91,8 @@ class AuthRepository:
         conn = self._connect()
         cursor = conn.cursor()
         try:
-            cursor.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,))
+            cursor.execute(
+                "SELECT password_hash FROM users WHERE id = ?", (user_id,))
             row = cursor.fetchone()
             return row["password_hash"] if row else None
         finally:
