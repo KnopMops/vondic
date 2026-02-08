@@ -51,6 +51,7 @@ export async function GET(
 						const author = usersMap[userId]
 						return {
 							...comment,
+							user_id: userId,
 							author_name: author?.username || `User ${userId || '?'}`,
 							author_avatar: author?.avatar_url || null,
 						}

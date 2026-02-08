@@ -1,7 +1,7 @@
 'use client'
 
 import { useAppSelector } from '@/lib/hooks'
-import { useEffect, useState } from 'react'
+import { usePosts } from '@/lib/hooks/usePosts'
 import Composer from './Composer'
 import Header from './Header'
 import Post from './Post'
@@ -13,88 +13,27 @@ type Props = {
 	onLogout: () => void
 }
 
-type PostData = {
-	id: string
-	posted_by: string
-	author_name: string
-	author_avatar: string | null
-	content: string
-	created_at: string
-	likes?: number
-	comments_count?: number
-	is_liked?: boolean
-	image?: string
-	attachments?: string[] | null
-}
-
 export default function SocialFeed({ email, onLogout }: Props) {
 	const { user } = useAppSelector(state => state.auth)
-	const [posts, setPosts] = useState<PostData[]>([])
-	const [loading, setLoading] = useState(false)
+	const {
+		data: posts = [],
+		isLoading: loading,
+		createPost,
+		deletePost,
+		updatePost,
+	} = usePosts()
 
-	const fetchPosts = async () => {
-		setLoading(true)
-		try {
-			const res = await fetch('/api/posts')
-			if (res.ok) {
-				const data = await res.json()
-				setPosts(Array.isArray(data) ? data : [])
-			}
-		} catch (e) {
-			console.error(e)
-		} finally {
-			setLoading(false)
-		}
+	const addPost = (text: string) => {
+		createPost(text)
 	}
 
-	useEffect(() => {
-		fetchPosts()
-	}, [])
-
-	const addPost = async (text: string) => {
-		try {
-			const res = await fetch('/api/posts', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ title: 'New Post', content: text }),
-			})
-			if (res.ok) {
-				fetchPosts()
-			}
-		} catch (e) {
-			console.error(e)
-		}
-	}
-
-	const deletePost = async (id: string | number, reason?: string) => {
+	const handleDeletePost = (id: string | number, reason?: string) => {
 		if (!user) return
-		try {
-			const res = await fetch(`/api/posts/${id}`, {
-				method: 'DELETE',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ user_id: user.id, reason }),
-			})
-			if (res.ok) {
-				setPosts(posts.filter(p => p.id !== id))
-			}
-		} catch (e) {
-			console.error(e)
-		}
+		deletePost({ id, userId: user.id, reason })
 	}
 
-	const updatePost = async (id: string | number, newText: string) => {
-		try {
-			const res = await fetch(`/api/posts/${id}`, {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ title: 'Updated Post', content: newText }),
-			})
-			if (res.ok) {
-				fetchPosts()
-			}
-		} catch (e) {
-			console.error(e)
-		}
+	const handleUpdatePost = (id: string | number, newText: string) => {
+		updatePost({ id, newText })
 	}
 
 	return (
@@ -147,8 +86,8 @@ export default function SocialFeed({ email, onLogout }: Props) {
 								}
 								currentUserId={user?.id}
 								userRole={user?.role}
-								onDelete={deletePost}
-								onUpdate={updatePost}
+								onDelete={handleDeletePost}
+								onUpdate={handleUpdatePost}
 							/>
 						))}
 					</div>

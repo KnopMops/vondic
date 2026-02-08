@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import CommentsModal from './CommentsModal'
 
 type Props = {
@@ -48,6 +48,10 @@ export default function Post({
 	const [showComments, setShowComments] = useState(false)
 	const [commentCount, setCommentCount] = useState(comments_count)
 
+	useEffect(() => {
+		setCommentCount(comments_count)
+	}, [comments_count])
+
 	const isOwner = String(currentUserId) === String(author_id)
 	const isAdmin = userRole === 'Admin'
 	const canDelete = isOwner || isAdmin
@@ -78,9 +82,30 @@ export default function Post({
 			})
 
 			if (!res.ok) {
-				// Revert on error
-				setIsLiked(!newIsLiked)
-				setLikeCount(likeCount)
+				if (res.status === 400 && newIsLiked) {
+					// If like failed with 400, try dislike
+					try {
+						const resDislike = await fetch(`/api/posts/${id}/like`, {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' },
+							body: JSON.stringify({ action: 'unlike' }),
+						})
+
+						if (resDislike.ok) {
+							setIsLiked(false)
+							setLikeCount(likeCount)
+						} else {
+							setIsLiked(!newIsLiked)
+							setLikeCount(likeCount)
+						}
+					} catch (e) {
+						setIsLiked(!newIsLiked)
+						setLikeCount(likeCount)
+					}
+				} else {
+					setIsLiked(!newIsLiked)
+					setLikeCount(likeCount)
+				}
 			}
 		} catch (e) {
 			console.error(e)
