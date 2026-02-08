@@ -10,27 +10,42 @@ import { useEffect, useState } from 'react'
 export default function FriendsPage() {
 	const { user, logout } = useAuth()
 	const [requests, setRequests] = useState<User[]>([])
+	const [friends, setFriends] = useState<User[]>([])
 	const [loading, setLoading] = useState(true)
 	const [error, setError] = useState('')
 
 	useEffect(() => {
-		const fetchRequests = async () => {
+		const fetchData = async () => {
 			if (!user) return
 			try {
-				const res = await fetch('/api/friends/requests')
-				if (!res.ok) throw new Error('Failed to fetch requests')
-				const data = await res.json()
-				// Assuming data is an array of users
-				setRequests(Array.isArray(data) ? data : [])
+				// 1. Requests
+				const reqRes = await fetch('/api/friends/requests', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ user_id: user.id }),
+				})
+				if (reqRes.ok) {
+					const data = await reqRes.json()
+					setRequests(Array.isArray(data) ? data : [])
+				}
+
+				// 2. Friends
+				const friendsRes = await fetch('/api/friends/list', {
+					method: 'POST',
+				})
+				if (friendsRes.ok) {
+					const data = await friendsRes.json()
+					setFriends(Array.isArray(data) ? data : [])
+				}
 			} catch (err) {
 				console.error(err)
-				setError('Не удалось загрузить заявки')
+				setError('Не удалось загрузить данные')
 			} finally {
 				setLoading(false)
 			}
 		}
 
-		fetchRequests()
+		fetchData()
 	}, [user])
 
 	const handleAccept = async (requesterId: string) => {
@@ -41,7 +56,7 @@ export default function FriendsPage() {
 				body: JSON.stringify({ requester_id: requesterId }),
 			})
 			if (!res.ok) throw new Error('Failed to accept')
-			
+
 			// Remove from list
 			setRequests(prev => prev.filter(r => r.id !== requesterId))
 		} catch (err) {
@@ -111,9 +126,11 @@ export default function FriendsPage() {
 													/>
 													<div>
 														<div className='font-semibold'>{req.username}</div>
-														<div className='text-sm text-gray-400'>
-															{req.email}
-														</div>
+														{!req.email?.endsWith('@telegram.bot') && (
+															<div className='text-sm text-gray-400'>
+																{req.email}
+															</div>
+														)}
 													</div>
 												</Link>
 												<div className='flex gap-2'>
@@ -130,6 +147,50 @@ export default function FriendsPage() {
 														Отклонить
 													</button>
 												</div>
+											</div>
+										))}
+									</div>
+								)}
+							</div>
+
+							{/* Friends List */}
+							<div className='space-y-4 pt-8 border-t border-gray-700'>
+								<h2 className='text-lg font-semibold text-gray-400'>
+									Ваши друзья
+								</h2>
+
+								{friends.length === 0 && !loading ? (
+									<div className='text-center text-gray-500'>
+										У вас пока нет друзей
+									</div>
+								) : (
+									<div className='space-y-4'>
+										{friends.map(friend => (
+											<div
+												key={friend.id}
+												className='flex items-center justify-between rounded-lg bg-gray-700 p-4'
+											>
+												<Link
+													href={`/feed/profile/${friend.id}`}
+													className='flex items-center gap-3 hover:opacity-80'
+												>
+													<img
+														src={friend.avatar_url || '/placeholder-user.jpg'}
+														alt={friend.username}
+														className='h-12 w-12 rounded-full object-cover'
+													/>
+													<div>
+														<div className='font-semibold'>
+															{friend.username}
+														</div>
+														{!friend.email?.endsWith('@telegram.bot') && (
+															<div className='text-sm text-gray-400'>
+																{friend.email}
+															</div>
+														)}
+													</div>
+												</Link>
+												{/* Optional: Add "Remove friend" or "Message" button here */}
 											</div>
 										))}
 									</div>
