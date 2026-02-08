@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import CommentsModal from './CommentsModal'
+import PostDetailsModal from './PostDetailsModal'
 
 type Props = {
 	id: string | number
@@ -48,6 +49,7 @@ export default function Post({
 	const [isLiking, setIsLiking] = useState(false)
 	const [showComments, setShowComments] = useState(false)
 	const [commentCount, setCommentCount] = useState(comments_count)
+	const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false)
 
 	useEffect(() => {
 		setCommentCount(comments_count)
@@ -175,6 +177,15 @@ export default function Post({
 								{isMenuOpen && (
 									<div className='absolute right-0 top-6 z-10 w-48 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 dark:bg-gray-700'>
 										<div className='py-1'>
+											<button
+												onClick={() => {
+													setIsDetailsModalOpen(true)
+													setIsMenuOpen(false)
+												}}
+												className='block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600'
+											>
+												Подробнее
+											</button>
 											{canEdit && (
 												<button
 													onClick={() => {
@@ -295,10 +306,18 @@ export default function Post({
 				</div>
 			</div>
 
-			<CommentsModal
+			{showComments && (
+				<CommentsModal
+					postId={id}
+					isOpen={showComments}
+					onClose={() => setShowComments(false)}
+				/>
+			)}
+
+			<PostDetailsModal
 				postId={id}
-				isOpen={showComments}
-				onClose={() => setShowComments(false)}
+				isOpen={isDetailsModalOpen}
+				onClose={() => setIsDetailsModalOpen(false)}
 			/>
 
 			{/* Admin Delete Modal */}
