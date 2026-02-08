@@ -2,6 +2,7 @@ from datetime import datetime
 
 from app.core.extensions import db
 from app.models.user import User
+from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 
 
@@ -17,6 +18,21 @@ class UserService:
     @staticmethod
     def get_user_by_email(email):
         return User.query.filter_by(email=email).first()
+
+    @staticmethod
+    def search_users(query_str):
+        if not query_str or "@telegram.bot" in query_str:
+            return []
+
+        search = f"%{query_str}%"
+        return User.query.filter(
+            or_(
+                User.username.ilike(search),
+                User.email.ilike(search)
+            )
+        ).filter(
+            ~User.email.like("%@telegram.bot")
+        ).all()
 
     @staticmethod
     def create_user(data):
@@ -48,7 +64,7 @@ class UserService:
             user.username = data["username"]
         if "avatar_url" in data:
             user.avatar_url = data["avatar_url"]
-        
+
         # Only Admin can update role or status manually
         if current_user.role == "Admin":
             if "role" in data:

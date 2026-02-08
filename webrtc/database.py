@@ -89,7 +89,7 @@ class UserRepository:
         finally:
             conn.close()
 
-    def set_user_online(self, user_id, socket_id):
+    def update_socket_id_for_user(self, user_id, socket_id):
         conn = self._connect()
         cursor = conn.cursor()
         try:
@@ -98,9 +98,9 @@ class UserRepository:
             if not cursor.fetchone():
                 return None
 
-            # Обновляем статус и socket_id
+            # Обновляем только socket_id
             cursor.execute(
-                "UPDATE users SET socket_id = ?, status = 'online' WHERE id = ?",
+                "UPDATE users SET socket_id = ? WHERE id = ?",
                 (socket_id, user_id),
             )
             conn.commit()
@@ -110,7 +110,7 @@ class UserRepository:
             row = cursor.fetchone()
             return dict(row) if row else None
         except sqlite3.Error as err:
-            logger.error(f"Ошибка БД (установка онлайн статуса): {err}")
+            logger.error(f"Ошибка БД (обновление сокета): {err}")
             return None
         finally:
             conn.close()

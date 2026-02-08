@@ -101,7 +101,7 @@ def create_app():
     @app.route("/set_socket_id", methods=["POST"])
     def set_socket_id():
         """
-        Принудительное назначение socket_id пользователю и перевод в онлайн
+        Принудительное назначение socket_id пользователю
         ---
         tags:
           - Users
@@ -129,8 +129,8 @@ def create_app():
               properties:
                 message:
                   type: string
-                user:
-                  type: object
+                  user:
+                    type: object
           400:
             description: Некорректные данные
           404:
@@ -146,7 +146,7 @@ def create_app():
         if not user_id or not socket_id:
             return (jsonify({"error": "Missing user_id or socket_id"}), 400)
 
-        updated_user = user_repo.set_user_online(user_id, socket_id)
+        updated_user = user_repo.update_socket_id_for_user(user_id, socket_id)
 
         if updated_user:
             return (

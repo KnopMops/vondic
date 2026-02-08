@@ -18,6 +18,14 @@ class PostService:
         return Post.query.filter_by(id=post_id, deleted=False).first()
 
     @staticmethod
+    def search_posts(query_str):
+        search = f"%{query_str}%"
+        return Post.query.filter(
+            Post.content.ilike(search),
+            Post.deleted == False
+        ).order_by(Post.created_at.desc()).all()
+
+    @staticmethod
     def create_post(data, user_id):
         new_post = Post(
             content=data.get("content"),

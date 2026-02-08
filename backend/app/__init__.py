@@ -42,6 +42,8 @@ def create_app(config_class=Config):
     from app.api.v1.comments import comments_bp
     from app.api.v1.friends import friends_bp
     from app.api.v1.posts import posts_bp
+    from app.api.v1.search import search_bp
+    from app.api.v1.subscriptions import subscriptions_bp
     from app.api.v1.users import users_bp
 
     app.register_blueprint(users_bp)
@@ -49,6 +51,8 @@ def create_app(config_class=Config):
     app.register_blueprint(posts_bp)
     app.register_blueprint(comments_bp)
     app.register_blueprint(friends_bp)
+    app.register_blueprint(subscriptions_bp)
+    app.register_blueprint(search_bp)
 
     @app.route("/health")
     def health_check():

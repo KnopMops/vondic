@@ -90,6 +90,43 @@ def get_user_detail():
     return jsonify(user_schema.dump(user)), 200
 
 
+@users_bp.route("/search", methods=["POST"])
+@token_required
+def search_users(current_user):
+    """
+    Поиск пользователей по имени или email
+    ---
+    tags:
+      - Users
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            access_token:
+              type: string
+              required: true
+            query:
+              type: string
+              required: true
+    responses:
+      200:
+        description: Список найденных пользователей
+      400:
+        description: Не указан поисковый запрос
+    """
+    data = request.get_json() or {}
+    query = data.get("query")
+
+    if not query:
+        return jsonify({"error": "query is required"}), 400
+
+    users = UserService.search_users(query)
+    return jsonify(users_schema.dump(users)), 200
+
+
 @users_bp.route("/", methods=["POST"])
 def create_user():
     """
