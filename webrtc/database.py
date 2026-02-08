@@ -34,12 +34,12 @@ class UserRepository:
         cursor = conn.cursor()
         try:
             cursor.execute(
-                "UPDATE users SET socket_id = ? WHERE id = ?", (
+                "UPDATE users SET socket_id = ?, status = 'online' WHERE id = ?", (
                     socket_id, user_id)
             )
             conn.commit()
             logger.info(
-                f"Привязан socket_id для пользователя {user_id} -> {socket_id}")
+                f"Привязан socket_id для пользователя {user_id} -> {socket_id} (online)")
         except sqlite3.Error as err:
             logger.error(f"Ошибка БД (привязка сокета): {err}")
         finally:
@@ -50,12 +50,12 @@ class UserRepository:
         cursor = conn.cursor()
         try:
             cursor.execute(
-                "UPDATE users SET socket_id = NULL WHERE socket_id = ?", (
+                "UPDATE users SET socket_id = NULL, status = 'offline' WHERE socket_id = ?", (
                     socket_id,)
             )
             conn.commit()
             if cursor.rowcount > 0:
-                logger.info(f"Очищен socket_id {socket_id} из БД")
+                logger.info(f"Очищен socket_id {socket_id} из БД (offline)")
         except sqlite3.Error as err:
             logger.error(f"Ошибка БД (очистка сокета): {err}")
         finally:

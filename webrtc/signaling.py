@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 
 from flask import request
 from flask_socketio import ConnectionRefusedError, emit, join_room
@@ -25,6 +26,7 @@ class SignalingService:
         self.io.on_event("call_answer", self.on_call_answer)
         self.io.on_event("call_reject", self.on_call_reject)
         self.io.on_event("call_end", self.on_call_end)
+        self.io.on_event("send_message", self.on_send_message)
 
     def on_connect(self, auth=None):
         token_value = None
@@ -34,12 +36,14 @@ class SignalingService:
             token_value = request.args.get("token")
         if not token_value:
             logger.warning("Отклонено: Токен не предоставлен")
-            raise ConnectionRefusedError("401 Unauthorized: Токен не предоставлен")
+            raise ConnectionRefusedError(
+                "401 Unauthorized: Токен не предоставлен")
         current_socket = request.sid
         user_info = self.broker.register_session(token_value, current_socket)
         if not user_info:
             logger.warning("Отклонено: Ошибка регистрации сессии")
-            raise ConnectionRefusedError("401 Unauthorized: Ошибка регистрации")
+            raise ConnectionRefusedError(
+                "401 Unauthorized: Ошибка регистрации")
         join_room(user_info["id"])
         logger.info(
             f"Пользователь {user_info['username']} подключен. SID: {current_socket}"
@@ -70,9 +74,11 @@ class SignalingService:
             logger.info(
                 f"Звонок от {request.sid} к пользователю {target_user_id} (socket: {target_socket})"
             )
-            emit("incoming_call", {"caller_socket_id": request.sid}, room=target_socket)
+            emit("incoming_call", {
+                 "caller_socket_id": request.sid}, room=target_socket)
         else:
-            emit("call_failed", {"message": "Пользователь не в сети или не найден"})
+            emit("call_failed", {
+                 "message": "Пользователь не в сети или не найден"})
 
     def on_call_answer(self, payload):
         caller_socket_id = payload.get("caller_socket_id")
@@ -93,7 +99,8 @@ class SignalingService:
         if not caller_socket_id:
             return
         if self.broker.resolve_recipient(caller_socket_id):
-            logger.info(f"Звонок отклонен: {request.sid} -> {caller_socket_id}")
+            logger.info(
+                f"Звонок отклонен: {request.sid} -> {caller_socket_id}")
             emit(
                 "call_rejected",
                 {"responder_socket_id": request.sid, "reason": "busy"},
@@ -105,8 +112,10 @@ class SignalingService:
         if not target_socket_id:
             return
         if self.broker.resolve_recipient(target_socket_id):
-            logger.info(f"Завершение звонка: {request.sid} -> {target_socket_id}")
-            emit("call_ended", {"sender_socket_id": request.sid}, room=target_socket_id)
+            logger.info(
+                f"Завершение звонка: {request.sid} -> {target_socket_id}")
+            emit("call_ended", {
+                 "sender_socket_id": request.sid}, room=target_socket_id)
 
     def on_offer(self, payload):
         target_sid = payload.get("target_socket_id")
@@ -149,3 +158,35 @@ class SignalingService:
                 {"candidate": candidate_data, "sender_socket_id": request.sid},
                 room=target_sid,
             )
+
+    def on_send_message(self, payload):
+        target_user_id = payload.get("target_user_id")
+        content = payload.get("content")
+
+        if not target_user_id or not content:
+            emit("error", {"message": "Missing target_user_id or content"})
+            return
+
+        # Identify sender
+        sender = self.broker.resolve_recipient(request.sid)
+        if not sender:
+            emit("error", {"message": "Unauthorized"})
+            return
+
+        # Find target socket
+        target_socket = self.broker.get_user_socket(target_user_id)
+
+        if target_socket:
+            # Send to target
+            emit(
+                "receive_message",
+                {
+                    "sender_id": sender["id"],
+                    "sender_socket_id": request.sid,
+                    "content": content,
+                    "timestamp": datetime.utcnow().isoformat(),
+                },
+                room=target_socket,
+            )
+        else:
+            emit("error", {"message": "User offline or not found"})
