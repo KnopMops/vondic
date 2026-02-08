@@ -4,9 +4,21 @@ import { useState } from 'react'
 import BrandLogo from './BrandLogo'
 import { sidebarItems } from './sidebar.items'
 import Link from 'next/link'
+import { useAuth } from '@/lib/AuthContext'
 
 export default function Sidebar() {
 	const [isExpanded, setIsExpanded] = useState(false)
+	const { user } = useAuth()
+
+	const items = sidebarItems.map(item => {
+		if (item.href === '/feed/profile' && user?.id) {
+			return { ...item, href: `/feed/profile/${user.id}` }
+		}
+		if (item.href === '/friends') {
+			return { ...item, href: '/feed/friends' }
+		}
+		return item
+	})
 
 	return (
 		<aside
@@ -51,7 +63,7 @@ export default function Sidebar() {
 
 				{/* Menu Items */}
 				<nav className='flex w-full flex-col gap-2'>
-					{sidebarItems.map(i => {
+					{items.map(i => {
 						const content = (
 							<>
 								<span className='text-xl'>{i.icon}</span>

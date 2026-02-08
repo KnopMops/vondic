@@ -2,6 +2,7 @@
 
 import { useAppSelector } from '@/lib/hooks'
 import { useComments } from '@/lib/hooks/useComments'
+import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 type Comment = {
@@ -208,16 +209,23 @@ function CommentItem({
 
 	return (
 		<div className='flex gap-3'>
-			<img
-				src={comment.author_avatar || '/placeholder-user.jpg'}
-				alt={comment.author_name || 'User'}
-				className='h-8 w-8 rounded-full object-cover'
-			/>
+			<Link href={`/feed/profile/${comment.user_id}`}>
+				<img
+					src={comment.author_avatar || '/placeholder-user.jpg'}
+					alt={comment.author_name || 'User'}
+					className='h-8 w-8 rounded-full object-cover hover:opacity-80 transition-opacity'
+				/>
+			</Link>
 			<div className='flex-1'>
 				<div className='relative rounded-lg bg-gray-100 p-3 dark:bg-gray-700'>
 					<div className='flex items-start justify-between'>
 						<div className='text-sm font-semibold text-gray-900 dark:text-white'>
-							{comment.author_name || 'User'}
+							<Link
+								href={`/feed/profile/${comment.user_id}`}
+								className='hover:underline'
+							>
+								{comment.author_name || 'User'}
+							</Link>
 						</div>
 						{(canEdit || canDelete) && (
 							<div className='relative' ref={menuRef}>

@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import CommentsModal from './CommentsModal'
 
@@ -137,21 +138,28 @@ export default function Post({
 	return (
 		<article className='rounded-xl bg-white p-4 shadow-sm dark:bg-gray-800 relative'>
 			<div className='flex items-start gap-3'>
-				{author_avatar ? (
-					<img
-						src={author_avatar}
-						alt={author}
-						className='h-10 w-10 rounded-full object-cover'
-					/>
-				) : (
-					<div className='h-10 w-10 rounded-full bg-indigo-200 dark:bg-indigo-900/50' />
-				)}
+				<Link href={`/feed/profile/${author_id}`}>
+					{author_avatar ? (
+						<img
+							src={author_avatar}
+							alt={author}
+							className='h-10 w-10 rounded-full object-cover hover:opacity-80 transition-opacity'
+						/>
+					) : (
+						<div className='h-10 w-10 rounded-full bg-indigo-200 dark:bg-indigo-900/50 hover:opacity-80 transition-opacity' />
+					)}
+				</Link>
 				<div className='flex-1'>
 					<div className='flex items-center justify-between'>
 						<div className='flex items-center gap-2'>
-							<span className='text-sm font-semibold text-gray-900 dark:text-white'>
-								{author}
-							</span>
+							<Link
+								href={`/feed/profile/${author_id}`}
+								className='hover:underline'
+							>
+								<span className='text-sm font-semibold text-gray-900 dark:text-white'>
+									{author}
+								</span>
+							</Link>
 							<span className='text-xs text-gray-500 dark:text-gray-400'>
 								{time}
 							</span>
