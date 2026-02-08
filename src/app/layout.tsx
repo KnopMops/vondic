@@ -1,5 +1,6 @@
 import { AuthProvider } from '@/lib/AuthContext'
 import ReactQueryProvider from '@/lib/ReactQueryProvider'
+import { SocketProvider } from '@/lib/SocketContext'
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
@@ -32,7 +33,9 @@ export default function RootLayout({
 			>
 				<StoreProvider>
 					<ReactQueryProvider>
-						<AuthProvider>{children}</AuthProvider>
+						<AuthProvider>
+							<SocketProvider>{children}</SocketProvider>
+						</AuthProvider>
 					</ReactQueryProvider>
 				</StoreProvider>
 			</body>

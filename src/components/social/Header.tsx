@@ -1,6 +1,7 @@
 'use client'
 
 import { useAppSelector } from '@/lib/hooks'
+import { useSocket } from '@/lib/SocketContext'
 import { User } from '@/lib/types'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
@@ -18,6 +19,7 @@ type Props = {
 
 export default function Header({ email, onLogout }: Props) {
 	const { user } = useAppSelector(state => state.auth)
+	const { isConnected } = useSocket()
 	const [isDropdownOpen, setIsDropdownOpen] = useState(false)
 
 	// Search state
@@ -74,6 +76,10 @@ export default function Header({ email, onLogout }: Props) {
 			<div className='mx-auto flex max-w-7xl items-center justify-between'>
 				<div className='flex items-center gap-3'>
 					<BrandLogo size={28} />
+					<div
+						className={`h-2.5 w-2.5 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'} transition-colors duration-300`}
+						title={isConnected ? 'Socket Connected' : 'Socket Disconnected'}
+					/>
 				</div>
 
 				<div className='flex flex-1 justify-center px-4'>

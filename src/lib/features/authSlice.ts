@@ -45,6 +45,11 @@ const authSlice = createSlice({
 			state.user = action.payload
 			state.isInitialized = true
 		},
+		setSocketId: (state, action: PayloadAction<string>) => {
+			if (state.user) {
+				state.user.socket_id = action.payload
+			}
+		},
 		logout: state => {
 			state.user = null
 			state.isInitialized = true
@@ -79,5 +84,5 @@ const authSlice = createSlice({
 	},
 })
 
-export const { setUser, logout } = authSlice.actions
+export const { setUser, logout, setSocketId } = authSlice.actions
 export default authSlice.reducer
