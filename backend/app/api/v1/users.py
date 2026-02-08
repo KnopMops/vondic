@@ -27,9 +27,67 @@ def get_users():
                 type: string
               email:
                 type: string
+              balance:
+                type: number
     """
     users = UserService.get_all_users()
     return (jsonify(users_schema.dump(users)), 200)
+
+
+@users_bp.route("/get", methods=["POST"])
+def get_user_detail():
+    """
+    Получить пользователя по ID
+    ---
+    tags:
+      - Users
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            user_id:
+              type: string
+              required: true
+    responses:
+      200:
+        description: Данные пользователя
+        schema:
+          type: object
+          properties:
+            id:
+              type: string
+            username:
+              type: string
+            email:
+              type: string
+            balance:
+              type: number
+            avatar_url:
+              type: string
+            status:
+              type: string
+            role:
+              type: string
+            created_at:
+              type: string
+      400:
+        description: Не указан user_id
+      404:
+        description: Пользователь не найден
+    """
+    data = request.get_json() or {}
+    user_id = data.get("user_id")
+
+    if not user_id:
+        return jsonify({"error": "user_id is required"}), 400
+
+    user = UserService.get_user_by_id(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    return jsonify(user_schema.dump(user)), 200
 
 
 @users_bp.route("/", methods=["POST"])
@@ -107,7 +165,7 @@ def update_user(current_user):
     data = request.get_json()
     if not data:
         return jsonify({"error": "No data provided"}), 400
-        
+
     user_id = data.get("user_id")
     if not user_id:
         return jsonify({"error": "user_id is required"}), 400
@@ -160,12 +218,12 @@ def block_user(current_user):
     data = request.get_json() or {}
     user_id = data.get("user_id")
     admin_user_id = data.get("admin_user_id")
-    
+
     if not user_id or not admin_user_id:
         return jsonify({"error": "user_id and admin_user_id are required"}), 400
-        
+
     if str(admin_user_id) != str(current_user.id):
-         return jsonify({"error": "Admin User ID mismatch"}), 403
+        return jsonify({"error": "Admin User ID mismatch"}), 403
 
     is_admin = current_user.role == "Admin"
     user, error = UserService.block_user(user_id, is_admin)
@@ -213,12 +271,12 @@ def unblock_user(current_user):
     data = request.get_json() or {}
     user_id = data.get("user_id")
     admin_user_id = data.get("admin_user_id")
-    
+
     if not user_id or not admin_user_id:
         return jsonify({"error": "user_id and admin_user_id are required"}), 400
-        
+
     if str(admin_user_id) != str(current_user.id):
-         return jsonify({"error": "Admin User ID mismatch"}), 403
+        return jsonify({"error": "Admin User ID mismatch"}), 403
 
     is_admin = current_user.role == "Admin"
     user, error = UserService.unblock_user(user_id, is_admin)

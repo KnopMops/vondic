@@ -189,7 +189,7 @@ def like_comment(current_user):
       200:
         description: Лайк добавлен
       400:
-        description: Неверные параметры
+        description: Неверные параметры или лайк уже существует
       404:
         description: Комментарий не найден
     """
@@ -229,7 +229,7 @@ def unlike_comment(current_user):
       200:
         description: Лайк убран
       400:
-        description: Неверные параметры
+        description: Неверные параметры или лайк отсутствует
       404:
         description: Комментарий не найден
     """

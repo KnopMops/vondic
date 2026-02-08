@@ -2,7 +2,7 @@ import logging
 
 import eventlet
 from flasgger import Swagger
-from flask import Flask, request, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_socketio import SocketIO
 

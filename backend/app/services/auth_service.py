@@ -1,8 +1,8 @@
 import os
 import secrets
 import sys
-import requests
 
+import requests
 from app.core.config import Config
 from app.core.extensions import db
 from app.models.user import User

@@ -69,6 +69,43 @@ def get_post(post_id):
     return jsonify(post_schema.dump(post)), 200
 
 
+@posts_bp.route("/detail", methods=["POST"])
+def get_post_detail():
+    """
+    Получить пост по ID (через body)
+    ---
+    tags:
+      - Posts
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            post_id:
+              type: string
+              required: true
+    responses:
+      200:
+        description: Данные поста
+      400:
+        description: Не указан post_id
+      404:
+        description: Пост не найден
+    """
+    data = request.get_json() or {}
+    post_id = data.get("post_id")
+
+    if not post_id:
+        return jsonify({"error": "post_id is required"}), 400
+
+    post = PostService.get_post_by_id(post_id)
+    if not post:
+        return jsonify({"error": "Post not found"}), 404
+    return jsonify(post_schema.dump(post)), 200
+
+
 @posts_bp.route("/", methods=["POST"])
 @token_required
 def create_post(current_user):
@@ -292,7 +329,7 @@ def like_post(current_user):
       200:
         description: Лайк добавлен
       400:
-        description: Неверные параметры
+        description: Неверные параметры или лайк уже существует
       404:
         description: Пост не найден
     """
@@ -332,7 +369,7 @@ def unlike_post(current_user):
       200:
         description: Лайк убран
       400:
-        description: Неверные параметры
+        description: Неверные параметры или лайк отсутствует
       404:
         description: Пост не найден
     """

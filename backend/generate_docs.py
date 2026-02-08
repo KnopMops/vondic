@@ -1,11 +1,12 @@
 import json
-import sys
 import os
+import sys
 
 # Add the current directory to sys.path so we can import app
 sys.path.append(os.getcwd())
 
 from app import create_app
+
 
 def generate_swagger_json():
     app = create_app()

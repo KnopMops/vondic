@@ -1,8 +1,9 @@
 import uuid
 from datetime import datetime
 
-from app.core.extensions import db
 from sqlalchemy.dialects.sqlite import BOOLEAN, INTEGER, TEXT, TIMESTAMP
+
+from app.core.extensions import db
 
 
 class Comment(db.Model):

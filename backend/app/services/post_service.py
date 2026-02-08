@@ -28,7 +28,7 @@ class PostService:
             db.session.add(new_post)
             db.session.commit()
             return new_post
-        except Exception as e:
+        except Exception:
             db.session.rollback()
             return None
 

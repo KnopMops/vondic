@@ -37,9 +37,10 @@ def create_app(config_class=Config):
     Swagger(app, config=swagger_config)
 
     # Import models to ensure they are registered
-    from app import models
+    from app import models  # noqa: F401
     from app.api.v1.auth import auth_bp
     from app.api.v1.comments import comments_bp
+    from app.api.v1.friends import friends_bp
     from app.api.v1.posts import posts_bp
     from app.api.v1.users import users_bp
 
@@ -47,6 +48,7 @@ def create_app(config_class=Config):
     app.register_blueprint(auth_bp)
     app.register_blueprint(posts_bp)
     app.register_blueprint(comments_bp)
+    app.register_blueprint(friends_bp)
 
     @app.route("/health")
     def health_check():
