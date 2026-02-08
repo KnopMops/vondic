@@ -25,8 +25,18 @@ class CommentService:
         if not post:
             return None, "Post not found"
 
+        parent_id = data.get("parent_id")
+        if parent_id:
+            parent_comment = Comment.query.filter_by(
+                id=parent_id, deleted=False).first()
+            if not parent_comment:
+                return None, "Parent comment not found"
+
         new_comment = Comment(
-            content=data.get("content"), posted_by=user_id, post_id=post_id
+            content=data.get("content"),
+            posted_by=user_id,
+            post_id=post_id,
+            parent_id=parent_id
         )
         try:
             db.session.add(new_comment)

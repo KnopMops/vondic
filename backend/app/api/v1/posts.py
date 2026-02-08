@@ -395,6 +395,9 @@ def create_comment(current_user):
               required: true
             content:
               type: string
+            parent_id:
+              type: string
+              description: ID родительского комментария (необязательно)
     responses:
       201:
         description: Комментарий создан
