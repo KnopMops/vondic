@@ -7,6 +7,7 @@ requires-python = ">=3.13"
 dependencies = [
     "aiogram>=3.24.0",
     "bcrypt>=5.0.0",
+    "cryptography>=46.0.4",
     "django>=6.0.1",
     "email-validator==2.1.1",
     "eventlet>=0.40.4",
@@ -23,6 +24,7 @@ dependencies = [
     "python-dotenv==1.0.1",
     "requests>=2.32.5",
     "ruff>=0.15.0",
+    "websocket-client>=1.9.0",
     "werkzeug==3.0.3",
 ]
 

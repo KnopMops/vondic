@@ -1,9 +1,8 @@
 import logging
+import uuid
 from datetime import datetime
-
-from flask import request
+from flask import request, session
 from flask_socketio import ConnectionRefusedError, emit, join_room
-
 from .proxy import ConnectionBroker
 
 logger = logging.getLogger(__name__)
@@ -27,6 +26,9 @@ class SignalingService:
         self.io.on_event("call_reject", self.on_call_reject)
         self.io.on_event("call_end", self.on_call_end)
         self.io.on_event("send_message", self.on_send_message)
+        self.io.on_event("typing", self.on_typing)
+        self.io.on_event("stop_typing", self.on_stop_typing)
+        self.io.on_event("message_read", self.on_message_read)
 
     def on_connect(self, auth=None):
         token_value = None
@@ -44,6 +46,9 @@ class SignalingService:
             logger.warning("Отклонено: Ошибка регистрации сессии")
             raise ConnectionRefusedError(
                 "401 Unauthorized: Ошибка регистрации")
+
+        session["user_id"] = user_info["id"]
+
         join_room(user_info["id"])
         logger.info(
             f"Пользователь {user_info['username']} подключен. SID: {current_socket}"
@@ -161,32 +166,206 @@ class SignalingService:
 
     def on_send_message(self, payload):
         target_user_id = payload.get("target_user_id")
+        channel_id = payload.get("channel_id")
         content = payload.get("content")
 
-        if not target_user_id or not content:
-            emit("error", {"message": "Missing target_user_id or content"})
+        logger.info(
+            f"Получен запрос send_message от {request.sid}. Target: {target_user_id}, Channel: {channel_id}, Content: {content[:50] if content else 'None'}...")
+
+        if not content:
+            emit("error", {"message": "Content is required"})
             return
 
-        # Identify sender
-        sender = self.broker.resolve_recipient(request.sid)
-        if not sender:
+        if not target_user_id and not channel_id:
+            emit("error", {"message": "Missing target_user_id or channel_id"})
+            return
+
+        sender_id = session.get("user_id")
+        if not sender_id:
+            sender = self.broker.resolve_recipient(request.sid)
+            if sender:
+                sender_id = sender["id"]
+
+        if not sender_id:
+            logger.warning(
+                f"send_message: Unauthorized. Sender not found for SID {request.sid}")
             emit("error", {"message": "Unauthorized"})
             return
 
-        # Find target socket
-        target_socket = self.broker.get_user_socket(target_user_id)
+        logger.info(f"Sender identified: {sender_id}")
 
-        if target_socket:
-            # Send to target
-            emit(
-                "receive_message",
-                {
-                    "sender_id": sender["id"],
-                    "sender_socket_id": request.sid,
-                    "content": content,
-                    "timestamp": datetime.utcnow().isoformat(),
-                },
-                room=target_socket,
-            )
+        message_id = str(uuid.uuid4())
+        timestamp = datetime.utcnow().isoformat()
+
+        if channel_id:
+            # Channel Message Logic
+            owner_id = self.broker.repo.get_channel_owner(channel_id)
+            if not owner_id:
+                emit("error", {"message": "Channel not found"})
+                return
+
+            if str(sender_id) != str(owner_id):
+                emit("error", {"message": "Only the owner can write in this channel"})
+                return
+
+            msg_data = {
+                "id": message_id,
+                "sender_id": sender_id,
+                "channel_id": channel_id,
+                "content": content,
+                "timestamp": timestamp
+            }
+
+            saved = self.broker.repo.save_message(msg_data)
+            if not saved:
+                logger.error(f"Не удалось сохранить сообщение канала {message_id}")
+                emit("error", {"message": "Failed to save message"})
+                return
+
+            logger.info(f"Сообщение канала {message_id} сохранено (channel={channel_id})")
+
+            # Broadcast to participants
+            participants = self.broker.repo.get_channel_participants(channel_id)
+            full_message_payload = {
+                "id": message_id,
+                "sender_id": sender_id,
+                "channel_id": channel_id,
+                "content": content,
+                "timestamp": timestamp,
+                "is_read": 0
+            }
+
+            # Emit confirmation to sender
+            emit("message_sent", {
+                "status": "delivered",
+                "message": full_message_payload
+            })
+
+            # Emit to other participants
+            for pid in participants:
+                if str(pid) == str(sender_id):
+                    continue
+                pid_socket = self.broker.get_user_socket(pid)
+                if pid_socket:
+                    emit("receive_message", full_message_payload, room=pid_socket)
+
         else:
-            emit("error", {"message": "User offline or not found"})
+            # Direct Message Logic
+            msg_data = {
+                "id": message_id,
+                "sender_id": sender_id,
+                "target_id": target_user_id,
+                "content": content,
+                "timestamp": timestamp
+            }
+
+            saved = self.broker.repo.save_message(msg_data)
+            if not saved:
+                logger.error(f"Не удалось сохранить сообщение {message_id}")
+                emit("error", {"message": "Failed to save message"})
+                return
+
+            logger.info(
+                f"Сообщение {message_id} сохранено в БД (sender={sender_id}, target={target_user_id})")
+
+            target_socket = self.broker.get_user_socket(target_user_id)
+
+            full_message_payload = {
+                "id": message_id,
+                "sender_id": sender_id,
+                "target_id": target_user_id,
+                "content": content,
+                "timestamp": timestamp,
+                "is_read": 0
+            }
+
+            if target_socket:
+                logger.info(
+                    f"Доставка сообщения {message_id} пользователю {target_user_id} (socket={target_socket})")
+                emit(
+                    "receive_message",
+                    full_message_payload,
+                    room=target_socket,
+                )
+                emit("message_sent", {
+                    "status": "delivered",
+                    "message": full_message_payload
+                })
+            else:
+                logger.info(
+                    f"Пользователь {target_user_id} офлайн. Сообщение {message_id} сохранено.")
+                emit("message_sent", {
+                    "status": "saved",
+                    "message": full_message_payload
+                })
+
+    def on_typing(self, payload):
+        target_user_id = payload.get("target_user_id")
+        if not target_user_id:
+            return
+
+        sender_id = session.get("user_id")
+        if not sender_id:
+            sender = self.broker.resolve_recipient(request.sid)
+            if sender:
+                sender_id = sender["id"]
+
+        if not sender_id:
+            return
+
+        target_socket = self.broker.get_user_socket(target_user_id)
+        if target_socket:
+            emit("typing", {"sender_id": sender_id}, room=target_socket)
+
+    def on_stop_typing(self, payload):
+        target_user_id = payload.get("target_user_id")
+        if not target_user_id:
+            return
+
+        sender_id = session.get("user_id")
+        if not sender_id:
+            sender = self.broker.resolve_recipient(request.sid)
+            if sender:
+                sender_id = sender["id"]
+
+        if not sender_id:
+            return
+
+        target_socket = self.broker.get_user_socket(target_user_id)
+        if target_socket:
+            emit("stop_typing", {"sender_id": sender_id}, room=target_socket)
+
+    def on_message_read(self, payload):
+        """
+        Обработка события прочтения сообщений.
+        payload = {
+            "message_ids": ["uuid1", "uuid2"],
+            "sender_id": "id-of-original-sender" (опционально, чтобы быстрее найти сокет, но лучше искать по message_id или передавать sender_id с клиента)
+        }
+        В данном случае мы ожидаем, что клиент знает sender_id (того, кто отправил эти сообщения),
+        чтобы мы могли уведомить его, что его сообщения прочитаны.
+        """
+        message_ids = payload.get("message_ids")
+        target_sender_id = payload.get("target_sender_id")
+
+        if not message_ids:
+            return
+
+        reader_id = session.get("user_id")
+        if not reader_id:
+            reader = self.broker.resolve_recipient(request.sid)
+            if reader:
+                reader_id = reader["id"]
+
+        if not reader_id:
+            return
+
+        self.broker.repo.mark_messages_as_read(message_ids, reader_id)
+
+        if target_sender_id:
+            sender_socket = self.broker.get_user_socket(target_sender_id)
+            if sender_socket:
+                emit("messages_read_update", {
+                    "message_ids": message_ids,
+                    "reader_id": reader_id
+                }, room=sender_socket)

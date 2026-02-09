@@ -21,21 +21,21 @@ class FriendshipService:
 
         existing = Friendship.query.filter(
             or_(
-                (Friendship.requester_id == requester_id) & (
-                    Friendship.addressee_id == addressee_id),
-                (Friendship.requester_id == addressee_id) & (
-                    Friendship.addressee_id == requester_id)
+                (Friendship.requester_id == requester_id)
+                & (Friendship.addressee_id == addressee_id),
+                (Friendship.requester_id == addressee_id)
+                & (Friendship.addressee_id == requester_id),
             )
         ).first()
 
         if existing:
-            if existing.status == 'accepted':
+            if existing.status == "accepted":
                 return None, "Already friends"
-            if existing.status == 'pending':
+            if existing.status == "pending":
                 return None, "Friend request already pending"
 
-            if existing.status == 'rejected':
-                existing.status = 'pending'
+            if existing.status == "rejected":
+                existing.status = "pending"
                 existing.requester_id = requester_id
                 existing.addressee_id = addressee_id
                 existing.created_at = datetime.utcnow()
@@ -48,8 +48,7 @@ class FriendshipService:
 
             return None, f"Request status: {existing.status}"
 
-        new_request = Friendship(
-            requester_id=requester_id, addressee_id=addressee_id)
+        new_request = Friendship(requester_id=requester_id, addressee_id=addressee_id)
         try:
             db.session.add(new_request)
             db.session.commit()
@@ -61,15 +60,13 @@ class FriendshipService:
     @staticmethod
     def accept_request(user_id, requester_id):
         request = Friendship.query.filter_by(
-            requester_id=requester_id,
-            addressee_id=user_id,
-            status='pending'
+            requester_id=requester_id, addressee_id=user_id, status="pending"
         ).first()
 
         if not request:
             return None, "Friend request not found"
 
-        request.status = 'accepted'
+        request.status = "accepted"
         try:
             db.session.commit()
             return request, None
@@ -80,9 +77,7 @@ class FriendshipService:
     @staticmethod
     def reject_request(user_id, requester_id):
         request = Friendship.query.filter_by(
-            requester_id=requester_id,
-            addressee_id=user_id,
-            status='pending'
+            requester_id=requester_id, addressee_id=user_id, status="pending"
         ).first()
 
         if not request:
@@ -100,12 +95,12 @@ class FriendshipService:
     def remove_friend(user_id, friend_id):
         friendship = Friendship.query.filter(
             or_(
-                (Friendship.requester_id == user_id) & (
-                    Friendship.addressee_id == friend_id),
-                (Friendship.requester_id == friend_id) & (
-                    Friendship.addressee_id == user_id)
+                (Friendship.requester_id == user_id)
+                & (Friendship.addressee_id == friend_id),
+                (Friendship.requester_id == friend_id)
+                & (Friendship.addressee_id == user_id),
             ),
-            Friendship.status == 'accepted'
+            Friendship.status == "accepted",
         ).first()
 
         if not friendship:
@@ -122,9 +117,8 @@ class FriendshipService:
     @staticmethod
     def get_friends(user_id):
         friendships = Friendship.query.filter(
-            or_(Friendship.requester_id == user_id,
-                Friendship.addressee_id == user_id),
-            Friendship.status == 'accepted'
+            or_(Friendship.requester_id == user_id, Friendship.addressee_id == user_id),
+            Friendship.status == "accepted",
         ).all()
 
         friends = []
@@ -141,14 +135,14 @@ class FriendshipService:
         if not user:
             return []
 
-        requests = [f for f in user.friendships if f.status == 'pending']
+        requests = [f for f in user.friendships if f.status == "pending"]
 
         result = []
         for r in requests:
             requester = User.query.get(r.requester_id)
             if requester:
                 data = requester.to_dict()
-                data['request_created_at'] = r.created_at.isoformat()
-                data['friendship_id'] = r.id
+                data["request_created_at"] = r.created_at.isoformat()
+                data["friendship_id"] = r.id
                 result.append(data)
         return result

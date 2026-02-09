@@ -1,7 +1,6 @@
 from datetime import datetime
 
 from app.core.extensions import db
-from app.models.like import Like
 from app.models.post import Post
 
 
@@ -93,50 +92,6 @@ class PostService:
         post.reason_for_deletion = reason
 
         try:
-            db.session.commit()
-            return post, None
-        except Exception as e:
-            db.session.rollback()
-            return None, str(e)
-
-    @staticmethod
-    def like_post(post_id, user_id):
-        post = Post.query.filter_by(id=post_id, deleted=False).first()
-        if not post:
-            return None, "Post not found"
-
-        existing_like = Like.query.filter_by(
-            user_id=user_id, post_id=post_id).first()
-        if existing_like:
-            return None, "Already liked"
-
-        new_like = Like(user_id=user_id, post_id=post_id)
-        post.likes += 1
-
-        try:
-            db.session.add(new_like)
-            db.session.commit()
-            return post, None
-        except Exception as e:
-            db.session.rollback()
-            return None, str(e)
-
-    @staticmethod
-    def unlike_post(post_id, user_id):
-        post = Post.query.filter_by(id=post_id, deleted=False).first()
-        if not post:
-            return None, "Post not found"
-
-        existing_like = Like.query.filter_by(
-            user_id=user_id, post_id=post_id).first()
-        if not existing_like:
-            return None, "Not liked"
-
-        if post.likes > 0:
-            post.likes -= 1
-
-        try:
-            db.session.delete(existing_like)
             db.session.commit()
             return post, None
         except Exception as e:

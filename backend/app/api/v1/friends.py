@@ -80,19 +80,9 @@ def get_requests(current_user):
     if not user_id:
         return jsonify({"error": "user_id is required"}), 400
 
-    # Ensure security: user can only see their own requests
-    # Although admin might see anyone's? For now strict match.
     if str(user_id) != str(current_user.id):
-        # Optional: Allow admin
-        if current_user.role != 'Admin':
+        if current_user.role != "Admin":
             return jsonify({"error": "User ID mismatch"}), 403
-
-    # Use the new relationship 'friendships' on User model (which are requests to this user)
-    # We need to fetch the user first to access the relationship
-    # Or just use the service which does the query.
-    # But user asked to "look at requests like that" (via friendships).
-    # Let's use the relationship directly here or update service to use it.
-    # Service is cleaner. Let's update service.
 
     requests = FriendshipService.get_pending_requests(user_id)
     return jsonify(requests), 200
@@ -130,8 +120,7 @@ def send_request(current_user):
     if not friend_id:
         return jsonify({"error": "friend_id is required"}), 400
 
-    friendship, error = FriendshipService.send_request(
-        current_user.id, friend_id)
+    friendship, error = FriendshipService.send_request(current_user.id, friend_id)
     if error:
         return jsonify({"error": error}), 400
 
@@ -170,8 +159,7 @@ def accept_request(current_user):
     if not requester_id:
         return jsonify({"error": "requester_id is required"}), 400
 
-    friendship, error = FriendshipService.accept_request(
-        current_user.id, requester_id)
+    friendship, error = FriendshipService.accept_request(current_user.id, requester_id)
     if error:
         return jsonify({"error": error}), 400
 
@@ -210,8 +198,7 @@ def reject_request(current_user):
     if not requester_id:
         return jsonify({"error": "requester_id is required"}), 400
 
-    success, error = FriendshipService.reject_request(
-        current_user.id, requester_id)
+    success, error = FriendshipService.reject_request(current_user.id, requester_id)
     if error:
         return jsonify({"error": error}), 400
 
@@ -250,8 +237,7 @@ def remove_friend(current_user):
     if not friend_id:
         return jsonify({"error": "friend_id is required"}), 400
 
-    success, error = FriendshipService.remove_friend(
-        current_user.id, friend_id)
+    success, error = FriendshipService.remove_friend(current_user.id, friend_id)
     if error:
         return jsonify({"error": error}), 400
 

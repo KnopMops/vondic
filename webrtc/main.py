@@ -1,17 +1,16 @@
 import logging
-
-import eventlet
-from flasgger import Swagger
-from flask import Flask, jsonify, request
-from flask_cors import CORS
-from flask_socketio import SocketIO
-
-from .config import Config
-from .database import UserRepository
-from .proxy import ConnectionBroker
 from .signaling import SignalingService
-
+from .proxy import ConnectionBroker
+from .database import UserRepository
+from .config import Config
+from flask_socketio import SocketIO
+from flask_cors import CORS
+from flask import Flask, jsonify, request
+from flasgger import Swagger
+import eventlet
 eventlet.monkey_patch()
+
+
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
@@ -21,7 +20,9 @@ logger = logging.getLogger(__name__)
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
-    CORS(app)
+
+    CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+
     swagger_config = {
         "headers": [],
         "specs": [
@@ -95,10 +96,35 @@ const socket = io("http://localhost:5000", {
         },
     }
     Swagger(app, config=swagger_config)
-    socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
-    user_repo = UserRepository(app.config["DB_PATH"])
+    socketio = SocketIO(
+        app,
+        cors_allowed_origins="*",
+        async_mode="eventlet"
+    )
+    user_repo = UserRepository()
+    # user_repo.init_messages_table() # Initialized in __init__
+    logger.info("WebRTC Server initialized. Message encryption enabled.")
     broker = ConnectionBroker(user_repo)
     SignalingService(socketio, broker)
+
+    @app.route("/api/online-users", methods=["GET"])
+    def get_online_users():
+        """
+        Получить количество онлайн пользователей
+        ---
+        tags:
+          - Metrics
+        responses:
+          200:
+            description: Количество онлайн пользователей
+            schema:
+              type: object
+              properties:
+                count:
+                  type: integer
+        """
+        count = user_repo.get_online_users_count()
+        return jsonify({"count": count}), 200
 
     @app.route("/")
     def index():
@@ -210,6 +236,268 @@ const socket = io("http://localhost:5000", {
                 200,
             )
         return (jsonify({"error": "User not found or database error"}), 404)
+
+    @app.route("/messages/history", methods=["POST"])
+    def get_messages_history():
+        """
+        Получение истории сообщений
+        ---
+        tags:
+          - Messages
+        parameters:
+          - name: body
+            in: body
+            required: true
+            schema:
+              type: object
+              required:
+                - token
+                - target_id
+              properties:
+                token:
+                  type: string
+                  description: Токен авторизации пользователя
+                target_id:
+                  type: string
+                  description: ID собеседника (UUID)
+                limit:
+                  type: integer
+                  default: 50
+                  description: Лимит сообщений
+                offset:
+                  type: integer
+                  default: 0
+                  description: Смещение
+        responses:
+          200:
+            description: История сообщений
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  sender_id:
+                    type: string
+                  target_id:
+                    type: string
+                  content:
+                    type: string
+                  timestamp:
+                    type: string
+          401:
+            description: Неавторизован
+          400:
+            description: Некорректные параметры
+        """
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        token = data.get("token")
+        target_id = data.get("target_id")
+        limit = data.get("limit", 50)
+        offset = data.get("offset", 0)
+
+        if not token:
+            return jsonify({"error": "Token required"}), 401
+
+        user = user_repo.fetch_user_by_token(token)
+        if not user:
+            return jsonify({"error": "Invalid token"}), 401
+
+        messages = user_repo.get_messages_history(
+            user["id"], target_id, limit, offset
+        )
+        return jsonify(messages), 200
+
+    @app.route("/channels/history", methods=["POST"])
+    def get_channel_history():
+        """
+        Получение истории сообщений канала
+        ---
+        tags:
+          - Channels
+        parameters:
+          - name: body
+            in: body
+            required: true
+            schema:
+              type: object
+              required:
+                - token
+                - channel_id
+              properties:
+                token:
+                  type: string
+                  description: Токен авторизации пользователя
+                channel_id:
+                  type: string
+                  description: ID канала (UUID)
+                limit:
+                  type: integer
+                  default: 50
+                  description: Лимит сообщений
+                offset:
+                  type: integer
+                  default: 0
+                  description: Смещение
+        responses:
+          200:
+            description: История сообщений канала
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  sender_id:
+                    type: string
+                  channel_id:
+                    type: string
+                  content:
+                    type: string
+                  timestamp:
+                    type: string
+          401:
+            description: Неавторизован
+          400:
+            description: Некорректные параметры
+        """
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        token = data.get("token")
+        channel_id = data.get("channel_id")
+        limit = data.get("limit", 50)
+        offset = data.get("offset", 0)
+
+        if not token:
+            return jsonify({"error": "Token required"}), 401
+
+        if not channel_id:
+            return jsonify({"error": "channel_id is required"}), 400
+
+        user = user_repo.fetch_user_by_token(token)
+        if not user:
+            return jsonify({"error": "Invalid token"}), 401
+
+        # Optional: Check if user is participant of the channel
+        # participants = user_repo.get_channel_participants(channel_id)
+        # if user["id"] not in participants:
+        #     return jsonify({"error": "Access denied"}), 403
+
+        messages = user_repo.get_channel_history(
+            channel_id, limit, offset
+        )
+        return jsonify(messages), 200
+
+    @app.route("/chats/search", methods=["POST"])
+    def search_chats():
+        """
+        Поиск пользователей (чатов)
+        ---
+        tags:
+          - Search
+        parameters:
+          - name: body
+            in: body
+            required: true
+            schema:
+              type: object
+              required:
+                - token
+                - query
+              properties:
+                token:
+                  type: string
+                query:
+                  type: string
+                  description: Часть имени пользователя
+        responses:
+          200:
+            description: Список найденных пользователей
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  username:
+                    type: string
+        """
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data"}), 400
+
+        token = data.get("token")
+        query = data.get("query")
+
+        if not token:
+            return jsonify({"error": "Token required"}), 401
+
+        user = user_repo.fetch_user_by_token(token)
+        if not user:
+            return jsonify({"error": "Invalid token"}), 401
+
+        if not query:
+            return jsonify([]), 200
+
+        results = user_repo.search_users(query)
+        return jsonify(results), 200
+
+    @app.route("/messages/search", methods=["POST"])
+    def search_messages():
+        """
+        Поиск сообщений внутри чата
+        ---
+        tags:
+          - Search
+        parameters:
+          - name: body
+            in: body
+            required: true
+            schema:
+              type: object
+              required:
+                - token
+                - target_id
+                - query
+              properties:
+                token:
+                  type: string
+                target_id:
+                  type: string
+                query:
+                  type: string
+        responses:
+          200:
+            description: Найденные сообщения
+        """
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data"}), 400
+
+        token = data.get("token")
+        target_id = data.get("target_id")
+        query = data.get("query")
+
+        if not token:
+            return jsonify({"error": "Token required"}), 401
+
+        user = user_repo.fetch_user_by_token(token)
+        if not user:
+            return jsonify({"error": "Invalid token"}), 401
+
+        if not target_id or not query:
+            return jsonify([]), 200
+
+        results = user_repo.search_messages(user["id"], target_id, query)
+        return jsonify(results), 200
 
     return (app, socketio)
 

@@ -5,3 +5,4 @@ flask-cors
 python-dotenv
 ruff
 flasgger
+cryptography
