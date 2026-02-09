@@ -2,7 +2,7 @@ import requests
 from typing import Callable, Optional
 import threading
 
-DEFAULT_API_URL = "URL"
+DEFAULT_API_URL = "https://untortuously-hummel-arnoldo.ngrok-free.dev/ask"
 
 
 class RequestThread:

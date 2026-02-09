@@ -3,13 +3,13 @@ import os
 import sqlite3
 import time
 from typing import Optional, Tuple
-
 import requests
 from flask import Flask, jsonify, redirect, render_template, request, send_from_directory, session, url_for
-
+from flask_cors import CORS
+from flasgger import Swagger
 
 APP_SECRET = os.environ.get("CHAT_APP_SECRET", "dev-secret")
-DEFAULT_RAG_API_URL = os.environ.get("RAG_API_URL", "URL")
+DEFAULT_RAG_API_URL = os.environ.get("RAG_API_URL", "https://untortuously-hummel-arnoldo.ngrok-free.dev/ask")
 RAG_MODULE_PATH = "/Users/evgen/Desktop/vondic/Rag-systems/rag.py"
 DB_PATH = os.path.join(os.path.dirname(__file__), "chat_escalations.db")
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploaded_data")
@@ -59,6 +59,18 @@ def init_db():
             filename TEXT,
             path TEXT,
             uploaded_at INTEGER
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS photo_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            query TEXT,
+            photo_path TEXT,
+            access_token TEXT,
+            created_at INTEGER
         )
         """
     )
@@ -148,13 +160,95 @@ def ask_rag(question: str) -> Tuple[str, Optional[str]]:
 
 
 app = Flask(__name__)
+CORS(app)
+Swagger(app)
 app.secret_key = APP_SECRET
 init_db()
 ensure_escalation_columns()
 
 
+@app.route("/api/admin/data", methods=["GET"])
+def api_admin_data():
+    """
+    Get admin dashboard data
+    ---
+    tags:
+      - Admin
+    responses:
+      200:
+        description: Admin dashboard data including escalations, notifications, and datasets
+        schema:
+          type: object
+          properties:
+            escalations:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  user_id:
+                    type: string
+                  question:
+                    type: string
+                  created_at:
+                    type: integer
+            notifications:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  user_id:
+                    type: string
+                  message:
+                    type: string
+                  created_at:
+                    type: integer
+                  delivered:
+                    type: integer
+            datasets:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  filename:
+                    type: string
+                  path:
+                    type: string
+                  uploaded_at:
+                    type: integer
+    """
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("SELECT id, user_id, question, created_at FROM escalations WHERE status != 'answered' ORDER BY created_at DESC")
+    escalations = [{"id": r[0], "user_id": r[1], "question": r[2], "created_at": r[3]} for r in cur.fetchall()]
+    cur.execute("SELECT id, user_id, message, created_at, delivered FROM notifications ORDER BY created_at DESC")
+    notifications = [{"id": r[0], "user_id": r[1], "message": r[2], "created_at": r[3], "delivered": r[4]} for r in cur.fetchall()]
+    cur.execute("SELECT id, filename, path, uploaded_at FROM datasets ORDER BY uploaded_at DESC")
+    datasets = [{"id": r[0], "filename": r[1], "path": r[2], "uploaded_at": r[3]} for r in cur.fetchall()]
+    conn.close()
+    return jsonify({
+        "escalations": escalations,
+        "notifications": notifications,
+        "datasets": datasets
+    })
+
+
 @app.route("/chat", methods=["GET"])
 def chat_page():
+    """
+    Render the chat page
+    ---
+    tags:
+      - Pages
+    responses:
+      200:
+        description: HTML Chat page
+    """
     if "user_id" not in session:
         session["user_id"] = f"user-{int(time.time())}"
     return render_template("chat.html")
@@ -162,6 +256,36 @@ def chat_page():
 
 @app.route("/chat/send", methods=["POST"])
 def chat_send():
+    """
+    Send a message to the chat bot
+    ---
+    tags:
+      - Chat
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              description: The user's message
+    responses:
+      200:
+        description: The bot's answer
+        schema:
+          type: object
+          properties:
+            ok:
+              type: boolean
+            answer:
+              type: string
+      400:
+        description: Invalid input
+      500:
+        description: Internal server error
+    """
     data = request.get_json(force=True) or {}
     question = str(data.get("message", "")).strip()
     user_id = session.get("user_id", "anonymous")
@@ -176,8 +300,104 @@ def chat_send():
     return jsonify({"ok": True, "answer": answer})
 
 
+@app.route("/api/ask_with_photo", methods=["POST"])
+def api_ask_with_photo():
+    """
+    Ask a question with an attached photo
+    ---
+    tags:
+      - Chat
+    consumes:
+      - multipart/form-data
+    parameters:
+      - in: formData
+        name: file
+        type: file
+        required: true
+        description: The image file to upload
+      - in: formData
+        name: query
+        type: string
+        required: false
+        description: The question text
+      - in: formData
+        name: user_id
+        type: string
+        required: false
+        description: User ID
+      - in: formData
+        name: access_token
+        type: string
+        required: false
+        description: Access token
+    responses:
+      200:
+        description: The answer from RAG
+        schema:
+          type: object
+          properties:
+            ok:
+              type: boolean
+            answer:
+              type: string
+      400:
+        description: No file provided
+      500:
+        description: Internal server error
+    """
+    file = request.files.get("file")
+    query = request.form.get("query", "")
+    user_id = request.form.get("user_id", "anonymous")
+    access_token = request.form.get("access_token", "")
+    if not file:
+        return jsonify({"ok": False, "error": "No file provided"}), 400
+    ts = int(time.time())
+    filename = f"photo_{ts}_{file.filename}"
+    save_path = os.path.join(UPLOAD_DIR, filename)
+    file.save(save_path)
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO photo_requests (user_id, query, photo_path, access_token, created_at) VALUES (?, ?, ?, ?, ?)",
+        (user_id, query, save_path, access_token, ts),
+    )
+    conn.commit()
+    conn.close()
+    answer, err = ask_rag(query)
+    if err:
+        return jsonify({"ok": False, "error": err}), 500
+    return jsonify({"ok": True, "answer": answer})
+
+
 @app.route("/chat/updates", methods=["GET"])
 def chat_updates():
+    """
+    Poll for chat updates (admin answers)
+    ---
+    tags:
+      - Chat
+    responses:
+      200:
+        description: List of updates
+        schema:
+          type: object
+          properties:
+            ok:
+              type: boolean
+            updates:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  question:
+                    type: string
+                  answer:
+                    type: string
+                  answered_at:
+                    type: integer
+    """
     if "user_id" not in session:
         session["user_id"] = f"user-{int(time.time())}"
     user_id = session["user_id"]
@@ -202,6 +422,15 @@ def chat_updates():
 
 @app.route("/admin", methods=["GET"])
 def admin_page():
+    """
+    Render the admin dashboard
+    ---
+    tags:
+      - Pages
+    responses:
+      200:
+        description: HTML Admin dashboard
+    """
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     cur.execute("SELECT id, user_id, question, created_at FROM escalations WHERE status != 'answered' ORDER BY created_at DESC")
@@ -216,6 +445,33 @@ def admin_page():
 
 @app.route("/admin/updates", methods=["GET"])
 def admin_updates():
+    """
+    Get updates for admin dashboard (new escalations)
+    ---
+    tags:
+      - Admin
+    responses:
+      200:
+        description: List of pending escalations
+        schema:
+          type: object
+          properties:
+            ok:
+              type: boolean
+            escalations:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  user_id:
+                    type: string
+                  question:
+                    type: string
+                  created_at:
+                    type: integer
+    """
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     cur.execute("SELECT id, user_id, question, created_at FROM escalations WHERE status != 'answered' ORDER BY created_at DESC")
@@ -226,8 +482,39 @@ def admin_updates():
 
 @app.route("/admin/escalations/<int:esc_id>/answer", methods=["POST"])
 def admin_escalation_answer(esc_id: int):
-    answer = str(request.form.get("answer", "")).strip()
+    """
+    Answer an escalation
+    ---
+    tags:
+      - Admin
+    parameters:
+      - in: path
+        name: esc_id
+        type: integer
+        required: true
+        description: ID of the escalation
+      - in: body
+        name: body
+        required: false
+        schema:
+          type: object
+          properties:
+            answer:
+              type: string
+    responses:
+      200:
+        description: Answer submitted successfully
+      400:
+        description: Empty answer
+    """
+    if request.is_json:
+        data = request.get_json()
+        answer = str(data.get("answer", "")).strip()
+    else:
+        answer = str(request.form.get("answer", "")).strip()
     if not answer:
+        if request.is_json:
+             return jsonify({"ok": False, "error": "Empty answer"}), 400
         return redirect(url_for("admin_page"))
     ts = int(time.time())
     conn = sqlite3.connect(DB_PATH)
@@ -238,11 +525,30 @@ def admin_escalation_answer(esc_id: int):
     )
     conn.commit()
     conn.close()
+    if request.is_json:
+        return jsonify({"ok": True})
     return redirect(url_for("admin_page"))
 
 
 @app.route("/admin/upload", methods=["POST"])
 def admin_upload():
+    """
+    Upload a dataset file
+    ---
+    tags:
+      - Admin
+    consumes:
+      - multipart/form-data
+    parameters:
+      - in: formData
+        name: file
+        type: file
+        required: true
+        description: Excel file (.xlsx, .xls)
+    responses:
+      302:
+        description: Redirects back to admin page
+    """
     f = request.files.get("file")
     if not f or not f.filename:
         return redirect(url_for("admin_page"))
@@ -267,6 +573,23 @@ def admin_upload():
 
 @app.route("/admin/datasets/<int:ds_id>/download", methods=["GET"])
 def admin_dataset_download(ds_id: int):
+    """
+    Download a dataset file
+    ---
+    tags:
+      - Admin
+    parameters:
+      - in: path
+        name: ds_id
+        type: integer
+        required: true
+        description: ID of the dataset
+    responses:
+      200:
+        description: File download
+      302:
+        description: Redirect if not found
+    """
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     cur.execute("SELECT filename, path FROM datasets WHERE id = ?", (ds_id,))
