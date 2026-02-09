@@ -2,7 +2,7 @@ import requests
 from typing import Callable, Optional
 import threading
 
-DEFAULT_API_URL = "API_URL"
+DEFAULT_API_URL = "URL"
 
 
 class RequestThread:
