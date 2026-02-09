@@ -24,7 +24,7 @@ export default function SocialFeed({ email, onLogout }: Props) {
 	} = usePosts()
 
 	const addPost = (text: string) => {
-		createPost(text)
+		createPost({ text })
 	}
 
 	const handleDeletePost = (id: string | number, reason?: string) => {
@@ -37,24 +37,37 @@ export default function SocialFeed({ email, onLogout }: Props) {
 	}
 
 	return (
-		<div className='min-h-screen bg-gray-900 text-gray-100'>
-			<Header email={email} onLogout={onLogout} />
-			<div className='mx-auto flex max-w-7xl'>
+		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white overflow-x-hidden relative'>
+			<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
+				<div className='absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-indigo-900/20 blur-[120px]' />
+				<div className='absolute top-[40%] -right-[10%] w-[40%] h-[60%] rounded-full bg-purple-900/20 blur-[120px]' />
+				<div className='absolute bottom-[10%] left-[20%] w-[30%] h-[30%] rounded-full bg-emerald-900/10 blur-[100px]' />
+			</div>
+
+			<div className='relative z-20'>
+				<Header email={email} onLogout={onLogout} />
+			</div>
+
+			<div className='relative z-10 mx-auto flex max-w-7xl pt-6'>
 				<Sidebar />
-				<main className='flex-1 p-4 sm:p-6 lg:p-8'>
-					<div className='mx-auto max-w-3xl space-y-6'>
+				<main className='flex-1 px-4 sm:px-6 lg:px-8'>
+					<div className='mx-auto max-w-2xl space-y-6'>
 						<Composer onCreate={addPost} />
-						<div className='rounded-xl bg-gray-800 p-3'>
-							<div className='flex gap-6 text-sm'>
-								<button className='border-b-2 border-indigo-500 pb-2 font-semibold'>
+						<div className='rounded-xl bg-gray-900/40 backdrop-blur-md border border-gray-800/50 p-1'>
+							<div className='grid grid-cols-2 p-1 gap-2'>
+								<button className='rounded-lg bg-gray-800/50 py-2.5 text-sm font-medium text-white shadow-sm transition-all'>
 									Популярное
 								</button>
-								<button className='pb-2 text-gray-400'>Подписки</button>
+								<button className='rounded-lg py-2.5 text-sm font-medium text-gray-400 hover:text-white hover:bg-gray-800/30 transition-all'>
+									Подписки
+								</button>
 							</div>
 						</div>
 
 						{loading && (
-							<div className='text-center text-gray-400'>Загрузка...</div>
+							<div className='flex justify-center py-8'>
+								<div className='h-8 w-8 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent' />
+							</div>
 						)}
 
 						{posts.map(p => (
@@ -78,12 +91,7 @@ export default function SocialFeed({ email, onLogout }: Props) {
 								likes={p.likes || 0}
 								comments_count={p.comments_count || 0}
 								isLikedByCurrentUser={p.is_liked || false}
-								image={
-									p.image ||
-									(p.attachments && p.attachments.length > 0
-										? p.attachments[0]
-										: undefined)
-								}
+								image={p.image}
 								currentUserId={user?.id}
 								userRole={user?.role}
 								onDelete={handleDeletePost}

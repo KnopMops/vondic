@@ -49,7 +49,14 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 				if (!res.ok) return
 				const { token } = await res.json()
 
-				if (!token) return
+				if (!token) {
+				// Try once more with a slight delay or just fail
+				// But maybe the token is in cookies and we just need to wait?
+				// For now, return and let the user re-login or refresh if needed.
+				// But wait! If we are here, we have a user in Redux. 
+				// The user might have just logged in and token is in cookie.
+				return
+			}
 
 				// Initialize socket
                 // User specified http://localhost:5000 in example. 

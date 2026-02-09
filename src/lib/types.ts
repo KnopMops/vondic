@@ -9,3 +9,12 @@ export interface User {
 	socket_id?: string | null
 	status?: string
 }
+
+export interface Channel {
+	id: string
+	name: string
+	description: string
+	invite_code: string
+	owner_id: string
+	participants_count: number
+}

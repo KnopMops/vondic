@@ -18,6 +18,7 @@ interface User {
 	description?: string
 	birth_date?: string
 	socket_id?: string | null
+	access_token?: string
 }
 
 interface AuthContextType {
@@ -96,11 +97,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			}
 
 			const userData = data.user
+			if (data.access_token) {
+				userData.access_token = data.access_token
+			}
 			dispatch(setUser(userData))
 			localStorage.setItem('user', JSON.stringify(userData))
+
 			// Токены теперь в httpOnly cookies, не сохраняем их в localStorage
 
-			router.push('/')
+			router.push('/feed')
 		} catch (error) {
 			alert(error instanceof Error ? error.message : 'An error occurred')
 		}
@@ -121,10 +126,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			}
 
 			const userData = data.user
+			if (data.access_token) {
+				userData.access_token = data.access_token
+			}
 			dispatch(setUser(userData))
 			localStorage.setItem('user', JSON.stringify(userData))
 
-			router.push('/')
+			router.push('/feed')
 		} catch (error) {
 			alert(error instanceof Error ? error.message : 'An error occurred')
 		}
@@ -174,8 +182,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 			// Если бэкенд возвращает пользователя и токены сразу
 			if (data.user) {
-				dispatch(setUser(data.user))
-				localStorage.setItem('user', JSON.stringify(data.user))
+				const userData = data.user
+				if (data.access_token) {
+					userData.access_token = data.access_token
+				}
+				dispatch(setUser(userData))
+				localStorage.setItem('user', JSON.stringify(userData))
 			}
 
 			// Перенаправляем на верификацию
@@ -196,7 +208,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		// Удаляем токены из localStorage на всякий случай, если они там были
 		localStorage.removeItem('access_token')
 		localStorage.removeItem('refresh_token')
-		router.push('/login')
+		router.push('/')
 	}
 
 	return (

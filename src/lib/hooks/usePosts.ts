@@ -1,6 +1,6 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useAppDispatch } from '@/lib/hooks'
 import { setPosts } from '@/lib/features/postsSlice'
+import { useAppDispatch } from '@/lib/hooks'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 
 type PostData = {
@@ -14,7 +14,6 @@ type PostData = {
 	comments_count?: number
 	is_liked?: boolean
 	image?: string
-	attachments?: string[] | null
 }
 
 export function usePosts() {
@@ -30,7 +29,6 @@ export function usePosts() {
 		},
 	})
 
-	// Sync with Redux
 	useEffect(() => {
 		if (query.data) {
 			dispatch(setPosts(query.data))
@@ -38,7 +36,7 @@ export function usePosts() {
 	}, [query.data, dispatch])
 
 	const createPostMutation = useMutation({
-		mutationFn: async (text: string) => {
+		mutationFn: async ({ text }: { text: string }) => {
 			const res = await fetch('/api/posts', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -101,8 +99,5 @@ export function usePosts() {
 		createPost: createPostMutation.mutate,
 		deletePost: deletePostMutation.mutate,
 		updatePost: updatePostMutation.mutate,
-		isCreating: createPostMutation.isPending,
-		isDeleting: deletePostMutation.isPending,
-		isUpdating: updatePostMutation.isPending,
 	}
 }

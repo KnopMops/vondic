@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import CommentsModal from './CommentsModal'
 import PostDetailsModal from './PostDetailsModal'
+import ShareModal from './ShareModal'
 
 type Props = {
 	id: string | number
@@ -50,6 +51,7 @@ export default function Post({
 	const [showComments, setShowComments] = useState(false)
 	const [commentCount, setCommentCount] = useState(comments_count)
 	const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false)
+	const [isShareModalOpen, setIsShareModalOpen] = useState(false)
 
 	useEffect(() => {
 		setCommentCount(comments_count)
@@ -86,7 +88,6 @@ export default function Post({
 
 			if (!res.ok) {
 				if (res.status === 400 && newIsLiked) {
-					// If like failed with 400, try dislike
 					try {
 						const resDislike = await fetch(`/api/posts/${id}/like`, {
 							method: 'POST',
@@ -138,17 +139,17 @@ export default function Post({
 	}
 
 	return (
-		<article className='rounded-xl bg-white p-4 shadow-sm dark:bg-gray-800 relative'>
+		<article className='rounded-xl bg-gray-900/40 backdrop-blur-md border border-gray-800/50 p-4 shadow-sm relative group'>
 			<div className='flex items-start gap-3'>
 				<Link href={`/feed/profile/${author_id}`}>
 					{author_avatar ? (
 						<img
 							src={author_avatar}
 							alt={author}
-							className='h-10 w-10 rounded-full object-cover hover:opacity-80 transition-opacity'
+							className='h-10 w-10 rounded-full object-cover hover:opacity-80 transition-opacity ring-2 ring-transparent group-hover:ring-indigo-500/50'
 						/>
 					) : (
-						<div className='h-10 w-10 rounded-full bg-indigo-200 dark:bg-indigo-900/50 hover:opacity-80 transition-opacity' />
+						<div className='h-10 w-10 rounded-full bg-indigo-900/50 hover:opacity-80 transition-opacity ring-2 ring-transparent group-hover:ring-indigo-500/50' />
 					)}
 				</Link>
 				<div className='flex-1'>
@@ -156,33 +157,31 @@ export default function Post({
 						<div className='flex items-center gap-2'>
 							<Link
 								href={`/feed/profile/${author_id}`}
-								className='hover:underline'
+								className='hover:underline decoration-indigo-500/50'
 							>
-								<span className='text-sm font-semibold text-gray-900 dark:text-white'>
+								<span className='text-sm font-semibold text-gray-200'>
 									{author}
 								</span>
 							</Link>
-							<span className='text-xs text-gray-500 dark:text-gray-400'>
-								{time}
-							</span>
+							<span className='text-xs text-gray-500'>{time}</span>
 						</div>
 						{(canEdit || canDelete) && (
 							<div className='relative'>
 								<button
 									onClick={() => setIsMenuOpen(!isMenuOpen)}
-									className='text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+									className='text-gray-500 hover:text-gray-200 transition-colors rounded-full p-1 hover:bg-white/5'
 								>
 									•••
 								</button>
 								{isMenuOpen && (
-									<div className='absolute right-0 top-6 z-10 w-48 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 dark:bg-gray-700'>
+									<div className='absolute right-0 top-6 z-10 w-48 rounded-xl bg-gray-900/90 backdrop-blur-xl shadow-2xl ring-1 ring-white/10 overflow-hidden'>
 										<div className='py-1'>
 											<button
 												onClick={() => {
 													setIsDetailsModalOpen(true)
 													setIsMenuOpen(false)
 												}}
-												className='block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600'
+												className='block w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors'
 											>
 												Подробнее
 											</button>
@@ -192,7 +191,7 @@ export default function Post({
 														setIsEditing(true)
 														setIsMenuOpen(false)
 													}}
-													className='block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600'
+													className='block w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors'
 												>
 													Редактировать
 												</button>
@@ -200,7 +199,7 @@ export default function Post({
 											{canDelete && (
 												<button
 													onClick={handleDeleteClick}
-													className='block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-gray-100 dark:text-red-400 dark:hover:bg-gray-600'
+													className='block w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-red-500/10 transition-colors'
 												>
 													Удалить
 												</button>
@@ -215,40 +214,46 @@ export default function Post({
 					{isEditing ? (
 						<div className='mt-2'>
 							<textarea
-								className='w-full rounded-md border border-gray-300 p-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white'
+								className='w-full rounded-xl border border-gray-700/50 bg-gray-800/50 p-3 text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all'
 								value={editText}
 								onChange={e => setEditText(e.target.value)}
 							/>
 							<div className='mt-2 flex gap-2'>
 								<button
 									onClick={handleUpdate}
-									className='rounded-md bg-indigo-600 px-3 py-1 text-sm text-white hover:bg-indigo-700'
+									className='rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-500/20'
 								>
 									Сохранить
 								</button>
 								<button
 									onClick={() => setIsEditing(false)}
-									className='rounded-md bg-gray-200 px-3 py-1 text-sm text-gray-700 hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-200'
+									className='rounded-lg bg-gray-800/50 px-4 py-2 text-sm text-gray-400 hover:bg-gray-800 hover:text-white transition-colors'
 								>
 									Отмена
 								</button>
 							</div>
 						</div>
 					) : (
-						<p className='mt-1 text-sm text-gray-800 dark:text-gray-200'>
-							{text}
-						</p>
+						<>
+							<p className='mt-1 text-sm text-gray-300 leading-relaxed'>
+								{text}
+							</p>
+						</>
 					)}
 
 					{image && (
-						<img src={image} alt='' className='mt-3 w-full rounded-lg' />
+						<img
+							src={image}
+							alt=''
+							className='mt-3 w-full rounded-xl border border-gray-800/50'
+						/>
 					)}
 
-					<div className='mt-3 flex items-center gap-6'>
+					<div className='mt-4 flex items-center gap-6'>
 						<button
 							onClick={handleLike}
 							disabled={isLiking}
-							className={`flex items-center gap-2 transition-colors ${isLiked ? 'text-red-500' : 'text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400'} ${isLiking ? 'opacity-50 cursor-not-allowed' : ''}`}
+							className={`flex items-center gap-2 transition-all ${isLiked ? 'text-red-500 scale-105' : 'text-gray-500 hover:text-indigo-400 hover:scale-105'} ${isLiking ? 'opacity-50 cursor-not-allowed' : ''}`}
 						>
 							<svg
 								xmlns='http://www.w3.org/2000/svg'
@@ -268,7 +273,7 @@ export default function Post({
 						</button>
 						<button
 							onClick={() => setShowComments(true)}
-							className='flex items-center gap-2 text-gray-500 transition-colors hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400'
+							className='flex items-center gap-2 text-gray-500 transition-all hover:text-indigo-400 hover:scale-105'
 						>
 							<svg
 								xmlns='http://www.w3.org/2000/svg'
@@ -286,7 +291,10 @@ export default function Post({
 							</svg>
 							<span className='text-sm font-medium'>{commentCount}</span>
 						</button>
-						<button className='flex items-center gap-2 text-gray-500 transition-colors hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400'>
+						<button
+							onClick={() => setIsShareModalOpen(true)}
+							className='flex items-center gap-2 text-gray-500 transition-all hover:text-indigo-400 hover:scale-105'
+						>
 							<svg
 								xmlns='http://www.w3.org/2000/svg'
 								fill='none'
@@ -306,48 +314,74 @@ export default function Post({
 				</div>
 			</div>
 
-			{showComments && (
-				<CommentsModal
-					postId={id}
-					isOpen={showComments}
-					onClose={() => setShowComments(false)}
+			<CommentsModal
+				isOpen={showComments}
+				onClose={() => setShowComments(false)}
+				postId={id}
+				postAuthorId={author_id}
+			/>
+
+			<PostDetailsModal
+				isOpen={isDetailsModalOpen}
+				onClose={() => setIsDetailsModalOpen(false)}
+				post={{
+					id,
+					author,
+					author_id,
+					author_avatar,
+					time,
+					text,
+					likes: likeCount,
+					comments_count: commentCount,
+					image,
+					isLiked,
+				}}
+				onLike={handleLike}
+			/>
+
+			{isShareModalOpen && (
+				<ShareModal
+					isOpen={isShareModalOpen}
+					onClose={() => setIsShareModalOpen(false)}
+					postUrl={`${window.location.origin}/feed/post/${id}`}
 				/>
 			)}
 
-			<PostDetailsModal
-				postId={id}
-				isOpen={isDetailsModalOpen}
-				onClose={() => setIsDetailsModalOpen(false)}
-			/>
-
-			{/* Admin Delete Modal */}
 			{isDeleteModalOpen && (
-				<div className='fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50'>
-					<div className='w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800'>
-						<h3 className='mb-4 text-lg font-medium text-gray-900 dark:text-white'>
-							Удаление поста (Админ)
+				<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4'>
+					<div className='w-full max-w-md rounded-2xl bg-gray-900 border border-gray-800 p-6 shadow-2xl'>
+						<h3 className='text-xl font-bold text-white mb-2'>
+							Удалить публикацию?
 						</h3>
-						<p className='mb-2 text-sm text-gray-500 dark:text-gray-400'>
-							Укажите причину удаления:
+						<p className='text-gray-400 mb-6'>
+							Это действие нельзя отменить. Публикация будет удалена безвозвратно.
 						</p>
-						<textarea
-							className='mb-4 w-full rounded-md border border-gray-300 p-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white'
-							rows={3}
-							value={deleteReason}
-							onChange={e => setDeleteReason(e.target.value)}
-							placeholder='Причина...'
-						/>
-						<div className='flex justify-end gap-2'>
+
+						{isAdmin && !isOwner && (
+							<div className='mb-6'>
+								<label className='block text-sm font-medium text-gray-300 mb-2'>
+									Причина удаления (для автора)
+								</label>
+								<textarea
+									className='w-full rounded-xl border border-gray-700 bg-gray-800 p-3 text-white focus:outline-none focus:ring-2 focus:ring-red-500/50'
+									rows={3}
+									placeholder='Нарушение правил сообщества...'
+									value={deleteReason}
+									onChange={e => setDeleteReason(e.target.value)}
+								/>
+							</div>
+						)}
+
+						<div className='flex gap-3 justify-end'>
 							<button
 								onClick={() => setIsDeleteModalOpen(false)}
-								className='rounded-md bg-gray-200 px-4 py-2 text-sm text-gray-700 hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-200'
+								className='px-4 py-2 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white transition-colors'
 							>
 								Отмена
 							</button>
 							<button
 								onClick={handleConfirmDelete}
-								disabled={!deleteReason.trim()}
-								className='rounded-md bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700 disabled:opacity-50'
+								className='px-4 py-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors border border-red-500/20'
 							>
 								Удалить
 							</button>

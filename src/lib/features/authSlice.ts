@@ -9,6 +9,7 @@ interface User {
 	description?: string
 	birth_date?: string
 	socket_id?: string | null
+	access_token?: string
 }
 
 interface AuthState {

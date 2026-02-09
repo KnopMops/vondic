@@ -11,7 +11,6 @@ interface Post {
 	comments_count?: number
 	is_liked?: boolean
 	image?: string
-	attachments?: string[] | null
 }
 
 interface PostsState {

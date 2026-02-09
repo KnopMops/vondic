@@ -32,11 +32,6 @@ export default function ProfileIdPage() {
 				const res = await fetch(`/api/users/${id}`)
 				if (!res.ok) throw new Error('User not found')
 				const data = await res.json()
-                // Assuming backend returns the user object directly or nested.
-                // If nested like { user: ... }, we need to extract it.
-                // Based on auth/me, it's nested. Let's assume consistent API design.
-                // But /users/{id} usually returns the resource directly. 
-                // I'll check if 'user' property exists, if not use data.
 				setProfileUser(data.user || data)
 			} catch (err) {
 				console.error(err)
@@ -51,7 +46,7 @@ export default function ProfileIdPage() {
 
 	if (isLoading || isAuthLoading) {
 		return (
-			<div className='flex min-h-screen items-center justify-center bg-gray-900'>
+			<div className='flex min-h-screen items-center justify-center bg-black'>
 				<div className='h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent'></div>
 			</div>
 		)
@@ -59,7 +54,7 @@ export default function ProfileIdPage() {
 
 	if (error || !profileUser) {
 		return (
-			<div className='min-h-screen bg-gray-900 text-gray-100'>
+			<div className='min-h-screen bg-black text-white'>
 				<Header email={currentUser?.email} onLogout={logout} />
 				<div className='mx-auto flex max-w-7xl'>
 					<Sidebar />
@@ -82,9 +77,19 @@ export default function ProfileIdPage() {
 	}
 
 	return (
-		<div className='min-h-screen bg-gray-900 text-gray-100'>
-			<Header email={currentUser?.email} onLogout={logout} />
-			<div className='mx-auto flex max-w-7xl'>
+		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white overflow-x-hidden relative'>
+			{/* Background Gradients */}
+			<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
+				<div className='absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-indigo-900/20 blur-[120px]' />
+				<div className='absolute top-[40%] -right-[10%] w-[40%] h-[60%] rounded-full bg-purple-900/20 blur-[120px]' />
+				<div className='absolute bottom-[10%] left-[20%] w-[30%] h-[30%] rounded-full bg-emerald-900/10 blur-[100px]' />
+			</div>
+
+			<div className='relative z-20'>
+				<Header email={currentUser?.email} onLogout={logout} />
+			</div>
+
+			<div className='relative z-10 mx-auto flex max-w-7xl pt-6'>
 				<Sidebar />
 				<main className='flex-1 p-4 sm:p-6 lg:p-8'>
 					<UserProfile

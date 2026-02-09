@@ -1,6 +1,7 @@
 'use client'
 
 import { User } from '@/lib/types'
+import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect, useState } from 'react'
 
 type Props = {
@@ -38,9 +39,6 @@ export default function UserProfile({ user, currentUser }: Props) {
 				if (friendsRes.ok) {
 					const friends = await friendsRes.json()
 					if (Array.isArray(friends)) {
-						// Check if current profile user is in my friends list
-						// The friend object might have 'id' or 'friend_id' depending on backend
-						// Based on previous code, we enriched it, but let's check id matching
 						const isMyFriend = friends.some(
 							(f: any) => f.id === user.id || f.friend_id === user.id,
 						)
@@ -52,7 +50,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 				const followingRes = await fetch('/api/subscriptions/following', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ user_id: currentUser.id }), // Assuming we want MY following list
+					body: JSON.stringify({ user_id: currentUser.id }),
 				})
 				if (followingRes.ok) {
 					const following = await followingRes.json()
@@ -84,9 +82,6 @@ export default function UserProfile({ user, currentUser }: Props) {
 			})
 			if (!res.ok) throw new Error('Failed to add friend')
 			alert('Заявка отправлена!')
-			// Note: Usually adding a friend sends a request, it doesn't make them a friend immediately.
-			// But for UI feedback we might want to disable the button or show "Pending"
-			// The user requirement says "как сейчас добавить в друзья", so we keep it.
 		} catch (error) {
 			console.error(error)
 			alert('Ошибка при отправке заявки')
@@ -207,8 +202,8 @@ export default function UserProfile({ user, currentUser }: Props) {
 		try {
 			const payload = {
 				user_id: user.id,
-				email: user.email, // Required by backend, cannot be changed
-				username: user.username, // Required by backend, cannot be changed
+				email: user.email,
+				username: user.username,
 				avatar_url: avatarUrl,
 			}
 
@@ -220,11 +215,8 @@ export default function UserProfile({ user, currentUser }: Props) {
 
 			if (!res.ok) throw new Error('Failed to update profile')
 
-			const updatedUser = await res.json()
 			alert('Профиль обновлен!')
 			setIsEditModalOpen(false)
-			// Ideally update parent state or force refresh, but for now user will see updated image on reload or simple state update if we had setProfileUser passed down
-			// For immediate feedback let's reload or we need a callback from parent
 			window.location.reload()
 		} catch (error) {
 			console.error(error)
@@ -235,13 +227,25 @@ export default function UserProfile({ user, currentUser }: Props) {
 	}
 
 	return (
-		<div className='mx-auto max-w-3xl space-y-6'>
+		<motion.div
+			initial={{ opacity: 0, y: 20 }}
+			animate={{ opacity: 1, y: 0 }}
+			transition={{ duration: 0.5 }}
+			className='mx-auto max-w-3xl space-y-6'
+		>
 			{/* Cover Image */}
-			<div className='h-36 rounded-2xl bg-gradient-to-r from-indigo-500 to-cyan-500' />
+			<div className='relative h-48 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 overflow-hidden shadow-lg'>
+				<div className='absolute inset-0 bg-black/20' />
+			</div>
 
 			{/* User Info Section */}
-			<div className='flex items-end gap-4 px-4'>
-				<div className='-mt-12 flex h-24 w-24 items-center justify-center rounded-full bg-gray-800 ring-4 ring-gray-900 overflow-hidden'>
+			<div className='flex flex-col sm:flex-row items-end gap-6 px-4'>
+				<motion.div
+					initial={{ scale: 0.8, opacity: 0 }}
+					animate={{ scale: 1, opacity: 1 }}
+					transition={{ delay: 0.2 }}
+					className='-mt-20 flex h-32 w-32 items-center justify-center rounded-full bg-gray-900 ring-4 ring-black overflow-hidden shadow-xl z-10'
+				>
 					{user.avatar_url ? (
 						<img
 							src={user.avatar_url}
@@ -249,22 +253,23 @@ export default function UserProfile({ user, currentUser }: Props) {
 							className='h-full w-full object-cover'
 						/>
 					) : (
-						<span className='text-4xl'>
+						<span className='text-5xl'>
 							{user.username?.[0]?.toUpperCase() || '👤'}
 						</span>
 					)}
-				</div>
-				<div className='flex-1 pb-2'>
-					<div className='flex items-center justify-between'>
+				</motion.div>
+
+				<div className='flex-1 pb-2 w-full'>
+					<div className='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4'>
 						<div>
-							<h1 className='text-2xl font-bold'>{user.username}</h1>
+							<h1 className='text-3xl font-bold text-white'>{user.username}</h1>
 							{!user.email?.endsWith('@telegram.bot') && (
 								<p className='text-sm text-gray-400'>{user.email}</p>
 							)}
 							<p
-								className={`text-sm capitalize ${
+								className={`text-sm capitalize mt-1 ${
 									user.role === 'Admin'
-										? 'text-red-500 font-bold'
+										? 'text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-orange-500 font-bold'
 										: 'text-gray-400'
 								}`}
 							>
@@ -274,110 +279,136 @@ export default function UserProfile({ user, currentUser }: Props) {
 
 						{/* Actions */}
 						{isMe && (
-							<button
+							<motion.button
+								whileHover={{ scale: 1.05 }}
+								whileTap={{ scale: 0.95 }}
 								onClick={() => setIsEditModalOpen(true)}
-								className='rounded-lg bg-gray-700 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-600'
+								className='rounded-xl bg-white/10 border border-white/20 px-6 py-2 text-sm font-semibold text-white hover:bg-white/20 backdrop-blur-md transition-all shadow-lg'
 							>
 								Редактировать
-							</button>
+							</motion.button>
 						)}
 
 						{/* Edit Modal */}
-						{isEditModalOpen && (
-							<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4'>
-								<div className='w-full max-w-md space-y-4 rounded-xl bg-gray-800 p-6 shadow-xl'>
-									<h2 className='text-xl font-bold text-white'>
-										Редактировать профиль
-									</h2>
-									<div>
-										<label className='mb-1 block text-sm font-medium text-gray-400'>
-											Ссылка на аватар
-										</label>
-										<input
-											type='text'
-											value={avatarUrl}
-											onChange={e => setAvatarUrl(e.target.value)}
-											className='w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none'
-											placeholder='https://...'
-										/>
-									</div>
-									<div className='flex justify-end gap-3'>
-										<button
-											onClick={() => setIsEditModalOpen(false)}
-											className='rounded-lg px-4 py-2 text-sm font-semibold text-gray-400 hover:text-white'
-										>
-											Отмена
-										</button>
-										<button
-											onClick={handleUpdateProfile}
-											disabled={isUpdating}
-											className='rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50'
-										>
-											{isUpdating ? 'Сохранение...' : 'Сохранить'}
-										</button>
-									</div>
-								</div>
-							</div>
-						)}
+						<AnimatePresence>
+							{isEditModalOpen && (
+								<motion.div
+									initial={{ opacity: 0 }}
+									animate={{ opacity: 1 }}
+									exit={{ opacity: 0 }}
+									className='fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4'
+								>
+									<motion.div
+										initial={{ scale: 0.9, opacity: 0 }}
+										animate={{ scale: 1, opacity: 1 }}
+										exit={{ scale: 0.9, opacity: 0 }}
+										className='w-full max-w-md space-y-6 rounded-2xl bg-gray-900/90 border border-white/10 p-8 shadow-2xl backdrop-blur-xl'
+									>
+										<h2 className='text-2xl font-bold text-white'>
+											Редактировать профиль
+										</h2>
+										<div>
+											<label className='mb-2 block text-sm font-medium text-gray-400'>
+												Ссылка на аватар
+											</label>
+											<input
+												type='text'
+												value={avatarUrl}
+												onChange={e => setAvatarUrl(e.target.value)}
+												className='w-full rounded-xl border border-gray-700 bg-black/50 px-4 py-3 text-white focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all'
+												placeholder='https://...'
+											/>
+										</div>
+										<div className='flex justify-end gap-3 pt-4'>
+											<button
+												onClick={() => setIsEditModalOpen(false)}
+												className='rounded-xl px-4 py-2 text-sm font-semibold text-gray-400 hover:text-white hover:bg-white/5 transition-all'
+											>
+												Отмена
+											</button>
+											<button
+												onClick={handleUpdateProfile}
+												disabled={isUpdating}
+												className='rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-2 text-sm font-semibold text-white hover:shadow-lg hover:shadow-indigo-500/25 transition-all disabled:opacity-50'
+											>
+												{isUpdating ? 'Сохранение...' : 'Сохранить'}
+											</button>
+										</div>
+									</motion.div>
+								</motion.div>
+							)}
+						</AnimatePresence>
 
 						{!isMe && currentUser && !checkingStatus && (
-							<div className='flex gap-2'>
+							<div className='flex flex-wrap gap-3'>
 								{/* Friend Button */}
 								{isFriend ? (
-									<button
+									<motion.button
+										whileHover={{ scale: 1.05 }}
+										whileTap={{ scale: 0.95 }}
 										onClick={handleRemoveFriend}
 										disabled={loading}
-										className='rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50'
+										className='rounded-xl bg-red-500/10 border border-red-500/50 px-4 py-2 text-sm font-semibold text-red-400 hover:bg-red-500/20 transition-all disabled:opacity-50'
 									>
 										Удалить из друзей
-									</button>
+									</motion.button>
 								) : (
-									<button
+									<motion.button
+										whileHover={{ scale: 1.05 }}
+										whileTap={{ scale: 0.95 }}
 										onClick={handleAddFriend}
 										disabled={loading}
-										className='rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50'
+										className='rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg hover:shadow-indigo-500/25 transition-all disabled:opacity-50'
 									>
 										Добавить в друзья
-									</button>
+									</motion.button>
 								)}
 
 								{/* Subscribe Button */}
 								{isSubscribed ? (
-									<button
+									<motion.button
+										whileHover={{ scale: 1.05 }}
+										whileTap={{ scale: 0.95 }}
 										onClick={handleUnsubscribe}
 										disabled={loading}
-										className='rounded-lg bg-gray-600 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-500 disabled:opacity-50'
+										className='rounded-xl bg-white/10 border border-white/20 px-4 py-2 text-sm font-semibold text-white hover:bg-white/20 transition-all disabled:opacity-50'
 									>
 										Отписаться
-									</button>
+									</motion.button>
 								) : (
-									<button
+									<motion.button
+										whileHover={{ scale: 1.05 }}
+										whileTap={{ scale: 0.95 }}
 										onClick={handleSubscribe}
 										disabled={loading}
-										className='rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50'
+										className='rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 transition-all disabled:opacity-50'
 									>
 										Подписаться
-									</button>
+									</motion.button>
 								)}
 
 								{isAdmin && (
 									<>
 										{isBlocked ? (
-											<button
+											<motion.button
+												whileHover={{ scale: 1.05 }}
+												whileTap={{ scale: 0.95 }}
 												onClick={handleUnblock}
 												disabled={loading}
-												className='rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-500 disabled:opacity-50'
+												className='rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-500 transition-all disabled:opacity-50'
 											>
 												Разблокировать
-											</button>
+											</motion.button>
 										) : (
-											<button
+											<motion.button
+												whileHover={{ scale: 1.05 }}
+												whileTap={{ scale: 0.95 }}
 												onClick={handleBlock}
 												disabled={loading}
-												className='rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50'
+												className='rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-500 transition-all disabled:opacity-50'
 											>
 												Заблокировать
-											</button>
+											</motion.button>
 										)}
 									</>
 								)}
@@ -386,30 +417,42 @@ export default function UserProfile({ user, currentUser }: Props) {
 					</div>
 
 					{user.description && (
-						<p className='mt-2 text-sm text-gray-300'>{user.description}</p>
+						<p className='mt-4 text-sm text-gray-300 max-w-2xl'>
+							{user.description}
+						</p>
 					)}
 				</div>
 			</div>
 
 			{/* Content Tabs */}
-			<div className='rounded-xl bg-gray-800 p-4'>
-				<div className='flex gap-6 text-sm border-b border-gray-700 pb-4'>
-					<button className='border-b-2 border-indigo-500 pb-1 font-semibold text-white'>
+			<div className='rounded-3xl bg-white/5 border border-white/10 backdrop-blur-md p-1'>
+				<div className='flex'>
+					<button className='flex-1 rounded-2xl bg-white/10 py-3 text-sm font-medium text-white shadow-sm transition-all'>
 						Посты
 					</button>
-					<button className='pb-1 text-gray-400 hover:text-white transition-colors'>
+					<button className='flex-1 rounded-2xl py-3 text-sm font-medium text-gray-400 hover:text-white hover:bg-white/5 transition-all'>
 						Друзья
 					</button>
-					<button className='pb-1 text-gray-400 hover:text-white transition-colors'>
+					<button className='flex-1 rounded-2xl py-3 text-sm font-medium text-gray-400 hover:text-white hover:bg-white/5 transition-all'>
 						Фото
 					</button>
 				</div>
 
-				<div className='mt-8 flex flex-col items-center justify-center py-8 text-center text-gray-400'>
-					<div className='mb-2 text-4xl'>📭</div>
-					<p>Пока нет постов</p>
+				<div className='min-h-[300px] flex flex-col items-center justify-center py-12 text-center text-gray-400'>
+					<motion.div
+						initial={{ scale: 0.8, opacity: 0 }}
+						animate={{ scale: 1, opacity: 1 }}
+						transition={{ delay: 0.4 }}
+						className='mb-4 text-6xl opacity-50'
+					>
+						📭
+					</motion.div>
+					<p className='text-lg font-medium'>Пока нет постов</p>
+					<p className='text-sm text-gray-500'>
+						Здесь будут отображаться публикации пользователя
+					</p>
 				</div>
 			</div>
-		</div>
+		</motion.div>
 	)
 }

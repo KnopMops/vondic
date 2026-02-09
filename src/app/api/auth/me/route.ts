@@ -35,6 +35,13 @@ export async function GET(req: NextRequest) {
 		}
 
 		const data = await response.json()
+		// Inject access_token into the response so client can use it for Socket.IO
+		if (data.user) {
+			data.user.access_token = accessToken
+		} else {
+			// Fallback if structure is different
+			data.access_token = accessToken
+		}
 		return NextResponse.json(data)
 	} catch (error) {
 		console.error('[API] Internal error:', error)

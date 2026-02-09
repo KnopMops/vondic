@@ -2,11 +2,15 @@
 
 import BrandLogo from '@/components/social/BrandLogo'
 import { useAuth } from '@/lib/AuthContext'
-import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { useState } from 'react'
 
-export default function LoginPage() {
+interface LoginModalProps {
+	isOpen: boolean
+	onClose: () => void
+}
+
+export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 	const [email, setEmail] = useState('')
 	const [password, setPassword] = useState('')
 	const { login, loginWithTelegram, loginWithYandex, isLoading } = useAuth()
@@ -16,6 +20,8 @@ export default function LoginPage() {
 		'instruction',
 	)
 	const [telegramKey, setTelegramKey] = useState('')
+
+	if (!isOpen) return null
 
 	const handleEmailLogin = async (e: React.FormEvent) => {
 		e.preventDefault()
@@ -29,31 +35,40 @@ export default function LoginPage() {
 	}
 
 	return (
-		<div className='flex min-h-screen items-center justify-center bg-black text-white selection:bg-indigo-500 selection:text-white overflow-hidden relative'>
-			<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
-				<div className='absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-indigo-900/20 blur-[120px]' />
-				<div className='absolute top-[40%] -right-[10%] w-[40%] h-[60%] rounded-full bg-purple-900/20 blur-[120px]' />
-				<div className='absolute bottom-[10%] left-[20%] w-[30%] h-[30%] rounded-full bg-emerald-900/10 blur-[100px]' />
-			</div>
+		<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200'>
+			{/* Click outside to close */}
+			<div className='absolute inset-0' onClick={onClose} />
 
-			<motion.div
-				initial={{ opacity: 0, y: 20 }}
-				animate={{ opacity: 1, y: 0 }}
-				transition={{ duration: 0.8, ease: 'easeOut' }}
-				className='w-full max-w-md space-y-6 rounded-3xl bg-white/5 border border-white/10 p-8 shadow-2xl backdrop-blur-xl relative z-10'
-			>
-				<div className='flex flex-col items-center justify-center gap-4'>
-					<div className='flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 shadow-lg shadow-indigo-500/20'>
-						<span className='text-2xl font-bold text-white'>V</span>
-					</div>
-					<h2 className='text-2xl font-bold text-white'>
-						Добро пожаловать
-					</h2>
+			<div className='relative w-full max-w-md space-y-6 rounded-2xl bg-gray-900 p-8 shadow-2xl border border-gray-800 animate-in zoom-in-95 duration-200'>
+				{/* Close button */}
+				<button
+					onClick={onClose}
+					className='absolute top-4 right-4 text-gray-500 hover:text-white transition-colors'
+				>
+					<svg
+						xmlns='http://www.w3.org/2000/svg'
+						fill='none'
+						viewBox='0 0 24 24'
+						strokeWidth={1.5}
+						stroke='currentColor'
+						className='w-6 h-6'
+					>
+						<path
+							strokeLinecap='round'
+							strokeLinejoin='round'
+							d='M6 18L18 6M6 6l12 12'
+						/>
+					</svg>
+				</button>
+
+				<div className='flex items-center justify-center gap-3'>
+					<BrandLogo size={32} />
+					<h2 className='text-2xl font-bold text-white'>Вход в Vondic</h2>
 				</div>
 
 				{loginMethod === 'email' ? (
 					<form className='mt-8 space-y-6' onSubmit={handleEmailLogin}>
-						<div className='space-y-4'>
+						<div className='-space-y-px rounded-md shadow-sm'>
 							<div>
 								<label htmlFor='email-address' className='sr-only'>
 									Email address
@@ -64,7 +79,7 @@ export default function LoginPage() {
 									type='email'
 									autoComplete='email'
 									required
-									className='relative block w-full rounded-xl border border-white/10 bg-white/5 py-3 px-4 text-white placeholder:text-gray-500 focus:z-10 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none'
+									className='relative block w-full rounded-t-xl border-0 bg-gray-800 py-3 text-white ring-1 ring-inset ring-gray-700 placeholder:text-gray-500 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-indigo-500 transition-all'
 									placeholder='Электронная почта'
 									value={email}
 									onChange={e => setEmail(e.target.value)}
@@ -80,7 +95,7 @@ export default function LoginPage() {
 									type='password'
 									autoComplete='current-password'
 									required
-									className='relative block w-full rounded-xl border border-white/10 bg-white/5 py-3 px-4 text-white placeholder:text-gray-500 focus:z-10 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none'
+									className='relative block w-full rounded-b-xl border-0 bg-gray-800 py-3 text-white ring-1 ring-inset ring-gray-700 placeholder:text-gray-500 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-indigo-500 transition-all'
 									placeholder='Пароль'
 									value={password}
 									onChange={e => setPassword(e.target.value)}
@@ -88,20 +103,20 @@ export default function LoginPage() {
 							</div>
 						</div>
 
-						<div className='space-y-4'>
+						<div className='space-y-3'>
 							<button
 								type='submit'
 								disabled={isLoading}
-								className='group relative flex w-full justify-center rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-3 text-sm font-semibold text-white hover:shadow-lg hover:shadow-indigo-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed'
+								className='group relative flex w-full justify-center rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white hover:bg-indigo-500 disabled:opacity-50 transition-all shadow-lg shadow-indigo-500/20'
 							>
 								{isLoading ? 'Вход...' : 'Войти'}
 							</button>
 
-							<div className='relative flex items-center justify-center'>
+							<div className='relative flex items-center justify-center my-4'>
 								<div className='absolute inset-0 flex items-center'>
-									<div className='w-full border-t border-white/10'></div>
+									<div className='w-full border-t border-gray-800'></div>
 								</div>
-								<span className='relative bg-black/50 px-2 text-sm text-gray-500 rounded backdrop-blur-sm'>
+								<span className='relative bg-gray-900 px-2 text-sm text-gray-500'>
 									или
 								</span>
 							</div>
@@ -109,7 +124,7 @@ export default function LoginPage() {
 							<button
 								type='button'
 								onClick={() => setLoginMethod('telegram')}
-								className='group relative flex w-full justify-center rounded-full border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white hover:bg-white/10 transition-all'
+								className='group relative flex w-full justify-center rounded-xl border border-gray-700 bg-transparent px-4 py-3 text-sm font-semibold text-white hover:bg-gray-800 transition-all'
 							>
 								Войти через Telegram
 							</button>
@@ -117,7 +132,7 @@ export default function LoginPage() {
 							<button
 								type='button'
 								onClick={() => loginWithYandex()}
-								className='group relative flex w-full justify-center rounded-full border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-400 hover:bg-red-500/20 transition-all'
+								className='group relative flex w-full justify-center rounded-xl border border-red-900/30 bg-red-500/5 px-4 py-3 text-sm font-semibold text-red-400 hover:bg-red-500/10 transition-all'
 							>
 								Войти через Яндекс
 							</button>
@@ -136,7 +151,7 @@ export default function LoginPage() {
 									</p>
 								</div>
 
-								<div className='rounded-2xl bg-white/5 border border-white/10 p-6'>
+								<div className='rounded-xl bg-gray-800/50 p-6 ring-1 ring-inset ring-gray-700'>
 									<p className='mb-3 text-xs text-gray-500 uppercase tracking-wider'>
 										Напишите боту
 									</p>
@@ -144,7 +159,7 @@ export default function LoginPage() {
 										href='https://t.me/vodnic_registration_bot'
 										target='_blank'
 										rel='noopener noreferrer'
-										className='flex items-center justify-center gap-2 text-lg font-bold text-indigo-400 hover:text-indigo-300 transition-colors'
+										className='flex items-center justify-center gap-2 text-xl font-bold text-blue-400 hover:text-blue-300 transition-colors'
 									>
 										<svg
 											className='w-6 h-6'
@@ -164,7 +179,7 @@ export default function LoginPage() {
 
 								<button
 									onClick={() => setTelegramStep('input')}
-									className='w-full rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-3 text-sm font-semibold text-white hover:shadow-lg hover:shadow-indigo-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all'
+									className='w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white hover:bg-indigo-500 transition-all'
 								>
 									Я получил ключ
 								</button>
@@ -191,7 +206,7 @@ export default function LoginPage() {
 										id='telegram-key'
 										type='text'
 										required
-										className='block w-full rounded-xl border border-white/10 bg-white/5 py-3 text-white placeholder:text-gray-500 focus:z-10 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-center tracking-wide outline-none'
+										className='block w-full rounded-xl border-0 bg-gray-800 py-3 text-white ring-1 ring-inset ring-gray-700 placeholder:text-gray-500 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-indigo-500 text-center tracking-wide'
 										placeholder='Пример: 123456:AbCdEf...'
 										value={telegramKey}
 										onChange={e => setTelegramKey(e.target.value)}
@@ -201,7 +216,7 @@ export default function LoginPage() {
 								<button
 									type='submit'
 									disabled={isLoading}
-									className='w-full rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-3 text-sm font-semibold text-white hover:shadow-lg hover:shadow-indigo-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50'
+									className='w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white hover:bg-indigo-500 disabled:opacity-50 transition-all'
 								>
 									{isLoading ? 'Вход...' : 'Войти в аккаунт'}
 								</button>
@@ -217,23 +232,25 @@ export default function LoginPage() {
 									setLoginMethod('email')
 								}
 							}}
-							className='flex w-full justify-center text-sm text-gray-400 hover:text-white transition-colors'
+							className='mt-4 w-full text-sm text-gray-500 hover:text-gray-300 transition-colors'
 						>
-							Назад
+							{telegramStep === 'input'
+								? 'Назад к инструкции'
+								: 'Вернуться к Email'}
 						</button>
 					</div>
 				)}
-				
-				<p className="mt-4 text-center text-sm text-gray-400">
-					Нет аккаунта?{" "}
+
+				<p className='mt-2 text-center text-sm text-gray-500'>
+					Нет аккаунта?{' '}
 					<Link
-						href="/register"
-						className="font-medium text-indigo-400 hover:text-indigo-300 transition-colors"
+						href='/register'
+						className='font-medium text-indigo-400 hover:text-indigo-300 transition-colors'
 					>
 						Зарегистрироваться
 					</Link>
 				</p>
-			</motion.div>
+			</div>
 		</div>
 	)
 }
