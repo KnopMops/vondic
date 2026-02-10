@@ -1,0 +1,237 @@
+'use client'
+
+import { useRouter } from 'next/navigation'
+import React, { createContext, useContext, useEffect } from 'react'
+import {
+	fetchUser,
+	logout as logoutAction,
+	setUser,
+} from './features/authSlice'
+import { useAppDispatch, useAppSelector } from './hooks'
+
+interface User {
+	id: string
+	email: string
+	username: string
+	role: string
+	avatar_url: string | null
+	description?: string
+	birth_date?: string
+	socket_id?: string | null
+	access_token?: string
+}
+
+interface AuthContextType {
+	user: User | null
+	login: (email: string, password: string) => Promise<void>
+	loginWithTelegram: (key: string) => Promise<void>
+	loginWithYandex: () => Promise<void>
+	register: (email: string, username: string, password: string) => Promise<void>
+	logout: () => void
+	isLoading: boolean
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined)
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+	const dispatch = useAppDispatch()
+	const { user, isLoading, isInitialized } = useAppSelector(state => state.auth)
+	const router = useRouter()
+
+	const backendUrl =
+		process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+
+	useEffect(() => {
+		const initAuth = async () => {
+			if (isInitialized) return
+
+			// 1. Пробуем восстановить из временной cookie (от social auth)
+			const getCookie = (name: string) => {
+				const value = `; ${document.cookie}`
+				const parts = value.split(`; ${name}=`)
+				if (parts.length === 2) return parts.pop()?.split(';').shift()
+			}
+
+			const tempUserData = getCookie('temp_user_data')
+			if (tempUserData) {
+				try {
+					const userData = JSON.parse(decodeURIComponent(tempUserData))
+					dispatch(setUser(userData))
+					localStorage.setItem('user', JSON.stringify(userData))
+					// Удаляем cookie
+					document.cookie =
+						'temp_user_data=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;'
+					return
+				} catch (e) {
+					console.error('Failed to parse temp_user_data', e)
+				}
+			}
+
+			// 2. Сначала пробуем восстановить из localStorage для быстрого отображения
+			// (Можно добавить setUser здесь, но fetchUser перепишет его если что)
+			const storedUser = localStorage.getItem('user')
+			if (storedUser && !user) {
+				dispatch(setUser(JSON.parse(storedUser)))
+			}
+
+			// 3. Загружаем пользователя с сервера через Redux Thunk
+			dispatch(fetchUser())
+		}
+
+		initAuth()
+	}, [dispatch, isInitialized, user])
+
+	const login = async (email: string, password: string) => {
+		try {
+			// Запрос к нашему API Proxy (который установит cookies)
+			const response = await fetch('/api/auth/login', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ email, password }),
+			})
+
+			const data = await response.json()
+
+			if (!response.ok) {
+				throw new Error(data.error || 'Login failed')
+			}
+
+			const userData = data.user
+			if (data.access_token) {
+				userData.access_token = data.access_token
+			}
+			dispatch(setUser(userData))
+			localStorage.setItem('user', JSON.stringify(userData))
+
+			// Токены теперь в httpOnly cookies, не сохраняем их в localStorage
+
+			router.push('/feed')
+		} catch (error) {
+			alert(error instanceof Error ? error.message : 'An error occurred')
+		}
+	}
+
+	const loginWithTelegram = async (key: string) => {
+		try {
+			const response = await fetch('/api/auth/telegram', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ key }),
+			})
+
+			const data = await response.json()
+
+			if (!response.ok) {
+				throw new Error(data.error || 'Telegram login failed')
+			}
+
+			const userData = data.user
+			if (data.access_token) {
+				userData.access_token = data.access_token
+			}
+			dispatch(setUser(userData))
+			localStorage.setItem('user', JSON.stringify(userData))
+
+			router.push('/feed')
+		} catch (error) {
+			alert(error instanceof Error ? error.message : 'An error occurred')
+		}
+	}
+
+	const loginWithYandex = async () => {
+		try {
+			const response = await fetch('/api/auth/yandex/login', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+			})
+
+			const data = await response.json()
+
+			if (!response.ok) {
+				throw new Error(data.error || 'Yandex login init failed')
+			}
+
+			if (data.auth_url) {
+				window.location.href = data.auth_url
+			} else {
+				throw new Error('No auth_url returned')
+			}
+		} catch (error) {
+			alert(error instanceof Error ? error.message : 'An error occurred')
+		}
+	}
+
+	const register = async (
+		email: string,
+		username: string,
+		password: string,
+	) => {
+		try {
+			// Запрос к нашему API Proxy
+			const response = await fetch('/api/auth/register', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ email, username, password }),
+			})
+
+			const data = await response.json()
+
+			if (!response.ok) {
+				throw new Error(data.error || 'Registration failed')
+			}
+
+			// Если бэкенд возвращает пользователя и токены сразу
+			if (data.user) {
+				const userData = data.user
+				if (data.access_token) {
+					userData.access_token = data.access_token
+				}
+				dispatch(setUser(userData))
+				localStorage.setItem('user', JSON.stringify(userData))
+			}
+
+			// Перенаправляем на верификацию
+			router.push('/verify')
+		} catch (error) {
+			alert(error instanceof Error ? error.message : 'An error occurred')
+		}
+	}
+
+	const logout = async () => {
+		try {
+			await fetch('/api/auth/logout', { method: 'POST' })
+		} catch (e) {
+			console.error(e)
+		}
+		dispatch(logoutAction())
+		localStorage.removeItem('user')
+		// Удаляем токены из localStorage на всякий случай, если они там были
+		localStorage.removeItem('access_token')
+		localStorage.removeItem('refresh_token')
+		router.push('/')
+	}
+
+	return (
+		<AuthContext.Provider
+			value={{
+				user,
+				login,
+				loginWithTelegram,
+				loginWithYandex,
+				register,
+				logout,
+				isLoading,
+			}}
+		>
+			{children}
+		</AuthContext.Provider>
+	)
+}
+
+export function useAuth() {
+	const context = useContext(AuthContext)
+	if (context === undefined) {
+		throw new Error('useAuth must be used within an AuthProvider')
+	}
+	return context
+}

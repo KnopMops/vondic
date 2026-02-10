@@ -1,0 +1,427 @@
+import { Socket } from 'socket.io-client'
+import { create } from 'zustand'
+import { CallManager, CallRecord, CallState } from '../services/CallManager'
+import { WebRTCService } from '../services/WebRTCService'
+
+interface CallStore {
+	// Состояния
+	isInitialized: boolean
+	isWebRTCSupported: boolean
+	localStream: MediaStream | null
+	remoteStreams: Map<string, MediaStream>
+	activeCalls: Map<string, CallState>
+	activeGroupCallId: string | null
+	incomingCall: CallState | null
+	isMuted: boolean
+	callHistory: CallRecord[]
+
+	// Сервисы
+	webRTCService: WebRTCService | null
+	callManager: CallManager | null
+	socket: Socket | null
+	currentUserId: string | null
+
+	// Действия
+	initializeWebRTC: (socket: Socket, userId: string) => Promise<void>
+	cleanup: () => void
+	setLocalStream: (stream: MediaStream | null) => void
+	addActiveCall: (socketId: string, call: CallState) => void
+	removeActiveCall: (socketId: string) => void
+	updateActiveCall: (socketId: string, call: CallState) => void
+	setIncomingCall: (call: CallState | null) => void
+	clearIncomingCall: () => void
+	toggleMute: () => boolean
+	setMuted: (muted: boolean) => void
+	addToHistory: (record: CallRecord) => void
+	clearHistory: () => void
+
+	// Действия звонков
+	initiateCall: (targetUserId: string, targetUserName: string) => Promise<void>
+	initiateGroupCall: (groupId: string) => Promise<void>
+	joinGroupCall: (callId: string) => Promise<void>
+	leaveGroupCall: (callId: string) => void
+	acceptCall: (
+		callerSocketId: string,
+		callerInfo?: { userId: string; userName: string },
+	) => Promise<void>
+	rejectCall: (callerSocketId: string) => void
+	endCall: (targetSocketId: string) => void
+	endAllCalls: () => void
+
+	// Геттеры
+	getCallBySocketId: (socketId: string) => CallState | undefined
+	getCallByUserId: (userId: string) => CallState | undefined
+	getActiveCallsCount: () => number
+	getTotalCallDuration: () => number
+}
+
+export const useCallStore = create<CallStore>((set, get) => ({
+	// Начальные состояния
+	isInitialized: false,
+	isWebRTCSupported:
+		typeof window !== 'undefined' && 'RTCPeerConnection' in window,
+	localStream: null,
+	remoteStreams: new Map(),
+	activeCalls: new Map(),
+	activeGroupCallId: null,
+	incomingCall: null,
+	isMuted: false,
+	callHistory: [],
+
+	// Сервисы
+	webRTCService: null,
+	callManager: null,
+	socket: null,
+	currentUserId: null,
+
+	// Инициализация WebRTC
+	initializeWebRTC: async (socket: Socket, userId: string) => {
+		try {
+			if (!get().isWebRTCSupported) {
+				throw new Error('WebRTC не поддерживается в этом браузере')
+			}
+
+			const webRTCService = new WebRTCService(socket, userId)
+			const callManager = new CallManager(webRTCService, socket)
+
+			// Настройка callback'ов
+			webRTCService.onLocalStream = (stream: MediaStream) => {
+				set({ localStream: stream })
+			}
+
+			callManager.onRemoteStream = (socketId: string, stream: MediaStream) => {
+				const { activeCalls, remoteStreams } = get()
+				const call = activeCalls.get(socketId)
+
+				// Обновляем стримы
+				const newStreams = new Map(remoteStreams)
+				newStreams.set(socketId, stream)
+
+				if (call) {
+					call.status = 'connected'
+					const newCalls = new Map(activeCalls)
+					newCalls.set(socketId, call)
+					set({ activeCalls: newCalls, remoteStreams: newStreams })
+				} else {
+					set({ remoteStreams: newStreams })
+				}
+			}
+
+			callManager.onIncomingCall = (call: CallState) => {
+				set({ incomingCall: call })
+			}
+
+			callManager.onCallAccepted = (call: CallState, oldSocketId?: string) => {
+				const { activeCalls, remoteStreams } = get()
+				const newCalls = new Map(activeCalls)
+				const newStreams = new Map(remoteStreams)
+
+				if (oldSocketId) {
+					newCalls.delete(oldSocketId)
+					// Migrate remote stream if exists
+					const stream = newStreams.get(oldSocketId)
+					if (stream) {
+						newStreams.delete(oldSocketId)
+						newStreams.set(call.socketId, stream)
+					}
+				}
+				newCalls.set(call.socketId, call)
+				set({
+					activeCalls: newCalls,
+					remoteStreams: newStreams,
+					incomingCall: null,
+				})
+			}
+
+			callManager.onCallRejected = (call: CallState, reason?: string) => {
+				const { activeCalls } = get()
+				const newCalls = new Map(activeCalls)
+				newCalls.set(call.socketId, call)
+				set({ activeCalls: newCalls, incomingCall: null })
+			}
+
+			callManager.onCallEnded = (call: CallState) => {
+				const { activeCalls, callHistory, remoteStreams } = get()
+				const newCalls = new Map(activeCalls)
+				newCalls.delete(call.socketId)
+
+				const newStreams = new Map(remoteStreams)
+				newStreams.delete(call.socketId)
+
+				// Добавляем в историю
+				const historyRecord: CallRecord = {
+					id: `${call.userId}-${Date.now()}`,
+					callerId: userId,
+					callerName: 'Me',
+					receiverId: call.userId,
+					receiverName: call.userName || 'Unknown',
+					type: call.status === 'connected' ? 'outgoing' : 'missed',
+					duration: call.duration || 0,
+					startTime: call.startTime || new Date(),
+					endTime: new Date(),
+					status: call.status === 'connected' ? 'completed' : 'missed',
+				}
+
+				const newHistory = [historyRecord, ...callHistory]
+
+				set({
+					activeCalls: newCalls,
+					remoteStreams: newStreams,
+					callHistory: newHistory.slice(0, 100), // Ограничиваем историю
+				})
+			}
+
+			callManager.onCallFailed = (call: CallState, error: string) => {
+				console.error('Call failed:', error)
+				const { activeCalls } = get()
+				const newCalls = new Map(activeCalls)
+				if (call.socketId) {
+					newCalls.set(call.socketId, { ...call, status: 'failed' })
+				}
+				set({ activeCalls: newCalls })
+			}
+
+			callManager.onCallStateChange = (socketId: string, state: CallState) => {
+				const { activeCalls } = get()
+				const newCalls = new Map(activeCalls)
+				newCalls.set(socketId, state)
+				set({ activeCalls: newCalls })
+			}
+
+			callManager.onGroupCallIdChange = (groupId: string | null) => {
+				set({ activeGroupCallId: groupId })
+			}
+
+			set({
+				isInitialized: true,
+				webRTCService,
+				callManager,
+				socket,
+				currentUserId: userId,
+			})
+		} catch (error) {
+			console.error('Failed to initialize WebRTC:', error)
+			throw error
+		}
+	},
+
+	// Очистка
+	cleanup: () => {
+		const { callManager, webRTCService } = get()
+
+		if (callManager) {
+			callManager.cleanup()
+		}
+
+		if (webRTCService) {
+			webRTCService.cleanup()
+		}
+
+		set({
+			isInitialized: false,
+			localStream: null,
+			remoteStreams: new Map(),
+			activeCalls: new Map(),
+			activeGroupCallId: null,
+			incomingCall: null,
+			isMuted: false,
+			webRTCService: null,
+			callManager: null,
+			socket: null,
+			currentUserId: null,
+		})
+	},
+
+	// Управление локальным стримом
+	setLocalStream: (stream: MediaStream | null) => {
+		set({ localStream: stream })
+	},
+
+	// Управление активными звонками
+	addActiveCall: (socketId: string, call: CallState) => {
+		const { activeCalls } = get()
+		const newCalls = new Map(activeCalls)
+		newCalls.set(socketId, call)
+		set({ activeCalls: newCalls })
+	},
+
+	removeActiveCall: (socketId: string) => {
+		const { activeCalls } = get()
+		const newCalls = new Map(activeCalls)
+		newCalls.delete(socketId)
+		set({ activeCalls: newCalls })
+	},
+
+	updateActiveCall: (socketId: string, call: CallState) => {
+		const { activeCalls } = get()
+		const newCalls = new Map(activeCalls)
+		newCalls.set(socketId, call)
+		set({ activeCalls: newCalls })
+	},
+
+	// Управление входящим звонком
+	setIncomingCall: (call: CallState | null) => {
+		set({ incomingCall: call })
+	},
+
+	clearIncomingCall: () => {
+		set({ incomingCall: null })
+	},
+
+	// Управление микрофоном
+	toggleMute: () => {
+		const { callManager, isMuted } = get()
+		if (callManager) {
+			const newMutedState = callManager.toggleMute()
+			set({ isMuted: newMutedState })
+			return newMutedState
+		}
+		return isMuted
+	},
+
+	setMuted: (muted: boolean) => {
+		const { callManager } = get()
+		if (callManager) {
+			const currentMuted = callManager.isMuted()
+			if (currentMuted !== muted) {
+				callManager.toggleMute()
+			}
+		}
+		set({ isMuted: muted })
+	},
+
+	// Управление историей
+	addToHistory: (record: CallRecord) => {
+		const { callHistory } = get()
+		const newHistory = [record, ...callHistory]
+		set({ callHistory: newHistory.slice(0, 100) })
+	},
+
+	clearHistory: () => {
+		set({ callHistory: [] })
+	},
+
+	// Действия звонков
+	initiateCall: async (targetUserId: string, targetUserName: string) => {
+		const { callManager } = get()
+		if (!callManager) {
+			throw new Error('CallManager не инициализирован')
+		}
+
+		await callManager.initiateDirectCall(targetUserId, targetUserName)
+	},
+
+	initiateGroupCall: async (groupId: string) => {
+		const { callManager } = get()
+		if (!callManager) throw new Error('CallManager not initialized')
+		await callManager.initiateGroupCall(groupId)
+	},
+
+	joinGroupCall: async (callId: string) => {
+		const { callManager } = get()
+		if (!callManager) throw new Error('CallManager not initialized')
+		await callManager.joinGroupCall(callId)
+	},
+
+	leaveGroupCall: (callId: string) => {
+		const { callManager } = get()
+		if (!callManager) return
+		callManager.leaveGroupCall(callId)
+	},
+
+	acceptCall: async (
+		callerSocketId: string,
+		callerInfo?: { userId: string; userName: string },
+	) => {
+		const { callManager, incomingCall } = get()
+		if (!callManager) {
+			throw new Error('CallManager не инициализирован')
+		}
+
+		if (incomingCall?.isGroupCall && incomingCall.callId) {
+			await callManager.joinGroupCall(incomingCall.callId)
+		} else {
+			await callManager.acceptIncomingCall(callerSocketId, callerInfo)
+		}
+		set({ incomingCall: null })
+	},
+
+	rejectCall: (callerSocketId: string) => {
+		const { callManager, incomingCall } = get()
+		if (!callManager) {
+			return
+		}
+
+		if (incomingCall?.isGroupCall && incomingCall.callId) {
+			callManager.rejectGroupCall(incomingCall.callId)
+		} else {
+			callManager.rejectIncomingCall(callerSocketId)
+		}
+		set({ incomingCall: null })
+	},
+
+	endCall: (targetSocketId: string) => {
+		const { callManager } = get()
+		if (!callManager) {
+			return
+		}
+
+		callManager.endCall(targetSocketId)
+	},
+
+	endAllCalls: () => {
+		const { callManager } = get()
+		if (!callManager) {
+			return
+		}
+
+		callManager.endAllCalls()
+	},
+
+	// Геттеры
+	getCallBySocketId: (socketId: string) => {
+		const { activeCalls } = get()
+		return activeCalls.get(socketId)
+	},
+
+	getCallByUserId: (userId: string) => {
+		const { activeCalls } = get()
+		for (const call of activeCalls.values()) {
+			if (call.userId === userId) {
+				return call
+			}
+		}
+		return undefined
+	},
+
+	getActiveCallsCount: () => {
+		const { activeCalls } = get()
+		return activeCalls.size
+	},
+
+	getTotalCallDuration: () => {
+		const { activeCalls } = get()
+		let totalDuration = 0
+		for (const call of activeCalls.values()) {
+			if (call.duration) {
+				totalDuration += call.duration
+			}
+		}
+		return totalDuration
+	},
+}))
+
+// Селекторы для удобного использования
+export const useWebRTCService = () => useCallStore(state => state.webRTCService)
+export const useCallManager = () => useCallStore(state => state.callManager)
+export const useLocalStream = () => useCallStore(state => state.localStream)
+export const useRemoteStreams = () => useCallStore(state => state.remoteStreams)
+export const useActiveCalls = () => useCallStore(state => state.activeCalls)
+export const useActiveGroupCallId = () =>
+	useCallStore(state => state.activeGroupCallId)
+export const useIncomingCall = () => useCallStore(state => state.incomingCall)
+export const useCallHistory = () => useCallStore(state => state.callHistory)
+export const useIsMuted = () => useCallStore(state => state.isMuted)
+export const useIsInitialized = () => useCallStore(state => state.isInitialized)
+export const useIsWebRTCSupported = () =>
+	useCallStore(state => state.isWebRTCSupported)
