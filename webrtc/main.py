@@ -1,16 +1,13 @@
 import logging
-
-import eventlet
-from flasgger import Swagger
-from flask import Flask, jsonify, request
-from flask_cors import CORS
-from flask_socketio import SocketIO
-
-from .config import Config
-from .database import UserRepository
-from .proxy import ConnectionBroker
 from .signaling import SignalingService
-
+from .proxy import ConnectionBroker
+from .database import UserRepository
+from .config import Config
+from flask_socketio import SocketIO
+from flask_cors import CORS
+from flask import Flask, jsonify, request
+from flasgger import Swagger
+import eventlet
 eventlet.monkey_patch()
 
 

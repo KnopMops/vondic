@@ -1,7 +1,6 @@
 from datetime import datetime
 
 from app.core.extensions import db
-from app.models.like import Like
 from app.models.post import Post
 
 
