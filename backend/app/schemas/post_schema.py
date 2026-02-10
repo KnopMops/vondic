@@ -11,7 +11,7 @@ class PostSchema(ma.SQLAlchemyAutoSchema):
     comments_count = ma.Method("get_comments_count")
 
     def get_comments_count(self, obj):
-        return len(obj.comments) if obj.comments else 0
+        return len([c for c in obj.comments if not c.deleted]) if obj.comments else 0
 
 
 post_schema = PostSchema()

@@ -128,6 +128,10 @@ def create_post(current_user):
               type: string
             content:
               type: string
+            attachments:
+              type: array
+              items:
+                type: object
     responses:
       201:
         description: Пост создан
@@ -137,6 +141,10 @@ def create_post(current_user):
     data = request.get_json()
     if not data:
         return jsonify({"error": "No data provided"}), 400
+
+    attachments = data.get("attachments")
+    if attachments is not None and not isinstance(attachments, list):
+        return jsonify({"error": "attachments must be a list"}), 400
 
     post = PostService.create_post(data, current_user.id)
     if not post:

@@ -25,3 +25,7 @@ uv.lock
 instance/
 
 api_docs.json
+
+migrations/
+
+static/

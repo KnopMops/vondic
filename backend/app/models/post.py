@@ -14,7 +14,7 @@ class Post(db.Model):
     likes = db.Column(INTEGER, default=0)
     created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
     deleted_at = db.Column(TIMESTAMP, nullable=True)
-    deleted_by = db.Column(TEXT, nullable=True)  # Admin UUID
+    deleted_by = db.Column(TEXT, nullable=True)
     reason_for_deletion = db.Column(TEXT, nullable=True)
     deleted = db.Column(BOOLEAN, default=False)
     updated_at = db.Column(
@@ -22,7 +22,6 @@ class Post(db.Model):
     reports = db.Column(INTEGER, default=0)
     posted_by = db.Column(TEXT, db.ForeignKey("users.id"), nullable=False)
 
-    # Relationships
     comments = db.relationship("Comment", backref="post", lazy=True)
 
     def to_dict(self):
@@ -35,5 +34,5 @@ class Post(db.Model):
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "posted_by": self.posted_by,
             "deleted": self.deleted,
-            "comments_count": len(self.comments) if self.comments else 0,
+            "comments_count": len([c for c in self.comments if not c.deleted]) if self.comments else 0,
         }
