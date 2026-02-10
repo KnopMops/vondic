@@ -29,3 +29,17 @@ api_docs.json
 migrations/
 
 static/
+
+.env
+
+node_modules/
+
+.next/
+
+dist/
+dist-ssr/
+*.local
+_billing.tsx
+
+logs/
+*.log
