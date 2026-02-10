@@ -1,7 +1,9 @@
 'use client'
 
 import { User } from '@/lib/types'
+import { getAttachmentUrl } from '@/lib/utils'
 import { AnimatePresence, motion } from 'framer-motion'
+import Link from 'next/link'
 import { useEffect, useState } from 'react'
 
 type Props = {
@@ -15,6 +17,9 @@ export default function UserProfile({ user, currentUser }: Props) {
 	const [isBlocked, setIsBlocked] = useState(user.status === 'blocked')
 	const [loading, setLoading] = useState(false)
 	const [checkingStatus, setCheckingStatus] = useState(true)
+	const [activeTab, setActiveTab] = useState<'posts' | 'friends'>('posts')
+	const [friends, setFriends] = useState<User[]>([])
+	const [loadingFriends, setLoadingFriends] = useState(false)
 
 	// Edit Profile Modal State
 	const [isEditModalOpen, setIsEditModalOpen] = useState(false)
@@ -70,6 +75,30 @@ export default function UserProfile({ user, currentUser }: Props) {
 
 		checkStatus()
 	}, [currentUser, user.id, isMe])
+
+	useEffect(() => {
+		if (activeTab === 'friends' && friends.length === 0) {
+			const fetchFriends = async () => {
+				setLoadingFriends(true)
+				try {
+					const res = await fetch('/api/friends/list', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ user_id: user.id }),
+					})
+					if (res.ok) {
+						const data = await res.json()
+						setFriends(Array.isArray(data) ? data : [])
+					}
+				} catch (e) {
+					console.error(e)
+				} finally {
+					setLoadingFriends(false)
+				}
+			}
+			fetchFriends()
+		}
+	}, [activeTab, user.id, friends.length])
 
 	const handleAddFriend = async () => {
 		if (!currentUser) return
@@ -248,7 +277,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 				>
 					{user.avatar_url ? (
 						<img
-							src={user.avatar_url}
+							src={getAttachmentUrl(user.avatar_url)}
 							alt={user.username}
 							className='h-full w-full object-cover'
 						/>
@@ -427,30 +456,79 @@ export default function UserProfile({ user, currentUser }: Props) {
 			{/* Content Tabs */}
 			<div className='rounded-3xl bg-white/5 border border-white/10 backdrop-blur-md p-1'>
 				<div className='flex'>
-					<button className='flex-1 rounded-2xl bg-white/10 py-3 text-sm font-medium text-white shadow-sm transition-all'>
+					<button
+						onClick={() => setActiveTab('posts')}
+						className={`flex-1 rounded-2xl py-3 text-sm font-medium transition-all ${
+							activeTab === 'posts'
+								? 'bg-white/10 text-white shadow-sm'
+								: 'text-gray-400 hover:text-white hover:bg-white/5'
+						}`}
+					>
 						Посты
 					</button>
-					<button className='flex-1 rounded-2xl py-3 text-sm font-medium text-gray-400 hover:text-white hover:bg-white/5 transition-all'>
+					<button
+						onClick={() => setActiveTab('friends')}
+						className={`flex-1 rounded-2xl py-3 text-sm font-medium transition-all ${
+							activeTab === 'friends'
+								? 'bg-white/10 text-white shadow-sm'
+								: 'text-gray-400 hover:text-white hover:bg-white/5'
+						}`}
+					>
 						Друзья
-					</button>
-					<button className='flex-1 rounded-2xl py-3 text-sm font-medium text-gray-400 hover:text-white hover:bg-white/5 transition-all'>
-						Фото
 					</button>
 				</div>
 
-				<div className='min-h-[300px] flex flex-col items-center justify-center py-12 text-center text-gray-400'>
-					<motion.div
-						initial={{ scale: 0.8, opacity: 0 }}
-						animate={{ scale: 1, opacity: 1 }}
-						transition={{ delay: 0.4 }}
-						className='mb-4 text-6xl opacity-50'
-					>
-						📭
-					</motion.div>
-					<p className='text-lg font-medium'>Пока нет постов</p>
-					<p className='text-sm text-gray-500'>
-						Здесь будут отображаться публикации пользователя
-					</p>
+				<div className='min-h-[300px] p-6'>
+					{activeTab === 'posts' ? (
+						<div className='flex flex-col items-center justify-center py-12 text-center text-gray-400'>
+							<motion.div
+								initial={{ scale: 0.8, opacity: 0 }}
+								animate={{ scale: 1, opacity: 1 }}
+								transition={{ delay: 0.4 }}
+								className='mb-4 text-6xl opacity-50'
+							>
+								📭
+							</motion.div>
+							<p className='text-lg font-medium'>Пока нет постов</p>
+							<p className='text-sm text-gray-500'>
+								Здесь будут отображаться публикации пользователя
+							</p>
+						</div>
+					) : (
+						<div className='grid grid-cols-1 gap-4 sm:grid-cols-2'>
+							{loadingFriends ? (
+								<div className='col-span-full flex justify-center py-12'>
+									<div className='h-8 w-8 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent' />
+								</div>
+							) : friends.length > 0 ? (
+								friends.map(friend => (
+									<Link
+										key={friend.id}
+										href={`/feed/profile/${friend.id}`}
+										className='flex items-center gap-3 rounded-xl bg-white/5 p-3 hover:bg-white/10 transition-colors'
+									>
+										<img
+											src={getAttachmentUrl(friend.avatar_url)}
+											alt={friend.username}
+											className='h-12 w-12 rounded-full object-cover'
+										/>
+										<div>
+											<p className='font-medium text-white'>
+												{friend.username}
+											</p>
+											{!friend.email.endsWith('@telegram.bot') && (
+												<p className='text-xs text-gray-400'>{friend.email}</p>
+											)}
+										</div>
+									</Link>
+								))
+							) : (
+								<div className='col-span-full py-12 text-center text-gray-400'>
+									<p>Нет друзей</p>
+								</div>
+							)}
+						</div>
+					)}
 				</div>
 			</div>
 		</motion.div>

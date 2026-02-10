@@ -4,6 +4,7 @@ import { SocketProvider } from '@/lib/SocketContext'
 import { ToastProvider } from '@/lib/ToastContext'
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
+import '../styles/calls.css'
 import './globals.css'
 import StoreProvider from './StoreProvider'
 

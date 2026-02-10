@@ -2,6 +2,7 @@
 
 import { useSocket } from '@/lib/SocketContext'
 import { User } from '@/lib/types'
+import { getAttachmentUrl } from '@/lib/utils'
 import { useEffect, useState } from 'react'
 
 interface ShareModalProps {
@@ -132,7 +133,10 @@ export default function ShareModal({ isOpen, onClose, post }: ShareModalProps) {
 								>
 									<div className='flex items-center gap-3'>
 										<img
-											src={friend.avatar_url || '/placeholder-user.jpg'}
+											src={
+												getAttachmentUrl(friend.avatar_url) ||
+												'/placeholder-user.jpg'
+											}
 											alt={friend.username}
 											className='h-10 w-10 rounded-full object-cover'
 										/>

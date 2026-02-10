@@ -3,6 +3,7 @@
 import { useAppSelector } from '@/lib/hooks'
 import { useSocket } from '@/lib/SocketContext'
 import { User } from '@/lib/types'
+import { getAttachmentUrl } from '@/lib/utils'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import BrandLogo from './BrandLogo'
@@ -137,7 +138,10 @@ export default function Header({ email, onLogout }: Props) {
 															onClick={() => setShowResults(false)}
 														>
 															<img
-																src={u.avatar_url || '/placeholder-user.jpg'}
+																src={
+																	getAttachmentUrl(u.avatar_url) ||
+																	'/placeholder-user.jpg'
+																}
 																alt={u.username}
 																className='h-10 w-10 rounded-full object-cover ring-2 ring-gray-800'
 															/>
@@ -170,7 +174,7 @@ export default function Header({ email, onLogout }: Props) {
 														>
 															<img
 																src={
-																	post.author?.avatar_url ||
+																	getAttachmentUrl(post.author?.avatar_url) ||
 																	'/placeholder-user.jpg'
 																}
 																alt={post.author?.username || 'User'}
@@ -211,7 +215,7 @@ export default function Header({ email, onLogout }: Props) {
 						>
 							{user?.avatar_url ? (
 								<img
-									src={user.avatar_url}
+									src={getAttachmentUrl(user.avatar_url)}
 									alt={user.username}
 									className='h-full w-full object-cover'
 								/>

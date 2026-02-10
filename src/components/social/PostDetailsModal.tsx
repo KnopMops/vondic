@@ -1,6 +1,8 @@
 'use client'
 
 import { useAppSelector } from '@/lib/hooks'
+import { Attachment } from '@/lib/types'
+import { getAttachmentUrl } from '@/lib/utils'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 
@@ -12,18 +14,29 @@ type PostData = {
 	author_avatar?: string
 	posted_by?: string
 	image?: string
+	attachments?: Attachment[]
 	likes?: number
 	comments_count?: number
 	is_liked?: boolean
 }
 
-type Props = {
-	postId: string | number
-	isOpen: boolean
-	onClose: () => void
-}
+type Props =
+	| {
+			postId: string | number
+			isOpen: boolean
+			onClose: () => void
+	  }
+	| {
+			post: any
+			isOpen: boolean
+			onClose: () => void
+			onLike?: () => void
+	  }
 
-export default function PostDetailsModal({ postId, isOpen, onClose }: Props) {
+export default function PostDetailsModal(props: Props) {
+	const isOpen = props.isOpen
+	const onClose = props.onClose
+	const postId = 'postId' in props ? props.postId : props.post?.id
 	const { user } = useAppSelector(state => state.auth)
 	const [post, setPost] = useState<PostData | null>(null)
 	const [loading, setLoading] = useState(true)
@@ -31,6 +44,13 @@ export default function PostDetailsModal({ postId, isOpen, onClose }: Props) {
 
 	useEffect(() => {
 		if (!isOpen) return
+
+		if (!('postId' in props) && props.post) {
+			setPost(props.post)
+			setLoading(false)
+			setError('')
+			return
+		}
 
 		const fetchPost = async () => {
 			setLoading(true)
@@ -48,10 +68,25 @@ export default function PostDetailsModal({ postId, isOpen, onClose }: Props) {
 			}
 		}
 
-		fetchPost()
-	}, [postId, isOpen])
+		if (postId) {
+			fetchPost()
+		}
+	}, [postId, isOpen, props])
 
 	if (!isOpen) return null
+
+	const isImageAttachment = (a: Attachment) => {
+		const ext = (a.ext || '').toLowerCase()
+		return (
+			ext === 'png' ||
+			ext === 'jpg' ||
+			ext === 'jpeg' ||
+			ext === 'gif' ||
+			ext === 'webp' ||
+			ext === 'bmp' ||
+			ext === 'svg'
+		)
+	}
 
 	return (
 		<div className='fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm'>
@@ -100,7 +135,7 @@ export default function PostDetailsModal({ postId, isOpen, onClose }: Props) {
 								>
 									{post.author_avatar ? (
 										<img
-											src={post.author_avatar}
+											src={getAttachmentUrl(post.author_avatar)}
 											alt={post.author_name || 'User'}
 											className='h-12 w-12 rounded-full object-cover'
 										/>
@@ -133,10 +168,42 @@ export default function PostDetailsModal({ postId, isOpen, onClose }: Props) {
 							{post.image && (
 								<div className='mt-4 overflow-hidden rounded-lg'>
 									<img
-										src={post.image}
+										src={getAttachmentUrl(post.image)}
 										alt='Post attachment'
 										className='w-full object-cover max-h-[500px]'
 									/>
+								</div>
+							)}
+
+							{post.attachments && post.attachments.length > 0 && (
+								<div className='mt-4 grid grid-cols-1 gap-2'>
+									{post.attachments
+										.filter(
+											a => a && a.url && (!post.image || a.url !== post.image),
+										)
+										.map(a =>
+											isImageAttachment(a) ? (
+												<img
+													key={a.url}
+													src={getAttachmentUrl(a.url)}
+													alt={a.name}
+													className='w-full rounded-lg object-cover max-h-[500px]'
+												/>
+											) : (
+												<a
+													key={a.url}
+													href={getAttachmentUrl(a.url)}
+													target='_blank'
+													rel='noreferrer'
+													className='flex items-center justify-between rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-800 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-200 dark:hover:bg-gray-900/60 transition-colors'
+												>
+													<span className='truncate'>{a.name}</span>
+													<span className='ml-4 text-xs text-gray-500 dark:text-gray-400'>
+														{a.ext ? a.ext.toUpperCase() : 'FILE'}
+													</span>
+												</a>
+											),
+										)}
 								</div>
 							)}
 

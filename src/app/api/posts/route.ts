@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
 		}
 
 		const body = await req.json()
-		const { title, content } = body
+		const { title, content, attachments } = body
 
 		const response = await fetch(`${BACKEND_URL}/api/v1/posts/`, {
 			method: 'POST',
@@ -94,6 +94,7 @@ export async function POST(req: NextRequest) {
 				access_token: accessToken,
 				title,
 				content,
+				attachments,
 			}),
 		})
 

@@ -4,8 +4,9 @@ import Header from '@/components/social/Header'
 import Sidebar from '@/components/social/Sidebar'
 import { useAuth } from '@/lib/AuthContext'
 import { User } from '@/lib/types'
+import { getAttachmentUrl } from '@/lib/utils'
 import { motion } from 'framer-motion'
-import { Search, UserPlus, Users, UserCheck, UserX } from 'lucide-react'
+import { Search, UserCheck, UserPlus, Users, UserX } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 
@@ -189,11 +190,17 @@ export default function FriendsPage() {
 						>
 							<div className='relative'>
 								<img
-									src={u.avatar_url || '/placeholder-user.jpg'}
+									src={
+										getAttachmentUrl(u.avatar_url) || '/placeholder-user.jpg'
+									}
 									alt={u.username}
 									className='h-12 w-12 rounded-full object-cover ring-2 ring-transparent group-hover:ring-indigo-500/50 transition-all'
 								/>
-								<div className='absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-black' />
+								<div
+									className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-black ${
+										u.status === 'online' ? 'bg-green-500' : 'bg-gray-500'
+									}`}
+								/>
 							</div>
 							<div>
 								<div className='font-semibold text-white group-hover:text-indigo-400 transition-colors'>
@@ -252,7 +259,7 @@ export default function FriendsPage() {
 							<h1 className='text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400'>
 								Друзья
 							</h1>
-							
+
 							<div className='relative'>
 								<Search className='absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500' />
 								<input
@@ -272,7 +279,11 @@ export default function FriendsPage() {
 								{ id: 'friends', label: 'Мои друзья', count: friends.length },
 								{ id: 'requests', label: 'Заявки', count: requests.length },
 								{ id: 'following', label: 'Подписки', count: following.length },
-								{ id: 'followers', label: 'Подписчики', count: followers.length },
+								{
+									id: 'followers',
+									label: 'Подписчики',
+									count: followers.length,
+								},
 							].map(tab => (
 								<button
 									key={tab.id}
@@ -285,11 +296,13 @@ export default function FriendsPage() {
 								>
 									{tab.label}
 									{tab.count > 0 && (
-										<span className={`text-xs px-2 py-0.5 rounded-full ${
-											activeTab === tab.id 
-												? 'bg-white/20 text-white' 
-												: 'bg-white/10 text-gray-400'
-										}`}>
+										<span
+											className={`text-xs px-2 py-0.5 rounded-full ${
+												activeTab === tab.id
+													? 'bg-white/20 text-white'
+													: 'bg-white/10 text-gray-400'
+											}`}
+										>
 											{tab.count}
 										</span>
 									)}
@@ -316,7 +329,9 @@ export default function FriendsPage() {
 								animate={{ opacity: 1, y: 0 }}
 								className='mt-12 pt-8 border-t border-white/10'
 							>
-								<h2 className='text-xl font-bold mb-6 text-white'>Результаты поиска</h2>
+								<h2 className='text-xl font-bold mb-6 text-white'>
+									Результаты поиска
+								</h2>
 								<div className='grid grid-cols-1 gap-4'>
 									{searchResults.map(u => (
 										<div
@@ -325,12 +340,17 @@ export default function FriendsPage() {
 										>
 											<div className='flex items-center gap-4'>
 												<img
-													src={u.avatar_url || '/placeholder-user.jpg'}
+													src={
+														getAttachmentUrl(u.avatar_url) ||
+														'/placeholder-user.jpg'
+													}
 													alt={u.username}
 													className='h-12 w-12 rounded-full'
 												/>
 												<div>
-													<div className='font-semibold text-white'>{u.username}</div>
+													<div className='font-semibold text-white'>
+														{u.username}
+													</div>
 												</div>
 											</div>
 											<button

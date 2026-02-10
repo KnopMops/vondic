@@ -2,6 +2,7 @@ import { setPosts } from '@/lib/features/postsSlice'
 import { useAppDispatch } from '@/lib/hooks'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
+import { Attachment } from '@/lib/types'
 
 type PostData = {
 	id: string
@@ -14,6 +15,7 @@ type PostData = {
 	comments_count?: number
 	is_liked?: boolean
 	image?: string
+	attachments?: Attachment[]
 }
 
 export function usePosts() {
@@ -36,11 +38,21 @@ export function usePosts() {
 	}, [query.data, dispatch])
 
 	const createPostMutation = useMutation({
-		mutationFn: async ({ text }: { text: string }) => {
+		mutationFn: async ({
+			text,
+			attachments,
+		}: {
+			text: string
+			attachments?: Attachment[]
+		}) => {
 			const res = await fetch('/api/posts', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ title: 'New Post', content: text }),
+				body: JSON.stringify({
+					title: 'New Post',
+					content: text,
+					attachments,
+				}),
 			})
 			if (!res.ok) throw new Error('Failed to create post')
 			return res.json()

@@ -1,5 +1,7 @@
 'use client'
 
+import { Attachment } from '@/lib/types'
+import { getAttachmentUrl } from '@/lib/utils'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import CommentsModal from './CommentsModal'
@@ -16,6 +18,7 @@ type Props = {
 	likes?: number
 	comments_count?: number
 	image?: string
+	attachments?: Attachment[]
 	currentUserId?: string
 	userRole?: string
 	isLikedByCurrentUser?: boolean
@@ -33,6 +36,7 @@ export default function Post({
 	likes = 0,
 	comments_count = 0,
 	image,
+	attachments,
 	currentUserId,
 	userRole,
 	isLikedByCurrentUser = false,
@@ -56,6 +60,19 @@ export default function Post({
 	useEffect(() => {
 		setCommentCount(comments_count)
 	}, [comments_count])
+
+	const isImageAttachment = (a: Attachment) => {
+		const ext = (a.ext || '').toLowerCase()
+		return (
+			ext === 'png' ||
+			ext === 'jpg' ||
+			ext === 'jpeg' ||
+			ext === 'gif' ||
+			ext === 'webp' ||
+			ext === 'bmp' ||
+			ext === 'svg'
+		)
+	}
 
 	const isOwner = String(currentUserId) === String(author_id)
 	const isAdmin = userRole === 'Admin'
@@ -144,7 +161,7 @@ export default function Post({
 				<Link href={`/feed/profile/${author_id}`}>
 					{author_avatar ? (
 						<img
-							src={author_avatar}
+							src={getAttachmentUrl(author_avatar)}
 							alt={author}
 							className='h-10 w-10 rounded-full object-cover hover:opacity-80 transition-opacity ring-2 ring-transparent group-hover:ring-indigo-500/50'
 						/>
@@ -243,10 +260,40 @@ export default function Post({
 
 					{image && (
 						<img
-							src={image}
+							src={getAttachmentUrl(image)}
 							alt=''
 							className='mt-3 w-full rounded-xl border border-gray-800/50'
 						/>
+					)}
+
+					{attachments && attachments.length > 0 && (
+						<div className='mt-3 grid grid-cols-1 gap-2'>
+							{attachments
+								.filter(a => a && a.url && (!image || a.url !== image))
+								.map(a =>
+									isImageAttachment(a) ? (
+										<img
+											key={a.url}
+											src={getAttachmentUrl(a.url)}
+											alt={a.name}
+											className='w-full rounded-xl border border-gray-800/50 object-cover'
+										/>
+									) : (
+										<a
+											key={a.url}
+											href={getAttachmentUrl(a.url)}
+											target='_blank'
+											rel='noreferrer'
+											className='flex items-center justify-between rounded-xl border border-gray-800/50 bg-gray-900/30 px-4 py-3 text-sm text-gray-200 hover:bg-gray-900/50 transition-colors'
+										>
+											<span className='truncate'>{a.name}</span>
+											<span className='ml-4 text-xs text-gray-400'>
+												{a.ext ? a.ext.toUpperCase() : 'FILE'}
+											</span>
+										</a>
+									),
+								)}
+						</div>
 					)}
 
 					<div className='mt-4 flex items-center gap-6'>
@@ -334,6 +381,7 @@ export default function Post({
 					likes: likeCount,
 					comments_count: commentCount,
 					image,
+					attachments,
 					isLiked,
 				}}
 				onLike={handleLike}
@@ -354,7 +402,8 @@ export default function Post({
 							Удалить публикацию?
 						</h3>
 						<p className='text-gray-400 mb-6'>
-							Это действие нельзя отменить. Публикация будет удалена безвозвратно.
+							Это действие нельзя отменить. Публикация будет удалена
+							безвозвратно.
 						</p>
 
 						{isAdmin && !isOwner && (

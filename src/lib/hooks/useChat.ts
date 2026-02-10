@@ -1,21 +1,13 @@
+import { Message } from '@/lib/types'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Socket } from 'socket.io-client'
-
-export interface Message {
-	id: string
-	sender_id: string
-	content: string
-	timestamp: string
-	isOwn: boolean
-	is_read?: boolean
-	channel_id?: string
-}
 
 export const useChat = (
 	socket: Socket | null,
 	currentUserId: string | undefined,
 	targetUserId: string | undefined,
 	channelId?: string | undefined,
+	groupId?: string | undefined,
 ) => {
 	const [messages, setMessages] = useState<Message[]>([])
 	const [offset, setOffset] = useState(0)
@@ -27,10 +19,53 @@ export const useChat = (
 	// 1. Load history when chat opens
 	useEffect(() => {
 		const fetchHistory = async () => {
-			if (!currentUserId || (!targetUserId && !channelId)) return
+			if (!currentUserId || (!targetUserId && !channelId && !groupId)) return
 
 			setIsLoading(true)
 			try {
+				// Handle Group History via Socket
+				if (groupId && socket) {
+					socket.emit('get_group_history', {
+						group_id: groupId,
+						limit: 50,
+						offset: 0,
+					})
+
+					const handleHistory = (data: any) => {
+						if (data.group_id === groupId) {
+							const history: Message[] = Array.isArray(data.messages)
+								? data.messages.map((msg: any) => ({
+										id: msg.id || Math.random().toString(),
+										sender_id: msg.sender_id,
+										content: msg.content,
+										timestamp: msg.timestamp,
+										isOwn: msg.sender_id === currentUserId,
+										is_read: msg.is_read,
+										group_id: msg.group_id,
+										type: msg.type || 'text',
+									}))
+								: []
+
+							history.sort(
+								(a, b) =>
+									new Date(a.timestamp).getTime() -
+									new Date(b.timestamp).getTime(),
+							)
+							setMessages(history)
+							setOffset(50)
+							setHasMore(history.length >= 50)
+							setIsLoading(false)
+							socket.off('group_history', handleHistory)
+						}
+					}
+
+					// Remove any previous listeners to avoid duplicates if rapid switching
+					socket.off('group_history')
+					socket.on('group_history', handleHistory)
+					return
+				}
+
+				// Handle REST API History (Direct & Channels)
 				let endpoint = '/api/messages/history'
 				const body: any = {
 					limit: 50,
@@ -60,6 +95,7 @@ export const useChat = (
 								isOwn: msg.sender_id === currentUserId,
 								is_read: msg.is_read,
 								channel_id: msg.channel_id,
+								type: msg.type || 'text',
 							}))
 						: []
 
@@ -74,11 +110,11 @@ export const useChat = (
 			} catch (err) {
 				console.error('Error loading history:', err)
 			} finally {
-				setIsLoading(false)
+				if (!groupId) setIsLoading(false) // For REST, stop loading here. For socket, it's in the listener.
 			}
 		}
 
-		if (targetUserId || channelId) {
+		if (targetUserId || channelId || groupId) {
 			setMessages([])
 			setOffset(0)
 			setHasMore(true)
@@ -87,11 +123,11 @@ export const useChat = (
 			setMessages([])
 			setOffset(0)
 		}
-	}, [targetUserId, currentUserId, channelId])
+	}, [targetUserId, currentUserId, channelId, groupId, socket])
 
 	const loadMoreMessages = useCallback(async () => {
 		if (
-			(!targetUserId && !channelId) ||
+			(!targetUserId && !channelId && !groupId) ||
 			!currentUserId ||
 			isLoading ||
 			!hasMore
@@ -100,6 +136,51 @@ export const useChat = (
 
 		setIsLoading(true)
 		try {
+			// Handle Group Load More via Socket
+			if (groupId && socket) {
+				socket.emit('get_group_history', {
+					group_id: groupId,
+					limit: 50,
+					offset: offset,
+				})
+
+				const handleMoreHistory = (data: any) => {
+					if (data.group_id === groupId) {
+						const newOldMessages: Message[] = Array.isArray(data.messages)
+							? data.messages.map((msg: any) => ({
+									id: msg.id || Math.random().toString(),
+									sender_id: msg.sender_id,
+									content: msg.content,
+									timestamp: msg.timestamp,
+									isOwn: msg.sender_id === currentUserId,
+									is_read: msg.is_read,
+									group_id: msg.group_id,
+									type: msg.type || 'text',
+								}))
+							: []
+
+						if (newOldMessages.length < 50) {
+							setHasMore(false)
+						}
+
+						newOldMessages.sort(
+							(a, b) =>
+								new Date(a.timestamp).getTime() -
+								new Date(b.timestamp).getTime(),
+						)
+
+						setMessages(prev => [...newOldMessages, ...prev])
+						setOffset(prev => prev + 50)
+						setIsLoading(false)
+						socket.off('group_history', handleMoreHistory)
+					}
+				}
+
+				socket.once('group_history', handleMoreHistory)
+				return
+			}
+
+			// Handle REST Load More
 			let endpoint = '/api/messages/history'
 			const body: any = {
 				limit: 50,
@@ -129,6 +210,7 @@ export const useChat = (
 							isOwn: msg.sender_id === currentUserId,
 							is_read: msg.is_read,
 							channel_id: msg.channel_id,
+							type: msg.type || 'text',
 						}))
 					: []
 
@@ -147,13 +229,22 @@ export const useChat = (
 		} catch (err) {
 			console.error('Error loading more messages:', err)
 		} finally {
-			setIsLoading(false)
+			if (!groupId) setIsLoading(false)
 		}
-	}, [targetUserId, channelId, currentUserId, offset, isLoading, hasMore])
+	}, [
+		targetUserId,
+		channelId,
+		groupId,
+		currentUserId,
+		offset,
+		isLoading,
+		hasMore,
+		socket,
+	])
 
 	// 2. Listen for incoming messages
 	useEffect(() => {
-		if (!socket || (!targetUserId && !channelId)) return
+		if (!socket || (!targetUserId && !channelId && !groupId)) return
 
 		const handleReceiveMessage = (data: any) => {
 			// Handle Channel Message
@@ -166,6 +257,23 @@ export const useChat = (
 					isOwn: data.sender_id === currentUserId,
 					is_read: false,
 					channel_id: data.channel_id,
+					type: data.type || 'text',
+				}
+				setMessages(prevMessages => [...prevMessages, newMessage])
+				return
+			}
+
+			// Handle Group Message
+			if (groupId && data.group_id === groupId) {
+				const newMessage: Message = {
+					id: data.id || Date.now().toString() + Math.random().toString(),
+					sender_id: data.sender_id,
+					content: data.content,
+					timestamp: data.timestamp || new Date().toISOString(),
+					isOwn: data.sender_id === currentUserId,
+					is_read: false,
+					group_id: data.group_id,
+					type: data.type || 'text',
 				}
 				setMessages(prevMessages => [...prevMessages, newMessage])
 				return
@@ -174,9 +282,11 @@ export const useChat = (
 			// Handle Direct Message
 			if (
 				!channelId &&
+				!groupId &&
 				targetUserId &&
 				data.sender_id === targetUserId &&
-				!data.channel_id
+				!data.channel_id &&
+				!data.group_id
 			) {
 				const newMessage: Message = {
 					id: data.id || Date.now().toString() + Math.random().toString(),
@@ -185,6 +295,7 @@ export const useChat = (
 					timestamp: data.timestamp || new Date().toISOString(),
 					isOwn: false,
 					is_read: false,
+					type: data.type || 'text',
 				}
 				setMessages(prevMessages => [...prevMessages, newMessage])
 			}
@@ -203,6 +314,23 @@ export const useChat = (
 					isOwn: true,
 					is_read: false,
 					channel_id: msg.channel_id,
+					type: msg.type || 'text',
+				}
+				setMessages(prevMessages => [...prevMessages, newMessage])
+				return
+			}
+
+			// Handle Group Message Confirmation
+			if (groupId && msg.group_id === groupId) {
+				const newMessage: Message = {
+					id: msg.id || Date.now().toString() + Math.random().toString(),
+					sender_id: msg.sender_id,
+					content: msg.content,
+					timestamp: msg.timestamp || new Date().toISOString(),
+					isOwn: true,
+					is_read: false,
+					group_id: msg.group_id,
+					type: msg.type || 'text',
 				}
 				setMessages(prevMessages => [...prevMessages, newMessage])
 				return
@@ -211,9 +339,10 @@ export const useChat = (
 			// Handle Direct Message Confirmation
 			if (
 				!channelId &&
+				!groupId &&
 				targetUserId &&
 				(msg.receiver_id === targetUserId ||
-					(!msg.receiver_id && !msg.channel_id))
+					(!msg.receiver_id && !msg.channel_id && !msg.group_id))
 			) {
 				// Fallback logic for DM
 				const newMessage: Message = {
@@ -223,6 +352,7 @@ export const useChat = (
 					timestamp: msg.timestamp || new Date().toISOString(),
 					isOwn: true,
 					is_read: false,
+					type: msg.type || 'text',
 				}
 				setMessages(prevMessages => [...prevMessages, newMessage])
 			}
@@ -230,7 +360,12 @@ export const useChat = (
 
 		const handleTyping = (data: any) => {
 			// Only for Direct Messages for now
-			if (!channelId && targetUserId && data.sender_id === targetUserId) {
+			if (
+				!channelId &&
+				!groupId &&
+				targetUserId &&
+				data.sender_id === targetUserId
+			) {
 				setIsTyping(true)
 				if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
 				typingTimeoutRef.current = setTimeout(() => {
@@ -240,7 +375,12 @@ export const useChat = (
 		}
 
 		const handleStopTyping = (data: any) => {
-			if (!channelId && targetUserId && data.sender_id === targetUserId) {
+			if (
+				!channelId &&
+				!groupId &&
+				targetUserId &&
+				data.sender_id === targetUserId
+			) {
 				setIsTyping(false)
 				if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
 			}
@@ -249,6 +389,7 @@ export const useChat = (
 		const handleMessagesReadUpdate = (data: any) => {
 			if (
 				!channelId &&
+				!groupId &&
 				targetUserId &&
 				data.reader_id === targetUserId &&
 				Array.isArray(data.message_ids)
@@ -267,118 +408,80 @@ export const useChat = (
 		socket.on('stop_typing', handleStopTyping)
 		socket.on('messages_read_update', handleMessagesReadUpdate)
 
+		const handleError = (err: any) => {
+			console.error('Socket error:', err)
+			// Optional: Trigger a UI notification here if you have a toast system
+			// alert("Error: " + (err.message || "Unknown error"))
+		}
+		socket.on('error', handleError)
+
 		return () => {
 			socket.off('receive_message', handleReceiveMessage)
 			socket.off('message_sent', handleSentMessage)
 			socket.off('typing', handleTyping)
 			socket.off('stop_typing', handleStopTyping)
 			socket.off('messages_read_update', handleMessagesReadUpdate)
+			socket.off('error', handleError)
 		}
-	}, [socket, targetUserId, channelId, currentUserId])
+	}, [socket, targetUserId, channelId, groupId, currentUserId])
 
 	// 3. Send function
 	const sendMessage = useCallback(
-		(content: string) => {
-			if (!socket || (!targetUserId && !channelId) || !currentUserId) return
+		(content: string, type: 'text' | 'voice' = 'text') => {
+			if (
+				!socket ||
+				(!targetUserId && !channelId && !groupId) ||
+				!currentUserId
+			)
+				return
 
 			const messagePayload: any = {
 				content: content,
+				type: type,
 			}
 
 			if (channelId) {
 				messagePayload.channel_id = channelId
+			} else if (groupId) {
+				messagePayload.group_id = groupId
 			} else if (targetUserId) {
 				messagePayload.target_user_id = targetUserId
 			}
 
 			socket.emit('send_message', messagePayload)
 		},
-		[socket, targetUserId, channelId, currentUserId],
+		[socket, targetUserId, channelId, groupId, currentUserId],
 	)
 
 	const sendTyping = useCallback(() => {
-		if (!socket || !targetUserId || channelId) return // No typing for channels yet
+		if (!socket || !targetUserId || channelId || groupId) return // No typing for channels/groups yet
+
 		socket.emit('typing', { target_user_id: targetUserId })
-	}, [socket, targetUserId, channelId])
+	}, [socket, targetUserId, channelId, groupId])
 
 	const sendStopTyping = useCallback(() => {
-		if (!socket || !targetUserId || channelId) return
+		if (!socket || !targetUserId || channelId || groupId) return
+
 		socket.emit('stop_typing', { target_user_id: targetUserId })
-	}, [socket, targetUserId, channelId])
+	}, [socket, targetUserId, channelId, groupId])
 
 	const markMessagesAsRead = useCallback(
 		(messageIds: string[]) => {
-			if (
-				!socket ||
-				!targetUserId ||
-				!currentUserId ||
-				messageIds.length === 0 ||
-				channelId
-			)
-				return
+			if (!socket || !targetUserId || channelId || groupId) return // Only for DMs
 
-			socket.emit('message_read', {
+			socket.emit('messages_read', {
+				sender_id: targetUserId,
 				message_ids: messageIds,
-				target_sender_id: targetUserId,
 			})
 		},
-		[socket, targetUserId, currentUserId, channelId],
-	)
-
-	const searchMessages = useCallback(
-		async (query: string) => {
-			if ((!targetUserId && !channelId) || !query.trim()) return []
-
-			try {
-				const body: any = {
-					query: query.trim(),
-				}
-				if (channelId) {
-					body.channel_id = channelId
-				} else if (targetUserId) {
-					body.target_id = targetUserId
-				}
-
-				const response = await fetch('/api/messages/search', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify(body),
-				})
-
-				if (response.ok) {
-					const data = await response.json()
-					const foundMessages: Message[] = Array.isArray(data)
-						? data.map((msg: any) => ({
-								id: msg.id || Math.random().toString(),
-								sender_id: msg.sender_id,
-								content: msg.content,
-								timestamp: msg.timestamp,
-								isOwn: msg.sender_id === currentUserId,
-								channel_id: msg.channel_id,
-							}))
-						: []
-
-					foundMessages.sort(
-						(a, b) =>
-							new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
-					)
-
-					return foundMessages
-				}
-				return []
-			} catch (err) {
-				console.error('Error searching messages:', err)
-				return []
-			}
-		},
-		[targetUserId, channelId, currentUserId],
+		[socket, targetUserId, channelId, groupId],
 	)
 
 	return {
 		messages,
 		sendMessage,
 		loadMoreMessages,
-		searchMessages,
+		searchMessages: async () => [], // TODO: Implement search for groups
 		isLoading,
 		isTyping,
 		sendTyping,

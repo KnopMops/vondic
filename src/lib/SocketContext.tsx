@@ -71,6 +71,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 				socketInstance.on('connect', () => {
 					console.log('Socket connected')
 					setIsConnected(true)
+					socketInstance?.emit('authenticate', { access_token: token })
 				})
 
 				socketInstance.on('disconnect', () => {

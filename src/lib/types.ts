@@ -18,3 +18,32 @@ export interface Channel {
 	owner_id: string
 	participants_count: number
 }
+
+export interface Group {
+	id: string
+	name: string
+	avatar_url?: string | null
+	participants?: string[]
+	owner_id?: string
+	invite_code?: string
+}
+
+export interface Attachment {
+	url: string
+	name: string
+	ext: string
+	size: number
+}
+
+export interface Message {
+	id: string
+	sender_id: string
+	content: string
+	timestamp: string
+	isOwn: boolean
+	is_read?: boolean
+	channel_id?: string
+	group_id?: string
+	type?: 'text' | 'voice'
+	attachments?: Attachment[]
+}

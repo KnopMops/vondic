@@ -6,7 +6,7 @@ const BACKEND_URL =
 
 export async function POST(
 	request: NextRequest,
-	{ params }: { params: { id: string } },
+	{ params }: { params: Promise<{ id: string }> },
 ) {
 	const { id } = await params
 

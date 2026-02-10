@@ -6,7 +6,7 @@ const BACKEND_URL =
 
 export async function GET(
 	request: NextRequest,
-	{ params }: { params: { id: string } },
+	{ params }: { params: Promise<{ id: string }> },
 ) {
 	const { id } = await params
 	const accessToken = await getAccessToken(request)
@@ -76,7 +76,7 @@ export async function GET(
 
 export async function POST(
 	request: NextRequest,
-	{ params }: { params: { id: string } },
+	{ params }: { params: Promise<{ id: string }> },
 ) {
 	const { id } = await params
 	const accessToken = await getAccessToken(request)

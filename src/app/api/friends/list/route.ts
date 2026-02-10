@@ -11,7 +11,14 @@ export async function POST(req: NextRequest) {
 		const backendUrl =
 			process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
 
-		const payload = { access_token: token }
+		let body: any = {}
+		try {
+			body = await req.json()
+		} catch (e) {
+			// Body is optional
+		}
+
+		const payload = { ...body, access_token: token }
 
 		const response = await fetch(`${backendUrl}/api/v1/friends/list`, {
 			method: 'POST',

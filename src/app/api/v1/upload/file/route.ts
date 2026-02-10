@@ -1,10 +1,7 @@
 import { getAccessToken } from '@/lib/auth.utils'
 import { NextRequest, NextResponse } from 'next/server'
 
-export async function POST(
-	req: NextRequest,
-	{ params }: { params: Promise<{ id: string }> },
-) {
+export async function POST(req: NextRequest) {
 	try {
 		const token = await getAccessToken(req)
 
@@ -12,31 +9,36 @@ export async function POST(
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 		}
 
-		const { id } = await params
+		const body = await req.json().catch(() => ({}))
+		const file = body?.file
+		const filename = body?.filename
+
+		if (!file || !filename) {
+			return NextResponse.json(
+				{ error: 'Missing file or filename' },
+				{ status: 400 },
+			)
+		}
 
 		const backendUrl =
 			process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
 
-		let body = {}
-		try {
-			body = await req.json()
-		} catch (e) {
-			// ignore
-		}
-
-		const response = await fetch(`${backendUrl}/api/v1/channels/${id}`, {
+		const response = await fetch(`${backendUrl}/api/v1/upload/file`, {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
-				Authorization: `Bearer ${token}`,
 			},
-			body: JSON.stringify({ ...body, access_token: token }),
+			body: JSON.stringify({
+				access_token: token,
+				file,
+				filename,
+			}),
 		})
 
 		if (!response.ok) {
 			const errorText = await response.text()
 			return NextResponse.json(
-				{ error: 'Failed to fetch channel info', details: errorText },
+				{ error: 'Failed to upload file', details: errorText },
 				{ status: response.status },
 			)
 		}
@@ -44,7 +46,7 @@ export async function POST(
 		const data = await response.json()
 		return NextResponse.json(data)
 	} catch (error) {
-		console.error('Channel info proxy error:', error)
+		console.error('Upload file proxy error:', error)
 		return NextResponse.json(
 			{ error: 'Internal Server Error' },
 			{ status: 500 },

@@ -2,6 +2,7 @@
 
 import { useAppSelector } from '@/lib/hooks'
 import { usePosts } from '@/lib/hooks/usePosts'
+import { Attachment } from '@/lib/types'
 import Composer from './Composer'
 import Header from './Header'
 import Post from './Post'
@@ -23,8 +24,8 @@ export default function SocialFeed({ email, onLogout }: Props) {
 		updatePost,
 	} = usePosts()
 
-	const addPost = (text: string) => {
-		createPost({ text })
+	const addPost = (text: string, attachments?: Attachment[]) => {
+		createPost({ text, attachments })
 	}
 
 	const handleDeletePost = (id: string | number, reason?: string) => {
@@ -92,6 +93,7 @@ export default function SocialFeed({ email, onLogout }: Props) {
 								comments_count={p.comments_count || 0}
 								isLikedByCurrentUser={p.is_liked || false}
 								image={p.image}
+								attachments={p.attachments}
 								currentUserId={user?.id}
 								userRole={user?.role}
 								onDelete={handleDeletePost}

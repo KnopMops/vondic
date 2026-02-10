@@ -1,15 +1,29 @@
 import PostDetailsModal from '@/components/social/PostDetailsModal'
-import { Message } from '@/lib/hooks/useChat'
+import { User } from '@/lib/types'
+import { getAttachmentUrl } from '@/lib/utils'
 import { memo, useState } from 'react'
+
+interface Message {
+	id: string
+	sender_id: string
+	content: string
+	timestamp: string
+	isOwn: boolean
+	is_read?: boolean
+	type?: 'text' | 'voice'
+	channel_id?: string
+	group_id?: string
+}
 
 interface MessageBubbleProps {
 	msg: Message
 	theme?: {
 		ownMessageBg: string
 	}
+	sender?: User
 }
 
-const MessageBubble = memo(({ msg, theme }: MessageBubbleProps) => {
+const MessageBubble = memo(({ msg, theme, sender }: MessageBubbleProps) => {
 	const [isDetailsOpen, setIsDetailsOpen] = useState(false)
 
 	const getSharedPost = (content: string) => {
@@ -33,6 +47,16 @@ const MessageBubble = memo(({ msg, theme }: MessageBubbleProps) => {
 				msg.isOwn ? 'justify-end' : 'justify-start'
 			}`}
 		>
+			{!msg.isOwn && sender && (
+				<div className='flex items-end mr-2'>
+					<img
+						src={getAttachmentUrl(sender.avatar_url) || '/default-avatar.png'}
+						alt={sender.username}
+						className='w-8 h-8 rounded-full bg-gray-800 object-cover'
+						title={sender.username}
+					/>
+				</div>
+			)}
 			<div
 				className={`relative max-w-[75%] px-5 py-3 shadow-md text-sm md:text-base transition-colors duration-500 ${
 					msg.isOwn
@@ -43,7 +67,30 @@ const MessageBubble = memo(({ msg, theme }: MessageBubbleProps) => {
 						: 'bg-gray-800 border border-gray-700 text-gray-100 rounded-2xl rounded-tl-sm'
 				}`}
 			>
-				{sharedPost ? (
+				{msg.type === 'voice' ? (
+					<div className='min-w-[240px] py-1'>
+						<div className='flex items-center gap-2 mb-2'>
+							<svg
+								className='w-4 h-4 text-blue-400'
+								viewBox='0 0 24 24'
+								fill='none'
+								stroke='currentColor'
+								strokeWidth='2'
+							>
+								<path d='M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z'></path>
+								<path d='M19 10v2a7 7 0 0 1-14 0v-2'></path>
+								<line x1='12' y1='19' x2='12' y2='23'></line>
+								<line x1='8' y1='23' x2='16' y2='23'></line>
+							</svg>
+							<span className='text-xs text-blue-400'>Голосовое сообщение</span>
+						</div>
+						<audio
+							controls
+							src={getAttachmentUrl(msg.content)}
+							className='w-full h-8'
+						/>
+					</div>
+				) : sharedPost ? (
 					<>
 						<div
 							onClick={() => setIsDetailsOpen(true)}
@@ -52,7 +99,7 @@ const MessageBubble = memo(({ msg, theme }: MessageBubbleProps) => {
 							<div className='flex items-center gap-2 border-b border-white/10 pb-2'>
 								{sharedPost.author_avatar ? (
 									<img
-										src={sharedPost.author_avatar}
+										src={getAttachmentUrl(sharedPost.author_avatar)}
 										alt={sharedPost.author}
 										className='h-6 w-6 rounded-full object-cover'
 									/>
@@ -71,7 +118,7 @@ const MessageBubble = memo(({ msg, theme }: MessageBubbleProps) => {
 							</p>
 							{sharedPost.image && (
 								<img
-									src={sharedPost.image}
+									src={getAttachmentUrl(sharedPost.image)}
 									alt='Shared content'
 									className='mt-1 max-h-48 w-full rounded-md object-cover'
 								/>
@@ -95,6 +142,11 @@ const MessageBubble = memo(({ msg, theme }: MessageBubbleProps) => {
 							: 'justify-start text-gray-400'
 					}`}
 				>
+					{!msg.isOwn && sender && (
+						<span className='font-bold text-gray-300 mr-2'>
+							{sender.username}
+						</span>
+					)}
 					{new Date(msg.timestamp).toLocaleTimeString([], {
 						hour: '2-digit',
 						minute: '2-digit',

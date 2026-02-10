@@ -2,6 +2,7 @@
 
 import { useAppSelector } from '@/lib/hooks'
 import { useComments } from '@/lib/hooks/useComments'
+import { getAttachmentUrl } from '@/lib/utils'
 import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
@@ -211,7 +212,9 @@ function CommentItem({
 		<div className='flex gap-3'>
 			<Link href={`/feed/profile/${comment.user_id}`}>
 				<img
-					src={comment.author_avatar || '/placeholder-user.jpg'}
+					src={
+						getAttachmentUrl(comment.author_avatar) || '/placeholder-user.jpg'
+					}
 					alt={comment.author_name || 'User'}
 					className='h-8 w-8 rounded-full object-cover hover:opacity-80 transition-opacity'
 				/>
