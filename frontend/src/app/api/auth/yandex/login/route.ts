@@ -31,23 +31,7 @@ export async function POST(req: NextRequest) {
 			)
 		}
 
-		// Expecting { auth_url: "..." }
-		// Подменяем redirect_uri на наш локальный
-		if (data.auth_url) {
-			try {
-				const authUrl = new URL(data.auth_url)
-				// Определяем текущий хост. В серверном окружении req.headers.get('host') должен работать.
-				const host = req.headers.get('host') || 'localhost:3000'
-				const protocol = req.headers.get('x-forwarded-proto') || 'http'
-				const newRedirectUri = `${protocol}://${host}/api/auth/yandex/callback`
-
-				authUrl.searchParams.set('redirect_uri', newRedirectUri)
-				data.auth_url = authUrl.toString()
-			} catch (e) {
-				console.error('Failed to parse/modify auth_url:', e)
-				// Если не вышло, оставляем как есть, но скорее всего это приведет к редиректу на бэкенд
-			}
-		}
+		// Возвращаем auth_url, как его сформировал бэкенд (без подмены redirect_uri)
 
 		return NextResponse.json(data)
 	} catch (error) {

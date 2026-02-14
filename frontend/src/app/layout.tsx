@@ -1,3 +1,4 @@
+import { GlobalCallUI, WebRTCProvider } from '@/components/calls'
 import { AuthProvider } from '@/lib/AuthContext'
 import ReactQueryProvider from '@/lib/ReactQueryProvider'
 import { SocketProvider } from '@/lib/SocketContext'
@@ -7,6 +8,7 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import '../styles/calls.css'
 import './globals.css'
 import StoreProvider from './StoreProvider'
+import NotificationBell from '@/components/notifications/NotificationBell'
 
 const geistSans = Geist({
 	variable: '--font-geist-sans',
@@ -37,7 +39,13 @@ export default function RootLayout({
 					<ReactQueryProvider>
 						<AuthProvider>
 							<SocketProvider>
-								<ToastProvider>{children}</ToastProvider>
+								<ToastProvider>
+									<WebRTCProvider>
+										{children}
+										<GlobalCallUI />
+										<NotificationBell />
+									</WebRTCProvider>
+								</ToastProvider>
 							</SocketProvider>
 						</AuthProvider>
 					</ReactQueryProvider>

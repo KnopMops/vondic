@@ -1,13 +1,16 @@
 import logging
-from .signaling import SignalingService
-from .proxy import ConnectionBroker
-from .database import UserRepository
-from .config import Config
-from flask_socketio import SocketIO
-from flask_cors import CORS
-from flask import Flask, jsonify, request
-from flasgger import Swagger
+
 import eventlet
+from flasgger import Swagger
+from flask import Flask, jsonify, request
+from flask_cors import CORS
+from flask_socketio import SocketIO
+
+from .config import Config
+from .database import UserRepository
+from .proxy import ConnectionBroker
+from .signaling import SignalingService
+
 eventlet.monkey_patch()
 
 
@@ -511,6 +514,39 @@ const socket = io("http://localhost:5000", {
 
         results = user_repo.search_messages(user["id"], target_id, query)
         return jsonify(results), 200
+
+    @app.route("/internal/broadcast_message", methods=["POST"])
+    def broadcast_message():
+        """
+        Internal endpoint for backend to trigger real-time message notifications
+        """
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data"}), 400
+        
+        group_id = data.get("group_id")
+        target_id = data.get("target_id")
+        payload = data.get("payload")
+        
+        if not payload:
+            return jsonify({"error": "Missing payload"}), 400
+            
+        if group_id:
+            # Broadcast to group participants
+            participants = user_repo.get_group_participants(group_id)
+            for pid in participants:
+                pid_socket = broker.get_user_socket(pid)
+                if pid_socket:
+                    socketio.emit("receive_message", payload, room=pid_socket)
+        elif target_id:
+            # Send to specific user (DM)
+            target_socket = broker.get_user_socket(target_id)
+            if target_socket:
+                socketio.emit("receive_message", payload, room=target_socket)
+        else:
+            return jsonify({"error": "Missing group_id or target_id"}), 400
+                
+        return jsonify({"status": "success"}), 200
 
     return (app, socketio)
 

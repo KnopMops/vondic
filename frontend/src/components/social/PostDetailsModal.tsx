@@ -2,7 +2,7 @@
 
 import { useAppSelector } from '@/lib/hooks'
 import { Attachment } from '@/lib/types'
-import { getAttachmentUrl } from '@/lib/utils'
+import { getAttachmentUrl, formatMskDateTime } from '@/lib/utils'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 
@@ -12,6 +12,7 @@ type PostData = {
 	created_at: string
 	author_name?: string
 	author_avatar?: string
+	author_premium?: boolean
 	posted_by?: string
 	image?: string
 	attachments?: Attachment[]
@@ -89,7 +90,7 @@ export default function PostDetailsModal(props: Props) {
 	}
 
 	return (
-		<div className='fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm'>
+		<div className='fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm'>
 			<div className='w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-gray-800 flex flex-col max-h-[90vh]'>
 				{/* Header */}
 				<div className='flex items-center justify-between border-b border-gray-200 p-4 dark:border-gray-700'>
@@ -145,14 +146,13 @@ export default function PostDetailsModal(props: Props) {
 									<div>
 										<div className='font-bold text-gray-900 dark:text-white hover:underline'>
 											{post.author_name || 'Unknown User'}
+											{post.author_premium && (
+												<span className='ml-1 text-amber-400'>★</span>
+											)}
 										</div>
 										<div className='text-sm text-gray-500 dark:text-gray-400'>
-											{new Date(post.created_at).toLocaleString('ru-RU', {
-												day: 'numeric',
+											{formatMskDateTime(post.created_at, {
 												month: 'long',
-												year: 'numeric',
-												hour: '2-digit',
-												minute: '2-digit',
 											})}
 										</div>
 									</div>

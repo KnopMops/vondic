@@ -1,3 +1,4 @@
+import { useAppSelector } from '@/lib/hooks'
 import { Message } from '@/lib/types'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Socket } from 'socket.io-client'
@@ -9,6 +10,8 @@ export const useChat = (
 	channelId?: string | undefined,
 	groupId?: string | undefined,
 ) => {
+	const { user } = useAppSelector(state => state.auth)
+	const accessToken = user?.access_token
 	const [messages, setMessages] = useState<Message[]>([])
 	const [offset, setOffset] = useState(0)
 	const [hasMore, setHasMore] = useState(true)
@@ -38,11 +41,17 @@ export const useChat = (
 										id: msg.id || Math.random().toString(),
 										sender_id: msg.sender_id,
 										content: msg.content,
-										timestamp: msg.timestamp,
+										timestamp:
+											msg.timestamp ||
+											msg.created_at ||
+											new Date().toISOString(),
 										isOwn: msg.sender_id === currentUserId,
 										is_read: msg.is_read,
 										group_id: msg.group_id,
 										type: msg.type || 'text',
+										attachments: Array.isArray(msg.attachments)
+											? msg.attachments
+											: undefined,
 									}))
 								: []
 
@@ -81,7 +90,10 @@ export const useChat = (
 				const response = await fetch(endpoint, {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify(body),
+					body: JSON.stringify({
+						...body,
+						access_token: accessToken,
+					}),
 				})
 
 				if (response.ok) {
@@ -91,11 +103,15 @@ export const useChat = (
 								id: msg.id || Math.random().toString(),
 								sender_id: msg.sender_id,
 								content: msg.content,
-								timestamp: msg.timestamp,
+								timestamp:
+									msg.timestamp || msg.created_at || new Date().toISOString(),
 								isOwn: msg.sender_id === currentUserId,
 								is_read: msg.is_read,
 								channel_id: msg.channel_id,
 								type: msg.type || 'text',
+								attachments: Array.isArray(msg.attachments)
+									? msg.attachments
+									: undefined,
 							}))
 						: []
 
@@ -151,11 +167,15 @@ export const useChat = (
 									id: msg.id || Math.random().toString(),
 									sender_id: msg.sender_id,
 									content: msg.content,
-									timestamp: msg.timestamp,
+									timestamp:
+										msg.timestamp || msg.created_at || new Date().toISOString(),
 									isOwn: msg.sender_id === currentUserId,
 									is_read: msg.is_read,
 									group_id: msg.group_id,
 									type: msg.type || 'text',
+									attachments: Array.isArray(msg.attachments)
+										? msg.attachments
+										: undefined,
 								}))
 							: []
 
@@ -196,7 +216,10 @@ export const useChat = (
 			const response = await fetch(endpoint, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(body),
+				body: JSON.stringify({
+					...body,
+					access_token: accessToken,
+				}),
 			})
 
 			if (response.ok) {
@@ -206,11 +229,15 @@ export const useChat = (
 							id: msg.id || Math.random().toString(),
 							sender_id: msg.sender_id,
 							content: msg.content,
-							timestamp: msg.timestamp,
+							timestamp:
+								msg.timestamp || msg.created_at || new Date().toISOString(),
 							isOwn: msg.sender_id === currentUserId,
 							is_read: msg.is_read,
 							channel_id: msg.channel_id,
 							type: msg.type || 'text',
+							attachments: Array.isArray(msg.attachments)
+								? msg.attachments
+								: undefined,
 						}))
 					: []
 
@@ -258,6 +285,9 @@ export const useChat = (
 					is_read: false,
 					channel_id: data.channel_id,
 					type: data.type || 'text',
+					attachments: Array.isArray(data.attachments)
+						? data.attachments
+						: undefined,
 				}
 				setMessages(prevMessages => [...prevMessages, newMessage])
 				return
@@ -274,6 +304,9 @@ export const useChat = (
 					is_read: false,
 					group_id: data.group_id,
 					type: data.type || 'text',
+					attachments: Array.isArray(data.attachments)
+						? data.attachments
+						: undefined,
 				}
 				setMessages(prevMessages => [...prevMessages, newMessage])
 				return
@@ -296,6 +329,9 @@ export const useChat = (
 					isOwn: false,
 					is_read: false,
 					type: data.type || 'text',
+					attachments: Array.isArray(data.attachments)
+						? data.attachments
+						: undefined,
 				}
 				setMessages(prevMessages => [...prevMessages, newMessage])
 			}
@@ -315,6 +351,9 @@ export const useChat = (
 					is_read: false,
 					channel_id: msg.channel_id,
 					type: msg.type || 'text',
+					attachments: Array.isArray(msg.attachments)
+						? msg.attachments
+						: undefined,
 				}
 				setMessages(prevMessages => [...prevMessages, newMessage])
 				return
@@ -331,6 +370,9 @@ export const useChat = (
 					is_read: false,
 					group_id: msg.group_id,
 					type: msg.type || 'text',
+					attachments: Array.isArray(msg.attachments)
+						? msg.attachments
+						: undefined,
 				}
 				setMessages(prevMessages => [...prevMessages, newMessage])
 				return
@@ -341,8 +383,12 @@ export const useChat = (
 				!channelId &&
 				!groupId &&
 				targetUserId &&
-				(msg.receiver_id === targetUserId ||
-					(!msg.receiver_id && !msg.channel_id && !msg.group_id))
+				(msg.target_id === targetUserId ||
+					msg.target_user_id === targetUserId ||
+					(!msg.target_id &&
+						!msg.target_user_id &&
+						!msg.channel_id &&
+						!msg.group_id))
 			) {
 				// Fallback logic for DM
 				const newMessage: Message = {
@@ -353,6 +399,9 @@ export const useChat = (
 					isOwn: true,
 					is_read: false,
 					type: msg.type || 'text',
+					attachments: Array.isArray(msg.attachments)
+						? msg.attachments
+						: undefined,
 				}
 				setMessages(prevMessages => [...prevMessages, newMessage])
 			}
@@ -427,7 +476,7 @@ export const useChat = (
 
 	// 3. Send function
 	const sendMessage = useCallback(
-		(content: string, type: 'text' | 'voice' = 'text') => {
+		(content: string, type: 'text' | 'voice' = 'text', attachments?: any[]) => {
 			if (
 				!socket ||
 				(!targetUserId && !channelId && !groupId) ||
@@ -438,6 +487,7 @@ export const useChat = (
 			const messagePayload: any = {
 				content: content,
 				type: type,
+				attachments: attachments,
 			}
 
 			if (channelId) {

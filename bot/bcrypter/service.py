@@ -3,6 +3,7 @@ import secrets
 import string
 
 import bcrypt
+from werkzeug.security import check_password_hash
 
 from .database import AuthRepository
 
@@ -76,3 +77,20 @@ class BCrypter:
     def is_user_registered(self, user_id: str) -> bool:
         """Проверяет, зарегистрирован ли пользователь."""
         return self.repo.user_exists(user_id)
+
+    def authenticate_user(self, email: str, password: str):
+        """
+        Аутентификация пользователя по email и паролю.
+        Возвращает dict пользователя или None.
+        """
+        user = self.repo.get_user_by_email(email)
+        if not user:
+            return None
+
+        # Проверяем хеш пароля (сгенерированный werkzeug)
+        if check_password_hash(user["password_hash"], password):
+            return user
+        return None
+
+    def set_user_premium(self, user_id: str, premium: bool) -> bool:
+        return self.repo.set_premium(user_id, 1 if premium else 0)

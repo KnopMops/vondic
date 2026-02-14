@@ -23,6 +23,8 @@ export class CallManager {
 	private callHistory: CallRecord[] = []
 	private incomingCall: CallState | null = null
 	private activeGroupCallId: string | null = null
+	private currentUser: { id: string; name: string; avatar?: string } | null =
+		null
 
 	// Callbacks
 	public onIncomingCall?: (call: CallState) => void
@@ -40,6 +42,11 @@ export class CallManager {
 		this.setupSocketListeners()
 		this.setupWebRTCCallbacks()
 	}
+
+	public setCurrentUser(user: { id: string; name: string; avatar?: string }) {
+		this.currentUser = user
+	}
+
 	private setupSocketListeners(): void {
 		// --- Group Call Listeners ---
 		this.socket.on('group_call_started', (data: any) => {
@@ -84,6 +91,9 @@ export class CallManager {
 				this.socket.emit('offer', {
 					target_socket_id: socket_id,
 					offer: offer,
+					caller_user_id: this.currentUser?.id,
+					caller_username: this.currentUser?.name,
+					caller_avatar_url: this.currentUser?.avatar,
 				})
 			} else {
 				console.log(`I (${mySocketId}) am waiting for offer from ${socket_id}`)
@@ -134,6 +144,50 @@ export class CallManager {
 						callId: call_id,
 					})
 			}
+		})
+
+		// --- Voice Channel Call Listeners (Persistent) ---
+		this.socket.on('voice_channel_participant_joined', async (data: any) => {
+			console.log('Voice channel participant joined:', data)
+			const { channel_id, user_id, socket_id } = data
+			if (!channel_id || !socket_id) return
+			if (socket_id === this.socket.id) return
+
+			// Decide offer side deterministically
+			const mySocketId = this.socket.id
+			const iCreateOffer = mySocketId < socket_id
+
+			if (iCreateOffer) {
+				const pc = this.webRTCService.ensurePeerConnection(socket_id)
+				const offer = await pc.createOffer()
+				await pc.setLocalDescription(offer)
+				this.socket.emit('offer', {
+					target_socket_id: socket_id,
+					offer,
+					caller_user_id: this.currentUser?.id,
+					caller_username: this.currentUser?.name,
+					caller_avatar_url: this.currentUser?.avatar,
+				})
+			} else {
+				this.webRTCService.ensurePeerConnection(socket_id)
+			}
+
+			const callState: CallState = {
+				socketId: socket_id,
+				userId: user_id,
+				status: 'connected',
+				startTime: new Date(),
+				isGroupCall: true,
+				callId: channel_id,
+			}
+			this.currentCalls.set(socket_id, callState)
+			this.updateCallState(socket_id, callState)
+		})
+
+		this.socket.on('voice_channel_participant_left', (data: any) => {
+			const { channel_id, socket_id } = data
+			if (!channel_id || !socket_id) return
+			this.handleCallEnded(socket_id)
 		})
 
 		// Входящий звонок
@@ -286,6 +340,8 @@ export class CallManager {
 					sender_socket_id: sender_socket_id,
 					answer: answer,
 				})
+				// Ensure UI mapping even if server doesn't send call_accepted
+				this.handleCallAcceptedSignal(sender_socket_id)
 			}
 		})
 
@@ -293,12 +349,21 @@ export class CallManager {
 		this.socket.on('offer', (...args: any[]) => {
 			let from_socket_id: string | undefined
 			let offer: RTCSessionDescriptionInit | undefined
+			let caller_user_id: string | undefined
+			let caller_username: string | undefined
+			let caller_avatar_url: string | undefined
+
 			const firstArg = args[0]
 			if (typeof firstArg === 'object' && firstArg !== null) {
 				from_socket_id =
 					firstArg.from_socket_id ||
 					firstArg.caller_socket_id ||
 					firstArg.sender_socket_id
+
+				caller_user_id = firstArg.caller_user_id
+				caller_username = firstArg.caller_username
+				caller_avatar_url = firstArg.caller_avatar_url
+
 				if (firstArg.offer) {
 					offer = firstArg.offer
 				} else if (firstArg.offer_json) {
@@ -317,8 +382,18 @@ export class CallManager {
 				if (typeof args[1] === 'object') offer = args[1]
 			}
 			if (from_socket_id && offer) {
-				if (this.currentCalls.has(from_socket_id)) return
-				this.handleIncomingCall(from_socket_id, offer)
+				if (this.currentCalls.has(from_socket_id)) {
+					// Renegotiation on existing call: auto-accept without modal
+					this.webRTCService
+						.handleRenegotiationOffer(from_socket_id, offer)
+						.catch(e => console.error('Renegotiation failed:', e))
+				} else {
+					this.handleIncomingCall(from_socket_id, offer, {
+						userId: caller_user_id,
+						userName: caller_username,
+						avatarUrl: caller_avatar_url,
+					})
+				}
 			}
 		})
 
@@ -343,6 +418,30 @@ export class CallManager {
 				this.handleCallEnded(from_socket_id)
 			} else {
 				console.error('Invalid call_end data structure:', args)
+			}
+		})
+
+		// Compatibility: some servers emit 'call_ended' instead of 'call_end'
+		this.socket.on('call_ended', (...args: any[]) => {
+			console.log('DEBUG: call_ended raw args:', JSON.stringify(args, null, 2))
+			let from_socket_id: string | undefined
+
+			const firstArg = args[0]
+			if (typeof firstArg === 'object' && firstArg !== null) {
+				from_socket_id =
+					firstArg.from_socket_id ||
+					firstArg.caller_socket_id ||
+					firstArg.sender_socket_id ||
+					firstArg.responder_socket_id ||
+					firstArg.target_socket_id
+			} else if (args.length >= 1 && typeof args[0] === 'string') {
+				from_socket_id = args[0]
+			}
+
+			if (from_socket_id) {
+				this.handleCallEnded(from_socket_id)
+			} else {
+				console.error('Invalid call_ended data structure:', args)
 			}
 		})
 
@@ -372,8 +471,41 @@ export class CallManager {
 			}
 		})
 
+		// Compatibility: some servers emit 'call_rejected' instead of 'call_reject'
+		this.socket.on('call_rejected', (...args: any[]) => {
+			console.log(
+				'DEBUG: call_rejected raw args:',
+				JSON.stringify(args, null, 2),
+			)
+			let from_socket_id: string | undefined
+			let reason: string | undefined
+
+			const firstArg = args[0]
+			if (typeof firstArg === 'object' && firstArg !== null) {
+				from_socket_id =
+					firstArg.from_socket_id ||
+					firstArg.caller_socket_id ||
+					firstArg.sender_socket_id ||
+					firstArg.responder_socket_id ||
+					firstArg.target_socket_id
+				reason = firstArg.reason
+			} else if (args.length >= 1 && typeof args[0] === 'string') {
+				from_socket_id = args[0]
+			}
+
+			if (from_socket_id) {
+				this.handleCallRejected(from_socket_id, reason)
+			} else {
+				console.error('Invalid call_rejected data structure:', args)
+			}
+		})
+
 		// Ошибка звонка
 		this.socket.on('error', (data: { message: string }) => {
+			this.handleCallFailed(data.message)
+		})
+
+		this.socket.on('call_failed', (data: { message: string }) => {
 			this.handleCallFailed(data.message)
 		})
 
@@ -449,6 +581,32 @@ export class CallManager {
 			console.error('Failed to initiate group call:', error)
 			throw error
 		}
+	}
+
+	async joinVoiceChannel(channelId: string): Promise<void> {
+		try {
+			await this.webRTCService.initializeLocalStream()
+			this.socket.emit('join_voice_channel', { channel_id: channelId })
+			console.log('Joined voice channel:', channelId)
+
+			this.activeGroupCallId = channelId
+			if (this.onGroupCallIdChange) this.onGroupCallIdChange(channelId)
+		} catch (error) {
+			console.error('Failed to join voice channel:', error)
+			throw error
+		}
+	}
+
+	leaveVoiceChannel(channelId: string): void {
+		this.socket.emit('leave_voice_channel', { channel_id: channelId })
+
+		this.activeGroupCallId = null
+		if (this.onGroupCallIdChange) this.onGroupCallIdChange(null)
+
+		// Close all peer connections gracefully for this context
+		this.webRTCService.peerConnections.forEach(pc => pc.close())
+		this.webRTCService.peerConnections.clear()
+		this.currentCalls.clear()
 	}
 
 	joinGroupCall(callId: string): void {
@@ -537,14 +695,11 @@ export class CallManager {
 	): Promise<void> {
 		try {
 			console.log('Handling incoming call from socket:', callerSocketId)
-			// Ensure local audio is initialized so tracks are added to PC
-			await this.webRTCService.initializeLocalStream()
-			await this.webRTCService.handleIncomingCall(callerSocketId, offer)
 
 			const callState: CallState = {
 				socketId: callerSocketId,
 				userId: info?.userId || callerSocketId,
-				userName: info?.userName || 'Incoming Call',
+				userName: info?.userName || 'Входящий звонок',
 				avatarUrl: info?.avatarUrl,
 				status: 'ringing',
 				startTime: new Date(),
@@ -552,11 +707,15 @@ export class CallManager {
 
 			this.incomingCall = callState
 			this.currentCalls.set(callerSocketId, callState)
-			console.log('Incoming call state set:', callState)
+			console.log('Incoming call state set (modal should show now):', callState)
 
 			if (this.onIncomingCall) {
 				this.onIncomingCall(callState)
 			}
+
+			// Do NOT initializeLocalStream here because it might block showing the modal
+			// Instead, just prepare the PC with the remote offer
+			await this.webRTCService.handleIncomingCall(callerSocketId, offer)
 		} catch (error) {
 			console.error('Failed to handle incoming call:', error)
 		}
@@ -572,6 +731,10 @@ export class CallManager {
 		let oldSocketId: string | undefined
 
 		if (!call) {
+			console.log(
+				'Current call keys before migration:',
+				Array.from(this.currentCalls.keys()),
+			)
 			for (const [key, state] of this.currentCalls.entries()) {
 				if (state.status === 'calling') {
 					console.log(`Mapping call from ${key} to ${responderSocketId}`)
@@ -585,6 +748,10 @@ export class CallManager {
 
 					// Tell WebRTCService to migrate
 					this.webRTCService.migrateCall(key, responderSocketId)
+					console.log(
+						'Current call keys after migration:',
+						Array.from(this.currentCalls.keys()),
+					)
 					break
 				}
 			}
@@ -622,6 +789,10 @@ export class CallManager {
 		callerInfo?: { userId: string; userName: string },
 	): Promise<void> {
 		try {
+			// Ensure local media is available and attached before answering
+			if (!this.webRTCService.getLocalStream()) {
+				await this.webRTCService.initializeLocalStream()
+			}
 			await this.webRTCService.acceptCall(callerSocketId)
 
 			// Clear incoming call state immediately
@@ -761,7 +932,9 @@ export class CallManager {
 		this.socket.off('answer')
 		this.socket.off('offer')
 		this.socket.off('call_end')
+		this.socket.off('call_ended')
 		this.socket.off('call_reject')
+		this.socket.off('call_rejected')
 		this.socket.off('error')
 		this.socket.off('ice_candidate')
 	}

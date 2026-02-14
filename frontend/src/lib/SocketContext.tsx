@@ -59,13 +59,13 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 			}
 
 				// Initialize socket
-                // User specified http://localhost:5000 in example. 
-                // We should probably use env var or default to that.
-                const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000'
-                
+				// Use NEXT_PUBLIC_WEBRTC_URL from .env as the signaling server URL
+                const socketUrl = process.env.NEXT_PUBLIC_WEBRTC_URL || 'http://localhost:5000'
+                const socketPath = process.env.NEXT_PUBLIC_SOCKET_PATH || '/socket.io'
 				socketInstance = io(socketUrl, {
 					auth: { token },
-					// transports: ['websocket'], // Optional, often good to prefer websocket
+					transports: ['websocket'],
+					path: socketPath,
 				})
 
 				socketInstance.on('connect', () => {

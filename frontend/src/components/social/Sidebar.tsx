@@ -1,6 +1,7 @@
 'use client'
 
 import { useAuth } from '@/lib/AuthContext'
+import { formatBytes } from '@/lib/utils'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { sidebarItems } from './sidebar.items'
@@ -31,6 +32,11 @@ export default function Sidebar() {
 		}
 		return item
 	})
+
+	// Add Admin panel for Support role
+	if (user?.role === 'Support' || user?.role === 'Admin') {
+		items.push({ label: 'Админка', icon: '🛠️', href: '/feed/admin' })
+	}
 
 	return (
 		<aside
@@ -101,6 +107,35 @@ export default function Sidebar() {
 						)
 					})}
 				</nav>
+
+				{isExpanded && user && (
+					<div className='mt-auto w-full'>
+						<div className='rounded-xl bg-white/5 border border-white/10 p-3'>
+							<div className='flex justify-between text-[10px] mb-1.5'>
+								<span className='text-gray-400'>Память</span>
+								<span className='text-white font-mono'>
+									{formatBytes(user.disk_usage || 0)}
+								</span>
+							</div>
+							<div className='h-1.5 bg-gray-700/50 rounded-full overflow-hidden mb-1.5'>
+								<div
+									className='h-full bg-gradient-to-r from-indigo-500 to-purple-500'
+									style={{
+										width: `${Math.min(
+											((user.disk_usage || 0) /
+												(user.disk_limit || 1073741824)) *
+												100,
+											100,
+										)}%`,
+									}}
+								/>
+							</div>
+							<p className='text-[10px] text-gray-500 leading-tight'>
+								{user.premium ? 'Доступно 5 ГБ' : 'Лимит 1 ГБ'}
+							</p>
+						</div>
+					</div>
+				)}
 			</div>
 		</aside>
 	)

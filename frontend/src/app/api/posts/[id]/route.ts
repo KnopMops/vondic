@@ -83,3 +83,76 @@ export async function GET(
 		)
 	}
 }
+
+export async function DELETE(
+	req: NextRequest,
+	{ params }: { params: Promise<{ id: string }> },
+) {
+	try {
+		const { id } = await params
+		const accessToken = await getAccessToken(req)
+		if (!accessToken) {
+			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+		}
+
+		const body = await req.json().catch(() => ({}))
+		const { user_id, reason } = body || {}
+
+		if (!user_id) {
+			return NextResponse.json(
+				{ error: 'user_id is required' },
+				{ status: 400 },
+			)
+		}
+
+		const backendUrl =
+			process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+
+		const isAdminDelete = typeof reason === 'string' && reason.trim().length > 0
+		const endpoint = isAdminDelete
+			? `${backendUrl}/api/v1/posts/admin`
+			: `${backendUrl}/api/v1/posts/`
+
+		const payload = isAdminDelete
+			? {
+					access_token: accessToken,
+					post_id: id,
+					user_id,
+					reason,
+				}
+			: {
+					access_token: accessToken,
+					post_id: id,
+					user_id,
+				}
+
+		const res = await fetch(endpoint, {
+			method: 'DELETE',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${accessToken}`,
+			},
+			body: JSON.stringify(payload),
+		})
+
+		const text = await res.text()
+		let data: any = {}
+		try {
+			data = JSON.parse(text)
+		} catch {
+			data = { message: text }
+		}
+
+		if (!res.ok) {
+			return NextResponse.json(data, { status: res.status })
+		}
+
+		return NextResponse.json(data, { status: 200 })
+	} catch (error) {
+		console.error('Delete post proxy error:', error)
+		return NextResponse.json(
+			{ error: 'Internal Server Error' },
+			{ status: 500 },
+		)
+	}
+}

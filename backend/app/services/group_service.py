@@ -1,4 +1,3 @@
-from datetime import datetime
 
 from app.core.extensions import db
 from app.models.group import Group
@@ -62,6 +61,14 @@ class GroupService:
         user = User.query.get(user_id)
         if not user:
             return []
+        
+        # Ensure AI chat exists and is named correctly
+        try:
+            from app.services.ollama_service import OllamaService
+            OllamaService.ensure_chat_with_ai(user_id)
+        except Exception as e:
+            print(f"Error ensuring AI chat: {e}")
+
         return user.groups
 
     @staticmethod

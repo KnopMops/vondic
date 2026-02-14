@@ -59,6 +59,7 @@ export async function GET(req: NextRequest) {
 						...post,
 						author_name: author?.username || 'Unknown User',
 						author_avatar: author?.avatar_url || null,
+						author_premium: !!author?.premium,
 						is_liked: post.is_liked || post.liked || post.has_liked || false,
 						likes: post.likes || post.like_count || 0,
 					}

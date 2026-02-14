@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 		}
 
-		const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000'
+		const socketUrl = process.env.NEXT_PUBLIC_WEBRTC_URL || 'http://localhost:5000'
 
 		const response = await fetch(`${socketUrl}/messages/search`, {
 			method: 'POST',

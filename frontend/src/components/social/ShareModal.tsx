@@ -88,7 +88,7 @@ export default function ShareModal({ isOpen, onClose, post }: ShareModalProps) {
 	if (!isOpen) return null
 
 	return (
-		<div className='fixed inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-50'>
+		<div className='fixed inset-0 z-[10000] flex items-center justify-center bg-black bg-opacity-50'>
 			<div className='flex h-[60vh] w-full max-w-md flex-col rounded-xl bg-white shadow-xl dark:bg-gray-800'>
 				<div className='flex items-center justify-between border-b border-gray-200 p-4 dark:border-gray-700'>
 					<h3 className='text-lg font-semibold text-gray-900 dark:text-white'>

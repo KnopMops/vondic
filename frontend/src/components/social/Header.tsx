@@ -3,7 +3,7 @@
 import { useAppSelector } from '@/lib/hooks'
 import { useSocket } from '@/lib/SocketContext'
 import { User } from '@/lib/types'
-import { getAttachmentUrl } from '@/lib/utils'
+import { getAttachmentUrl, formatMskDateTime } from '@/lib/utils'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import BrandLogo from './BrandLogo'
@@ -148,6 +148,11 @@ export default function Header({ email, onLogout }: Props) {
 															<div>
 																<div className='text-sm font-semibold text-gray-200'>
 																	{u.username}
+																	{u.premium && (
+																		<span className='ml-1 text-amber-400'>
+																			★
+																		</span>
+																	)}
 																</div>
 																<div className='text-xs text-gray-500'>
 																	{u.email}
@@ -186,9 +191,7 @@ export default function Header({ email, onLogout }: Props) {
 																		{post.author?.username || 'Unknown User'}
 																	</span>
 																	<span className='text-xs text-gray-500 whitespace-nowrap ml-2'>
-																		{new Date(
-																			post.created_at,
-																		).toLocaleDateString()}
+																		{formatMskDateTime(post.created_at)}
 																	</span>
 																</div>
 																<div className='text-sm text-gray-400 truncate mt-0.5'>

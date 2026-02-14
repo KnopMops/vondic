@@ -1,7 +1,10 @@
+import os
 from datetime import datetime
 
 from app.core.extensions import db
 from app.models.post import Post
+from app.models.user import User
+from flask import current_app
 
 
 class PostService:
@@ -115,6 +118,31 @@ class PostService:
         if post.posted_by != user_id:
             return None, "Unauthorized"
 
+        freed_bytes = 0
+        attachments = post.attachments or []
+        for a in attachments:
+            try:
+                url = a.get("url")
+                size = int(a.get("size") or 0)
+                if url and isinstance(url, str):
+                    abs_path = os.path.join(current_app.root_path, url.lstrip("/"))
+                    if os.path.exists(abs_path):
+                        try:
+                            os.remove(abs_path)
+                        except Exception:
+                            pass
+                if size > 0:
+                    freed_bytes += size
+            except Exception:
+                continue
+
+        user = User.query.get(post.posted_by)
+        if user and freed_bytes > 0:
+            try:
+                user.disk_usage = max(0, int(user.disk_usage or 0) - freed_bytes)
+            except Exception:
+                pass
+
         post.deleted = True
         post.deleted_at = datetime.utcnow()
         post.deleted_by = user_id
@@ -131,6 +159,31 @@ class PostService:
         post = Post.query.filter_by(id=post_id, deleted=False).first()
         if not post:
             return None, "Post not found"
+
+        freed_bytes = 0
+        attachments = post.attachments or []
+        for a in attachments:
+            try:
+                url = a.get("url")
+                size = int(a.get("size") or 0)
+                if url and isinstance(url, str):
+                    abs_path = os.path.join(current_app.root_path, url.lstrip("/"))
+                    if os.path.exists(abs_path):
+                        try:
+                            os.remove(abs_path)
+                        except Exception:
+                            pass
+                if size > 0:
+                    freed_bytes += size
+            except Exception:
+                continue
+
+        user = User.query.get(post.posted_by)
+        if user and freed_bytes > 0:
+            try:
+                user.disk_usage = max(0, int(user.disk_usage or 0) - freed_bytes)
+            except Exception:
+                pass
 
         post.deleted = True
         post.deleted_at = datetime.utcnow()

@@ -35,8 +35,8 @@ export async function GET(req: NextRequest) {
 			return NextResponse.redirect(loginUrl)
 		}
 
-		// Если успех, устанавливаем токены и редиректим на главную
-		const nextResponse = NextResponse.redirect(new URL('/', req.url))
+		// Если успех, устанавливаем токены и редиректим на /feed
+		const nextResponse = NextResponse.redirect(new URL('/feed', req.url))
 
 		// Устанавливаем токены
 		const responseWithTokens = setTokens(

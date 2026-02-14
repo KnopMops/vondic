@@ -6,17 +6,19 @@ import { useAuth } from '@/lib/AuthContext'
 import { motion } from 'framer-motion'
 import { MessageCircle, Share2, Shield, Zap } from 'lucide-react'
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 export default function Home() {
 	const { user } = useAuth()
 	const [isLoginModalOpen, setIsLoginModalOpen] = useState(false)
 	const [onlineCount, setOnlineCount] = useState<number | null>(null)
+	const cursorRef = useRef<HTMLDivElement | null>(null)
 
 	useEffect(() => {
 		const fetchOnlineUsers = async () => {
 			try {
-				const res = await fetch('http://localhost:5000/api/online-users')
+				const webrtcUrl = process.env.NEXT_PUBLIC_WEBRTC_URL || 'http://localhost:5000'
+				const res = await fetch(`${webrtcUrl}/api/online-users`)
 				if (res.ok) {
 					const data = await res.json()
 					setOnlineCount(data.count)
@@ -30,9 +32,28 @@ export default function Home() {
 		const interval = setInterval(fetchOnlineUsers, 60000)
 		return () => clearInterval(interval)
 	}, [])
+	// Cursor glow effect
+	useEffect(() => {
+		const handleMove = (e: MouseEvent) => {
+			if (!cursorRef.current) return
+			const x = e.clientX
+			const y = e.clientY
+			cursorRef.current.style.transform = `translate(${x}px, ${y}px)`
+		}
+		window.addEventListener('mousemove', handleMove)
+		return () => window.removeEventListener('mousemove', handleMove)
+	}, [])
 
 	return (
 		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white overflow-x-hidden'>
+			{/* Cursor-following glow */}
+			<div
+				ref={cursorRef}
+				className='fixed top-0 left-0 z-[1] pointer-events-none'
+				style={{ transform: 'translate(-1000px, -1000px)' }}
+			>
+				<div className='-translate-x-1/2 -translate-y-1/2 w-40 h-40 rounded-full bg-gradient-to-r from-indigo-500/20 via-purple-500/20 to-pink-500/20 blur-3xl mix-blend-screen' />
+			</div>
 			<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
 				<div className='absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-indigo-900/20 blur-[120px]' />
 				<div className='absolute top-[40%] -right-[10%] w-[40%] h-[60%] rounded-full bg-purple-900/20 blur-[120px]' />

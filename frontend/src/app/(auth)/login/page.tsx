@@ -1,25 +1,91 @@
 'use client'
 
-import BrandLogo from '@/components/social/BrandLogo'
 import { useAuth } from '@/lib/AuthContext'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 export default function LoginPage() {
 	const [email, setEmail] = useState('')
 	const [password, setPassword] = useState('')
 	const { login, loginWithTelegram, loginWithYandex, isLoading } = useAuth()
+	const router = useRouter()
 
 	const [loginMethod, setLoginMethod] = useState<'email' | 'telegram'>('email')
 	const [telegramStep, setTelegramStep] = useState<'instruction' | 'input'>(
 		'instruction',
 	)
 	const [telegramKey, setTelegramKey] = useState('')
+	const [twoFactorRequired, setTwoFactorRequired] = useState(false)
+	const [twoFactorMethod, setTwoFactorMethod] = useState<'email' | 'totp'>(
+		'email',
+	)
+	const [twoFactorCode, setTwoFactorCode] = useState('')
+	const [loginError, setLoginError] = useState<string | null>(null)
+	const sendLoginEmailCode = async () => {
+		try {
+			const res = await fetch('/api/auth/2fa/email/send', { method: 'POST' })
+			const data = await res.json().catch(() => ({}))
+			if (!res.ok) {
+				setLoginError(data?.error || 'Не удалось отправить код')
+				return
+			}
+			if (data.dev_code) {
+				setTwoFactorCode(data.dev_code)
+				setLoginError(null)
+			}
+		} catch (err: any) {
+			setLoginError(err.message || 'Ошибка отправки кода')
+		}
+	}
 
 	const handleEmailLogin = async (e: React.FormEvent) => {
 		e.preventDefault()
-		await login(email, password)
+		setLoginError(null)
+		try {
+			const res = await fetch('/api/auth/login', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ email, password }),
+			})
+			const data = await res.json().catch(() => ({}))
+			if (!res.ok) {
+				if (data?.two_factor_required) {
+					setTwoFactorRequired(true)
+					setTwoFactorMethod(data.method === 'totp' ? 'totp' : 'email')
+					return
+				}
+				setLoginError(data?.error || 'Ошибка входа')
+				return
+			}
+			router.push('/feed')
+		} catch (err: any) {
+			setLoginError(err.message || 'Ошибка входа')
+		}
+	}
+
+	const handleEmailTwoFactor = async (e: React.FormEvent) => {
+		e.preventDefault()
+		setLoginError(null)
+		try {
+			const body: any = { email, password }
+			if (twoFactorMethod === 'email') body.email_code = twoFactorCode
+			else body.totp_code = twoFactorCode
+			const res = await fetch('/api/auth/login', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(body),
+			})
+			const data = await res.json().catch(() => ({}))
+			if (!res.ok) {
+				setLoginError(data?.error || 'Неверный код')
+				return
+			}
+			router.push('/feed')
+		} catch (err: any) {
+			setLoginError(err.message || 'Ошибка подтверждения')
+		}
 	}
 
 	const handleTelegramLogin = async (e: React.FormEvent) => {
@@ -46,13 +112,16 @@ export default function LoginPage() {
 					<div className='flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 shadow-lg shadow-indigo-500/20'>
 						<span className='text-2xl font-bold text-white'>V</span>
 					</div>
-					<h2 className='text-2xl font-bold text-white'>
-						Добро пожаловать
-					</h2>
+					<h2 className='text-2xl font-bold text-white'>Добро пожаловать</h2>
 				</div>
 
 				{loginMethod === 'email' ? (
-					<form className='mt-8 space-y-6' onSubmit={handleEmailLogin}>
+					<form
+						className='mt-8 space-y-6'
+						onSubmit={
+							twoFactorRequired ? handleEmailTwoFactor : handleEmailLogin
+						}
+					>
 						<div className='space-y-4'>
 							<div>
 								<label htmlFor='email-address' className='sr-only'>
@@ -70,22 +139,58 @@ export default function LoginPage() {
 									onChange={e => setEmail(e.target.value)}
 								/>
 							</div>
-							<div>
-								<label htmlFor='password' className='sr-only'>
-									Password
-								</label>
-								<input
-									id='password'
-									name='password'
-									type='password'
-									autoComplete='current-password'
-									required
-									className='relative block w-full rounded-xl border border-white/10 bg-white/5 py-3 px-4 text-white placeholder:text-gray-500 focus:z-10 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none'
-									placeholder='Пароль'
-									value={password}
-									onChange={e => setPassword(e.target.value)}
-								/>
-							</div>
+							{!twoFactorRequired ? (
+								<div>
+									<label htmlFor='password' className='sr-only'>
+										Password
+									</label>
+									<input
+										id='password'
+										name='password'
+										type='password'
+										autoComplete='current-password'
+										required
+										className='relative block w-full rounded-xl border border-white/10 bg-white/5 py-3 px-4 text-white placeholder:text-gray-500 focus:z-10 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none'
+										placeholder='Пароль'
+										value={password}
+										onChange={e => setPassword(e.target.value)}
+									/>
+								</div>
+							) : (
+								<div>
+									<label htmlFor='twofactor' className='sr-only'>
+										Two Factor Code
+									</label>
+									<input
+										id='twofactor'
+										type='text'
+										autoComplete='one-time-code'
+										required
+										className='relative block w-full rounded-xl border border-white/10 bg-white/5 py-3 px-4 text-white placeholder:text-gray-500 focus:z-10 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none'
+										placeholder={
+											twoFactorMethod === 'email'
+												? 'Код из письма'
+												: 'Код из приложения'
+										}
+										value={twoFactorCode}
+										onChange={e => setTwoFactorCode(e.target.value)}
+									/>
+									<p className='text-xs text-gray-500 mt-1'>
+										{twoFactorMethod === 'email'
+											? 'Введите 6-значный код, отправленный на вашу почту.'
+											: 'Введите 6-значный код из приложения аутентификации.'}
+									</p>
+									{twoFactorMethod === 'email' && (
+										<button
+											type='button'
+											onClick={sendLoginEmailCode}
+											className='mt-2 text-xs text-indigo-400 hover:text-indigo-300 transition-colors'
+										>
+											Отправить код на почту
+										</button>
+									)}
+								</div>
+							)}
 						</div>
 
 						<div className='space-y-4'>
@@ -94,8 +199,15 @@ export default function LoginPage() {
 								disabled={isLoading}
 								className='group relative flex w-full justify-center rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-3 text-sm font-semibold text-white hover:shadow-lg hover:shadow-indigo-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed'
 							>
-								{isLoading ? 'Вход...' : 'Войти'}
+								{isLoading
+									? 'Вход...'
+									: twoFactorRequired
+										? 'Подтвердить'
+										: 'Войти'}
 							</button>
+							{loginError && (
+								<p className='text-center text-sm text-red-400'>{loginError}</p>
+							)}
 
 							<div className='relative flex items-center justify-center'>
 								<div className='absolute inset-0 flex items-center'>
@@ -223,12 +335,12 @@ export default function LoginPage() {
 						</button>
 					</div>
 				)}
-				
-				<p className="mt-4 text-center text-sm text-gray-400">
-					Нет аккаунта?{" "}
+
+				<p className='mt-4 text-center text-sm text-gray-400'>
+					Нет аккаунта?{' '}
 					<Link
-						href="/register"
-						className="font-medium text-indigo-400 hover:text-indigo-300 transition-colors"
+						href='/register'
+						className='font-medium text-indigo-400 hover:text-indigo-300 transition-colors'
 					>
 						Зарегистрироваться
 					</Link>

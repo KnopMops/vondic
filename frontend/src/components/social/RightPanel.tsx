@@ -1,9 +1,16 @@
 'use client'
 
+import { useAuth } from '@/lib/AuthContext'
 import { motion } from 'framer-motion'
 import { Sparkles, Zap } from 'lucide-react'
 
 export default function RightPanel() {
+	const { user } = useAuth()
+
+	if (user?.premium) {
+		return null
+	}
+
 	return (
 		<aside className='space-y-6'>
 			<motion.div
@@ -27,7 +34,7 @@ export default function RightPanel() {
 					</div>
 
 					<p className='text-sm text-gray-300 mb-6 leading-relaxed'>
-						Получите доступ к эксклюзивным функциям, безлимитному хранилищу и
+						Получите доступ к эксклюзивным функциям: 5 ГБ хранилища, загрузка файлов до 100 МБ, GIF-аватарки и многое другое.
 						уникальным стикерам.
 					</p>
 

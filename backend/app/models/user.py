@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy.dialects.sqlite import FLOAT, INTEGER, TEXT, TIMESTAMP
+from sqlalchemy.dialects.sqlite import FLOAT, INTEGER, JSON, TEXT, TIMESTAMP
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app.core.extensions import db
@@ -23,10 +23,33 @@ class User(db.Model):
     role = db.Column(TEXT, default="User")
     status = db.Column(TEXT, default="offline")
     balance = db.Column(FLOAT, default=0.0)
+    premium = db.Column(INTEGER, default=0)
+    premium_started_at = db.Column(TIMESTAMP, default=None)
+    premium_expired_at = db.Column(TIMESTAMP, default=None)
+    disk_usage = db.Column(INTEGER, default=0)
     is_messaging = db.Column(INTEGER, default=0)
+    telegram_id = db.Column(TEXT, unique=True, nullable=True)
+    link_key = db.Column(TEXT, unique=True, nullable=True)
+    two_factor_enabled = db.Column(INTEGER, default=0)
+    two_factor_method = db.Column(TEXT, default=None)  # 'email' | 'totp'
+    two_factor_secret = db.Column(TEXT, default=None)
+    two_factor_email_code = db.Column(TEXT, default=None)
+    two_factor_email_code_expires = db.Column(TIMESTAMP, default=None)
+    login_alert_enabled = db.Column(INTEGER, default=0)
+    # Profile customization
+    profile_bg_theme = db.Column(TEXT, default=None)       # e.g. 'indigo' | 'purple' | 'emerald' | 'rose' | 'cyan'
+    profile_bg_gradient = db.Column(TEXT, default=None)    # e.g. 'linear-gradient(135deg, #ff00aa, #00ffee)'
+    gifts = db.Column(JSON, default=list)
     created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
     updated_at = db.Column(
         TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    @property
+    def disk_limit(self):
+        # 5 GB for premium, 1 GB for regular
+        if self.premium:
+            return 5 * 1024 * 1024 * 1024
+        return 1 * 1024 * 1024 * 1024
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -45,6 +68,19 @@ class User(db.Model):
             "role": self.role,
             "status": self.status,
             "balance": self.balance,
+            "gifts": self.gifts or [],
+            "premium": bool(self.premium),
+            "premium_started_at": self.premium_started_at.isoformat() if self.premium_started_at else None,
+            "premium_expired_at": self.premium_expired_at.isoformat() if self.premium_expired_at else None,
+            "disk_usage": self.disk_usage,
+            "disk_limit": self.disk_limit,
+            "telegram_id": self.telegram_id,
+            "link_key": self.link_key,
+            "profile_bg_theme": self.profile_bg_theme,
+            "profile_bg_gradient": self.profile_bg_gradient,
             "is_blocked": bool(self.is_blocked),
+            "two_factor_enabled": bool(self.two_factor_enabled),
+            "two_factor_method": self.two_factor_method,
+            "login_alert_enabled": bool(self.login_alert_enabled),
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

@@ -54,6 +54,7 @@ export async function GET(
 							user_id: userId,
 							author_name: author?.username || `User ${userId || '?'}`,
 							author_avatar: author?.avatar_url || null,
+							author_premium: !!author?.premium,
 						}
 					})
 				: []

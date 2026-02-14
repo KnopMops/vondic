@@ -1,6 +1,8 @@
+import AudioPlayer from '@/components/social/AudioPlayer'
 import PostDetailsModal from '@/components/social/PostDetailsModal'
-import { User } from '@/lib/types'
-import { getAttachmentUrl } from '@/lib/utils'
+import VideoPlayer from '@/components/social/VideoPlayer'
+import { Attachment, User } from '@/lib/types'
+import { getAttachmentUrl, formatMskTime } from '@/lib/utils'
 import { memo, useState } from 'react'
 
 interface Message {
@@ -13,6 +15,7 @@ interface Message {
 	type?: 'text' | 'voice'
 	channel_id?: string
 	group_id?: string
+	attachments?: Attachment[]
 }
 
 interface MessageBubbleProps {
@@ -135,6 +138,65 @@ const MessageBubble = memo(({ msg, theme, sender }: MessageBubbleProps) => {
 				) : (
 					<div className='break-words leading-relaxed'>{msg.content}</div>
 				)}
+				{msg.attachments && msg.attachments.length > 0 && (
+					<div className='mt-2 space-y-2'>
+						{msg.attachments.map(a => {
+							const ext = (a.ext || '').toLowerCase()
+							const isImage =
+								ext === 'png' ||
+								ext === 'jpg' ||
+								ext === 'jpeg' ||
+								ext === 'gif' ||
+								ext === 'webp' ||
+								ext === 'bmp' ||
+								ext === 'svg'
+							const isVideo =
+								ext === 'mp4' ||
+								ext === 'mov' ||
+								ext === 'webm' ||
+								ext === 'm4v' ||
+								ext === 'avi' ||
+								ext === 'mkv'
+							const isAudio =
+								ext === 'mp3' ||
+								ext === 'wav' ||
+								ext === 'ogg' ||
+								ext === 'm4a' ||
+								ext === 'webm'
+
+							if (isImage) {
+								return (
+									<img
+										key={a.url}
+										src={getAttachmentUrl(a.url)}
+										alt={a.name}
+										className='w-full rounded-lg object-cover'
+									/>
+								)
+							}
+							if (isVideo) {
+								return <VideoPlayer key={a.url} src={a.url} />
+							}
+							if (isAudio) {
+								return <AudioPlayer key={a.url} src={a.url} />
+							}
+							return (
+								<a
+									key={a.url}
+									href={getAttachmentUrl(a.url)}
+									target='_blank'
+									rel='noreferrer'
+									className='flex items-center justify-between rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-gray-200 hover:bg-black/30 transition-colors'
+								>
+									<span className='truncate'>{a.name}</span>
+									<span className='ml-3 text-xs text-gray-400'>
+										{a.ext ? a.ext.toUpperCase() : 'FILE'}
+									</span>
+								</a>
+							)
+						})}
+					</div>
+				)}
 				<div
 					className={`text-[10px] mt-1 flex items-center gap-1 ${
 						msg.isOwn
@@ -147,10 +209,7 @@ const MessageBubble = memo(({ msg, theme, sender }: MessageBubbleProps) => {
 							{sender.username}
 						</span>
 					)}
-					{new Date(msg.timestamp).toLocaleTimeString([], {
-						hour: '2-digit',
-						minute: '2-digit',
-					})}
+					{formatMskTime(msg.timestamp)}
 					{msg.isOwn && (
 						<div className='flex items-center'>
 							{msg.is_read ? (

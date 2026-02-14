@@ -28,9 +28,9 @@ api_docs.json
 
 migrations/
 
-static/
-
 .env
+
+static/uploads/
 
 node_modules/
 

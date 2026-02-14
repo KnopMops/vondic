@@ -24,7 +24,7 @@ def get_friends(current_user):
             access_token:
               type: string
               required: true
-    description: Возвращает список друзей текущего пользователя.
+    description: Возвращает список друзей. Если в теле запроса передан user_id, будет возвращен список друзей указанного пользователя.
     responses:
       200:
         description: Список друзей
@@ -42,7 +42,9 @@ def get_friends(current_user):
                 balance:
                     type: number
     """
-    friends = FriendshipService.get_friends(current_user.id)
+    data = request.get_json() or {}
+    target_user_id = data.get("user_id") or current_user.id
+    friends = FriendshipService.get_friends(target_user_id)
     return jsonify(friends), 200
 
 

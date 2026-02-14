@@ -3,6 +3,7 @@
 import BrandLogo from '@/components/social/BrandLogo'
 import { useAuth } from '@/lib/AuthContext'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 interface LoginModalProps {
@@ -14,18 +15,84 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 	const [email, setEmail] = useState('')
 	const [password, setPassword] = useState('')
 	const { login, loginWithTelegram, loginWithYandex, isLoading } = useAuth()
+	const router = useRouter()
 
 	const [loginMethod, setLoginMethod] = useState<'email' | 'telegram'>('email')
 	const [telegramStep, setTelegramStep] = useState<'instruction' | 'input'>(
 		'instruction',
 	)
 	const [telegramKey, setTelegramKey] = useState('')
+	const [twoFactorRequired, setTwoFactorRequired] = useState(false)
+	const [twoFactorMethod, setTwoFactorMethod] = useState<'email' | 'totp'>(
+		'email',
+	)
+	const [twoFactorCode, setTwoFactorCode] = useState('')
+	const [loginError, setLoginError] = useState<string | null>(null)
+	const sendLoginEmailCode = async () => {
+		try {
+			const res = await fetch('/api/auth/2fa/email/send', { method: 'POST' })
+			const data = await res.json().catch(() => ({}))
+			if (!res.ok) {
+				setLoginError(data?.error || 'Не удалось отправить код')
+				return
+			}
+			if (data.dev_code) {
+				setTwoFactorCode(data.dev_code)
+				setLoginError(null)
+			}
+		} catch (err: any) {
+			setLoginError(err.message || 'Ошибка отправки кода')
+		}
+	}
 
 	if (!isOpen) return null
 
 	const handleEmailLogin = async (e: React.FormEvent) => {
 		e.preventDefault()
-		await login(email, password)
+		setLoginError(null)
+		try {
+			const res = await fetch('/api/auth/login', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ email, password }),
+			})
+			const data = await res.json().catch(() => ({}))
+			if (!res.ok) {
+				if (data?.two_factor_required) {
+					setTwoFactorRequired(true)
+					setTwoFactorMethod(data.method === 'totp' ? 'totp' : 'email')
+					return
+				}
+				setLoginError(data?.error || 'Ошибка входа')
+				return
+			}
+			router.push('/feed')
+		} catch (err: any) {
+			setLoginError(err.message || 'Ошибка входа')
+		}
+	}
+
+	const handleEmailTwoFactor = async (e: React.FormEvent) => {
+		e.preventDefault()
+		setLoginError(null)
+		try {
+			const body: any = { email, password }
+			if (twoFactorMethod === 'email') body.email_code = twoFactorCode
+			else body.totp_code = twoFactorCode
+			const res = await fetch('/api/auth/login', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(body),
+			})
+			const data = await res.json().catch(() => ({}))
+			if (!res.ok) {
+				setLoginError(data?.error || 'Неверный код')
+				return
+			}
+			router.push('/feed')
+		} catch (err: any) {
+			setLoginError(err.message || 'Ошибка подтверждения')
+		}
 	}
 
 	const handleTelegramLogin = async (e: React.FormEvent) => {
@@ -67,7 +134,12 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 				</div>
 
 				{loginMethod === 'email' ? (
-					<form className='mt-8 space-y-6' onSubmit={handleEmailLogin}>
+					<form
+						className='mt-8 space-y-6'
+						onSubmit={
+							twoFactorRequired ? handleEmailTwoFactor : handleEmailLogin
+						}
+					>
 						<div className='-space-y-px rounded-md shadow-sm'>
 							<div>
 								<label htmlFor='email-address' className='sr-only'>
@@ -85,22 +157,59 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 									onChange={e => setEmail(e.target.value)}
 								/>
 							</div>
-							<div>
-								<label htmlFor='password' className='sr-only'>
-									Password
-								</label>
-								<input
-									id='password'
-									name='password'
-									type='password'
-									autoComplete='current-password'
-									required
-									className='relative block w-full rounded-b-xl border-0 bg-gray-800 py-3 text-white ring-1 ring-inset ring-gray-700 placeholder:text-gray-500 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-indigo-500 transition-all'
-									placeholder='Пароль'
-									value={password}
-									onChange={e => setPassword(e.target.value)}
-								/>
-							</div>
+							{!twoFactorRequired ? (
+								<div>
+									<label htmlFor='password' className='sr-only'>
+										Password
+									</label>
+									<input
+										id='password'
+										name='password'
+										type='password'
+										autoComplete='current-password'
+										required
+										className='relative block w-full rounded-b-xl border-0 bg-gray-800 py-3 text-white ring-1 ring-inset ring-gray-700 placeholder:text-gray-500 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-indigo-500 transition-all'
+										placeholder='Пароль'
+										value={password}
+										onChange={e => setPassword(e.target.value)}
+									/>
+								</div>
+							) : (
+								<div className='space-y-2'>
+									<label htmlFor='twofactor' className='sr-only'>
+										Two Factor Code
+									</label>
+									<input
+										id='twofactor'
+										name='twofactor'
+										type='text'
+										autoComplete='one-time-code'
+										required
+										className='relative block w-full rounded-b-xl border-0 bg-gray-800 py-3 text-white ring-1 ring-inset ring-gray-700 placeholder:text-gray-500 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-indigo-500 transition-all'
+										placeholder={
+											twoFactorMethod === 'email'
+												? 'Код из письма'
+												: 'Код из приложения'
+										}
+										value={twoFactorCode}
+										onChange={e => setTwoFactorCode(e.target.value)}
+									/>
+									<p className='text-xs text-gray-400'>
+										{twoFactorMethod === 'email'
+											? 'Введите 6-значный код, отправленный на вашу почту.'
+											: 'Введите 6-значный код из приложения аутентификации.'}
+									</p>
+									{twoFactorMethod === 'email' && (
+										<button
+											type='button'
+											onClick={sendLoginEmailCode}
+											className='mt-2 text-xs text-indigo-400 hover:text-indigo-300 transition-colors'
+										>
+											Отправить код на почту
+										</button>
+									)}
+								</div>
+							)}
 						</div>
 
 						<div className='space-y-3'>
@@ -109,8 +218,15 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 								disabled={isLoading}
 								className='group relative flex w-full justify-center rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white hover:bg-indigo-500 disabled:opacity-50 transition-all shadow-lg shadow-indigo-500/20'
 							>
-								{isLoading ? 'Вход...' : 'Войти'}
+								{isLoading
+									? 'Вход...'
+									: twoFactorRequired
+										? 'Подтвердить'
+										: 'Войти'}
 							</button>
+							{loginError && (
+								<p className='text-center text-sm text-red-400'>{loginError}</p>
+							)}
 
 							<div className='relative flex items-center justify-center my-4'>
 								<div className='absolute inset-0 flex items-center'>

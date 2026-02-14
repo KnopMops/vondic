@@ -1,0 +1,34 @@
+from app.core.extensions import db
+from app.models.community import Community
+from app.models.user import User
+
+
+class CommunityService:
+    @staticmethod
+    def create_community(data, user_id):
+        name = data.get("name")
+        description = data.get("description")
+        if not name:
+            return None, "Community name is required"
+        community = Community(name=name, description=description, owner_id=user_id)
+        owner = User.query.get(user_id)
+        if owner:
+            community.members.append(owner)
+        try:
+            db.session.add(community)
+            db.session.commit()
+            return community, None
+        except Exception as e:
+            db.session.rollback()
+            return None, str(e)
+
+    @staticmethod
+    def get_user_communities(user_id):
+        user = User.query.get(user_id)
+        if not user:
+            return []
+        return user.communities
+
+    @staticmethod
+    def get_by_id(community_id):
+        return Community.query.get(community_id)

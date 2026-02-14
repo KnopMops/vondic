@@ -8,6 +8,22 @@ export interface User {
 	birth_date?: string
 	socket_id?: string | null
 	status?: string
+	premium?: boolean
+	balance?: number
+	gifts?: GiftItem[]
+	disk_usage?: number
+	disk_limit?: number
+	telegram_id?: string | null
+	profile_bg_theme?: string | null
+	profile_bg_gradient?: string | null
+}
+
+export interface GiftItem {
+	gift_id: string
+	quantity: number
+	from_user_id?: string
+	created_at?: string
+	is_displayed?: boolean
 }
 
 export interface Channel {

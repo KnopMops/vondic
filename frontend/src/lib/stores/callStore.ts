@@ -22,7 +22,10 @@ interface CallStore {
 	currentUserId: string | null
 
 	// Действия
-	initializeWebRTC: (socket: Socket, userId: string) => Promise<void>
+	initializeWebRTC: (
+		socket: Socket,
+		user: { id: string; name: string; avatar?: string },
+	) => Promise<void>
 	cleanup: () => void
 	setLocalStream: (stream: MediaStream | null) => void
 	addActiveCall: (socketId: string, call: CallState) => void
@@ -38,6 +41,8 @@ interface CallStore {
 	// Действия звонков
 	initiateCall: (targetUserId: string, targetUserName: string) => Promise<void>
 	initiateGroupCall: (groupId: string) => Promise<void>
+	joinVoiceChannel: (channelId: string) => Promise<void>
+	leaveVoiceChannel: (channelId: string) => void
 	joinGroupCall: (callId: string) => Promise<void>
 	leaveGroupCall: (callId: string) => void
 	acceptCall: (
@@ -75,14 +80,18 @@ export const useCallStore = create<CallStore>((set, get) => ({
 	currentUserId: null,
 
 	// Инициализация WebRTC
-	initializeWebRTC: async (socket: Socket, userId: string) => {
+	initializeWebRTC: async (
+		socket: Socket,
+		user: { id: string; name: string; avatar?: string },
+	) => {
 		try {
 			if (!get().isWebRTCSupported) {
 				throw new Error('WebRTC не поддерживается в этом браузере')
 			}
 
-			const webRTCService = new WebRTCService(socket, userId)
+			const webRTCService = new WebRTCService(socket, user.id)
 			const callManager = new CallManager(webRTCService, socket)
+			callManager.setCurrentUser(user)
 
 			// Настройка callback'ов
 			webRTCService.onLocalStream = (stream: MediaStream) => {
@@ -140,6 +149,23 @@ export const useCallStore = create<CallStore>((set, get) => ({
 				set({ activeCalls: newCalls, incomingCall: null })
 			}
 
+			webRTCService.onCallMigrated = (oldKey: string, newKey: string) => {
+				const { activeCalls, remoteStreams } = get()
+				const newCalls = new Map(activeCalls)
+				const newStreams = new Map(remoteStreams)
+				const call = newCalls.get(oldKey)
+				if (call) {
+					newCalls.delete(oldKey)
+					newCalls.set(newKey, { ...call, socketId: newKey })
+				}
+				const stream = newStreams.get(oldKey)
+				if (stream) {
+					newStreams.delete(oldKey)
+					newStreams.set(newKey, stream)
+				}
+				set({ activeCalls: newCalls, remoteStreams: newStreams })
+			}
+
 			callManager.onCallEnded = (call: CallState) => {
 				const { activeCalls, callHistory, remoteStreams } = get()
 				const newCalls = new Map(activeCalls)
@@ -151,7 +177,7 @@ export const useCallStore = create<CallStore>((set, get) => ({
 				// Добавляем в историю
 				const historyRecord: CallRecord = {
 					id: `${call.userId}-${Date.now()}`,
-					callerId: userId,
+					callerId: user.id,
 					callerName: 'Me',
 					receiverId: call.userId,
 					receiverName: call.userName || 'Unknown',
@@ -197,7 +223,7 @@ export const useCallStore = create<CallStore>((set, get) => ({
 				webRTCService,
 				callManager,
 				socket,
-				currentUserId: userId,
+				currentUserId: user.id,
 			})
 		} catch (error) {
 			console.error('Failed to initialize WebRTC:', error)
@@ -315,6 +341,18 @@ export const useCallStore = create<CallStore>((set, get) => ({
 		const { callManager } = get()
 		if (!callManager) throw new Error('CallManager not initialized')
 		await callManager.initiateGroupCall(groupId)
+	},
+
+	joinVoiceChannel: async (channelId: string) => {
+		const { callManager } = get()
+		if (!callManager) throw new Error('CallManager not initialized')
+		await callManager.joinVoiceChannel(channelId)
+	},
+
+	leaveVoiceChannel: (channelId: string) => {
+		const { callManager } = get()
+		if (!callManager) return
+		callManager.leaveVoiceChannel(channelId)
 	},
 
 	joinGroupCall: async (callId: string) => {

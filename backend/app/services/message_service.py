@@ -8,7 +8,7 @@ from app.models.user import User
 
 class MessageService:
     @staticmethod
-    def create_message(data, user_id, group_id):
+    def create_message(data, user_id, group_id=None, target_id=None):
         content = data.get("content")
         attachments = data.get("attachments")
         msg_type = data.get("type", "text")
@@ -22,30 +22,83 @@ class MessageService:
         if not content:
             content = ""
 
-        group = Group.query.get(group_id)
-        if not group:
-            return None, "Group not found"
+        if group_id:
+            group = Group.query.get(group_id)
+            if not group:
+                return None, "Group not found"
 
-        # Check if user is participant
-        user = User.query.get(user_id)
-        if not user or user not in group.participants:
-            return None, "User is not a participant of this group"
+            # Check if user is participant
+            user = User.query.get(user_id)
+            if not user or user not in group.participants:
+                return None, "User is not a participant of this group"
 
-        new_message = Message(
-            content=content,
-            attachments=attachments,
-            type=msg_type,
-            sender_id=user_id,
-            group_id=group_id
-        )
+            new_message = Message(
+                content=content,
+                attachments=attachments,
+                type=msg_type,
+                sender_id=user_id,
+                group_id=group_id
+            )
+        elif target_id:
+            target_user = User.query.get(target_id)
+            if not target_user:
+                return None, "Target user not found"
+
+            new_message = Message(
+                content=content,
+                attachments=attachments,
+                type=msg_type,
+                sender_id=user_id,
+                target_id=target_id
+            )
+        else:
+            return None, "Either group_id or target_id is required"
 
         try:
             db.session.add(new_message)
             db.session.commit()
+
+            # Check for AI assistant integration
+            from app.services.ollama_service import AI_USERNAME, OllamaService
+
+            # For Group
+            if group_id:
+                ai_participant = next(
+                    (p for p in group.participants if p.username == AI_USERNAME), None)
+                if ai_participant and str(new_message.sender_id) != str(ai_participant.id):
+                    OllamaService.process_message_async(
+                        new_message.id, is_dm=False)
+
+            # For DM
+            elif target_id:
+                ai_user = OllamaService.get_ai_user()
+                if str(target_id) == str(ai_user.id):
+                    OllamaService.process_message_async(
+                        new_message.id, is_dm=True)
+
             return new_message, None
         except Exception as e:
             db.session.rollback()
             return None, str(e)
+
+    @staticmethod
+    def get_direct_messages(user_id, target_id, page=1, per_page=50, cursor=None):
+        query = Message.query.filter(
+            ((Message.sender_id == user_id) & (Message.target_id == target_id)) |
+            ((Message.sender_id == target_id) & (Message.target_id == user_id))
+        )
+
+        if cursor:
+            try:
+                cursor_dt = datetime.fromisoformat(cursor)
+                query = query.filter(Message.created_at < cursor_dt)
+            except ValueError:
+                pass
+
+        messages = query.order_by(Message.created_at.desc())\
+            .paginate(page=page, per_page=per_page, error_out=False)
+
+        return messages, None
 
     @staticmethod
     def get_group_messages(group_id, user_id, page=1, per_page=50, cursor=None):

@@ -1,4 +1,3 @@
-from datetime import datetime
 
 from app.core.extensions import db
 from app.models.channel import Channel

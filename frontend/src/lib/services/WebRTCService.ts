@@ -24,7 +24,10 @@ export class WebRTCService {
 	private remoteStreams: Map<string, MediaStream> = new Map()
 	public peerConnections: Map<string, RTCPeerConnection> = new Map()
 	private iceCandidateQueue: Map<string, RTCIceCandidate[]> = new Map()
+	private incomingIceQueue: Map<string, RTCIceCandidateInit[]> = new Map()
 	private configuration: WebRTCConfig
+	private hasTurn: boolean = false
+	private forceRelay: boolean = false
 
 	// Callbacks
 	public onRemoteStream?: (socketId: string, stream: MediaStream) => void
@@ -33,6 +36,7 @@ export class WebRTCService {
 		state: RTCPeerConnectionState,
 	) => void
 	public onLocalStream?: (stream: MediaStream) => void
+	public onCallMigrated?: (oldKey: string, newKey: string) => void
 
 	constructor(socket: Socket, userId: string) {
 		this.socket = socket
@@ -43,6 +47,72 @@ export class WebRTCService {
 				{ urls: 'stun:stun1.l.google.com:19302' },
 			],
 		}
+		try {
+			let turnUrl =
+				typeof process !== 'undefined'
+					? (process.env.NEXT_PUBLIC_TURN_URL as string | undefined)
+					: undefined
+			const turnUrlsEnv =
+				typeof process !== 'undefined'
+					? (process.env.NEXT_PUBLIC_TURN_URLS as string | undefined)
+					: undefined
+			const turnUser =
+				typeof process !== 'undefined'
+					? (process.env.NEXT_PUBLIC_TURN_USERNAME as string | undefined)
+					: undefined
+			const turnPass =
+				typeof process !== 'undefined'
+					? (process.env.NEXT_PUBLIC_TURN_PASSWORD as string | undefined)
+					: undefined
+			const turnRawList: string[] = []
+			if (turnUrl) turnRawList.push(turnUrl)
+			if (turnUrlsEnv)
+				turnRawList.push(
+					...turnUrlsEnv
+						.split(/[,\s]+/)
+						.map(s => s.trim())
+						.filter(Boolean),
+				)
+			if (turnRawList.length && turnUser && turnPass) {
+				const urls: string[] = []
+				for (let u of turnRawList) {
+					u = u.trim()
+					if (!u) continue
+					if (u.startsWith('turn://')) u = 'turn:' + u.slice(7)
+					else if (u.startsWith('turns://')) u = 'turns:' + u.slice(8)
+					const hasTransport = /\?transport=(udp|tcp)$/i.test(u)
+					if (u.startsWith('turns:')) {
+						const v = hasTransport ? u : `${u}?transport=tcp`
+						urls.push(v)
+					} else {
+						if (hasTransport) {
+							urls.push(u)
+						} else {
+							const base = u.replace(/\?transport=(udp|tcp)$/i, '')
+							urls.push(`${base}?transport=udp`, `${base}?transport=tcp`)
+						}
+					}
+				}
+				if (urls.length) {
+					;(this.configuration.iceServers as RTCIceServer[]).push({
+						urls,
+						username: turnUser,
+						credential: turnPass,
+					} as any)
+					this.hasTurn = true
+				}
+			}
+			const fr =
+				typeof process !== 'undefined'
+					? (process.env.NEXT_PUBLIC_FORCE_RELAY as string | undefined)
+					: undefined
+			this.forceRelay = fr === 'true'
+			if (this.forceRelay && !this.hasTurn) {
+				console.warn(
+					'[WebRTC] FORCE_RELAY enabled but no TURN credentials provided; ICE may stay in "new"',
+				)
+			}
+		} catch {}
 	}
 
 	async initializeLocalStream(): Promise<MediaStream> {
@@ -70,30 +140,40 @@ export class WebRTCService {
 		// Обработка ICE кандидатов
 		pc.onicecandidate = event => {
 			if (event.candidate) {
-				// Check if targetSocketId looks like a UUID (length > 30 is a safe heuristic for UUID vs SocketID)
-				// Socket.IO IDs are usually 20 chars. UUIDs are 36.
-				if (targetSocketId.length > 30) {
-					console.log('Buffering ICE candidate for userId:', targetSocketId)
-					const queue = this.iceCandidateQueue.get(targetSocketId) || []
-					queue.push(event.candidate)
-					this.iceCandidateQueue.set(targetSocketId, queue)
-				} else {
+				const isLikelySocketId = /^[A-Za-z0-9_-]{16,30}$/.test(targetSocketId)
+				if (isLikelySocketId) {
 					this.socket.emit('ice_candidate', {
 						target_socket_id: targetSocketId,
 						candidate: event.candidate,
 					})
+				} else {
+					const queue = this.iceCandidateQueue.get(targetSocketId) || []
+					queue.push(event.candidate)
+					this.iceCandidateQueue.set(targetSocketId, queue)
 				}
 			}
 		}
 
 		// Обработка входящих стримов
 		pc.ontrack = event => {
-			const stream = event.streams[0]
-			this.remoteStreams.set(targetSocketId, stream)
-
-			if (this.onRemoteStream) {
-				this.onRemoteStream(targetSocketId, stream)
+			const stream =
+				(event.streams && event.streams[0]) || new MediaStream([event.track])
+			const assign = () => {
+				this.remoteStreams.set(targetSocketId, stream)
+				if (this.onRemoteStream) {
+					this.onRemoteStream(targetSocketId, stream)
+				}
 			}
+			try {
+				const track = event.track
+				if (track && typeof (track as any).onunmute !== 'undefined') {
+					;(track as any).onunmute = () => {
+						console.log('[WebRTC] Remote track unmuted, assigning stream')
+						assign()
+					}
+				}
+			} catch {}
+			assign()
 		}
 
 		// Обработка изменения состояния соединения
@@ -101,11 +181,39 @@ export class WebRTCService {
 			if (this.onConnectionStateChange) {
 				this.onConnectionStateChange(targetSocketId, pc.connectionState)
 			}
+			if (
+				pc.connectionState === 'connected' ||
+				pc.connectionState === 'completed'
+			) {
+				try {
+					const receivers = pc.getReceivers() || []
+					const tracks = receivers
+						.map(r => r.track)
+						.filter((t): t is MediaStreamTrack => !!t)
+					if (tracks.length > 0) {
+						const stream = new MediaStream(tracks)
+						this.remoteStreams.set(targetSocketId, stream)
+						if (this.onRemoteStream) this.onRemoteStream(targetSocketId, stream)
+					}
+				} catch {}
+			}
 		}
+		try {
+			;(pc as any).oniceconnectionstatechange = () => {
+				if (this.onConnectionStateChange) {
+					this.onConnectionStateChange(targetSocketId, pc.connectionState)
+				}
+			}
+		} catch {}
 	}
 
-	createPeerConnection(targetSocketId: string): RTCPeerConnection {
-		const pc = new RTCPeerConnection(this.configuration)
+	private createPeerConnectionWithPolicy(
+		targetSocketId: string,
+		policy: 'all' | 'relay' = 'all',
+	): RTCPeerConnection {
+		const baseConfig: any = { iceServers: this.configuration.iceServers }
+		if (policy === 'relay') baseConfig.iceTransportPolicy = 'relay'
+		const pc = new RTCPeerConnection(baseConfig)
 
 		// Добавление локального стрима
 		if (this.localStream) {
@@ -118,6 +226,13 @@ export class WebRTCService {
 
 		this.peerConnections.set(targetSocketId, pc)
 		return pc
+	}
+
+	createPeerConnection(targetSocketId: string): RTCPeerConnection {
+		return this.createPeerConnectionWithPolicy(
+			targetSocketId,
+			this.forceRelay ? 'relay' : 'all',
+		)
 	}
 
 	ensurePeerConnection(targetSocketId: string): RTCPeerConnection {
@@ -157,7 +272,29 @@ export class WebRTCService {
 			// When we receive 'call_accepted', we get 'from_socket_id'.
 			// So we need to migrate the PC from userId key to socketId key then.
 
+			// Ensure local audio is available and attached before creating offer
+			if (!this.localStream) {
+				this.localStream = await navigator.mediaDevices.getUserMedia({
+					audio: true,
+					video: false,
+				})
+				if (this.onLocalStream) {
+					this.onLocalStream(this.localStream)
+				}
+			}
+
 			const pc = this.createPeerConnection(targetUserId)
+			// Double-check sender presence for audio
+			const hasAudioSender = pc
+				.getSenders()
+				.some(s => s.track && s.track.kind === 'audio')
+			if (this.localStream && !hasAudioSender) {
+				const audioTrack = this.localStream.getAudioTracks()[0]
+				if (audioTrack) {
+					pc.addTrack(audioTrack, this.localStream)
+				}
+			}
+
 			const offer = await pc.createOffer()
 			await pc.setLocalDescription(offer)
 			console.log('Created offer:', offer)
@@ -192,6 +329,21 @@ export class WebRTCService {
 		// Устанавливаем полученный offer
 		await pc.setRemoteDescription(new RTCSessionDescription(offer))
 		console.log('Remote description set for incoming call')
+
+		// Process any buffered ICE candidates
+		this.processBufferedCandidates(callerSocketId)
+	}
+
+	async handleRenegotiationOffer(
+		socketId: string,
+		offer: RTCSessionDescriptionInit,
+	): Promise<void> {
+		const pc =
+			this.ensurePeerConnection(socketId) || this.createPeerConnection(socketId)
+		await pc.setRemoteDescription(new RTCSessionDescription(offer))
+		this.processBufferedCandidates(socketId)
+		// Immediately generate answer for renegotiation
+		await this.acceptCall(socketId)
 	}
 
 	async acceptCall(callerSocketId: string): Promise<void> {
@@ -199,6 +351,68 @@ export class WebRTCService {
 			const pc = this.peerConnections.get(callerSocketId)
 			if (!pc) {
 				throw new Error('Peer connection not found')
+			}
+
+			// Ensure local audio track is attached to the existing peer connection
+			if (!this.localStream) {
+				this.localStream = await navigator.mediaDevices.getUserMedia({
+					audio: true,
+					video: false,
+				})
+				if (this.onLocalStream) {
+					this.onLocalStream(this.localStream)
+				}
+			}
+			if (this.localStream) {
+				const audioTrack = this.localStream.getAudioTracks()[0]
+				if (audioTrack) {
+					try {
+						audioTrack.enabled = true
+					} catch {}
+					const senders = pc.getSenders()
+					const audioSender = senders.find(
+						s => s.track && s.track.kind === 'audio',
+					)
+					if (!audioSender) {
+						pc.addTrack(audioTrack, this.localStream)
+					} else if (audioSender.track !== audioTrack) {
+						try {
+							await audioSender.replaceTrack(audioTrack)
+						} catch {}
+					}
+					try {
+						const transceivers = pc.getTransceivers()
+						const audioTransceiver = transceivers.find(
+							t =>
+								(t.receiver &&
+									t.receiver.track &&
+									t.receiver.track.kind === 'audio') ||
+								(t.sender && t.sender.track && t.sender.track.kind === 'audio'),
+						)
+						if (audioTransceiver) {
+							const dir: any = (audioTransceiver as any).direction
+							if (dir !== 'sendrecv') {
+								try {
+									;(audioTransceiver as any).direction = 'sendrecv'
+								} catch {}
+								try {
+									if (
+										typeof (audioTransceiver as any).setDirection === 'function'
+									) {
+										;(audioTransceiver as any).setDirection('sendrecv')
+									}
+								} catch {}
+								console.log('Forced audio transceiver direction to sendrecv')
+							}
+						}
+					} catch {}
+					try {
+						const count = pc
+							.getSenders()
+							.filter(s => s.track && s.track.kind === 'audio').length
+						console.log('Audio senders before createAnswer:', count)
+					} catch {}
+				}
 			}
 
 			// Создаем answer
@@ -257,6 +471,11 @@ export class WebRTCService {
 					this.iceCandidateQueue.delete(oldKey)
 				}
 			}
+			if (this.onCallMigrated) {
+				try {
+					this.onCallMigrated(oldKey, newKey)
+				} catch {}
+			}
 		}
 	}
 
@@ -264,17 +483,24 @@ export class WebRTCService {
 		sender_socket_id: string
 		answer: RTCSessionDescriptionInit
 	}): Promise<void> {
+		console.log(`[WebRTC] Received answer from ${data.sender_socket_id}`)
 		// Try to find PC by socket_id
 		let pc = this.peerConnections.get(data.sender_socket_id)
 
 		if (!pc) {
+			console.log(
+				`[WebRTC] PC not found for ${data.sender_socket_id}, checking for outgoing calls in 'have-local-offer' state`,
+			)
 			// If not found, it might be one of the outgoing calls keyed by userId.
 			// This handles the race condition where 'answer' arrives before 'call_accepted'.
 			// We look for any PC that is in 'have-local-offer' state.
 			for (const [key, connection] of this.peerConnections.entries()) {
+				console.log(
+					`[WebRTC] Checking PC: key=${key}, state=${connection.signalingState}`,
+				)
 				if (connection.signalingState === 'have-local-offer') {
 					console.log(
-						`Found matching PC keyed by ${key}, migrating to ${data.sender_socket_id}`,
+						`[WebRTC] Found matching PC keyed by ${key}, migrating to ${data.sender_socket_id}`,
 					)
 
 					// Perform migration
@@ -288,13 +514,97 @@ export class WebRTCService {
 		}
 
 		if (pc) {
-			await pc.setRemoteDescription(new RTCSessionDescription(data.answer))
-			console.log('Remote description set from answer')
+			try {
+				console.log(
+					`[WebRTC] Setting remote description for answer from ${data.sender_socket_id}`,
+				)
+				await pc.setRemoteDescription(new RTCSessionDescription(data.answer))
+				console.log('[WebRTC] Remote description set from answer')
+				this.processBufferedCandidates(data.sender_socket_id)
+
+				try {
+					const dirs =
+						(typeof data.answer.sdp === 'string' &&
+							data.answer.sdp.match(/a=(sendrecv|recvonly|sendonly)/g)) ||
+						[]
+					console.log('Answer direction lines:', dirs)
+				} catch {}
+
+				try {
+					const trans = pc
+						.getTransceivers()
+						.find(
+							t =>
+								t.receiver &&
+								t.receiver.track &&
+								t.receiver.track.kind === 'audio',
+						)
+					const dir: any = trans ? (trans as any).direction : ''
+					console.log('Remote audio direction from answer:', dir)
+					if (dir !== 'sendrecv' && dir !== 'sendonly') {
+						console.warn('Remote side is not sending audio')
+					}
+				} catch {}
+
+				try {
+					const rc = pc
+						.getReceivers()
+						.filter(r => r.track && r.track.kind === 'audio').length
+					console.log('Audio receivers count after answer:', rc)
+					if (rc === 0) {
+						console.warn('No audio receivers after answer')
+					}
+				} catch {}
+
+				try {
+					const hasAudioReceiver = pc
+						.getReceivers()
+						.some(r => r.track && r.track.kind === 'audio')
+					if (!hasAudioReceiver && this.hasTurn) {
+						setTimeout(() => {
+							const againPc = this.peerConnections.get(data.sender_socket_id)
+							if (againPc) {
+								const stillNoAudio = !againPc
+									.getReceivers()
+									.some(r => r.track && r.track.kind === 'audio')
+								if (stillNoAudio) {
+									this.renegotiateWithRelay(data.sender_socket_id).catch(err =>
+										console.error(
+											'Relay fallback (no audio receiver) failed:',
+											err,
+										),
+									)
+								}
+							}
+						}, 1500)
+					}
+				} catch {}
+
+				if (this.hasTurn) {
+					setTimeout(() => {
+						const current = this.peerConnections.get(data.sender_socket_id)
+						if (current && current.connectionState !== 'connected') {
+							console.log(
+								`[WebRTC] Connection not established, attempting TURN relay fallback for ${data.sender_socket_id}`,
+							)
+							this.renegotiateWithRelay(data.sender_socket_id).catch(err =>
+								console.error('Relay fallback failed:', err),
+							)
+						}
+					}, 8000)
+				}
+			} catch (err) {
+				console.error('[WebRTC] Error setting remote description:', err)
+			}
 		} else {
 			console.error(
-				'Peer connection not found for answer from:',
+				'[WebRTC] Peer connection not found for answer from:',
 				data.sender_socket_id,
+				'Existing PC keys:',
+				Array.from(this.peerConnections.keys()),
 			)
+			// Last ditch effort: maybe it's just a new incoming answer we didn't expect?
+			// But for answers, we must have an offer sent.
 		}
 	}
 
@@ -304,7 +614,47 @@ export class WebRTCService {
 	}) {
 		const pc = this.peerConnections.get(data.sender_socket_id)
 		if (pc) {
-			await pc.addIceCandidate(new RTCIceCandidate(data.candidate))
+			if (pc.remoteDescription && pc.remoteDescription.type) {
+				await pc.addIceCandidate(new RTCIceCandidate(data.candidate))
+			} else {
+				console.log(
+					`Buffering incoming ICE candidate from ${data.sender_socket_id} (remote description not set)`,
+				)
+				const queue = this.incomingIceQueue.get(data.sender_socket_id) || []
+				queue.push(data.candidate)
+				this.incomingIceQueue.set(data.sender_socket_id, queue)
+			}
+		} else {
+			// If PC doesn't exist yet, we should also buffer?
+			// Usually handleIncomingCall creates PC.
+			// If ICE arrives before offer (very rare but possible in some UDP scenarios or race conditions),
+			// we should buffer.
+			console.log(
+				`Buffering incoming ICE candidate from ${data.sender_socket_id} (PC not found)`,
+			)
+			const queue = this.incomingIceQueue.get(data.sender_socket_id) || []
+			queue.push(data.candidate)
+			this.incomingIceQueue.set(data.sender_socket_id, queue)
+		}
+	}
+
+	private async processBufferedCandidates(socketId: string) {
+		const queue = this.incomingIceQueue.get(socketId)
+		if (queue && queue.length > 0) {
+			console.log(
+				`Processing ${queue.length} buffered ICE candidates for ${socketId}`,
+			)
+			const pc = this.peerConnections.get(socketId)
+			if (pc) {
+				for (const candidate of queue) {
+					try {
+						await pc.addIceCandidate(new RTCIceCandidate(candidate))
+					} catch (e) {
+						console.error('Error adding buffered ICE candidate:', e)
+					}
+				}
+				this.incomingIceQueue.delete(socketId)
+			}
 		}
 	}
 
@@ -317,6 +667,17 @@ export class WebRTCService {
 	endCall(targetSocketId: string): void {
 		this.socket.emit('call_end', { target_socket_id: targetSocketId })
 		this.cleanupCall(targetSocketId)
+	}
+
+	private async renegotiateWithRelay(targetSocketId: string): Promise<void> {
+		this.cleanupCall(targetSocketId)
+		const pc = this.createPeerConnectionWithPolicy(targetSocketId, 'relay')
+		const offer = await pc.createOffer()
+		await pc.setLocalDescription(offer)
+		this.socket.emit('offer', {
+			target_socket_id: targetSocketId,
+			offer,
+		})
 	}
 
 	public cleanupCall(socketId: string) {

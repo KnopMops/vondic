@@ -1,5 +1,7 @@
 import logging
+
 from flask_socketio import ConnectionRefusedError
+
 from .database import UserRepository
 
 logger = logging.getLogger(__name__)

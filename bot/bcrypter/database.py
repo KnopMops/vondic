@@ -97,3 +97,26 @@ class AuthRepository:
             return row["password_hash"] if row else None
         finally:
             conn.close()
+
+    def get_user_by_email(self, email: str):
+        conn = self._connect()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
+
+    def set_premium(self, user_id: str, premium_status: int) -> bool:
+        conn = self._connect()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "UPDATE users SET premium = ? WHERE id = ?", (premium_status, user_id))
+            conn.commit()
+            return True
+        except sqlite3.Error:
+            return False
+        finally:
+            conn.close()

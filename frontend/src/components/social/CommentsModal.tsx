@@ -13,6 +13,7 @@ type Comment = {
 	created_at?: string
 	author_name?: string
 	author_avatar?: string
+	author_premium?: boolean
 	parent_id?: string
 	likes?: number
 	is_liked?: boolean
@@ -229,6 +230,9 @@ function CommentItem({
 							>
 								{comment.author_name || 'User'}
 							</Link>
+							{comment.author_premium && (
+								<span className='ml-1 text-amber-500'>★</span>
+							)}
 						</div>
 						{(canEdit || canDelete) && (
 							<div className='relative' ref={menuRef}>
@@ -506,7 +510,7 @@ export default function CommentsModal({
 	if (!isOpen) return null
 
 	return (
-		<div className='fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50'>
+		<div className='fixed inset-0 z-[10000] flex items-center justify-center bg-black bg-opacity-50'>
 			<div className='flex h-[80vh] w-full max-w-lg flex-col rounded-xl bg-white shadow-xl dark:bg-gray-800'>
 				{/* Header */}
 				<div className='flex items-center justify-between border-b border-gray-200 p-4 dark:border-gray-700'>
@@ -606,7 +610,7 @@ export default function CommentsModal({
 
 			{/* Admin Delete Confirmation Modal */}
 			{adminDeleteComment && (
-				<div className='fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-50'>
+				<div className='fixed inset-0 z-[10000] flex items-center justify-center bg-black bg-opacity-50'>
 					<div className='w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800'>
 						<h3 className='mb-4 text-lg font-bold text-gray-900 dark:text-white'>
 							Удаление комментария (Админ)

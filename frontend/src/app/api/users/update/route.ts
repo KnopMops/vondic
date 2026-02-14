@@ -14,7 +14,7 @@ export async function PUT(req: NextRequest) {
     // Inject access_token into body as requested by user
     const payload = { ...body, access_token: token };
 
-    const response = await fetch(`${backendUrl}/api/v1/users/update`, {
+    const response = await fetch(`${backendUrl}/api/v1/users/`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",

@@ -3,8 +3,14 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(req: NextRequest) {
 	try {
-		const { target_id, limit = 50, offset = 0 } = await req.json()
-		const token = await getAccessToken(req)
+		let body: any = {}
+		try {
+			body = await req.json()
+		} catch {
+			body = {}
+		}
+		const { target_id, limit = 50, offset = 0, access_token: tokenFromBody, token: tokenAlt } = body
+		const token = (await getAccessToken(req)) || tokenFromBody || tokenAlt
 
 		if (!token) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -16,7 +22,7 @@ export async function POST(req: NextRequest) {
         // Given "webrtc server" phrasing and socket usage, port 5000 is likely correct for this specific service.
         // However, standard backend is 5050. Let's use 5000 as per "webrtc server" hint or fallback to env.
         
-        const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000'
+        const socketUrl = process.env.NEXT_PUBLIC_WEBRTC_URL || 'http://localhost:5000'
 
 		const response = await fetch(`${socketUrl}/messages/history`, {
 			method: 'POST',

@@ -38,6 +38,14 @@ class AuthService:
             new_user.refresh_token = refresh_token
             db.session.add(new_user)
             db.session.commit()
+
+            # Ensure AI chat
+            try:
+                from app.services.ollama_service import OllamaService
+                OllamaService.ensure_chat_with_ai(new_user.id)
+            except Exception as e:
+                print(f"Failed to create AI chat: {e}")
+
             token = EmailService.generate_verification_token(email)
             if not EmailService.send_verification_email(email, token):
                 return (
@@ -48,6 +56,26 @@ class AuthService:
         except Exception as e:
             db.session.rollback()
             return (None, str(e))
+
+    @staticmethod
+    def link_telegram(link_key, telegram_id):
+        user = User.query.filter_by(link_key=link_key).first()
+        if not user:
+            return None, "Invalid or expired link key"
+
+        # Check if telegram_id is already used by another user
+        existing = User.query.filter_by(telegram_id=str(telegram_id)).first()
+        if existing and existing.id != user.id:
+            return None, "Telegram account already linked to another user"
+
+        try:
+            user.telegram_id = str(telegram_id)
+            user.link_key = None  # Invalidate key after use
+            db.session.commit()
+            return user, None
+        except Exception as e:
+            db.session.rollback()
+            return None, str(e)
 
     @staticmethod
     def get_user_by_token(access_token):
@@ -133,11 +161,19 @@ class AuthService:
                 return None, "User is blocked"
             user.access_token = secrets.token_hex(32)
             user.refresh_token = secrets.token_hex(32)
-            if avatar_url:
-                user.avatar_url = avatar_url
 
         try:
             db.session.commit()
+
+            # Ensure AI chat
+            try:
+                from app.services.ollama_service import OllamaService
+                OllamaService.ensure_chat_with_ai(user.id)
+            except Exception as e:
+                print(f"Failed to create AI chat: {e}")
+
+            if user.login_alert_enabled and user.email and not user.email.endswith("@telegram.bot"):
+                EmailService.send_login_alert(user.email)
             return (
                 {
                     "user": user,
@@ -181,6 +217,26 @@ class AuthService:
             return (None, "User is blocked")
         if not user.is_verified:
             return (None, "Email not verified")
+        # Enforce 2FA challenge if enabled
+        if user.two_factor_enabled:
+            if (user.email or "").endswith("@yandex.ru"):
+                # 2FA is not available for yandex.ru accounts
+                pass
+            method = user.two_factor_method
+            if method == "email":
+                email_code = data.get("email_code")
+                if not email_code:
+                    return (None, "TwoFactorEmailRequired")
+                success, err = AuthService.verify_2fa_email_code(
+                    user, email_code)
+                if not success:
+                    return (None, "InvalidTwoFactorCode")
+            elif method == "totp":
+                totp_code = data.get("totp_code")
+                if not totp_code:
+                    return (None, "TwoFactorTotpRequired")
+                if not AuthService.verify_totp(user.two_factor_secret, totp_code):
+                    return (None, "InvalidTwoFactorCode")
         access_token = secrets.token_hex(32)
         refresh_token = secrets.token_hex(32)
         user.access_token = access_token
@@ -231,6 +287,16 @@ class AuthService:
             user.refresh_token = secrets.token_hex(32)
         try:
             db.session.commit()
+
+            # Ensure AI chat
+            try:
+                from app.services.ollama_service import OllamaService
+                OllamaService.ensure_chat_with_ai(user.id)
+            except Exception as e:
+                print(f"Failed to create AI chat: {e}")
+
+            if user.login_alert_enabled and user.email and not user.email.endswith("@telegram.bot"):
+                EmailService.send_login_alert(user.email)
             return (
                 {
                     "user": user,
@@ -242,3 +308,119 @@ class AuthService:
         except Exception as e:
             db.session.rollback()
             return (None, str(e))
+            db.session.rollback()
+            return (None, str(e))
+
+    @staticmethod
+    def setup_2fa(current_user, method, enable):
+        email = current_user.email or ""
+        if enable and email.endswith("@yandex.ru"):
+            return None, "для yandex аккаунта это не недоступно"
+        if enable:
+            if method == "totp" and email.endswith("@telegram.bot"):
+                return None, "TOTP is unavailable for Telegram accounts"
+            current_user.two_factor_enabled = 1
+            current_user.two_factor_method = method
+            if method == "totp":
+                secret = secrets.token_hex(20)
+                current_user.two_factor_secret = secret
+                current_user.two_factor_email_code = None
+                current_user.two_factor_email_code_expires = None
+            elif method == "email":
+                current_user.two_factor_secret = None
+            else:
+                return None, "Unsupported 2FA method"
+        else:
+            current_user.two_factor_enabled = 0
+            current_user.two_factor_method = None
+            current_user.two_factor_secret = None
+            current_user.two_factor_email_code = None
+            current_user.two_factor_email_code_expires = None
+        try:
+            db.session.commit()
+            return current_user, None
+        except Exception as e:
+            db.session.rollback()
+            return None, str(e)
+
+    @staticmethod
+    def send_2fa_email_code(current_user):
+        if not current_user.email:
+            return False, "Email not set"
+        if current_user.email.endswith("@yandex.ru"):
+            return False, "для yandex аккаунта это не недоступно"
+        code = "".join(secrets.choice("0123456789") for _ in range(6))
+        current_user.two_factor_enabled = 1
+        current_user.two_factor_method = "email"
+        current_user.two_factor_secret = None
+        from datetime import datetime, timedelta
+        current_user.two_factor_email_code = code
+        current_user.two_factor_email_code_expires = datetime.utcnow() + \
+            timedelta(minutes=10)
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            return False, str(e)
+        if not EmailService.send_2fa_code(current_user.email, code):
+            return False, "Failed to send email"
+        return True, None
+
+    @staticmethod
+    def verify_2fa_email_code(current_user, code):
+        from datetime import datetime
+        if current_user.two_factor_method != "email":
+            return False, "2FA method is not email"
+        if not current_user.two_factor_email_code or not current_user.two_factor_email_code_expires:
+            return False, "No code requested"
+        if current_user.two_factor_email_code != str(code):
+            return False, "Invalid code"
+        if current_user.two_factor_email_code_expires < datetime.utcnow():
+            return False, "Code expired"
+        current_user.two_factor_email_code = None
+        current_user.two_factor_email_code_expires = None
+        try:
+            db.session.commit()
+            return True, None
+        except Exception as e:
+            db.session.rollback()
+            return False, str(e)
+
+    @staticmethod
+    def toggle_login_alerts(current_user, enable):
+        current_user.login_alert_enabled = 1 if enable else 0
+        try:
+            db.session.commit()
+            return True, None
+        except Exception as e:
+            db.session.rollback()
+            return False, str(e)
+
+    @staticmethod
+    def verify_totp(secret_hex, code, window=1):
+        try:
+            import hashlib
+            import hmac
+            import struct
+            import time
+            if not secret_hex:
+                return False
+            secret = bytes.fromhex(secret_hex)
+            timestep = 30
+            counter = int(time.time() // timestep)
+            code = str(code).strip()
+            if not code.isdigit() or len(code) not in (6, 7, 8):
+                return False
+            for offset in range(-window, window + 1):
+                c = counter + offset
+                msg = struct.pack(">Q", c)
+                hmac_hash = hmac.new(secret, msg, hashlib.sha1).digest()
+                o = hmac_hash[19] & 0x0F
+                binary = ((hmac_hash[o] & 0x7f) << 24) | ((hmac_hash[o + 1] & 0xff) << 16) | (
+                    (hmac_hash[o + 2] & 0xff) << 8) | (hmac_hash[o + 3] & 0xff)
+                otp = binary % 1000000
+                if f"{otp:06d}" == code:
+                    return True
+            return False
+        except Exception:
+            return False

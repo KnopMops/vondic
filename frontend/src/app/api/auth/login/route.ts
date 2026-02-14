@@ -12,13 +12,20 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify(body),
     });
 
-    const data = await response.json();
+  const text = await response.text();
+  let data: any = {};
+  try {
+    data = JSON.parse(text);
+  } catch {
+    data = { error: text || "Login failed" };
+  }
 
     if (!response.ok) {
-      return NextResponse.json(
-        { error: data.error || "Login failed" },
-        { status: response.status }
-      );
+    // Пробрасываем two_factor_required и method, если они есть
+    if (data.two_factor_required) {
+      return NextResponse.json(data, { status: response.status });
+    }
+    return NextResponse.json({ error: data.error || "Login failed" }, { status: response.status });
     }
 
     // Создаем ответ и устанавливаем cookies

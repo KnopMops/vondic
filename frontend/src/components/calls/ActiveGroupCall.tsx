@@ -1,3 +1,5 @@
+'use client'
+
 import React, { useEffect, useState } from 'react'
 import { CallState } from '../../lib/services/WebRTCService'
 
@@ -47,13 +49,13 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 
 	if (isMinimized) {
 		return (
-			<div className="active-call group-call minimized">
-				<div className="minimized-call-info" onClick={toggleMinimize}>
-					<span className="call-icon">👥</span>
-					<span className="call-duration">{formatDuration(duration)}</span>
-					<span className="call-status">{participants.length + 1} уч.</span>
+			<div className='active-call group-call minimized'>
+				<div className='minimized-call-info' onClick={toggleMinimize}>
+					<span className='call-icon'>👥</span>
+					<span className='call-duration'>{formatDuration(duration)}</span>
+					<span className='call-status'>{participants.length + 1} уч.</span>
 				</div>
-				<div className="minimized-controls">
+				<div className='minimized-controls'>
 					<button
 						onClick={onMuteToggle}
 						className={`mute-button ${isMuted ? 'muted' : ''}`}
@@ -63,8 +65,8 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 					</button>
 					<button
 						onClick={() => onEndCall(callId)}
-						className="end-call-button"
-						title="Покинуть группу"
+						className='end-call-button'
+						title='Покинуть группу'
 					>
 						📞
 					</button>
@@ -74,41 +76,43 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 	}
 
 	return (
-		<div className="active-call group-call">
-			<div className="call-header">
-				<div className="call-info">
-					<h3 className="call-title">Групповой звонок</h3>
-					<div className="call-meta">
-						<span className="call-duration">{formatDuration(duration)}</span>
-						<span className="call-status connected">
+		<div className='active-call group-call'>
+			<div className='call-header'>
+				<div className='call-info'>
+					<h3 className='call-title'>Групповой звонок</h3>
+					<div className='call-meta'>
+						<span className='call-duration'>{formatDuration(duration)}</span>
+						<span className='call-status connected'>
 							{participants.length + 1} участников
 						</span>
 					</div>
 				</div>
 				<button
 					onClick={toggleMinimize}
-					className="minimize-button"
-					title="Свернуть"
+					className='minimize-button'
+					title='Свернуть'
 				>
 					➖
 				</button>
 			</div>
 
-			<div className="call-content group-grid">
+			<div className='call-content group-grid'>
 				{/* Local Participant */}
-				<div className="participant-card local">
-					<div className="participant-avatar">
-						<div className="avatar-placeholder">Вы</div>
+				<div className='participant-card local'>
+					<div className='participant-avatar'>
+						<div className='avatar-placeholder'>Вы</div>
 					</div>
-					<div className="participant-info">
-						<span className="participant-name">Вы</span>
-						<span className="participant-status">
-							{isMuted ? '🔇' : '🎤'}
-						</span>
+					<div className='participant-info'>
+						<span className='participant-name'>Вы</span>
+						<span className='participant-status'>{isMuted ? '🔇' : '🎤'}</span>
 					</div>
 					<audio
 						ref={ref => {
 							if (ref && localStream) ref.srcObject = localStream
+							if (ref) {
+								const p = ref.play()
+								if (p && typeof p.catch === 'function') p.catch(() => {})
+							}
 						}}
 						autoPlay
 						playsInline
@@ -118,29 +122,37 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 
 				{/* Remote Participants */}
 				{participants.map(participant => (
-					<div key={participant.socketId} className="participant-card remote">
-						<div className="participant-avatar">
+					<div key={participant.socketId} className='participant-card remote'>
+						<div className='participant-avatar'>
 							{participant.avatarUrl ? (
 								<img src={participant.avatarUrl} alt={participant.userName} />
 							) : (
-								<div className="avatar-placeholder">
+								<div className='avatar-placeholder'>
 									{participant.userName?.charAt(0) || '?'}
 								</div>
 							)}
 						</div>
-						<div className="participant-info">
-							<span className="participant-name">
+						<div className='participant-info'>
+							<span className='participant-name'>
 								{participant.userName || 'Unknown'}
 							</span>
-							<span className="participant-status">
+							<span className='participant-status'>
 								{participant.status === 'connected' ? '🔊' : '...'}
 							</span>
 						</div>
 						<audio
 							ref={ref => {
 								const stream = remoteStreams.get(participant.socketId)
-								if (ref && stream) {
+								if (!ref) return
+								if (participant.status === 'connected' && stream) {
 									ref.srcObject = stream
+									const p = ref.play()
+									if (p && typeof p.catch === 'function') p.catch(() => {})
+								} else {
+									try {
+										ref.pause()
+									} catch {}
+									ref.srcObject = null
 								}
 							}}
 							autoPlay
@@ -150,25 +162,25 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 				))}
 			</div>
 
-			<div className="call-controls">
+			<div className='call-controls'>
 				<button
 					onClick={onMuteToggle}
 					className={`mute-button ${isMuted ? 'muted' : ''}`}
 					title={isMuted ? 'Включить микрофон' : 'Выключить микрофон'}
 				>
-					<span className="button-icon">{isMuted ? '🔇' : '🎤'}</span>
-					<span className="button-text">
+					<span className='button-icon'>{isMuted ? '🔇' : '🎤'}</span>
+					<span className='button-text'>
 						{isMuted ? 'Включить' : 'Выключить'}
 					</span>
 				</button>
 
 				<button
 					onClick={() => onEndCall(callId)}
-					className="end-call-button"
-					title="Покинуть звонок"
+					className='end-call-button'
+					title='Покинуть звонок'
 				>
-					<span className="button-icon">📞</span>
-					<span className="button-text">Покинуть</span>
+					<span className='button-icon'>📞</span>
+					<span className='button-text'>Покинуть</span>
 				</button>
 			</div>
 		</div>

@@ -1,3 +1,5 @@
+'use client'
+
 import { useAuth } from '@/lib/AuthContext'
 import { useSocket } from '@/lib/SocketContext'
 import { useCallStore } from '@/lib/stores/callStore'
@@ -30,10 +32,13 @@ export const WebRTCProvider: React.FC<WebRTCProviderProps> = ({ children }) => {
 	useEffect(() => {
 		// Инициализация WebRTC при наличии сокета и пользователя
 		if (socket && user && isWebRTCSupported && !isInitialized) {
-			initializeWebRTC(socket, user.id)
-				.catch((error) => {
-					console.error('Failed to initialize WebRTC:', error)
-				})
+			initializeWebRTC(socket, {
+				id: user.id,
+				name: user.username || user.name || 'Unknown',
+				avatar: user.avatar_url,
+			}).catch(error => {
+				console.error('Failed to initialize WebRTC:', error)
+			})
 		}
 
 		// Очистка при размонтировании

@@ -1,5 +1,6 @@
 'use client'
 
+import { useAppSelector } from '@/lib/hooks'
 import { Attachment } from '@/lib/types'
 import { useRef, useState } from 'react'
 
@@ -12,6 +13,7 @@ export default function Composer({ onCreate }: Props) {
 	const [files, setFiles] = useState<File[]>([])
 	const [isUploading, setIsUploading] = useState(false)
 	const fileInputRef = useRef<HTMLInputElement>(null)
+	const { user } = useAppSelector(state => state.auth)
 
 	const fileToDataUrl = (file: File) =>
 		new Promise<string>((resolve, reject) => {
@@ -22,8 +24,19 @@ export default function Composer({ onCreate }: Props) {
 		})
 
 	const uploadFile = async (file: File): Promise<Attachment> => {
+		const maxSize = (user?.premium ? 100 : 20) * 1024 * 1024
+		if (file.size > maxSize) {
+			throw new Error(
+				`Файл превышает лимит ${user?.premium ? '100' : '20'} МБ: ${file.name}`,
+			)
+		}
+		const THROTTLE_BPS = 1750000
+		if (!user?.premium) {
+			const delayMs = Math.ceil((file.size / THROTTLE_BPS) * 1000)
+			await new Promise(resolve => setTimeout(resolve, delayMs))
+		}
 		const dataUrl = await fileToDataUrl(file)
-		const res = await fetch('/api/v1/upload/file', {
+		const res = await fetch('/api/upload/file', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
@@ -61,8 +74,19 @@ export default function Composer({ onCreate }: Props) {
 
 		setIsUploading(true)
 		try {
-			const attachments =
-				files.length > 0 ? await Promise.all(files.map(uploadFile)) : undefined
+			let attachments: Attachment[] | undefined = undefined
+			if (files.length > 0) {
+				if (user?.premium) {
+					attachments = await Promise.all(files.map(uploadFile))
+				} else {
+					const list: Attachment[] = []
+					for (const f of files) {
+						const a = await uploadFile(f)
+						list.push(a)
+					}
+					attachments = list
+				}
+			}
 			onCreate(text.trim(), attachments)
 			setText('')
 			setFiles([])
@@ -92,6 +116,7 @@ export default function Composer({ onCreate }: Props) {
 			<input
 				ref={fileInputRef}
 				type='file'
+				accept='image/*,video/*,audio/*'
 				multiple
 				onChange={handleFilesSelected}
 				className='hidden'

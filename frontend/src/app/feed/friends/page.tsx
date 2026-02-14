@@ -205,6 +205,7 @@ export default function FriendsPage() {
 							<div>
 								<div className='font-semibold text-white group-hover:text-indigo-400 transition-colors'>
 									{u.username}
+									{u.premium && <span className='ml-1 text-amber-400'>★</span>}
 								</div>
 								{!u.email?.endsWith('@telegram.bot') && (
 									<div className='text-xs text-gray-400'>{u.email}</div>
@@ -350,6 +351,9 @@ export default function FriendsPage() {
 												<div>
 													<div className='font-semibold text-white'>
 														{u.username}
+														{u.premium && (
+															<span className='ml-1 text-amber-400'>★</span>
+														)}
 													</div>
 												</div>
 											</div>

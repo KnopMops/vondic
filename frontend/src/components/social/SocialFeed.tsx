@@ -3,6 +3,8 @@
 import { useAppSelector } from '@/lib/hooks'
 import { usePosts } from '@/lib/hooks/usePosts'
 import { Attachment } from '@/lib/types'
+import { useEffect, useMemo, useState } from 'react'
+import { formatMskDateTime } from '@/lib/utils'
 import Composer from './Composer'
 import Header from './Header'
 import Post from './Post'
@@ -23,6 +25,9 @@ export default function SocialFeed({ email, onLogout }: Props) {
 		deletePost,
 		updatePost,
 	} = usePosts()
+	const [activeTab, setActiveTab] = useState<'popular' | 'following'>('popular')
+	const [followingIds, setFollowingIds] = useState<string[]>([])
+	const [isFollowingLoading, setIsFollowingLoading] = useState(false)
 
 	const addPost = (text: string, attachments?: Attachment[]) => {
 		createPost({ text, attachments })
@@ -36,6 +41,40 @@ export default function SocialFeed({ email, onLogout }: Props) {
 	const handleUpdatePost = (id: string | number, newText: string) => {
 		updatePost({ id, newText })
 	}
+
+	useEffect(() => {
+		const fetchFollowing = async () => {
+			if (!user) return
+			setIsFollowingLoading(true)
+			try {
+				const res = await fetch('/api/subscriptions/following', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ user_id: user.id }),
+				})
+				if (res.ok) {
+					const data = await res.json()
+					const ids = Array.isArray(data)
+						? data.map((u: any) => String(u.id)).filter(Boolean)
+						: []
+					setFollowingIds(ids)
+				}
+			} catch (e) {
+			} finally {
+				setIsFollowingLoading(false)
+			}
+		}
+		fetchFollowing()
+	}, [user?.id])
+
+	const displayedPosts = useMemo(() => {
+		const byDateDesc = (a: any, b: any) =>
+			new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+		if (activeTab === 'following' && followingIds.length > 0) {
+			return posts.filter(p => followingIds.includes(String(p.posted_by))).sort(byDateDesc)
+		}
+		return [...posts].sort(byDateDesc)
+	}, [activeTab, posts, followingIds])
 
 	return (
 		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white overflow-x-hidden relative'>
@@ -56,10 +95,16 @@ export default function SocialFeed({ email, onLogout }: Props) {
 						<Composer onCreate={addPost} />
 						<div className='rounded-xl bg-gray-900/40 backdrop-blur-md border border-gray-800/50 p-1'>
 							<div className='grid grid-cols-2 p-1 gap-2'>
-								<button className='rounded-lg bg-gray-800/50 py-2.5 text-sm font-medium text-white shadow-sm transition-all'>
+								<button
+									onClick={() => setActiveTab('popular')}
+									className={`rounded-lg py-2.5 text-sm font-medium transition-all ${activeTab === 'popular' ? 'bg-gray-800/50 text-white shadow-sm' : 'text-gray-400 hover:text-white hover:bg-gray-800/30'}`}
+								>
 									Популярное
 								</button>
-								<button className='rounded-lg py-2.5 text-sm font-medium text-gray-400 hover:text-white hover:bg-gray-800/30 transition-all'>
+								<button
+									onClick={() => setActiveTab('following')}
+									className={`rounded-lg py-2.5 text-sm font-medium transition-all ${activeTab === 'following' ? 'bg-gray-800/50 text-white shadow-sm' : 'text-gray-400 hover:text-white hover:bg-gray-800/30'}`}
+								>
 									Подписки
 								</button>
 							</div>
@@ -71,21 +116,25 @@ export default function SocialFeed({ email, onLogout }: Props) {
 							</div>
 						)}
 
-						{posts.map(p => (
+						{activeTab === 'following' &&
+							!isFollowingLoading &&
+							followingIds.length === 0 && (
+								<div className='text-center text-gray-400 py-6'>
+									У вас пока нет подписок
+								</div>
+							)}
+
+						{displayedPosts.map(p => (
 							<Post
 								key={p.id}
 								id={p.id}
 								author={p.author_name || 'Unknown User'}
 								author_id={p.posted_by}
 								author_avatar={p.author_avatar}
+								author_premium={p.author_premium}
 								time={
 									p.created_at
-										? new Date(p.created_at).toLocaleString('ru-RU', {
-												day: 'numeric',
-												month: 'short',
-												hour: '2-digit',
-												minute: '2-digit',
-											})
+										? formatMskDateTime(p.created_at)
 										: 'недавно'
 								}
 								text={p.content}

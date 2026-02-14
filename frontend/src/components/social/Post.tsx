@@ -7,12 +7,14 @@ import { useEffect, useState } from 'react'
 import CommentsModal from './CommentsModal'
 import PostDetailsModal from './PostDetailsModal'
 import ShareModal from './ShareModal'
+import VideoPlayer from './VideoPlayer'
 
 type Props = {
 	id: string | number
 	author: string
 	author_id: string | number
 	author_avatar?: string | null
+	author_premium?: boolean
 	time: string
 	text: string
 	likes?: number
@@ -31,6 +33,7 @@ export default function Post({
 	author,
 	author_id,
 	author_avatar,
+	author_premium,
 	time,
 	text,
 	likes = 0,
@@ -72,6 +75,11 @@ export default function Post({
 			ext === 'bmp' ||
 			ext === 'svg'
 		)
+	}
+
+	const isVideoAttachment = (a: Attachment) => {
+		const ext = (a.ext || '').toLowerCase()
+		return ext === 'mp4' || ext === 'mov' || ext === 'webm' || ext === 'ogg'
 	}
 
 	const isOwner = String(currentUserId) === String(author_id)
@@ -180,6 +188,7 @@ export default function Post({
 									{author}
 								</span>
 							</Link>
+							{author_premium && <span className='text-amber-400'>★</span>}
 							<span className='text-xs text-gray-500'>{time}</span>
 						</div>
 						{(canEdit || canDelete) && (
@@ -278,6 +287,8 @@ export default function Post({
 											alt={a.name}
 											className='w-full rounded-xl border border-gray-800/50 object-cover'
 										/>
+									) : isVideoAttachment(a) ? (
+										<VideoPlayer key={a.url} src={a.url} />
 									) : (
 										<a
 											key={a.url}
@@ -391,12 +402,18 @@ export default function Post({
 				<ShareModal
 					isOpen={isShareModalOpen}
 					onClose={() => setIsShareModalOpen(false)}
-					postUrl={`${window.location.origin}/feed/post/${id}`}
+					post={{
+						id,
+						author,
+						author_avatar,
+						text,
+						image,
+					}}
 				/>
 			)}
 
 			{isDeleteModalOpen && (
-				<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4'>
+				<div className='fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4'>
 					<div className='w-full max-w-md rounded-2xl bg-gray-900 border border-gray-800 p-6 shadow-2xl'>
 						<h3 className='text-xl font-bold text-white mb-2'>
 							Удалить публикацию?

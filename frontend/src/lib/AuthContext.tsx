@@ -8,18 +8,7 @@ import {
 	setUser,
 } from './features/authSlice'
 import { useAppDispatch, useAppSelector } from './hooks'
-
-interface User {
-	id: string
-	email: string
-	username: string
-	role: string
-	avatar_url: string | null
-	description?: string
-	birth_date?: string
-	socket_id?: string | null
-	access_token?: string
-}
+import { User } from './types'
 
 interface AuthContextType {
 	user: User | null

@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime
 
 from app.core.extensions import db
@@ -18,6 +19,10 @@ class UserService:
     @staticmethod
     def get_user_by_email(email):
         return User.query.filter_by(email=email).first()
+
+    @staticmethod
+    def get_user_by_telegram_id(telegram_id):
+        return User.query.filter_by(telegram_id=telegram_id).first()
 
     @staticmethod
     def search_users(query_str):
@@ -64,6 +69,15 @@ class UserService:
             user.username = data["username"]
         if "avatar_url" in data:
             user.avatar_url = data["avatar_url"]
+        # Profile background customization
+        if "profile_bg_theme" in data:
+            user.profile_bg_theme = data.get("profile_bg_theme")
+            # Reset gradient if theme chosen (non-premium customization)
+            if user.profile_bg_theme:
+                user.profile_bg_gradient = None
+        if "profile_bg_gradient" in data and current_user.premium:
+            # Allow gradient only for premium users
+            user.profile_bg_gradient = data.get("profile_bg_gradient")
 
         # Only Admin can update role or status manually
         if current_user.role == "Admin":
@@ -71,6 +85,8 @@ class UserService:
                 user.role = data["role"]
             if "status" in data:
                 user.status = data["status"]
+            if "premium" in data:
+                user.premium = int(data["premium"])
 
         try:
             db.session.commit()
@@ -78,6 +94,22 @@ class UserService:
         except IntegrityError:
             db.session.rollback()
             return None, "Username already taken"
+        except Exception as e:
+            db.session.rollback()
+            return None, str(e)
+
+    @staticmethod
+    def generate_link_key(user_id):
+        user = User.query.get(user_id)
+        if not user:
+            return None, "User not found"
+
+        try:
+            # Generate a 6-digit numeric code for easier typing
+            key = "".join(secrets.choice("0123456789") for _ in range(6))
+            user.link_key = key
+            db.session.commit()
+            return key, None
         except Exception as e:
             db.session.rollback()
             return None, str(e)

@@ -151,11 +151,13 @@ def get_group(current_user):
     return jsonify(group_schema.dump(group)), 200
 
 
-@groups_bp.route("/<group_id>/participants", methods=["POST"])
+@groups_bp.route("/<group_id>/participants", methods=["GET", "POST"])
 @token_required
-def add_participant(current_user, group_id):
+def participants(current_user, group_id):
     """
-    Добавить участника в группу
+    Управление участниками группы
+    GET: Получить список участников
+    POST: Добавить участника
     ---
     tags:
       - Groups
@@ -166,23 +168,33 @@ def add_participant(current_user, group_id):
         required: true
       - name: body
         in: body
-        required: true
+        required: false
         schema:
           type: object
           properties:
             user_id:
               type: string
-              required: true
             access_token:
               type: string
     responses:
       200:
-        description: Участник добавлен
+        description: Успешно
       400:
         description: Ошибка
       403:
         description: Нет прав
     """
+    if request.method == "GET":
+        group = GroupService.get_group_by_id(group_id)
+        if not group:
+            return jsonify({"error": "Group not found"}), 404
+        
+        # Return list of participants
+        # We need a schema for users or just dump basic info
+        from app.schemas.user_schema import users_schema
+        return jsonify(users_schema.dump(group.participants)), 200
+
+    # POST logic (add participant)
     data = request.get_json() or {}
     target_user_id = data.get("user_id")
 

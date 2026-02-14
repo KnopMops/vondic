@@ -312,19 +312,22 @@ class UserRepository:
                 try:
                     msg["content"] = self.cipher.decrypt(
                         msg["content"].encode()).decode()
-                except Exception as e:
-                    msg["content"] = "[Encrypted/Error]"
-                    logger.error(
-                        f"Ошибка дешифровки сообщения {msg['id']}: {e}")
+                except Exception:
+                    # Fallback to original content if it's not encrypted (e.g. AI response)
+                    pass
                 if msg.get("attachments"):
                     try:
                         decrypted = self.cipher.decrypt(
                             msg["attachments"].encode()).decode()
                         msg["attachments"] = json.loads(decrypted)
-                    except Exception as e:
-                        msg["attachments"] = None
-                        logger.error(
-                            f"Ошибка дешифровки вложений {msg['id']}: {e}")
+                    except Exception:
+                        # Fallback to original attachments if it's not encrypted
+                        if isinstance(msg["attachments"], str):
+                            try:
+                                msg["attachments"] = json.loads(msg["attachments"])
+                            except Exception:
+                                pass
+                        pass
                 messages.append(msg)
             return messages
         except sqlite3.Error as err:
