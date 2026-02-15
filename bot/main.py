@@ -13,9 +13,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from bcrypter.service import BCrypter
 from dotenv import load_dotenv
 
-# Добавляем путь к папке bot, чтобы работали импорты из bcrypter
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-# Добавляем корневую папку проекта
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
@@ -43,31 +41,22 @@ class LinkStates(StatesGroup):
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
-    """
-    Обработчик команды /start.
-    Отправляет приветственное сообщение с инлайн-кнопками.
-    """
     builder = InlineKeyboardBuilder()
 
-    # Row 1: Registration
     builder.row(InlineKeyboardButton(
         text="✅ Регистрация", callback_data="register"))
 
-    # Row 2: Login/Restore
     builder.row(InlineKeyboardButton(
         text="🔄 Войти / Восстановить ключ", callback_data="restore"))
 
-    # Row 3: Buy Premium (TG)
     builder.row(InlineKeyboardButton(
         text="💎 Купить Vondic Premium", callback_data="buy_premium_tg"))
     builder.row(InlineKeyboardButton(
         text="💰 Купить Vondic Coins", callback_data="buy_coins"))
 
-    # Row 4: No Telegram Account
     builder.row(InlineKeyboardButton(
         text="🚪 У меня нет Telegram аккаунта", callback_data="no_telegram"))
 
-    # Row 5: Link Yandex Account
     builder.row(InlineKeyboardButton(
         text="🔗 Привязать аккаунт (Yandex)", callback_data="link_yandex"))
 
@@ -79,13 +68,9 @@ async def cmd_start(message: types.Message):
 
 @dp.callback_query(F.data == "buy_premium_tg")
 async def buy_premium_tg_start(callback: types.CallbackQuery):
-    """
-    Покупка премиума для текущего Telegram пользователя.
-    """
     user_id = str(callback.from_user.id)
     linked_user = None
 
-    # 1. Проверяем, привязан ли аккаунт к backend
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(f"{BACKEND_URL}/api/v1/users/by-telegram/{user_id}") as response:
@@ -94,7 +79,6 @@ async def buy_premium_tg_start(callback: types.CallbackQuery):
     except Exception as e:
         logger.error(f"Error checking linked user: {e}")
 
-    # 2. Если не привязан, проверяем локальную регистрацию
     is_local_registered = bcrypter.is_user_registered(user_id)
 
     if not linked_user and not is_local_registered:
@@ -108,14 +92,7 @@ async def buy_premium_tg_start(callback: types.CallbackQuery):
         await callback.answer()
         return
 
-    # Определяем ID пользователя для покупки (приоритет у связанного аккаунта)
     target_user_id = linked_user['id'] if linked_user else user_id
-
-    # Если пользователь локальный (не связанный), нужно убедиться, что он есть в базе backend (для Stripe)
-    # Но в текущей логике локальные пользователи создаются в bcrypter, а в backend попадают только при sync?
-    # В коде buy_premium мы используем user_id.
-    # Если это linked_user, то id - это UUID из базы.
-    # Если это bcrypter user, то id - это telegram_id (строка).
 
     builder = InlineKeyboardBuilder()
     builder.add(InlineKeyboardButton(
@@ -233,13 +210,9 @@ async def buy_coins_pack(callback: types.CallbackQuery):
 
 @dp.callback_query(F.data == "register")
 async def register_user(callback: types.CallbackQuery):
-    """
-    Обработчик нажатия на кнопку "Регистрация".
-    """
     user_id = str(callback.from_user.id)
     username = callback.from_user.username or f"user_{user_id}"
 
-    # Попытка получить аватарку
     avatar_url = None
     try:
         user_profile_photos = await callback.bot.get_user_profile_photos(callback.from_user.id, limit=1)
@@ -256,6 +229,19 @@ async def register_user(callback: types.CallbackQuery):
             "Вы уже зарегистрированы. Используйте 'Войти / Восстановить ключ', если забыли ключ."
         )
         await callback.answer()
+        return
+
+    key = bcrypter.register_user(user_id, username, avatar_url)
+    if key:
+        await callback.message.answer(
+            f"✅ Вы успешно зарегистрированы!\n\n🔑 Ваш секретный ключ:\n`{user_id}:{key}`\n\n⚠️ Сохраните его, он показывается только один раз!\nИспользуйте этот ключ для авторизации на сайте.",
+            parse_mode="Markdown",
+        )
+    else:
+        await callback.message.answer(
+            "❌ Произошла ошибка при регистрации. Возможно, такое имя пользователя уже занято."
+        )
+    await callback.answer()
 
 
 @dp.message(CoinsStates.email)
@@ -286,27 +272,12 @@ async def buy_coins_email_entered(message: types.Message, state: FSMContext):
     except Exception as e:
         await message.answer(f"Ошибка проверки email: {str(e)}")
         return
-    key = bcrypter.register_user(user_id, username, avatar_url)
-    if key:
-        await callback.message.answer(
-            f"✅ Вы успешно зарегистрированы!\n\n🔑 Ваш секретный ключ:\n`{user_id}:{key}`\n\n⚠️ Сохраните его, он показывается только один раз!\nИспользуйте этот ключ для авторизации на сайте.",
-            parse_mode="Markdown",
-        )
-    else:
-        await callback.message.answer(
-            "❌ Произошла ошибка при регистрации. Возможно, такое имя пользователя уже занято."
-        )
-    await callback.answer()
 
 
 @dp.callback_query(F.data == "restore")
 async def restore_key(callback: types.CallbackQuery):
-    """
-    Обработчик нажатия на кнопку "Войти / Восстановить ключ".
-    """
     user_id = str(callback.from_user.id)
 
-    # Попытка получить аватарку
     avatar_url = None
     try:
         user_profile_photos = await callback.bot.get_user_profile_photos(callback.from_user.id, limit=1)
@@ -337,9 +308,6 @@ async def restore_key(callback: types.CallbackQuery):
 
 @dp.callback_query(F.data == "no_telegram")
 async def no_telegram_auth(callback: types.CallbackQuery):
-    """
-    Меню авторизации для пользователей без Telegram аккаунта (или желающих войти через другие методы).
-    """
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(
         text="📧 Почта + Пароль", callback_data="auth_email"))
@@ -354,10 +322,6 @@ async def no_telegram_auth(callback: types.CallbackQuery):
 
 @dp.callback_query(F.data == "auth_yandex")
 async def auth_yandex(callback: types.CallbackQuery):
-    """
-    Авторизация через Yandex.
-    """
-    # Здесь должна быть ссылка на авторизацию
     await callback.message.answer(
         "Для авторизации через Яндекс, пожалуйста, перейдите на наш сайт и войдите в свой аккаунт:\n\n"
         "🔗 [Перейти на сайт](http://localhost:3000/login)\n\n"
@@ -393,7 +357,6 @@ async def process_link_key(message: types.Message, state: FSMContext):
                     user = data.get("user")
                     username = user.get("username") if user else "Unknown"
 
-                    # Предлагаем купить Premium
                     builder = InlineKeyboardBuilder()
                     builder.add(InlineKeyboardButton(
                         text="💎 Купить Vondic Premium", callback_data=f"buy_premium:{user['id']}"))
@@ -413,9 +376,6 @@ async def process_link_key(message: types.Message, state: FSMContext):
 
 @dp.callback_query(F.data == "auth_email")
 async def auth_email_start(callback: types.CallbackQuery, state: FSMContext):
-    """
-    Начало авторизации по email.
-    """
     await state.set_state(AuthStates.email)
     await callback.message.answer("📧 Введите ваш Email:")
     await callback.answer()
@@ -423,9 +383,6 @@ async def auth_email_start(callback: types.CallbackQuery, state: FSMContext):
 
 @dp.message(AuthStates.email)
 async def auth_email_entered(message: types.Message, state: FSMContext):
-    """
-    Получение email.
-    """
     email = message.text.strip()
     await state.update_data(email=email)
     await state.set_state(AuthStates.password)
@@ -434,21 +391,15 @@ async def auth_email_entered(message: types.Message, state: FSMContext):
 
 @dp.message(AuthStates.password)
 async def auth_password_entered(message: types.Message, state: FSMContext):
-    """
-    Получение пароля и проверка.
-    """
     password = message.text.strip()
     data = await state.get_data()
     email = data.get("email")
 
     user = bcrypter.authenticate_user(email, password)
 
-    # Очищаем пароль из памяти (хотя state clear удалит всё)
     await state.clear()
 
     if user:
-        # Сохраняем user_id в FSM или используем callback data для действий
-        # Для простоты пока просто показываем меню
         builder = InlineKeyboardBuilder()
         builder.add(InlineKeyboardButton(
             text="Купить Vondic Premium", callback_data=f"buy_premium:{user['id']}"))
@@ -469,9 +420,6 @@ async def auth_password_entered(message: types.Message, state: FSMContext):
 
 @dp.callback_query(F.data.startswith("buy_premium"))
 async def buy_premium(callback: types.CallbackQuery):
-    """
-    Создание сессии оплаты через Stripe.
-    """
     try:
         user_id = callback.data.split(":")[1]
 

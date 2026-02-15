@@ -39,7 +39,6 @@ class AuthService:
             db.session.add(new_user)
             db.session.commit()
 
-            # Ensure AI chat
             try:
                 from app.services.ollama_service import OllamaService
                 OllamaService.ensure_chat_with_ai(new_user.id)
@@ -63,14 +62,13 @@ class AuthService:
         if not user:
             return None, "Invalid or expired link key"
 
-        # Check if telegram_id is already used by another user
         existing = User.query.filter_by(telegram_id=str(telegram_id)).first()
         if existing and existing.id != user.id:
             return None, "Telegram account already linked to another user"
 
         try:
             user.telegram_id = str(telegram_id)
-            user.link_key = None  # Invalidate key after use
+            user.link_key = None
             db.session.commit()
             return user, None
         except Exception as e:
@@ -106,7 +104,6 @@ class AuthService:
         if not client_id or not client_secret:
             return None, "Yandex OAuth not configured"
 
-        # Exchange code for token
         token_url = "https://oauth.yandex.ru/token"
         data = {
             "grant_type": "authorization_code",
@@ -124,7 +121,6 @@ class AuthService:
         except Exception as e:
             return None, f"Failed to get token: {str(e)}"
 
-        # Get user info
         info_url = "https://login.yandex.ru/info"
         headers = {"Authorization": f"OAuth {access_token_yandex}"}
 
@@ -165,7 +161,6 @@ class AuthService:
         try:
             db.session.commit()
 
-            # Ensure AI chat
             try:
                 from app.services.ollama_service import OllamaService
                 OllamaService.ensure_chat_with_ai(user.id)
@@ -217,10 +212,8 @@ class AuthService:
             return (None, "User is blocked")
         if not user.is_verified:
             return (None, "Email not verified")
-        # Enforce 2FA challenge if enabled
         if user.two_factor_enabled:
             if (user.email or "").endswith("@yandex.ru"):
-                # 2FA is not available for yandex.ru accounts
                 pass
             method = user.two_factor_method
             if method == "email":
@@ -288,7 +281,6 @@ class AuthService:
         try:
             db.session.commit()
 
-            # Ensure AI chat
             try:
                 from app.services.ollama_service import OllamaService
                 OllamaService.ensure_chat_with_ai(user.id)

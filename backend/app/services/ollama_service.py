@@ -1,4 +1,6 @@
+import logging
 import threading
+import time
 from datetime import datetime
 
 import requests
@@ -9,6 +11,8 @@ from app.models.user import User
 
 AI_USERNAME = "Vondic AI"
 AI_EMAIL = "ai@vondic.com"
+SUPPORT_RESPONSE = "Пожалуйста, обратитесь в техническую поддержку для решения этого вопроса."
+logger = logging.getLogger(__name__)
 
 
 class OllamaService:
@@ -16,37 +20,127 @@ class OllamaService:
     def get_ai_user():
         user = User.query.filter_by(username=AI_USERNAME).first()
         if not user:
-            # Check if old username exists and rename it
             old_user = User.query.filter_by(username="vondic_ai").first()
             if old_user:
                 old_user.username = AI_USERNAME
                 db.session.commit()
                 return old_user
 
-            # Create AI user if not exists
             user = User(
                 username=AI_USERNAME,
                 email=AI_EMAIL,
                 role="Bot",
                 is_verified=1,
                 status="online",
-                avatar_url="https://ui-avatars.com/api/?name=Vondic+AI&background=0D8ABC&color=fff"
+                avatar_url="/static/vondic_ai.jpg"
             )
             user.set_password("ai_secret_password_very_long")
             db.session.add(user)
+            db.session.commit()
+        if user.avatar_url != "/static/vondic_ai.jpg":
+            user.avatar_url = "/static/vondic_ai.jpg"
             db.session.commit()
         return user
 
     @staticmethod
     def ensure_chat_with_ai(user_id):
-        # This is now a no-op as we use Direct Messages
         pass
 
     @staticmethod
+    def _is_support_request(text):
+        t = (text or "").strip().casefold()
+        if not t:
+            return False
+        faq_phrases = (
+            "как войти через yandex",
+            "как войти через яндекс",
+            "почему меня просят ввести код",
+            "письмо с кодом не приходит",
+            "где вводить код 2fa",
+            "two factor code",
+            "two factor",
+            "2fa",
+            "двухфактор",
+            "отправить код на почту",
+            "код не приходит",
+            "не приходит письмо",
+            "не могу войти",
+            "не удается войти",
+            "ошибка входа",
+        )
+        support_terms = (
+            "vondic",
+            "вондик",
+            "техподдерж",
+            "поддержк",
+            "служба поддержки",
+            "вход",
+            "авториза",
+            "логин",
+            "яндекс",
+        )
+        if any(phrase in t for phrase in faq_phrases):
+            return True
+        if any(term in t for term in support_terms):
+            if "код" in t or "войти" in t or "почт" in t or "email" in t:
+                return True
+        if "код" in t and ("почт" in t or "email" in t):
+            return True
+        return False
+
+    @staticmethod
+    def _send_reply(reply_content, ai_user, reply_target_id, reply_group_id, is_dm, message_id):
+        reply_msg = Message(
+            content=reply_content,
+            type="text",
+            sender_id=ai_user.id,
+            target_id=reply_target_id,
+            group_id=reply_group_id
+        )
+        db.session.add(reply_msg)
+        db.session.commit()
+
+        try:
+            signaling_url = "http://localhost:5000/internal/broadcast_message"
+            payload = {
+                "id": str(reply_msg.id),
+                "sender_id": str(ai_user.id),
+                "content": reply_content,
+                "type": "text",
+                "timestamp": reply_msg.created_at.isoformat() if reply_msg.created_at else datetime.utcnow().isoformat(),
+                "is_read": 0
+            }
+
+            if is_dm:
+                payload["target_id"] = str(reply_target_id)
+                broadcast_data = {
+                    "target_id": str(reply_target_id),
+                    "payload": payload
+                }
+            else:
+                payload["group_id"] = str(reply_group_id)
+                broadcast_data = {
+                    "group_id": str(reply_group_id),
+                    "payload": payload
+                }
+
+            requests.post(
+                signaling_url, json=broadcast_data, timeout=5)
+        except Exception as e:
+            logger.exception(
+                "ai_signal_error message_id=%s error=%s",
+                message_id,
+                e,
+            )
+
+    @staticmethod
     def process_message_async(message_id, is_dm=True, content=None, sender_id=None):
-        """
-        Starts a background thread to process the message
-        """
+        logger.info(
+            "ai_start message_id=%s is_dm=%s sender_id=%s",
+            message_id,
+            is_dm,
+            sender_id,
+        )
         thread = threading.Thread(
             target=OllamaService._generate_reply, args=(message_id, is_dm, content, sender_id))
         thread.start()
@@ -57,16 +151,16 @@ class OllamaService:
         app = create_app()
         with app.app_context():
             message = Message.query.get(message_id)
-            # If message is not in DB yet (rare but possible with async), we use content if provided
             if not message and not content:
+                logger.warning("ai_skip_no_message message_id=%s", message_id)
                 return
 
             user_content = content if content else (
                 message.content if message else None)
             if not user_content:
+                logger.warning("ai_skip_no_content message_id=%s", message_id)
                 return
 
-            # Determine who to reply to
             reply_target_id = None
             reply_group_id = None
 
@@ -77,19 +171,17 @@ class OllamaService:
                 reply_group_id = message.group_id if message else None
 
             if is_dm and not reply_target_id:
+                logger.warning("ai_skip_no_target message_id=%s", message_id)
                 return
 
             ai_user = OllamaService.get_ai_user()
 
-            # System prompt to classify and answer
             system_prompt = (
-                "You are Vondic AI, a helpful assistant in the Vondic messenger. "
-                "Your goal is to assist users. "
-                "IMPORTANT RULE: If the user asks about technical issues, bugs, errors, or how to use specific features of THIS service (Vondic), "
-                "you MUST reply ONLY with: 'Пожалуйста, обратитесь в техническую поддержку для решения этого вопроса.' "
-                "(Translate to the user's language if needed, but keep the meaning). "
-                "If the user asks general questions (e.g., programming, life, math, chit-chat), answer them helpfully and politely. "
-                "Do not mention you are an AI unless asked. Be concise."
+                "Ты — Vondic AI, полезный ассистент в мессенджере Vondic. "
+                "Всегда отвечай на русском языке. "
+                "Твоя цель — помогать пользователям. "
+                "Если вопрос общий, отвечай вежливо и по делу. "
+                "Не упоминай, что ты ИИ, если тебя не спрашивают. Будь кратким."
             )
 
             payload = {
@@ -102,56 +194,47 @@ class OllamaService:
             }
 
             try:
-                print(
-                    f"Sending request to Ollama: {Config.OLLAMA_API_URL}/api/chat")
+                if OllamaService._is_support_request(user_content):
+                    OllamaService._send_reply(
+                        SUPPORT_RESPONSE,
+                        ai_user,
+                        reply_target_id,
+                        reply_group_id,
+                        is_dm,
+                        message_id,
+                    )
+                    return
+                started = time.perf_counter()
+                logger.info(
+                    "ai_request_start message_id=%s url=%s",
+                    message_id,
+                    f"{Config.OLLAMA_API_URL}/api/chat",
+                )
                 response = requests.post(
                     f"{Config.OLLAMA_API_URL}/api/chat", json=payload, timeout=60)
-                print(f"Ollama response status: {response.status_code}")
+                elapsed = time.perf_counter() - started
+                logger.info(
+                    "ai_request_done message_id=%s status=%s elapsed=%.3fs",
+                    message_id,
+                    response.status_code,
+                    elapsed,
+                )
                 response.raise_for_status()
                 result = response.json()
                 reply_content = result.get("message", {}).get("content", "")
 
                 if reply_content:
-                    # Save reply to DB
-                    reply_msg = Message(
-                        content=reply_content,
-                        type="text",
-                        sender_id=ai_user.id,
-                        target_id=reply_target_id,
-                        group_id=reply_group_id
+                    OllamaService._send_reply(
+                        reply_content,
+                        ai_user,
+                        reply_target_id,
+                        reply_group_id,
+                        is_dm,
+                        message_id,
                     )
-                    db.session.add(reply_msg)
-                    db.session.commit()
-
-                    # Notify signaling server for real-time update
-                    try:
-                        signaling_url = "http://localhost:5000/internal/broadcast_message"
-                        payload = {
-                            "id": str(reply_msg.id),
-                            "sender_id": str(ai_user.id),
-                            "content": reply_content,
-                            "type": "text",
-                            "timestamp": reply_msg.created_at.isoformat() if reply_msg.created_at else datetime.utcnow().isoformat(),
-                            "is_read": 0
-                        }
-
-                        if is_dm:
-                            payload["target_id"] = str(reply_target_id)
-                            broadcast_data = {
-                                "target_id": str(reply_target_id),
-                                "payload": payload
-                            }
-                        else:
-                            payload["group_id"] = str(reply_group_id)
-                            broadcast_data = {
-                                "group_id": str(reply_group_id),
-                                "payload": payload
-                            }
-
-                        requests.post(
-                            signaling_url, json=broadcast_data, timeout=5)
-                    except Exception as e:
-                        print(f"Error notifying signaling server: {e}")
             except Exception as e:
-                print(f"Ollama error: {e}")
-                # Optionally send error message to user
+                logger.exception(
+                    "ai_request_error message_id=%s error=%s",
+                    message_id,
+                    e,
+                )

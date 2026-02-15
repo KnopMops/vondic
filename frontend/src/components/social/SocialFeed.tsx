@@ -3,13 +3,14 @@
 import { useAppSelector } from '@/lib/hooks'
 import { usePosts } from '@/lib/hooks/usePosts'
 import { Attachment } from '@/lib/types'
-import { useEffect, useMemo, useState } from 'react'
 import { formatMskDateTime } from '@/lib/utils'
+import { useEffect, useMemo, useState } from 'react'
 import Composer from './Composer'
 import Header from './Header'
 import Post from './Post'
 import RightPanel from './RightPanel'
 import Sidebar from './Sidebar'
+import StoriesBar from './StoriesBar'
 
 type Props = {
 	email: string
@@ -71,7 +72,9 @@ export default function SocialFeed({ email, onLogout }: Props) {
 		const byDateDesc = (a: any, b: any) =>
 			new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
 		if (activeTab === 'following' && followingIds.length > 0) {
-			return posts.filter(p => followingIds.includes(String(p.posted_by))).sort(byDateDesc)
+			return posts
+				.filter(p => followingIds.includes(String(p.posted_by)))
+				.sort(byDateDesc)
 		}
 		return [...posts].sort(byDateDesc)
 	}, [activeTab, posts, followingIds])
@@ -92,6 +95,7 @@ export default function SocialFeed({ email, onLogout }: Props) {
 				<Sidebar />
 				<main className='flex-1 px-4 sm:px-6 lg:px-8'>
 					<div className='mx-auto max-w-2xl space-y-6'>
+						<StoriesBar />
 						<Composer onCreate={addPost} />
 						<div className='rounded-xl bg-gray-900/40 backdrop-blur-md border border-gray-800/50 p-1'>
 							<div className='grid grid-cols-2 p-1 gap-2'>
@@ -133,9 +137,7 @@ export default function SocialFeed({ email, onLogout }: Props) {
 								author_avatar={p.author_avatar}
 								author_premium={p.author_premium}
 								time={
-									p.created_at
-										? formatMskDateTime(p.created_at)
-										: 'недавно'
+									p.created_at ? formatMskDateTime(p.created_at) : 'недавно'
 								}
 								text={p.content}
 								likes={p.likes || 0}

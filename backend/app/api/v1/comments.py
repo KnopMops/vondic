@@ -9,36 +9,6 @@ comments_bp = Blueprint("comments", __name__, url_prefix="/api/v1/comments")
 @comments_bp.route("/", methods=["PUT"])
 @token_required
 def update_comment(current_user):
-    """
-    Обновить комментарий
-    ---
-    tags:
-      - Comments
-    parameters:
-      - name: body
-        in: body
-        required: true
-        schema:
-          type: object
-          properties:
-            access_token:
-              type: string
-              required: true
-            comment_id:
-              type: string
-              required: true
-            content:
-              type: string
-    responses:
-      200:
-        description: Комментарий обновлен
-      400:
-        description: Неверные параметры
-      403:
-        description: Нет прав
-      404:
-        description: Комментарий не найден
-    """
     data = request.get_json()
     comment_id = data.get("comment_id")
 
@@ -58,36 +28,6 @@ def update_comment(current_user):
 @comments_bp.route("/", methods=["DELETE"])
 @token_required
 def delete_comment(current_user):
-    """
-    Удалить комментарий (Пользователь)
-    ---
-    tags:
-      - Comments
-    security:
-      - Bearer: []
-    parameters:
-      - name: body
-        in: body
-        required: true
-        schema:
-          type: object
-          properties:
-            comment_id:
-              type: string
-              required: true
-            user_id:
-              type: string
-              required: true
-    responses:
-      200:
-        description: Комментарий удален
-      400:
-        description: Неверные параметры
-      403:
-        description: Нет прав
-      404:
-        description: Комментарий не найден
-    """
     data = request.get_json() or {}
     comment_id = data.get("comment_id")
     user_id = data.get("user_id")
@@ -108,40 +48,6 @@ def delete_comment(current_user):
 @comments_bp.route("/admin", methods=["DELETE"])
 @token_required
 def delete_comment_admin(current_user):
-    """
-    Удалить комментарий (Админ)
-    ---
-    tags:
-      - Comments
-    security:
-      - Bearer: []
-    parameters:
-      - name: body
-        in: body
-        required: true
-        schema:
-          type: object
-          properties:
-            comment_id:
-              type: string
-              required: true
-            user_id:
-              type: string
-              description: ID админа
-              required: true
-            reason:
-              type: string
-              required: true
-    responses:
-      200:
-        description: Комментарий удален
-      400:
-        description: Неверные параметры
-      403:
-        description: Нет прав
-      404:
-        description: Комментарий не найден
-    """
     if current_user.role != "Admin":
         return jsonify({"error": "Unauthorized"}), 403
 
@@ -168,31 +74,6 @@ def delete_comment_admin(current_user):
 @comments_bp.route("/like", methods=["POST"])
 @token_required
 def like_comment(current_user):
-    """
-    Лайкнуть комментарий
-    ---
-    tags:
-      - Comments
-    security:
-      - Bearer: []
-    parameters:
-      - name: body
-        in: body
-        required: true
-        schema:
-          type: object
-          properties:
-            comment_id:
-              type: string
-              required: true
-    responses:
-      200:
-        description: Лайк добавлен
-      400:
-        description: Неверные параметры или лайк уже существует
-      404:
-        description: Комментарий не найден
-    """
     data = request.get_json() or {}
     comment_id = data.get("comment_id")
     if not comment_id:
@@ -208,31 +89,6 @@ def like_comment(current_user):
 @comments_bp.route("/unlike", methods=["POST"])
 @token_required
 def unlike_comment(current_user):
-    """
-    Убрать лайк с комментария
-    ---
-    tags:
-      - Comments
-    security:
-      - Bearer: []
-    parameters:
-      - name: body
-        in: body
-        required: true
-        schema:
-          type: object
-          properties:
-            comment_id:
-              type: string
-              required: true
-    responses:
-      200:
-        description: Лайк убран
-      400:
-        description: Неверные параметры или лайк отсутствует
-      404:
-        description: Комментарий не найден
-    """
     data = request.get_json() or {}
     comment_id = data.get("comment_id")
     if not comment_id:

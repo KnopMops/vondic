@@ -3,11 +3,12 @@
 import { Attachment } from '@/lib/types'
 import { getAttachmentUrl } from '@/lib/utils'
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
-import CommentsModal from './CommentsModal'
+import { useEffect, useMemo, useState } from 'react'
 import PostDetailsModal from './PostDetailsModal'
 import ShareModal from './ShareModal'
 import VideoPlayer from './VideoPlayer'
+import { useComments } from '@/lib/hooks/useComments'
+import { useAppSelector } from '@/lib/hooks'
 
 type Props = {
 	id: string | number
@@ -59,6 +60,19 @@ export default function Post({
 	const [commentCount, setCommentCount] = useState(comments_count)
 	const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false)
 	const [isShareModalOpen, setIsShareModalOpen] = useState(false)
+
+	const { user } = useAppSelector(state => state.auth)
+	const {
+		data: comments = [],
+		isLoading: commentsLoading,
+		createComment,
+		updateComment,
+		deleteComment,
+		isCreating: isCreatingComment,
+	} = useComments(id)
+
+	const [newComment, setNewComment] = useState('')
+	const [replyTo, setReplyTo] = useState<any>(null)
 
 	useEffect(() => {
 		setCommentCount(comments_count)
@@ -161,6 +175,139 @@ export default function Post({
 		}
 		setIsDeleteModalOpen(false)
 		setDeleteReason('')
+	}
+
+	const handleSubmitComment = async (e: React.FormEvent) => {
+		e.preventDefault()
+		if (!newComment.trim() || !user) return
+
+		createComment(
+			{ content: newComment, replyToId: replyTo?.id },
+			{
+				onSuccess: () => {
+					setNewComment('')
+					setReplyTo(null)
+					setCommentCount(prev => prev + 1)
+				},
+			},
+		)
+	}
+
+	const handleReply = (comment: any) => {
+		setReplyTo(comment)
+		setNewComment(`@${comment.author_name || 'User'} `)
+	}
+
+	const handleUpdateComment = async (commentId: string, content: string) => {
+		updateComment({ id: commentId, content })
+	}
+
+	const handleDeleteRequest = (comment: any) => {
+		if (user?.role === 'admin' || user?.role === 'Admin') {
+			if (window.confirm('Вы уверены, что хотите удалить этот комментарий?')) {
+				deleteComment(
+					{ id: comment.id, userId: user.id, isAdmin: true },
+					{
+						onSuccess: () => {
+							setCommentCount(prev => prev - 1)
+						},
+					},
+				)
+			}
+		} else {
+			if (window.confirm('Вы уверены, что хотите удалить этот комментарий?')) {
+				deleteComment(
+					{ id: comment.id, userId: user.id },
+					{
+						onSuccess: () => {
+							setCommentCount(prev => prev - 1)
+						},
+					},
+				)
+			}
+		}
+	}
+
+	const commentTree = useMemo(() => {
+		const map = new Map<string, any>()
+		const roots: any[] = []
+		const commentsCopy = comments.map((comment: any) => ({
+			...comment,
+			children: [],
+		}))
+
+		commentsCopy.forEach(comment => {
+			map.set(comment.id, comment)
+		})
+
+		commentsCopy.forEach(comment => {
+			if (comment.parent_id && map.has(comment.parent_id)) {
+				map.get(comment.parent_id).children.push(comment)
+			} else {
+				roots.push(comment)
+			}
+		})
+
+		return roots
+	}, [comments])
+
+	const renderComment = (comment: any, depth = 0) => {
+		const isOwner = user && String(user.id) === String(comment.user_id)
+		const canDelete = isOwner || user?.role === 'admin' || user?.role === 'Admin'
+
+		return (
+			<div key={comment.id} className={`${depth > 0 ? 'ml-8 border-l-2 border-gray-700 pl-4' : ''}`}>
+				<div className='flex gap-3 mb-3'>
+					<Link href={`/feed/profile/${comment.user_id}`}>
+						<img
+							src={getAttachmentUrl(comment.author_avatar) || '/placeholder-user.jpg'}
+							alt={comment.author_name || 'User'}
+							className='h-8 w-8 rounded-full object-cover'
+						/>
+					</Link>
+					<div className='flex-1'>
+						<div className='relative rounded-lg bg-gray-800/50 p-3'>
+							<div className='flex items-center justify-between mb-1'>
+								<div className='flex items-center gap-2'>
+									<Link
+										href={`/feed/profile/${comment.user_id}`}
+										className='text-sm font-semibold text-gray-200 hover:underline'
+									>
+										{comment.author_name || 'User'}
+									</Link>
+									{comment.author_premium && <span className='text-amber-400'>★</span>}
+								</div>
+								{canDelete && (
+									<button
+										onClick={() => handleDeleteRequest(comment)}
+										className='text-xs text-gray-500 hover:text-red-400 transition-colors'
+									>
+										Удалить
+									</button>
+								)}
+							</div>
+							<p className='text-sm text-gray-300 leading-relaxed'>
+								{comment.content}
+							</p>
+						</div>
+						<div className='mt-1 flex items-center gap-3 text-xs text-gray-500'>
+							<span>{new Date(comment.created_at || Date.now()).toLocaleDateString()}</span>
+							<button
+								onClick={() => handleReply(comment)}
+								className='hover:text-indigo-400 transition-colors'
+							>
+								Ответить
+							</button>
+						</div>
+					</div>
+				</div>
+				{comment.children && comment.children.length > 0 && (
+					<div className='mt-2'>
+						{comment.children.map(child => renderComment(child, depth + 1))}
+					</div>
+				)}
+			</div>
+		)
 	}
 
 	return (
@@ -330,7 +477,7 @@ export default function Post({
 							<span className='text-sm font-medium'>{likeCount}</span>
 						</button>
 						<button
-							onClick={() => setShowComments(true)}
+							onClick={() => setShowComments(!showComments)}
 							className='flex items-center gap-2 text-gray-500 transition-all hover:text-indigo-400 hover:scale-105'
 						>
 							<svg
@@ -369,15 +516,66 @@ export default function Post({
 							</svg>
 						</button>
 					</div>
+
+					{showComments && (
+						<div className='mt-4 pt-4 border-t border-gray-800/50'>
+							<div className='space-y-4 max-h-96 overflow-y-auto'>
+								{commentsLoading ? (
+									<div className='flex justify-center py-4'>
+										<div className='h-6 w-6 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent' />
+									</div>
+								) : comments.length === 0 ? (
+									<div className='text-center text-gray-500 py-4'>
+										Нет комментариев. Будьте первым!
+									</div>
+								) : (
+									commentTree.map(comment => renderComment(comment))
+								)}
+							</div>
+
+							<form onSubmit={handleSubmitComment} className='mt-4 flex gap-2'>
+								{replyTo && (
+									<div className='mb-2 flex items-center justify-between rounded-md bg-indigo-50 p-2 text-xs text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'>
+										<span>
+											Ответ пользователю <b>{replyTo.author_name || 'User'}</b>
+										</span>
+										<button
+											onClick={() => {
+												setReplyTo(null)
+												setNewComment('')
+											}}
+											className='hover:text-indigo-900 dark:hover:text-indigo-100'
+										>
+											✕
+										</button>
+									</div>
+								)}
+								<input
+									type='text'
+									value={newComment}
+									onChange={e => setNewComment(e.target.value)}
+									placeholder='Написать комментарий...'
+									className='flex-1 rounded-full border border-gray-300 bg-gray-50 px-4 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400'
+								/>
+								<button
+									type='submit'
+									disabled={!newComment.trim() || isCreatingComment}
+									className='rounded-full bg-indigo-600 p-2 text-white hover:bg-indigo-700 disabled:bg-indigo-400'
+								>
+									<svg
+										xmlns='http://www.w3.org/2000/svg'
+										viewBox='0 0 20 20'
+										fill='currentColor'
+										className='h-5 w-5'
+									>
+										<path d='M3.105 2.289a.75.75 0 00-.826.95l1.414 4.925A.75.75 0 003.75 8.25H10a.75.75 0 010 1.5H3.75a.75.75 0 00-.057.056l-1.414 4.925a.75.75 0 00.826.95 12.894 12.894 0 009-3.69 4.48 4.48 0 000-6.32 12.89 12.89 0 00-9-3.69z' />
+									</svg>
+								</button>
+							</form>
+						</div>
+					)}
 				</div>
 			</div>
-
-			<CommentsModal
-				isOpen={showComments}
-				onClose={() => setShowComments(false)}
-				postId={id}
-				postAuthorId={author_id}
-			/>
 
 			<PostDetailsModal
 				isOpen={isDetailsModalOpen}

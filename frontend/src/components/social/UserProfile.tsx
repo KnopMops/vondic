@@ -1,6 +1,8 @@
 'use client'
 
 import { useAuth } from '@/lib/AuthContext'
+import { setUser } from '@/lib/features/authSlice'
+import { useAppDispatch } from '@/lib/hooks'
 import { User } from '@/lib/types'
 import { getAttachmentUrl } from '@/lib/utils'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -129,9 +131,37 @@ export default function UserProfile({ user, currentUser }: Props) {
 	const [gradColor1, setGradColor1] = useState<string>('#4f46e5') // indigo-600
 	const [gradColor2, setGradColor2] = useState<string>('#ec4899') // pink-500
 	const [gradAngle, setGradAngle] = useState<number>(135)
+	const dispatch = useAppDispatch()
 
 	const isMe = currentUser?.id === user.id
 	const isAdmin = currentUser?.role === 'Admin'
+	const activeThemeId = (isMe ? profileTheme : user.profile_bg_theme) || FREE_THEMES[0].id
+	const activeTheme =
+		FREE_THEMES.find(t => t.id === activeThemeId) || FREE_THEMES[0]
+	const activeGradient = user.premium
+		? `linear-gradient(${gradAngle}deg, ${gradColor1}, ${gradColor2})`
+		: undefined
+
+	useEffect(() => {
+		if (user.profile_bg_theme) {
+			setProfileTheme(user.profile_bg_theme)
+		} else {
+			setProfileTheme(FREE_THEMES[0].id)
+		}
+		if (user.profile_bg_gradient) {
+			const match = user.profile_bg_gradient.match(
+				/linear-gradient\(\s*([0-9.]+)deg\s*,\s*([^,]+)\s*,\s*([^)]+)\)/i,
+			)
+			if (match) {
+				const angle = Number(match[1])
+				if (!Number.isNaN(angle)) {
+					setGradAngle(angle)
+				}
+				setGradColor1(match[2].trim())
+				setGradColor2(match[3].trim())
+			}
+		}
+	}, [user.profile_bg_theme, user.profile_bg_gradient])
 
 	const generateLinkKey = async () => {
 		try {
@@ -500,10 +530,20 @@ export default function UserProfile({ user, currentUser }: Props) {
 			})
 
 			if (!res.ok) throw new Error('Failed to update profile')
-
+			const data = await res.json()
+			const updatedUser = data.user || data
+			if (updatedUser && currentUser) {
+				const mergedUser = { ...currentUser, ...updatedUser }
+				dispatch(setUser(mergedUser))
+				localStorage.setItem('user', JSON.stringify(mergedUser))
+				setAvatarUrl(mergedUser.avatar_url || '')
+				setUsernameEdit(mergedUser.username || '')
+				if (mergedUser.profile_bg_theme) {
+					setProfileTheme(mergedUser.profile_bg_theme)
+				}
+			}
 			alert('Профиль обновлен!')
 			setIsEditModalOpen(false)
-			window.location.reload()
 		} catch (error) {
 			console.error(error)
 			alert('Ошибка обновления профиля')
@@ -524,13 +564,11 @@ export default function UserProfile({ user, currentUser }: Props) {
 				className={`relative h-48 rounded-2xl overflow-hidden shadow-lg ${
 					user.premium
 						? 'ring-2 ring-amber-400/30'
-						: FREE_THEMES.find(
-								t => t.id === (user.profile_bg_theme || profileTheme),
-							)?.class || FREE_THEMES[0].class
+						: activeTheme.class
 				}`}
 				style={
-					user.premium && user.profile_bg_gradient
-						? { backgroundImage: user.profile_bg_gradient }
+					user.premium && activeGradient
+						? { backgroundImage: activeGradient }
 						: undefined
 				}
 			>
@@ -608,7 +646,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 									initial={{ opacity: 0 }}
 									animate={{ opacity: 1 }}
 									exit={{ opacity: 0 }}
-									className='fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4'
+									className='fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4'
 								>
 									<motion.div
 										initial={{ scale: 0.9, opacity: 0 }}
@@ -878,7 +916,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 						initial={{ opacity: 0 }}
 						animate={{ opacity: 1 }}
 						exit={{ opacity: 0 }}
-						className='fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4'
+						className='fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4'
 					>
 						<motion.div
 							initial={{ scale: 0.95, opacity: 0 }}

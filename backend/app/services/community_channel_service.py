@@ -21,18 +21,15 @@ class CommunityChannelService:
             community_id=community_id, name=name, description=description, type=type_
         )
         try:
-            # Create community channel
             db.session.add(channel)
-            db.session.flush()  # Ensure channel.id is available
+            db.session.flush()
 
-            # Mirror as a global channel for messaging backend (WebRTC)
             mirror = Channel(
                 id=channel.id,
                 name=name,
                 description=description,
                 owner_id=community.owner_id,
             )
-            # Add all community members as participants to allow writing
             for member in community.members:
                 mirror.participants.append(member)
 

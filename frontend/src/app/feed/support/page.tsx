@@ -19,6 +19,70 @@ export default function SupportPage() {
 	const [ragMessages, setRagMessages] = useState<RagMessage[]>([])
 	const [ragInput, setRagInput] = useState('')
 	const [isUploading, setIsUploading] = useState(false)
+
+	const renderInline = (text: string, keyPrefix: string) => {
+		const parts = text.split('`')
+		return parts.map((part, index) =>
+			index % 2 === 1 ? (
+				<code
+					key={`${keyPrefix}-code-${index}`}
+					className='rounded bg-black/30 px-1 text-[0.9em] font-mono text-emerald-200'
+				>
+					{part}
+				</code>
+			) : (
+				<span key={`${keyPrefix}-text-${index}`}>{part}</span>
+			),
+		)
+	}
+
+	const renderTextBlock = (text: string, keyPrefix: string) => {
+		const lines = text.split('\n')
+		return (
+			<div key={keyPrefix} className='break-words leading-relaxed'>
+				{lines.map((line, index) => (
+					<span key={`${keyPrefix}-line-${index}`}>
+						{renderInline(line, `${keyPrefix}-inline-${index}`)}
+						{index < lines.length - 1 ? <br /> : null}
+					</span>
+				))}
+			</div>
+		)
+	}
+
+	const renderFormattedContent = (content: string) => {
+		const blocks = content.split('```')
+		return blocks.map((block, index) => {
+			if (index % 2 === 1) {
+				const firstNewline = block.indexOf('\n')
+				const firstLine =
+					firstNewline === -1 ? block.trim() : block.slice(0, firstNewline).trim()
+				const hasLang =
+					firstLine.length > 0 && !firstLine.includes(' ') && firstNewline !== -1
+				const language = hasLang ? firstLine : ''
+				const code = hasLang ? block.slice(firstNewline + 1) : block
+				const codeText = code.replace(/\n$/, '')
+				return (
+					<div
+						key={`code-${index}`}
+						className='my-2 overflow-hidden rounded-lg border border-white/10 bg-black/30'
+					>
+						{language ? (
+							<div className='border-b border-white/10 bg-black/40 px-3 py-1 text-[10px] uppercase tracking-wider text-gray-400'>
+								{language}
+							</div>
+						) : null}
+						<pre className='overflow-x-auto p-3 text-xs md:text-sm'>
+							<code className='font-mono text-emerald-200'>{codeText}</code>
+						</pre>
+					</div>
+				)
+			}
+			return block.trim()
+				? renderTextBlock(block, `text-${index}`)
+				: null
+		})
+	}
 	const fileInputRef = useRef<HTMLInputElement>(null)
 	const ragPollRef = useRef<number | null>(null)
 	const BACKEND_URL =
@@ -413,7 +477,9 @@ export default function SupportPage() {
 																}
 															/>
 														) : (
-															m.content
+															<div className='space-y-2'>
+																{renderFormattedContent(m.content)}
+															</div>
 														)}
 													</div>
 												</div>

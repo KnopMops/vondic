@@ -1,9 +1,75 @@
+import importlib
+
 from flasgger import Swagger
 from flask import Flask
 from sqlalchemy import text
 
 from app.core.config import Config
 from app.core.extensions import cors, db, ma, mail, migrate
+
+
+def _tag_for_rule(rule: str) -> str:
+    parts = [p for p in rule.split("/") if p]
+    if len(parts) >= 3 and parts[0] == "api" and parts[1] == "v1":
+        key = parts[2]
+    elif parts:
+        key = parts[0]
+    else:
+        key = "other"
+    mapping = {
+        "auth": "Auth",
+        "users": "Users",
+        "channels": "Channels",
+        "groups": "Groups",
+        "posts": "Posts",
+        "comments": "Comments",
+        "friends": "Friends",
+        "subscriptions": "Subscriptions",
+        "search": "Search",
+        "upload": "Upload",
+        "payments": "Payments",
+        "gifts": "Gifts",
+        "communities": "Communities",
+        "dm": "Direct Messages",
+        "storis": "Stories",
+        "support": "Support",
+        "health": "Health",
+    }
+    return mapping.get(key, key.replace("-", " ").title())
+
+
+def _build_swagger_paths(app: Flask):
+    paths = {}
+    for rule in app.url_map.iter_rules():
+        if rule.endpoint == "static":
+            continue
+        if rule.rule.startswith("/flasgger_static"):
+            continue
+        if rule.rule in ("/apispec.json", "/docs/"):
+            continue
+        methods = sorted(m for m in rule.methods if m not in {
+                         "HEAD", "OPTIONS"})
+        if not methods:
+            continue
+        view = app.view_functions.get(rule.endpoint)
+        is_auth = bool(getattr(view, "_auth_required", False))
+        tags = [_tag_for_rule(rule.rule)]
+        if "/admin/" in rule.rule:
+            tags.append("Admin")
+        tags.append("Protected" if is_auth else "Public")
+        entry = paths.setdefault(rule.rule, {})
+        for method in methods:
+            responses = {"200": {"description": "Success"}}
+            if is_auth:
+                responses["401"] = {"description": "Unauthorized"}
+            entry[method.lower()] = {
+                "summary": rule.endpoint,
+                "tags": tags,
+                "responses": responses,
+            }
+            if is_auth:
+                entry[method.lower()]["security"] = [{"Bearer": []}]
+    return paths
 
 
 def create_app(config_class=Config):
@@ -24,30 +90,7 @@ def create_app(config_class=Config):
 
     mail.init_app(app)
 
-    # Initialize Flasgger
-    swagger_config = {
-        "headers": [],
-        "specs": [
-            {
-                "endpoint": "apispec",
-                "route": "/apispec.json",
-                "rule_filter": lambda rule: True,
-                "model_filter": lambda tag: True,
-            }
-        ],
-        "static_url_path": "/flasgger_static",
-        "swagger_ui": True,
-        "specs_route": "/docs/",
-        "info": {
-            "title": "Vondic Backend API",
-            "description": "API документация для бэкенда Vondic",
-            "version": "1.0.0",
-        },
-    }
-    Swagger(app, config=swagger_config)
-
-    # Import models to ensure they are registered
-    from app import models  # noqa: F401
+    importlib.import_module("app.models")
 
     with app.app_context():
         if db.engine.dialect.name == "sqlite":
@@ -58,7 +101,6 @@ def create_app(config_class=Config):
                 db.session.execute(
                     text("ALTER TABLE messages ADD COLUMN attachments TEXT"))
                 db.session.commit()
-            # Ensure 'gifts' column exists on users table
             ucols = db.session.execute(
                 text("PRAGMA table_info(users)")).fetchall()
             ucolumn_names = [c[1] for c in ucols]
@@ -66,7 +108,10 @@ def create_app(config_class=Config):
                 db.session.execute(
                     text("ALTER TABLE users ADD COLUMN gifts TEXT"))
                 db.session.commit()
-            # Ensure gifts catalog table exists and is seeded
+            if ucolumn_names and "storis" not in ucolumn_names:
+                db.session.execute(
+                    text("ALTER TABLE users ADD COLUMN storis TEXT"))
+                db.session.commit()
             gc_cols = db.session.execute(
                 text("PRAGMA table_info(gifts_catalog)")).fetchall()
             if not gc_cols:
@@ -79,7 +124,6 @@ def create_app(config_class=Config):
                         description TEXT
                     )
                 """))
-                # Seed initial gifts
                 seed_items = [
                     ("newyear_fireworks", "Новогодний салют", 99,
                      "Flame", "Праздничное настроение на Новый год"),
@@ -220,7 +264,6 @@ def create_app(config_class=Config):
             if missing:
                 db.session.commit()
 
-            # Ensure AI user exists
             try:
                 from app.services.ollama_service import OllamaService
                 OllamaService.get_ai_user()
@@ -238,7 +281,9 @@ def create_app(config_class=Config):
     from app.api.v1.payments import payments_bp
     from app.api.v1.posts import posts_bp
     from app.api.v1.search import search_bp
+    from app.api.v1.storis import storis_bp
     from app.api.v1.subscriptions import subscriptions_bp
+    from app.api.v1.support import support_bp
     from app.api.v1.upload import upload_bp
     from app.api.v1.users import users_bp
 
@@ -256,12 +301,44 @@ def create_app(config_class=Config):
     app.register_blueprint(gifts_bp)
     app.register_blueprint(communities_bp)
     app.register_blueprint(dm_bp)
-    # Support API
-    from app.api.v1.support import support_bp
+    app.register_blueprint(storis_bp)
     app.register_blueprint(support_bp)
 
     @app.route("/health")
     def health_check():
         return {"status": "ok", "service": "backend-core"}
+
+    swagger_config = {
+        "headers": [],
+        "specs": [
+            {
+                "endpoint": "apispec",
+                "route": "/apispec.json",
+                "rule_filter": lambda rule: True,
+                "model_filter": lambda tag: True,
+            }
+        ],
+        "static_url_path": "/flasgger_static",
+        "swagger_ui": True,
+        "specs_route": "/docs/",
+    }
+    swagger_template = {
+        "swagger": "2.0",
+        "info": {
+            "title": "Vondic Backend API",
+            "description": "API документация для бэкенда Vondic",
+            "version": "1.0.0",
+        },
+        "securityDefinitions": {
+            "Bearer": {
+                "type": "apiKey",
+                "name": "Authorization",
+                "in": "header",
+                "description": "Bearer <access_token>",
+            }
+        },
+        "paths": _build_swagger_paths(app),
+    }
+    Swagger(app, config=swagger_config, template=swagger_template)
 
     return app

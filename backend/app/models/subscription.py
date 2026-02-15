@@ -17,7 +17,6 @@ class Subscription(db.Model):
         db.UniqueConstraint('subscriber_id', 'target_id', name='uq_subscription'),
     )
 
-    # Relationships
     subscriber = db.relationship(
         "User", foreign_keys=[subscriber_id], backref="following_subscriptions")
     target = db.relationship(

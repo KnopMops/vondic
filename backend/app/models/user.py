@@ -31,22 +31,21 @@ class User(db.Model):
     telegram_id = db.Column(TEXT, unique=True, nullable=True)
     link_key = db.Column(TEXT, unique=True, nullable=True)
     two_factor_enabled = db.Column(INTEGER, default=0)
-    two_factor_method = db.Column(TEXT, default=None)  # 'email' | 'totp'
+    two_factor_method = db.Column(TEXT, default=None)
     two_factor_secret = db.Column(TEXT, default=None)
     two_factor_email_code = db.Column(TEXT, default=None)
     two_factor_email_code_expires = db.Column(TIMESTAMP, default=None)
     login_alert_enabled = db.Column(INTEGER, default=0)
-    # Profile customization
-    profile_bg_theme = db.Column(TEXT, default=None)       # e.g. 'indigo' | 'purple' | 'emerald' | 'rose' | 'cyan'
-    profile_bg_gradient = db.Column(TEXT, default=None)    # e.g. 'linear-gradient(135deg, #ff00aa, #00ffee)'
+    profile_bg_theme = db.Column(TEXT, default=None)
+    profile_bg_gradient = db.Column(TEXT, default=None)
     gifts = db.Column(JSON, default=list)
+    storis = db.Column(JSON, default=list)
     created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
     updated_at = db.Column(
         TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     @property
     def disk_limit(self):
-        # 5 GB for premium, 1 GB for regular
         if self.premium:
             return 5 * 1024 * 1024 * 1024
         return 1 * 1024 * 1024 * 1024
@@ -78,6 +77,8 @@ class User(db.Model):
             "link_key": self.link_key,
             "profile_bg_theme": self.profile_bg_theme,
             "profile_bg_gradient": self.profile_bg_gradient,
+            "avatar_url": self.avatar_url,
+            "storis": self.storis or [],
             "is_blocked": bool(self.is_blocked),
             "two_factor_enabled": bool(self.two_factor_enabled),
             "two_factor_method": self.two_factor_method,

@@ -9,16 +9,12 @@ dm_bp = Blueprint("direct_messages", __name__, url_prefix="/api/v1/dm")
 @dm_bp.route("/<target_id>/messages", methods=["POST"])
 @token_required
 def send_dm(current_user, target_id):
-    """
-    Отправить личное сообщение
-    """
     data = request.get_json() or {}
     message, error = MessageService.create_message(
         data, current_user.id, target_id=target_id)
     if error:
         return jsonify({"error": error}), 400
 
-    # Trigger AI if target is Vondic AI
     from app.services.ollama_service import OllamaService
     ai_user = OllamaService.get_ai_user()
     if str(target_id) == str(ai_user.id):
@@ -30,9 +26,6 @@ def send_dm(current_user, target_id):
 @dm_bp.route("/<target_id>/messages", methods=["GET"])
 @token_required
 def get_dm_history(current_user, target_id):
-    """
-    Получить историю личных сообщений
-    """
     page = request.args.get("page", 1, type=int)
     per_page = request.args.get("per_page", 50, type=int)
     cursor = request.args.get("cursor", type=str)

@@ -5,6 +5,7 @@ from datetime import datetime
 from flask import request, session
 from flask_socketio import ConnectionRefusedError, emit, join_room
 
+from .config import Config
 from .proxy import ConnectionBroker
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,8 @@ class SignalingService:
         self.io.on_event("join_voice_channel", self.on_join_voice_channel)
         self.io.on_event("leave_voice_channel", self.on_leave_voice_channel)
         self.io.on_event("send_message", self.on_send_message)
+        self.io.on_event("delete_message", self.on_delete_message)
+        self.io.on_event("e2e_key_exchange", self.on_e2e_key_exchange)
         self.io.on_event("typing", self.on_typing)
         self.io.on_event("stop_typing", self.on_stop_typing)
         self.io.on_event("message_read", self.on_message_read)
@@ -102,7 +105,6 @@ class SignalingService:
             emit("error", {"message": "Unauthorized"})
             return
         participants = self.broker.repo.get_channel_participants(channel_id)
-        # Allow join for any participant of the channel
         if str(sender_id) not in [str(p) for p in participants]:
             emit("error", {"message": "Access denied"})
             return
@@ -110,7 +112,6 @@ class SignalingService:
         if channel_set is None:
             channel_set = set()
             self.voice_channel_calls[channel_id] = channel_set
-        # Notify existing participants about the new join
         for existing_sid in list(channel_set):
             if not self.broker.resolve_recipient(existing_sid):
                 channel_set.discard(existing_sid)
@@ -121,13 +122,11 @@ class SignalingService:
                     "socket_id": request.sid},
                 room=existing_sid,
             )
-            # Also notify the joiner about existing participant to establish P2P
             emit(
                 "voice_channel_participant_joined",
                 {"channel_id": channel_id, "user_id": self.broker.resolve_recipient(
                     existing_sid).get("id"), "socket_id": existing_sid},
             )
-        # Add current socket to the channel set
         channel_set.add(request.sid)
 
     def on_leave_voice_channel(self, payload):
@@ -139,7 +138,6 @@ class SignalingService:
             return
         if request.sid in channel_set:
             channel_set.discard(request.sid)
-            # Notify remaining participants about leave
             for existing_sid in list(channel_set):
                 if self.broker.resolve_recipient(existing_sid):
                     emit(
@@ -147,7 +145,6 @@ class SignalingService:
                         {"channel_id": channel_id, "socket_id": request.sid},
                         room=existing_sid,
                     )
-            # Cleanup empty set
             if not channel_set:
                 self.voice_channel_calls.pop(channel_id, None)
 
@@ -176,6 +173,27 @@ class SignalingService:
         else:
             emit("call_failed", {
                  "message": "Пользователь не в сети или не найден"})
+
+    def on_e2e_key_exchange(self, payload):
+        target_user_id = payload.get("target_user_id")
+        public_key = payload.get("public_key")
+        key_id = payload.get("key_id")
+        if not target_user_id or not public_key or not key_id:
+            emit("error", {"message": "Missing key data"})
+            return
+        sender_id, sender = self._get_sender()
+        if not sender_id:
+            emit("error", {"message": "Unauthorized"})
+            return
+        emit(
+            "e2e_key_exchange",
+            {
+                "from_user_id": sender_id,
+                "public_key": public_key,
+                "key_id": key_id,
+            },
+            room=target_user_id,
+        )
 
     def on_call_answer(self, payload):
         caller_socket_id = payload.get("caller_socket_id")
@@ -217,11 +235,6 @@ class SignalingService:
                 online_participants.append(
                     {"user_id": pid, "socket_id": pid_socket}
                 )
-
-        # Allow starting a group call even if no one else is online
-        # if not online_participants:
-        #     emit("call_failed", {"message": "Нет онлайн участников в группе"})
-        #     return
 
         call_id = str(uuid.uuid4())
         self.group_calls[call_id] = {
@@ -375,7 +388,6 @@ class SignalingService:
             emit("error", {"message": "Unauthorized"})
             return
 
-        # Verify participation
         participants = self.broker.repo.get_group_participants(group_id)
         if str(sender_id) not in [str(p) for p in participants]:
             emit("error", {"message": "Access denied"})
@@ -523,7 +535,6 @@ class SignalingService:
         timestamp = datetime.utcnow().isoformat()
 
         if channel_id:
-            # Channel Message Logic
             participants = self.broker.repo.get_channel_participants(
                 channel_id)
             if not participants:
@@ -533,7 +544,6 @@ class SignalingService:
                     return
                 participants = [owner_id]
 
-            # Verify sender is participant
             if str(sender_id) not in [str(p) for p in participants]:
                 emit(
                     "error", {"message": "You are not a participant of this channel"})
@@ -559,7 +569,6 @@ class SignalingService:
             logger.info(
                 f"Сообщение канала {message_id} сохранено (channel={channel_id})")
 
-            # Broadcast to participants
             participants = self.broker.repo.get_channel_participants(
                 channel_id)
             full_message_payload = {
@@ -573,13 +582,11 @@ class SignalingService:
                 "is_read": 0
             }
 
-            # Emit confirmation to sender
             emit("message_sent", {
                 "status": "delivered",
                 "message": full_message_payload
             })
 
-            # Emit to other participants
             for pid in participants:
                 if str(pid) == str(sender_id):
                     continue
@@ -588,10 +595,8 @@ class SignalingService:
                     emit("receive_message", full_message_payload, room=pid_socket)
 
         elif group_id:
-            # Group Message Logic
             participants = self.broker.repo.get_group_participants(group_id)
 
-            # Verify sender is participant
             if str(sender_id) not in [str(p) for p in participants]:
                 emit(
                     "error", {"message": "You are not a participant of this group"})
@@ -628,13 +633,11 @@ class SignalingService:
                 "is_read": 0
             }
 
-            # Emit confirmation to sender
             emit("message_sent", {
                 "status": "delivered",
                 "message": full_message_payload
             })
 
-            # Emit to other participants
             for pid in participants:
                 if str(pid) == str(sender_id):
                     continue
@@ -643,7 +646,6 @@ class SignalingService:
                     emit("receive_message", full_message_payload, room=pid_socket)
 
         else:
-            # Direct Message Logic
             msg_data = {
                 "id": message_id,
                 "sender_id": sender_id,
@@ -696,23 +698,79 @@ class SignalingService:
                     "message": full_message_payload
                 })
 
-            # Check for AI assistant integration
             try:
-                # We need to notify the backend about the new DM if it's for the AI
                 import requests
 
-                # Check if target is AI (this is a bit hacky since we don't have direct access to AI_ID here easily without querying DB)
-                # But we can send it to an internal backend endpoint to check
-                backend_url = "http://localhost:5050/api/v1/users/internal/process_message"
+                backend_url = f"{Config.BACKEND_INTERNAL_URL}/api/v1/users/internal/process_message"
+                logger.info(
+                    "AI notify backend_url=%s message_id=%s target_id=%s",
+                    backend_url,
+                    message_id,
+                    target_user_id,
+                )
                 requests.post(backend_url, json={
                     "message_id": message_id,
                     "sender_id": sender_id,
                     "target_id": target_user_id,
                     "content": content,
                     "type": msg_type
-                }, timeout=1)  # Short timeout, don't block signaling
+                }, timeout=1)
             except Exception as e:
                 logger.error(f"Error notifying backend about AI DM: {e}")
+
+    def on_delete_message(self, payload):
+        message_id = payload.get("message_id") if isinstance(
+            payload, dict) else None
+        if not message_id:
+            emit("error", {"message": "message_id is required"})
+            return
+
+        sender_id, _ = self._get_sender()
+        if not sender_id:
+            emit("error", {"message": "Unauthorized"})
+            return
+
+        meta = self.broker.repo.get_message_meta(message_id)
+        if not meta:
+            emit("error", {"message": "Message not found"})
+            return
+
+        ok, reason = self.broker.repo.mark_message_deleted(
+            message_id, sender_id)
+        if not ok:
+            if reason == "forbidden":
+                emit("error", {"message": "Forbidden"})
+            elif reason == "not_found":
+                emit("error", {"message": "Message not found"})
+            else:
+                emit("error", {"message": "Failed to delete message"})
+            return
+
+        payload = {
+            "id": message_id,
+            "is_deleted": True,
+            "content": "Сообщение удалено",
+            "attachments": [],
+        }
+
+        if meta.get("channel_id"):
+            participants = self.broker.repo.get_channel_participants(
+                meta["channel_id"])
+            for pid in participants:
+                emit("message_deleted", payload, room=pid)
+            return
+
+        if meta.get("group_id"):
+            participants = self.broker.repo.get_group_participants(
+                meta["group_id"])
+            for pid in participants:
+                emit("message_deleted", payload, room=pid)
+            return
+
+        target_user_id = meta.get("target_id")
+        emit("message_deleted", payload, room=sender_id)
+        if target_user_id:
+            emit("message_deleted", payload, room=target_user_id)
 
     def on_typing(self, payload):
         target_user_id = payload.get("target_user_id")
@@ -751,15 +809,6 @@ class SignalingService:
             emit("stop_typing", {"sender_id": sender_id}, room=target_socket)
 
     def on_message_read(self, payload):
-        """
-        Обработка события прочтения сообщений.
-        payload = {
-            "message_ids": ["uuid1", "uuid2"],
-            "sender_id": "id-of-original-sender" (опционально, чтобы быстрее найти сокет, но лучше искать по message_id или передавать sender_id с клиента)
-        }
-        В данном случае мы ожидаем, что клиент знает sender_id (того, кто отправил эти сообщения),
-        чтобы мы могли уведомить его, что его сообщения прочитаны.
-        """
         message_ids = payload.get("message_ids")
         target_sender_id = payload.get("target_sender_id")
 

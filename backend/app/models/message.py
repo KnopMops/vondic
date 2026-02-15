@@ -12,7 +12,6 @@ class Message(db.Model):
     id = db.Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
     content = db.Column(TEXT, nullable=False)
     attachments = db.Column(JSON, nullable=True)
-    # text, voice, image, etc.
     type = db.Column(TEXT, default="text", nullable=False)
     sender_id = db.Column(TEXT, db.ForeignKey("users.id"), nullable=False)
     target_id = db.Column(TEXT, db.ForeignKey("users.id"), nullable=True)
@@ -22,7 +21,6 @@ class Message(db.Model):
     updated_at = db.Column(
         TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Relationships
     sender = db.relationship("User", foreign_keys=[
                              sender_id], backref=db.backref("sent_messages", lazy=True))
     target = db.relationship("User", foreign_keys=[

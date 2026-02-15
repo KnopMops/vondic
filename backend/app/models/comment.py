@@ -14,7 +14,7 @@ class Comment(db.Model):
     post_id = db.Column(TEXT, db.ForeignKey("posts.id"), nullable=False)
     parent_id = db.Column(TEXT, db.ForeignKey("comments.id"), nullable=True)
     deleted = db.Column(BOOLEAN, default=False)
-    deleted_by = db.Column(TEXT, nullable=True)  # User/Admin UUID
+    deleted_by = db.Column(TEXT, nullable=True)
     reason_for_deletion = db.Column(TEXT, nullable=True)
     deleted_at = db.Column(TIMESTAMP, nullable=True)
     created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
@@ -22,7 +22,6 @@ class Comment(db.Model):
         TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
     likes = db.Column(INTEGER, default=0)
 
-    # Relationships
     replies = db.relationship("Comment", backref=db.backref(
         "parent", remote_side=[id]), lazy=True)
 

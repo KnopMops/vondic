@@ -36,12 +36,11 @@ def create_checkout_session():
             payment_method_types=["card"],
             line_items=[
                 {
-                    "price": Config.STRIPE_PRICE_ID,  # Ensure this is set in .env
+                    "price": Config.STRIPE_PRICE_ID,
                     "quantity": 1,
                 },
             ],
             mode="subscription",
-            # Replace with actual frontend URLs
             success_url="http://localhost:3000/premium/success",
             cancel_url="http://localhost:3000/premium/cancel",
         )
@@ -73,7 +72,7 @@ def create_payment_session():
         line_items = []
         for it in items:
             name = it.get("name")
-            amount = it.get("amount")  # in minor currency unit (e.g. kopecks)
+            amount = it.get("amount")
             currency = it.get("currency", "rub")
             quantity = int(it.get("quantity", 1))
             if not name or not amount or amount <= 0 or quantity <= 0:

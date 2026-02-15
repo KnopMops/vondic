@@ -19,6 +19,11 @@ export const getAttachmentUrl = (url: string | undefined | null) => {
 	return `${backendUrl}${url.startsWith('/') ? '' : '/'}${url}`
 }
 
+export const getAvatarUrl = (url: string | undefined | null) => {
+	const fallback = '/static/default-avatar.png'
+	return getAttachmentUrl(url || fallback)
+}
+
 export const parseAsUtc = (input: string | number | Date) => {
 	if (input instanceof Date) return new Date(input.getTime())
 	if (typeof input === 'number') return new Date(input)

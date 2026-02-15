@@ -2,6 +2,7 @@ import os
 from datetime import datetime
 
 from app.core.extensions import db
+from app.models.like import Like
 from app.models.post import Post
 from app.models.user import User
 from flask import current_app
@@ -24,7 +25,7 @@ class PostService:
         search = f"%{query_str}%"
         return Post.query.filter(
             Post.content.ilike(search),
-            Post.deleted == False
+            Post.deleted.is_(False)
         ).order_by(Post.created_at.desc()).all()
 
     @staticmethod
@@ -125,7 +126,8 @@ class PostService:
                 url = a.get("url")
                 size = int(a.get("size") or 0)
                 if url and isinstance(url, str):
-                    abs_path = os.path.join(current_app.root_path, url.lstrip("/"))
+                    abs_path = os.path.join(
+                        current_app.root_path, url.lstrip("/"))
                     if os.path.exists(abs_path):
                         try:
                             os.remove(abs_path)
@@ -139,7 +141,8 @@ class PostService:
         user = User.query.get(post.posted_by)
         if user and freed_bytes > 0:
             try:
-                user.disk_usage = max(0, int(user.disk_usage or 0) - freed_bytes)
+                user.disk_usage = max(
+                    0, int(user.disk_usage or 0) - freed_bytes)
             except Exception:
                 pass
 
@@ -167,7 +170,8 @@ class PostService:
                 url = a.get("url")
                 size = int(a.get("size") or 0)
                 if url and isinstance(url, str):
-                    abs_path = os.path.join(current_app.root_path, url.lstrip("/"))
+                    abs_path = os.path.join(
+                        current_app.root_path, url.lstrip("/"))
                     if os.path.exists(abs_path):
                         try:
                             os.remove(abs_path)
@@ -181,7 +185,8 @@ class PostService:
         user = User.query.get(post.posted_by)
         if user and freed_bytes > 0:
             try:
-                user.disk_usage = max(0, int(user.disk_usage or 0) - freed_bytes)
+                user.disk_usage = max(
+                    0, int(user.disk_usage or 0) - freed_bytes)
             except Exception:
                 pass
 

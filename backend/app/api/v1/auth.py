@@ -9,44 +9,6 @@ auth_bp = Blueprint("auth", __name__, url_prefix="/api/v1/auth")
 
 @auth_bp.route("/register", methods=["POST"])
 def register():
-    """
-    Регистрация нового пользователя
-    ---
-    tags:
-      - Auth
-    parameters:
-      - name: body
-        in: body
-        required: true
-        schema:
-          type: object
-          properties:
-            username:
-              type: string
-              example: "johndoe"
-            email:
-              type: string
-              example: "john@example.com"
-            password:
-              type: string
-              example: "secret123"
-    responses:
-      201:
-        description: Пользователь успешно создан
-        schema:
-          type: object
-          properties:
-            message:
-              type: string
-            user:
-              type: object
-            access_token:
-              type: string
-            refresh_token:
-              type: string
-      400:
-        description: Ошибка валидации или пользователь уже существует
-    """
     data = request.get_json()
     if not data:
         return (jsonify({"error": "No data provided"}), 400)
@@ -76,41 +38,6 @@ def verify_email(token):
 
 @auth_bp.route("/login", methods=["POST"])
 def login():
-    """
-    Аутентификация пользователя
-    ---
-    tags:
-      - Auth
-    parameters:
-      - name: body
-        in: body
-        required: true
-        schema:
-          type: object
-          properties:
-            email:
-              type: string
-              example: "john@example.com"
-            password:
-              type: string
-              example: "secret123"
-    responses:
-      200:
-        description: Успешный вход
-        schema:
-          type: object
-          properties:
-            message:
-              type: string
-            access_token:
-              type: string
-            refresh_token:
-              type: string
-            user:
-              type: object
-      401:
-        description: Неверный email или пароль
-    """
     data = request.get_json()
     if not data:
         return (jsonify({"error": "No data provided"}), 400)
@@ -149,28 +76,6 @@ def login():
 
 @auth_bp.route("/telegram/link", methods=["POST"])
 def link_telegram_account():
-    """
-    Link Telegram account using a link key
-    ---
-    tags:
-      - Auth
-    parameters:
-      - name: body
-        in: body
-        required: true
-        schema:
-          type: object
-          properties:
-            link_key:
-              type: string
-            telegram_id:
-              type: string
-    responses:
-      200:
-        description: Account linked successfully
-      400:
-        description: Invalid key or error
-    """
     data = request.get_json() or {}
     link_key = data.get("link_key")
     telegram_id = data.get("telegram_id")
@@ -187,38 +92,6 @@ def link_telegram_account():
 
 @auth_bp.route("/me", methods=["POST"])
 def me():
-    """
-    Получить текущего пользователя
-    ---
-    tags:
-      - Auth
-    parameters:
-      - name: body
-        in: body
-        required: true
-        schema:
-          type: object
-          properties:
-            access_token:
-              type: string
-              required: true
-    responses:
-      200:
-        description: Текущий пользователь
-        schema:
-          type: object
-          properties:
-            message:
-              type: string
-            is_authenticated:
-              type: boolean
-            user:
-              type: object
-      400:
-        description: Токен не передан
-      401:
-        description: Неверный токен
-    """
     data = request.get_json() or {}
     token = data.get("access_token")
 
@@ -290,7 +163,6 @@ def setup_2fa(current_user):
 def send_2fa_email(current_user):
     success, error = AuthService.send_2fa_email_code(current_user)
     if not success:
-        # In non-production or misconfigured mail, return code inline for development
         mail_server = current_app.config.get("MAIL_SERVER")
         env = current_app.config.get("ENV")
         if not mail_server or (env and env != "production"):
@@ -326,47 +198,6 @@ def toggle_login_alerts(current_user):
 
 @auth_bp.route("/telegram-login", methods=["POST"])
 def telegram_login():
-    """
-    Аутентификация через Telegram
-    ---
-    tags:
-      - Auth
-    parameters:
-      - name: body
-        in: body
-        required: true
-        schema:
-          type: object
-          properties:
-            id:
-              type: integer
-            first_name:
-              type: string
-            username:
-              type: string
-            photo_url:
-              type: string
-            auth_date:
-              type: integer
-            hash:
-              type: string
-    responses:
-      200:
-        description: Успешный вход
-        schema:
-          type: object
-          properties:
-            message:
-              type: string
-            access_token:
-              type: string
-            refresh_token:
-              type: string
-            user:
-              type: object
-      400:
-        description: Ошибка авторизации или неверная подпись
-    """
     data = request.get_json()
     if not data:
         return (jsonify({"error": "No data provided"}), 400)
@@ -388,9 +219,6 @@ def telegram_login():
 
 @auth_bp.route("/ai-user", methods=["GET"])
 def get_ai_user():
-    """
-    Получить пользователя Vondic AI
-    """
     from app.services.ollama_service import OllamaService
     ai_user = OllamaService.get_ai_user()
     return jsonify(user_schema.dump(ai_user)), 200

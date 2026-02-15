@@ -90,7 +90,7 @@ export default function PostDetailsModal(props: Props) {
 	}
 
 	return (
-		<div className='fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm'>
+		<div className='fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm'>
 			<div className='w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-gray-800 flex flex-col max-h-[90vh]'>
 				{/* Header */}
 				<div className='flex items-center justify-between border-b border-gray-200 p-4 dark:border-gray-700'>

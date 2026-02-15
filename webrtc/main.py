@@ -1,6 +1,9 @@
 import logging
 
 import eventlet
+
+eventlet.monkey_patch()
+
 from flasgger import Swagger
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -11,20 +14,240 @@ from .database import UserRepository
 from .proxy import ConnectionBroker
 from .signaling import SignalingService
 
-eventlet.monkey_patch()
-
-
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
+def _tag_for_rule(rule: str) -> str:
+    if rule.startswith("/messages"):
+        return "Messages"
+    if rule.startswith("/channels"):
+        return "Channels"
+    if rule.startswith("/chats"):
+        return "Chats"
+    if rule.startswith("/api/online-users"):
+        return "Stats"
+    if rule.startswith("/set_socket_id") or rule.startswith("/get_socket_id"):
+        return "Sockets"
+    if rule.startswith("/internal"):
+        return "Internal"
+    if rule == "/":
+        return "Root"
+    return "Other"
+
+
+def _build_swagger_paths(app: Flask):
+    protected_rules = {
+        "/messages/history",
+        "/channels/history",
+        "/chats/search",
+        "/messages/search",
+    }
+    paths = {}
+    for rule in app.url_map.iter_rules():
+        if rule.endpoint == "static":
+            continue
+        if rule.rule.startswith("/flasgger_static"):
+            continue
+        if rule.rule in ("/apispec.json", "/docs/"):
+            continue
+        methods = sorted(m for m in rule.methods if m not in {"HEAD", "OPTIONS"})
+        if not methods:
+            continue
+        is_protected = rule.rule in protected_rules
+        tags = [_tag_for_rule(rule.rule), "Protected" if is_protected else "Public"]
+        entry = paths.setdefault(rule.rule, {})
+        for method in methods:
+            responses = {"200": {"description": "Success"}}
+            if is_protected:
+                responses["401"] = {"description": "Unauthorized"}
+            entry[method.lower()] = {
+                "summary": rule.endpoint,
+                "tags": tags,
+                "responses": responses,
+            }
+    return paths
 
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
     CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+
+    socketio = SocketIO(
+        app,
+        cors_allowed_origins="*",
+        async_mode="eventlet",
+        logger=True,
+        engineio_logger=True,
+    )
+    user_repo = UserRepository()
+    logger.info("WebRTC Server initialized. Message encryption enabled.")
+    broker = ConnectionBroker(user_repo)
+    SignalingService(socketio, broker)
+
+    @app.route("/api/online-users", methods=["GET"])
+    def get_online_users():
+        count = user_repo.get_online_users_count()
+        return jsonify({"count": count}), 200
+
+    @app.route("/")
+    def index():
+        return "Сервер сигнализации WebRTC запущен."
+
+    @app.route("/get_socket_id/<user_id>")
+    def get_socket_id(user_id):
+        socket_id = broker.get_user_socket(user_id)
+        if socket_id:
+            return ({"socket_id": socket_id}, 200)
+        return ({"error": "User not found or offline"}, 404)
+
+    @app.route("/set_socket_id", methods=["POST"])
+    def set_socket_id():
+        data = request.get_json()
+        if not data:
+            return (jsonify({"error": "No data provided"}), 400)
+
+        user_id = data.get("user_id")
+        socket_id = data.get("socket_id")
+
+        if not user_id or not socket_id:
+            return (jsonify({"error": "Missing user_id or socket_id"}), 400)
+
+        updated_user = user_repo.update_socket_id_for_user(user_id, socket_id)
+
+        if updated_user:
+            return (
+                jsonify(
+                    {"message": "User socket updated successfully",
+                        "user": updated_user}
+                ),
+                200,
+            )
+        return (jsonify({"error": "User not found or database error"}), 404)
+
+    @app.route("/messages/history", methods=["POST"])
+    def get_messages_history():
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        token = data.get("token")
+        target_id = data.get("target_id")
+        limit = data.get("limit", 50)
+        offset = data.get("offset", 0)
+
+        if not token:
+            return jsonify({"error": "Token required"}), 401
+
+        user = user_repo.fetch_user_by_token(token)
+        if not user:
+            return jsonify({"error": "Invalid token"}), 401
+
+        messages = user_repo.get_messages_history(
+            user["id"], target_id, limit, offset
+        )
+        return jsonify(messages), 200
+
+    @app.route("/channels/history", methods=["POST"])
+    def get_channel_history():
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        token = data.get("token")
+        channel_id = data.get("channel_id")
+        limit = data.get("limit", 50)
+        offset = data.get("offset", 0)
+
+        if not token:
+            return jsonify({"error": "Token required"}), 401
+
+        if not channel_id:
+            return jsonify({"error": "channel_id is required"}), 400
+
+        user = user_repo.fetch_user_by_token(token)
+        if not user:
+            return jsonify({"error": "Invalid token"}), 401
+
+        messages = user_repo.get_channel_history(
+            channel_id, limit, offset
+        )
+        return jsonify(messages), 200
+
+    @app.route("/chats/search", methods=["POST"])
+    def search_chats():
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data"}), 400
+
+        token = data.get("token")
+        query = data.get("query")
+
+        if not token:
+            return jsonify({"error": "Token required"}), 401
+
+        user = user_repo.fetch_user_by_token(token)
+        if not user:
+            return jsonify({"error": "Invalid token"}), 401
+
+        if not query:
+            return jsonify([]), 200
+
+        results = user_repo.search_users(query)
+        return jsonify(results), 200
+
+    @app.route("/messages/search", methods=["POST"])
+    def search_messages():
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data"}), 400
+
+        token = data.get("token")
+        target_id = data.get("target_id")
+        query = data.get("query")
+
+        if not token:
+            return jsonify({"error": "Token required"}), 401
+
+        user = user_repo.fetch_user_by_token(token)
+        if not user:
+            return jsonify({"error": "Invalid token"}), 401
+
+        if not target_id or not query:
+            return jsonify([]), 200
+
+        results = user_repo.search_messages(user["id"], target_id, query)
+        return jsonify(results), 200
+
+    @app.route("/internal/broadcast_message", methods=["POST"])
+    def broadcast_message():
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data"}), 400
+        
+        group_id = data.get("group_id")
+        target_id = data.get("target_id")
+        payload = data.get("payload")
+        
+        if not payload:
+            return jsonify({"error": "Missing payload"}), 400
+            
+        if group_id:
+            participants = user_repo.get_group_participants(group_id)
+            for pid in participants:
+                pid_socket = broker.get_user_socket(pid)
+                if pid_socket:
+                    socketio.emit("receive_message", payload, room=pid_socket)
+        elif target_id:
+            target_socket = broker.get_user_socket(target_id)
+            if target_socket:
+                socketio.emit("receive_message", payload, room=target_socket)
+        else:
+            return jsonify({"error": "Missing group_id or target_id"}), 400
+                
+        return jsonify({"status": "success"}), 200
 
     swagger_config = {
         "headers": [],
@@ -39,6 +262,9 @@ def create_app():
         "static_url_path": "/flasgger_static",
         "swagger_ui": True,
         "specs_route": "/docs/",
+    }
+    swagger_template = {
+        "swagger": "2.0",
         "info": {
             "title": "WebRTC Signaling Server API",
             "description": """
@@ -110,443 +336,9 @@ const socket = io("http://localhost:5000", {
 """,
             "version": "1.0.0",
         },
+        "paths": _build_swagger_paths(app),
     }
-    Swagger(app, config=swagger_config)
-    socketio = SocketIO(
-        app,
-        cors_allowed_origins="*",
-        async_mode="eventlet"
-    )
-    user_repo = UserRepository()
-    # user_repo.init_messages_table() # Initialized in __init__
-    logger.info("WebRTC Server initialized. Message encryption enabled.")
-    broker = ConnectionBroker(user_repo)
-    SignalingService(socketio, broker)
-
-    @app.route("/api/online-users", methods=["GET"])
-    def get_online_users():
-        """
-        Получить количество онлайн пользователей
-        ---
-        tags:
-          - Metrics
-        responses:
-          200:
-            description: Количество онлайн пользователей
-            schema:
-              type: object
-              properties:
-                count:
-                  type: integer
-        """
-        count = user_repo.get_online_users_count()
-        return jsonify({"count": count}), 200
-
-    @app.route("/")
-    def index():
-        """
-        Статус сервера WebRTC
-        ---
-        tags:
-          - System
-        responses:
-          200:
-            description: Возвращает текстовое сообщение о статусе работы сервера.
-            schema:
-              type: string
-              example: Сервер сигнализации WebRTC запущен.
-        """
-        return "Сервер сигнализации WebRTC запущен."
-
-    @app.route("/get_socket_id/<user_id>")
-    def get_socket_id(user_id):
-        """
-        Получение socket_id пользователя по user_id
-        ---
-        tags:
-          - Users
-        parameters:
-          - name: user_id
-            in: path
-            type: string
-            required: true
-            description: ID пользователя (UUID)
-        responses:
-          200:
-            description: Socket ID пользователя найден
-            schema:
-              type: object
-              properties:
-                socket_id:
-                  type: string
-                  description: Текущий socket_id пользователя
-          404:
-            description: Пользователь не найден или не подключен
-            schema:
-              type: object
-              properties:
-                error:
-                  type: string
-        """
-        socket_id = broker.get_user_socket(user_id)
-        if socket_id:
-            return ({"socket_id": socket_id}, 200)
-        return ({"error": "User not found or offline"}, 404)
-
-    @app.route("/set_socket_id", methods=["POST"])
-    def set_socket_id():
-        """
-        Принудительное назначение socket_id пользователю
-        ---
-        tags:
-          - Users
-        parameters:
-          - name: body
-            in: body
-            required: true
-            schema:
-              type: object
-              required:
-                - user_id
-                - socket_id
-              properties:
-                user_id:
-                  type: string
-                  description: ID пользователя (UUID)
-                socket_id:
-                  type: string
-                  description: Socket ID для привязки
-        responses:
-          200:
-            description: Пользователь успешно обновлен
-            schema:
-              type: object
-              properties:
-                message:
-                  type: string
-                  user:
-                    type: object
-          400:
-            description: Некорректные данные
-          404:
-            description: Пользователь не найден
-        """
-        data = request.get_json()
-        if not data:
-            return (jsonify({"error": "No data provided"}), 400)
-
-        user_id = data.get("user_id")
-        socket_id = data.get("socket_id")
-
-        if not user_id or not socket_id:
-            return (jsonify({"error": "Missing user_id or socket_id"}), 400)
-
-        updated_user = user_repo.update_socket_id_for_user(user_id, socket_id)
-
-        if updated_user:
-            return (
-                jsonify(
-                    {"message": "User socket updated successfully",
-                        "user": updated_user}
-                ),
-                200,
-            )
-        return (jsonify({"error": "User not found or database error"}), 404)
-
-    @app.route("/messages/history", methods=["POST"])
-    def get_messages_history():
-        """
-        Получение истории сообщений
-        ---
-        tags:
-          - Messages
-        parameters:
-          - name: body
-            in: body
-            required: true
-            schema:
-              type: object
-              required:
-                - token
-                - target_id
-              properties:
-                token:
-                  type: string
-                  description: Токен авторизации пользователя
-                target_id:
-                  type: string
-                  description: ID собеседника (UUID)
-                limit:
-                  type: integer
-                  default: 50
-                  description: Лимит сообщений
-                offset:
-                  type: integer
-                  default: 0
-                  description: Смещение
-        responses:
-          200:
-            description: История сообщений
-            schema:
-              type: array
-              items:
-                type: object
-                properties:
-                  id:
-                    type: string
-                  sender_id:
-                    type: string
-                  target_id:
-                    type: string
-                  content:
-                    type: string
-                  timestamp:
-                    type: string
-          401:
-            description: Неавторизован
-          400:
-            description: Некорректные параметры
-        """
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "No data provided"}), 400
-
-        token = data.get("token")
-        target_id = data.get("target_id")
-        limit = data.get("limit", 50)
-        offset = data.get("offset", 0)
-
-        if not token:
-            return jsonify({"error": "Token required"}), 401
-
-        user = user_repo.fetch_user_by_token(token)
-        if not user:
-            return jsonify({"error": "Invalid token"}), 401
-
-        messages = user_repo.get_messages_history(
-            user["id"], target_id, limit, offset
-        )
-        return jsonify(messages), 200
-
-    @app.route("/channels/history", methods=["POST"])
-    def get_channel_history():
-        """
-        Получение истории сообщений канала
-        ---
-        tags:
-          - Channels
-        parameters:
-          - name: body
-            in: body
-            required: true
-            schema:
-              type: object
-              required:
-                - token
-                - channel_id
-              properties:
-                token:
-                  type: string
-                  description: Токен авторизации пользователя
-                channel_id:
-                  type: string
-                  description: ID канала (UUID)
-                limit:
-                  type: integer
-                  default: 50
-                  description: Лимит сообщений
-                offset:
-                  type: integer
-                  default: 0
-                  description: Смещение
-        responses:
-          200:
-            description: История сообщений канала
-            schema:
-              type: array
-              items:
-                type: object
-                properties:
-                  id:
-                    type: string
-                  sender_id:
-                    type: string
-                  channel_id:
-                    type: string
-                  content:
-                    type: string
-                  timestamp:
-                    type: string
-          401:
-            description: Неавторизован
-          400:
-            description: Некорректные параметры
-        """
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "No data provided"}), 400
-
-        token = data.get("token")
-        channel_id = data.get("channel_id")
-        limit = data.get("limit", 50)
-        offset = data.get("offset", 0)
-
-        if not token:
-            return jsonify({"error": "Token required"}), 401
-
-        if not channel_id:
-            return jsonify({"error": "channel_id is required"}), 400
-
-        user = user_repo.fetch_user_by_token(token)
-        if not user:
-            return jsonify({"error": "Invalid token"}), 401
-
-        # Optional: Check if user is participant of the channel
-        # participants = user_repo.get_channel_participants(channel_id)
-        # if user["id"] not in participants:
-        #     return jsonify({"error": "Access denied"}), 403
-
-        messages = user_repo.get_channel_history(
-            channel_id, limit, offset
-        )
-        return jsonify(messages), 200
-
-    @app.route("/chats/search", methods=["POST"])
-    def search_chats():
-        """
-        Поиск пользователей (чатов)
-        ---
-        tags:
-          - Search
-        parameters:
-          - name: body
-            in: body
-            required: true
-            schema:
-              type: object
-              required:
-                - token
-                - query
-              properties:
-                token:
-                  type: string
-                query:
-                  type: string
-                  description: Часть имени пользователя
-        responses:
-          200:
-            description: Список найденных пользователей
-            schema:
-              type: array
-              items:
-                type: object
-                properties:
-                  id:
-                    type: string
-                  username:
-                    type: string
-        """
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "No data"}), 400
-
-        token = data.get("token")
-        query = data.get("query")
-
-        if not token:
-            return jsonify({"error": "Token required"}), 401
-
-        user = user_repo.fetch_user_by_token(token)
-        if not user:
-            return jsonify({"error": "Invalid token"}), 401
-
-        if not query:
-            return jsonify([]), 200
-
-        results = user_repo.search_users(query)
-        return jsonify(results), 200
-
-    @app.route("/messages/search", methods=["POST"])
-    def search_messages():
-        """
-        Поиск сообщений внутри чата
-        ---
-        tags:
-          - Search
-        parameters:
-          - name: body
-            in: body
-            required: true
-            schema:
-              type: object
-              required:
-                - token
-                - target_id
-                - query
-              properties:
-                token:
-                  type: string
-                target_id:
-                  type: string
-                query:
-                  type: string
-        responses:
-          200:
-            description: Найденные сообщения
-        """
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "No data"}), 400
-
-        token = data.get("token")
-        target_id = data.get("target_id")
-        query = data.get("query")
-
-        if not token:
-            return jsonify({"error": "Token required"}), 401
-
-        user = user_repo.fetch_user_by_token(token)
-        if not user:
-            return jsonify({"error": "Invalid token"}), 401
-
-        if not target_id or not query:
-            return jsonify([]), 200
-
-        results = user_repo.search_messages(user["id"], target_id, query)
-        return jsonify(results), 200
-
-    @app.route("/internal/broadcast_message", methods=["POST"])
-    def broadcast_message():
-        """
-        Internal endpoint for backend to trigger real-time message notifications
-        """
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "No data"}), 400
-        
-        group_id = data.get("group_id")
-        target_id = data.get("target_id")
-        payload = data.get("payload")
-        
-        if not payload:
-            return jsonify({"error": "Missing payload"}), 400
-            
-        if group_id:
-            # Broadcast to group participants
-            participants = user_repo.get_group_participants(group_id)
-            for pid in participants:
-                pid_socket = broker.get_user_socket(pid)
-                if pid_socket:
-                    socketio.emit("receive_message", payload, room=pid_socket)
-        elif target_id:
-            # Send to specific user (DM)
-            target_socket = broker.get_user_socket(target_id)
-            if target_socket:
-                socketio.emit("receive_message", payload, room=target_socket)
-        else:
-            return jsonify({"error": "Missing group_id or target_id"}), 400
-                
-        return jsonify({"status": "success"}), 200
+    Swagger(app, config=swagger_config, template=swagger_template)
 
     return (app, socketio)
 

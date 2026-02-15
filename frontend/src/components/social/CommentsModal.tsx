@@ -510,7 +510,7 @@ export default function CommentsModal({
 	if (!isOpen) return null
 
 	return (
-		<div className='fixed inset-0 z-[10000] flex items-center justify-center bg-black bg-opacity-50'>
+		<div className='fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4'>
 			<div className='flex h-[80vh] w-full max-w-lg flex-col rounded-xl bg-white shadow-xl dark:bg-gray-800'>
 				{/* Header */}
 				<div className='flex items-center justify-between border-b border-gray-200 p-4 dark:border-gray-700'>
@@ -610,7 +610,7 @@ export default function CommentsModal({
 
 			{/* Admin Delete Confirmation Modal */}
 			{adminDeleteComment && (
-				<div className='fixed inset-0 z-[10000] flex items-center justify-center bg-black bg-opacity-50'>
+				<div className='fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4'>
 					<div className='w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800'>
 						<h3 className='mb-4 text-lg font-bold text-gray-900 dark:text-white'>
 							Удаление комментария (Админ)

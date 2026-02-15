@@ -18,7 +18,6 @@ class GroupService:
             description=description,
             owner_id=user_id
         )
-        # Add owner to participants automatically
         owner = User.query.get(user_id)
         if owner:
             new_group.participants.append(owner)
@@ -62,7 +61,6 @@ class GroupService:
         if not user:
             return []
         
-        # Ensure AI chat exists and is named correctly
         try:
             from app.services.ollama_service import OllamaService
             OllamaService.ensure_chat_with_ai(user_id)
@@ -77,14 +75,7 @@ class GroupService:
         if not group:
             return None, "Group not found"
 
-        # Check permissions (only owner can add for now, or maybe any member?)
-        # Let's restrict to owner for simplicity/security
         if str(group.owner_id) != str(requester_id):
-             # Alternatively, allow if requester is already a participant?
-             # For "Add friend to group" usually any member can add, or only admin.
-             # Let's allow owner only for now to be safe, or check requirements.
-             # User said "add possibility to add participants".
-             # Let's allow owner.
             return None, "Only owner can add participants"
 
         user_to_add = User.query.get(target_user_id)

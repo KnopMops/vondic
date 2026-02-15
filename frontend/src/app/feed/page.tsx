@@ -24,29 +24,22 @@ export default function FeedPage() {
 			const fetchSocketId = async () => {
 				setIsSocketLoading(true)
 				try {
-					const webrtcUrl = process.env.NEXT_PUBLIC_WEBRTC_URL
-					if (webrtcUrl) {
-						const socketId = crypto.randomUUID()
-						const res = await fetch(`${webrtcUrl}/set_socket_id`, {
-							method: 'POST',
-							headers: {
-								'Content-Type': 'application/json',
-							},
-							body: JSON.stringify({
-								socket_id: socketId,
-								user_id: user.id,
-							}),
-						})
-						if (res.ok) {
-							// Don't overwrite the whole user object with the response from WebRTC server
-							// as it might be incomplete (missing username, etc.)
-							dispatch(setSocketId(socketId))
-
-							// Update localStorage to persist the socket_id
-							if (user) {
-								const updatedUser = { ...user, socket_id: socketId }
-								localStorage.setItem('user', JSON.stringify(updatedUser))
-							}
+					const socketId = crypto.randomUUID()
+					const res = await fetch(`/api/webrtc/set_socket_id`, {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+						},
+						body: JSON.stringify({
+							socket_id: socketId,
+							user_id: user.id,
+						}),
+					})
+					if (res.ok) {
+						dispatch(setSocketId(socketId))
+						if (user) {
+							const updatedUser = { ...user, socket_id: socketId }
+							localStorage.setItem('user', JSON.stringify(updatedUser))
 						}
 					}
 				} catch (e) {

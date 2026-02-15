@@ -27,7 +27,6 @@ class MessageService:
             if not group:
                 return None, "Group not found"
 
-            # Check if user is participant
             user = User.query.get(user_id)
             if not user or user not in group.participants:
                 return None, "User is not a participant of this group"
@@ -58,10 +57,8 @@ class MessageService:
             db.session.add(new_message)
             db.session.commit()
 
-            # Check for AI assistant integration
             from app.services.ollama_service import AI_USERNAME, OllamaService
 
-            # For Group
             if group_id:
                 ai_participant = next(
                     (p for p in group.participants if p.username == AI_USERNAME), None)
@@ -69,7 +66,6 @@ class MessageService:
                     OllamaService.process_message_async(
                         new_message.id, is_dm=False)
 
-            # For DM
             elif target_id:
                 ai_user = OllamaService.get_ai_user()
                 if str(target_id) == str(ai_user.id):
@@ -106,7 +102,6 @@ class MessageService:
         if not group:
             return None, "Group not found"
 
-        # Check access
         user = User.query.get(user_id)
         if not user or user not in group.participants:
             return None, "Access denied"
@@ -115,12 +110,10 @@ class MessageService:
 
         if cursor:
             try:
-                # Ensure cursor is in correct format or convert if needed
-                # Assuming cursor is an ISO format string
                 cursor_dt = datetime.fromisoformat(cursor)
                 query = query.filter(Message.created_at < cursor_dt)
             except ValueError:
-                pass  # Ignore invalid cursor
+                pass
 
         messages = query.order_by(Message.created_at.desc())\
             .paginate(page=page, per_page=per_page, error_out=False)

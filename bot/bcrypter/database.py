@@ -21,7 +21,6 @@ class AuthRepository:
         return conn
 
     def _init_db(self):
-        """Инициализация таблицы, если она не существует. Используем схему совместимую с бэкендом."""
         conn = self._connect()
         cursor = conn.cursor()
         cursor.execute(

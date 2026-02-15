@@ -16,7 +16,7 @@ import {
 } from '@/lib/stores/callStore'
 import { useToast } from '@/lib/ToastContext'
 import { Channel, Group, Message, User } from '@/lib/types'
-import { getAttachmentUrl } from '@/lib/utils'
+import { getAvatarUrl } from '@/lib/utils'
 import Link from 'next/link'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
@@ -626,9 +626,26 @@ export default function MessengerPage() {
 	const [input, setInput] = useState('')
 	const [activeTab, setActiveTab] = useState<'direct' | 'community'>('direct')
 	const messagesEndRef = useRef<HTMLDivElement>(null)
+	const messageRefs = useRef<Record<string, HTMLDivElement | null>>({})
 	const containerRef = useRef<HTMLDivElement>(null)
 	const [prevScrollHeight, setPrevScrollHeight] = useState(0)
 	const [isRestoringScroll, setIsRestoringScroll] = useState(false)
+	const [replyToMessage, setReplyToMessage] = useState<Message | null>(null)
+	const [pinnedMessageId, setPinnedMessageId] = useState<string | null>(null)
+	const [pinnedMessageIds, setPinnedMessageIds] = useState<string[]>([])
+	const [replyMap, setReplyMap] = useState<Record<string, Message>>({})
+	const [reactionsByMessage, setReactionsByMessage] = useState<
+		Record<string, Record<string, { count: number; reacted: boolean }>>
+	>({})
+	const [forwardMessage, setForwardMessage] = useState<Message | null>(null)
+	const [isForwardOpen, setIsForwardOpen] = useState(false)
+	const [forwardQuery, setForwardQuery] = useState('')
+	const pendingReplyRef = useRef<{
+		content: string
+		reply: Message
+		sentAt: number
+		attachmentsCount: number
+	} | null>(null)
 
 	// Channels State
 	const {
@@ -1138,6 +1155,9 @@ export default function MessengerPage() {
 		sendTyping,
 		sendStopTyping,
 		markMessagesAsRead,
+		deleteMessage,
+		updateMessage,
+		markMessageDeleted,
 	} = useChat(
 		socket,
 		user?.id,
@@ -1384,9 +1404,18 @@ export default function MessengerPage() {
 						attachments = list
 					}
 				}
+				if (replyToMessage) {
+					pendingReplyRef.current = {
+						content: hasText ? input.trim() : '',
+						reply: replyToMessage,
+						sentAt: Date.now(),
+						attachmentsCount: attachments?.length ?? 0,
+					}
+				}
 				sendChatMessage(hasText ? input.trim() : '', 'text', attachments)
 				setInput('')
 				setFiles([])
+				setReplyToMessage(null)
 			} catch (e) {
 				console.error('Message send failed', e)
 				showToast('Не удалось отправить сообщение', 'error')
@@ -1395,6 +1424,197 @@ export default function MessengerPage() {
 			}
 		}
 		run()
+	}
+
+	useEffect(() => {
+		const pending = pendingReplyRef.current
+		if (!pending) return
+		const match = [...messages]
+			.reverse()
+			.find(
+				m =>
+					m.isOwn &&
+					m.content === pending.content &&
+					(m.attachments?.length ?? 0) === pending.attachmentsCount,
+			)
+		if (match && !replyMap[match.id]) {
+			setReplyMap(prev => ({ ...prev, [match.id]: pending.reply }))
+			pendingReplyRef.current = null
+		}
+	}, [messages, replyMap])
+
+	const getMessagePreview = (msg: Message) => {
+		if (msg.is_deleted) return 'Сообщение удалено'
+		if (msg.attachments && msg.attachments.length > 0) {
+			const a = msg.attachments[0]
+			const ext = (a.ext || '').toLowerCase()
+			const isImage =
+				ext === 'png' ||
+				ext === 'jpg' ||
+				ext === 'jpeg' ||
+				ext === 'gif' ||
+				ext === 'webp' ||
+				ext === 'bmp' ||
+				ext === 'svg'
+			if (isImage) return 'Изображение'
+			return a.name || 'Файл'
+		}
+		const text = msg.content?.trim()
+		if (!text) return 'Сообщение'
+		return text.length > 120 ? `${text.slice(0, 120)}…` : text
+	}
+
+	const getSenderName = (msg: Message) => {
+		if (msg.sender_id === user?.id) return 'Вы'
+		if (msg.group_id || selectedGroup?.id) {
+			return groupParticipants[msg.sender_id]?.username || 'Участник'
+		}
+		if (selectedFriend?.id) {
+			return selectedFriend.username
+		}
+		return 'Пользователь'
+	}
+
+	const isSharedPostPayload = (content: string) => {
+		try {
+			if (!content.trim().startsWith('{')) return false
+			const data = JSON.parse(content)
+			return data?.type === 'shared_post' && !!data?.post
+		} catch {
+			return false
+		}
+	}
+
+	const jumpToMessage = (id: string) => {
+		const el = messageRefs.current[id]
+		if (el) {
+			el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+		}
+	}
+
+	const handlePinMessage = (msg: Message) => {
+		setPinnedMessageIds(prev => {
+			if (prev.includes(msg.id)) {
+				const next = prev.filter(id => id !== msg.id)
+				setPinnedMessageId(current =>
+					current === msg.id ? next[next.length - 1] || null : current,
+				)
+				return next
+			}
+			const next = [...prev, msg.id]
+			setPinnedMessageId(msg.id)
+			return next
+		})
+	}
+
+	const handleReplyMessage = (msg: Message) => {
+		if (msg.isOwn) return
+		setReplyToMessage(msg)
+	}
+
+	const handleDeleteMessage = (msg: Message) => {
+		if (!msg.isOwn) {
+			showToast('Можно удалить только свои сообщения', 'error')
+			return
+		}
+		markMessageDeleted(msg.id)
+		deleteMessage(msg.id)
+		if (pinnedMessageId === msg.id) {
+			setPinnedMessageId(null)
+		}
+		if (pinnedMessageIds.includes(msg.id)) {
+			setPinnedMessageIds(prev => prev.filter(id => id !== msg.id))
+		}
+	}
+
+	const handleEditMessage = (msg: Message, text: string) => {
+		updateMessage(msg.id, { content: text, is_deleted: false })
+	}
+
+	const handleReactMessage = (msg: Message, emoji: string) => {
+		setReactionsByMessage(prev => {
+			const current = prev[msg.id] || {}
+			const entry = current[emoji]
+			const reacted = entry?.reacted ?? false
+			const count = entry?.count ?? 0
+			const nextCount = reacted ? Math.max(0, count - 1) : count + 1
+			const nextEntry =
+				nextCount === 0 ? undefined : { count: nextCount, reacted: !reacted }
+			const nextForMsg = { ...current }
+			if (nextEntry) {
+				nextForMsg[emoji] = nextEntry
+			} else {
+				delete nextForMsg[emoji]
+			}
+			return {
+				...prev,
+				[msg.id]: nextForMsg,
+			}
+		})
+	}
+
+	const handleForwardMessage = (msg: Message) => {
+		setForwardMessage(msg)
+		setIsForwardOpen(true)
+		setForwardQuery('')
+	}
+
+	const handleForwardToTarget = (target: {
+		id: string
+		kind: 'user' | 'group' | 'channel' | 'community'
+		label: string
+	}) => {
+		if (!socket || !forwardMessage) return
+		if (forwardMessage.is_deleted) return
+		const payload: any = {
+			content: forwardMessage.content,
+			type: forwardMessage.type || 'text',
+			attachments: forwardMessage.attachments,
+		}
+		if (forwardMessage.type === 'voice') {
+			payload.type = 'voice'
+			payload.attachments = undefined
+			payload.content = forwardMessage.content
+		}
+		if (isSharedPostPayload(forwardMessage.content)) {
+			payload.content = forwardMessage.content
+		}
+		if (target.kind === 'user') payload.target_user_id = target.id
+		if (target.kind === 'group') payload.group_id = target.id
+		if (target.kind === 'channel' || target.kind === 'community')
+			payload.channel_id = target.id
+		socket.emit('send_message', payload)
+		setIsForwardOpen(false)
+		setForwardMessage(null)
+		showToast(`Переслано в ${target.label}`, 'success')
+	}
+
+	const resolvePinnedForScroll = (scrollTop: number) => {
+		if (!pinnedMessageIds.length) return
+		let bestId: string | null = null
+		let bestTop = -Infinity
+		let earliestId: string | null = null
+		let earliestTop = Infinity
+		const visibleTop = scrollTop + 24
+		for (const id of pinnedMessageIds) {
+			const el = messageRefs.current[id]
+			if (!el) continue
+			const top = el.offsetTop
+			if (top <= visibleTop && top > bestTop) {
+				bestTop = top
+				bestId = id
+			}
+			if (top < earliestTop) {
+				earliestTop = top
+				earliestId = id
+			}
+		}
+		if (!bestId) {
+			bestId = earliestId
+		}
+		if (bestId && bestId !== pinnedMessageId) {
+			setPinnedMessageId(bestId)
+		}
 	}
 
 	// WebRTC Handlers
@@ -1417,6 +1637,7 @@ export default function MessengerPage() {
 		if (isChatSearchOpen && chatSearchQuery) return
 
 		const { scrollTop, scrollHeight } = e.currentTarget
+		requestAnimationFrame(() => resolvePinnedForScroll(scrollTop))
 		if (scrollTop < 30 && !isLoading && messages.length > 0) {
 			setPrevScrollHeight(scrollHeight)
 			setIsRestoringScroll(true)
@@ -1436,7 +1657,15 @@ export default function MessengerPage() {
 			// Scroll to bottom for new messages or initial load
 			messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
 		}
+		if (containerRef.current) {
+			resolvePinnedForScroll(containerRef.current.scrollTop)
+		}
 	}, [messages, isChatSearchOpen, chatSearchQuery])
+
+	useEffect(() => {
+		setPinnedMessageIds([])
+		setPinnedMessageId(null)
+	}, [selectedFriend?.id, selectedChannel?.id, selectedGroup?.id])
 
 	// Separate AI from other entities
 	const aiFriend = friends.find(
@@ -1455,6 +1684,41 @@ export default function MessengerPage() {
 	// Determine messages to show in chat
 	const messagesToDisplay =
 		isChatSearchOpen && chatSearchQuery ? foundMessages : messages
+	const pinnedMessage = pinnedMessageId
+		? messages.find(m => m.id === pinnedMessageId)
+		: null
+	const forwardTargets = [
+		...otherFriends.map(f => ({
+			id: f.id,
+			label: f.username,
+			kind: 'user' as const,
+			sub: 'Личный чат',
+		})),
+		...groups.map(g => ({
+			id: g.id,
+			label: g.name,
+			kind: 'group' as const,
+			sub: 'Группа',
+		})),
+		...channels.map(c => ({
+			id: c.id,
+			label: c.name,
+			kind: 'channel' as const,
+			sub: 'Канал',
+		})),
+		...communityChannels
+			.filter((c: any) => c?.type !== 'voice')
+			.map((c: any) => ({
+				id: c.id,
+				label: c.name || c.title || 'Канал',
+				kind: 'community' as const,
+				sub: 'Сервер',
+			})),
+	].filter(t =>
+		forwardQuery
+			? t.label.toLowerCase().includes(forwardQuery.toLowerCase())
+			: true,
+	)
 
 	return (
 		<div className='flex h-[calc(100vh-4rem)] w-full overflow-hidden bg-gray-950 text-gray-100 font-sans'>
@@ -1568,8 +1832,10 @@ export default function MessengerPage() {
 									}`}
 								>
 									<div className='relative'>
-										<div
-											className={`w-12 h-12 rounded-full flex items-center justify-center bg-indigo-600 ring-2 transition-all duration-300 ${
+										<img
+											src={getAvatarUrl(aiFriend.avatar_url)}
+											alt={aiFriend.username}
+											className={`w-12 h-12 rounded-full object-cover bg-gray-800 ring-2 transition-all duration-300 ${
 												selectedFriend?.id === aiFriend.id
 													? currentBackground.accentColor.replace(
 															'text-',
@@ -1577,24 +1843,7 @@ export default function MessengerPage() {
 														)
 													: 'ring-gray-950'
 											}`}
-										>
-											<svg
-												viewBox='0 0 24 24'
-												fill='none'
-												stroke='currentColor'
-												strokeWidth='2'
-												strokeLinecap='round'
-												strokeLinejoin='round'
-												className='w-6 h-6 text-white'
-											>
-												<path d='M12 2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2 2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z'></path>
-												<path d='M12 16a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-2a2 2 0 0 1 2-2z'></path>
-												<path d='M5 9a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2 2 2 0 0 1-2-2V11a2 2 0 0 1 2-2z'></path>
-												<path d='M19 9a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2 2 2 0 0 1-2-2V11a2 2 0 0 1 2-2z'></path>
-												<path d='M12 8a6 6 0 0 0-6 6'></path>
-												<path d='M18 14a6 6 0 0 0-6-6'></path>
-											</svg>
-										</div>
+										/>
 										<div className='absolute bottom-0 right-0 w-3.5 h-3.5 bg-gray-950 rounded-full flex items-center justify-center'>
 											<div className='w-2.5 h-2.5 rounded-full bg-emerald-500' />
 										</div>
@@ -1650,10 +1899,7 @@ export default function MessengerPage() {
 								>
 									<div className='relative'>
 										<img
-											src={
-												getAttachmentUrl(friend.avatar_url) ||
-												'/default-avatar.png'
-											}
+											src={getAvatarUrl(friend.avatar_url)}
 											className={`w-12 h-12 rounded-full object-cover bg-gray-800 ring-2 transition-all duration-300 ${
 												selectedFriend?.id === friend.id
 													? currentBackground.accentColor.replace(
@@ -2087,10 +2333,7 @@ export default function MessengerPage() {
 											<>
 												<div className='relative'>
 													<img
-														src={
-															getAttachmentUrl(selectedFriend.avatar_url) ||
-															'/default-avatar.png'
-														}
+														src={getAvatarUrl(selectedFriend.avatar_url)}
 														className='w-10 h-10 rounded-full object-cover bg-gray-800 ring-2 ring-gray-800/50'
 														alt={selectedFriend.username}
 													/>
@@ -2242,6 +2485,56 @@ export default function MessengerPage() {
 							)}
 						</div>
 
+						{pinnedMessage && (
+							<div className='px-6 py-2 border-b border-gray-800/60 bg-gray-900/60 backdrop-blur-md'>
+								<button
+									onClick={() => jumpToMessage(pinnedMessage.id)}
+									className='w-full flex items-center gap-3 rounded-xl border border-gray-800/60 bg-gray-800/40 px-3 py-2 text-left text-xs text-gray-200 hover:bg-gray-800/70 transition'
+								>
+									<span className='text-amber-400'>📌</span>
+									<div className='flex-1 min-w-0'>
+										<div className='text-[10px] uppercase tracking-wider text-gray-400'>
+											Закреплено
+										</div>
+										<div className='truncate'>
+											{getMessagePreview(pinnedMessage)}
+										</div>
+									</div>
+									{pinnedMessage.attachments &&
+										pinnedMessage.attachments.length > 0 && (
+											<div className='flex items-center gap-2'>
+												{(() => {
+													const a = pinnedMessage.attachments[0]
+													const ext = (a.ext || '').toLowerCase()
+													const isImage =
+														ext === 'png' ||
+														ext === 'jpg' ||
+														ext === 'jpeg' ||
+														ext === 'gif' ||
+														ext === 'webp' ||
+														ext === 'bmp' ||
+														ext === 'svg'
+													if (isImage) {
+														return (
+															<img
+																src={getAttachmentUrl(a.url)}
+																alt={a.name}
+																className='h-10 w-10 rounded-md object-cover'
+															/>
+														)
+													}
+													return (
+														<span className='rounded-md border border-gray-700/60 bg-gray-900/60 px-2 py-1 text-[10px] text-gray-300'>
+															{a.ext ? a.ext.toUpperCase() : 'FILE'}
+														</span>
+													)
+												})()}
+											</div>
+										)}
+								</button>
+							</div>
+						)}
+
 						{/* Messages */}
 						<div
 							ref={containerRef}
@@ -2306,10 +2599,20 @@ export default function MessengerPage() {
 
 							{messagesToDisplay.map((msg, index) => {
 								const isLast = index === messagesToDisplay.length - 1
+								const replyMessage = replyMap[msg.id]
+								const replyPreview = replyMessage
+									? {
+											sender: getSenderName(replyMessage),
+											text: getMessagePreview(replyMessage),
+										}
+									: undefined
 								return (
 									<div
 										key={msg.id || index}
-										ref={isLast ? messagesEndRef : null}
+										ref={el => {
+											messageRefs.current[msg.id] = el
+											if (isLast) messagesEndRef.current = el
+										}}
 										className='w-full'
 									>
 										<MessageBubble
@@ -2320,6 +2623,15 @@ export default function MessengerPage() {
 													? groupParticipants[msg.sender_id]
 													: undefined
 											}
+											isPinned={pinnedMessageIds.includes(msg.id)}
+											replyPreview={replyPreview}
+											reactions={reactionsByMessage[msg.id]}
+											onReply={handleReplyMessage}
+											onPin={handlePinMessage}
+											onDelete={handleDeleteMessage}
+											onEdit={handleEditMessage}
+											onReact={handleReactMessage}
+											onForward={handleForwardMessage}
 										/>
 									</div>
 								)
@@ -2342,6 +2654,24 @@ export default function MessengerPage() {
 
 						{/* Input Area */}
 						<div className='p-4 bg-gray-900/40 backdrop-blur-md border-t border-gray-800/50'>
+							{replyToMessage && (
+								<div className='max-w-4xl mx-auto mb-2 flex items-center gap-3 rounded-2xl border border-gray-800/60 bg-gray-800/40 px-4 py-2 text-xs text-gray-200'>
+									<div className='flex-1 min-w-0'>
+										<div className='text-[10px] uppercase tracking-wider text-gray-400'>
+											Ответ на: {getSenderName(replyToMessage)}
+										</div>
+										<div className='truncate text-gray-300'>
+											{getMessagePreview(replyToMessage)}
+										</div>
+									</div>
+									<button
+										onClick={() => setReplyToMessage(null)}
+										className='rounded-full px-2 py-1 text-gray-400 hover:bg-gray-700/60 hover:text-white transition'
+									>
+										✕
+									</button>
+								</div>
+							)}
 							<div
 								className={`max-w-4xl mx-auto flex items-end gap-3 bg-gray-800/50 p-2 rounded-3xl shadow-lg focus-within:ring-2 transition-all duration-300 ${currentBackground.ringColor.replace('focus:', 'focus-within:').replace('/50', '/20')}`}
 							>
@@ -2503,9 +2833,71 @@ export default function MessengerPage() {
 				)}
 			</div>
 
+			{isForwardOpen && forwardMessage && (
+				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
+					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
+						<div className='flex items-center justify-between mb-4'>
+							<h3 className='text-xl font-bold text-white'>
+								Переслать сообщение
+							</h3>
+							<button
+								onClick={() => {
+									setIsForwardOpen(false)
+									setForwardMessage(null)
+								}}
+								className='p-1 text-gray-400 hover:text-white transition-colors'
+							>
+								<XIcon className='w-5 h-5' />
+							</button>
+						</div>
+						<div className='mb-3'>
+							<input
+								type='text'
+								value={forwardQuery}
+								onChange={e => setForwardQuery(e.target.value)}
+								className='w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50'
+								placeholder='Поиск чатов, групп, каналов...'
+							/>
+						</div>
+						<div className='max-h-80 overflow-y-auto space-y-2 custom-scrollbar'>
+							{forwardTargets.length === 0 && (
+								<div className='text-center text-sm text-gray-500 py-6'>
+									Ничего не найдено
+								</div>
+							)}
+							{forwardTargets.map(target => (
+								<button
+									key={`${target.kind}-${target.id}`}
+									onClick={() => handleForwardToTarget(target)}
+									className='w-full flex items-center justify-between gap-3 rounded-xl border border-gray-800/60 bg-gray-800/40 px-4 py-3 text-left text-sm text-gray-200 hover:bg-gray-800/70 transition'
+								>
+									<div className='min-w-0'>
+										<div className='truncate font-medium'>{target.label}</div>
+										<div className='text-[11px] uppercase tracking-wider text-gray-500'>
+											{target.sub}
+										</div>
+									</div>
+									<span className='text-xs text-gray-500'>Отправить</span>
+								</button>
+							))}
+						</div>
+						{forwardMessage && (
+							<div className='mt-4 rounded-xl border border-gray-800/60 bg-gray-800/30 px-4 py-3 text-xs text-gray-300'>
+								<div className='text-[10px] uppercase tracking-wider text-gray-500 mb-1'>
+									Сообщение
+								</div>
+								<div className='truncate'>
+									{getMessagePreview(forwardMessage)}
+								</div>
+							</div>
+						)}
+					</div>
+				</div>
+			)}
+
 			{/* Create Channel Modal */}
 			{isCreateChannelOpen && (
-				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4'>
+				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
 					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
 						<div className='flex items-center justify-between mb-6'>
 							<h3 className='text-xl font-bold text-white'>Создать канал</h3>
@@ -2555,7 +2947,7 @@ export default function MessengerPage() {
 
 			{/* Create Community Modal */}
 			{isCreateCommunityOpen && (
-				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4'>
+				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
 					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
 						<div className='flex items-center justify-between mb-6'>
 							<h3 className='text-xl font-bold text-white'>
@@ -2607,7 +2999,7 @@ export default function MessengerPage() {
 
 			{/* Create Community Channel Modal */}
 			{isCreateCommChannelOpen && (
-				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4'>
+				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
 					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
 						<div className='flex items-center justify-between mb-6'>
 							<h3 className='text-xl font-bold text-white'>
@@ -2702,7 +3094,7 @@ export default function MessengerPage() {
 
 			{/* Join Channel Modal */}
 			{isJoinChannelOpen && (
-				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4'>
+				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
 					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
 						<div className='flex items-center justify-between mb-6'>
 							<h3 className='text-xl font-bold text-white'>Вступить в канал</h3>
@@ -2741,7 +3133,7 @@ export default function MessengerPage() {
 
 			{/* Create Group Modal */}
 			{isCreateGroupOpen && (
-				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4'>
+				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
 					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
 						<div className='flex items-center justify-between mb-6'>
 							<h3 className='text-xl font-bold text-white'>Создать группу</h3>
@@ -2791,7 +3183,7 @@ export default function MessengerPage() {
 
 			{/* Join Group Modal */}
 			{isJoinGroupOpen && (
-				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4'>
+				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
 					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
 						<div className='flex items-center justify-between mb-6'>
 							<h3 className='text-xl font-bold text-white'>
@@ -2832,7 +3224,7 @@ export default function MessengerPage() {
 
 			{/* Add Member Modal */}
 			{isAddMemberOpen && (
-				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4'>
+				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
 					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
 						<div className='flex items-center justify-between mb-6'>
 							<h3 className='text-xl font-bold text-white'>
@@ -2859,7 +3251,7 @@ export default function MessengerPage() {
 											className='flex items-center gap-3 p-3 rounded-xl hover:bg-gray-800 cursor-pointer transition-colors border border-transparent hover:border-gray-700'
 										>
 											<img
-												src={friend.avatar_url || '/default-avatar.png'}
+												src={getAvatarUrl(friend.avatar_url)}
 												alt={friend.username}
 												className='w-10 h-10 rounded-full object-cover bg-gray-800'
 											/>

@@ -102,7 +102,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 	}
 
 	return (
-		<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200'>
+		<div className='fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200'>
 			{/* Click outside to close */}
 			<div className='absolute inset-0' onClick={onClose} />
 

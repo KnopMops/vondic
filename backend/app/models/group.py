@@ -25,7 +25,6 @@ class Group(db.Model):
     created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
     updated_at = db.Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Relationships
     owner = db.relationship("User", foreign_keys=[owner_id], backref="owned_groups")
     participants = db.relationship(
         "User",

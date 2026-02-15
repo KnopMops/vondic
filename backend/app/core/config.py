@@ -29,6 +29,6 @@ class Config:
     YANDEX_REDIRECT_URI = os.environ.get("YANDEX_REDIRECT_URI")
     STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY")
     STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET")
-    STRIPE_PRICE_ID = os.environ.get("STRIPE_PRICE_ID")  # ID of the Premium product price
+    STRIPE_PRICE_ID = os.environ.get("STRIPE_PRICE_ID")
     OLLAMA_API_URL = os.environ.get("OLLAMA_API_URL") or "http://localhost:11434"
     OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL") or "llama3.1"

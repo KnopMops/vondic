@@ -4,6 +4,13 @@ export interface User {
 	username: string
 	role: string
 	avatar_url: string | null
+	storis?: {
+		id: string
+		url: string
+		type?: 'image' | 'video'
+		created_at?: string
+		reactions?: { user_id: string; emoji: string; created_at?: string }[]
+	}[]
 	description?: string
 	birth_date?: string
 	socket_id?: string | null
@@ -62,4 +69,5 @@ export interface Message {
 	group_id?: string
 	type?: 'text' | 'voice'
 	attachments?: Attachment[]
+	is_deleted?: boolean
 }

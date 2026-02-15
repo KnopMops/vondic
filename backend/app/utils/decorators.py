@@ -27,4 +27,5 @@ def token_required(f):
 
         return f(current_user=user, *args, **kwargs)
 
+    decorated._auth_required = True
     return decorated

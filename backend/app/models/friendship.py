@@ -11,19 +11,16 @@ class Friendship(db.Model):
     id = db.Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
     requester_id = db.Column(TEXT, db.ForeignKey("users.id"), nullable=False)
     addressee_id = db.Column(TEXT, db.ForeignKey("users.id"), nullable=False)
-    status = db.Column(TEXT, default="pending")  # pending, accepted, rejected
+    status = db.Column(TEXT, default="pending")
     created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
     updated_at = db.Column(
         TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Prevent duplicate requests between same users (regardless of direction is harder in SQLite check,
-    # but we can enforce uniqueness on (requester, addressee) and handle logic in service)
     __table_args__ = (
         db.UniqueConstraint('requester_id', 'addressee_id',
                             name='uq_friendship_request'),
     )
 
-    # Relationships
     requester = db.relationship(
         "User", foreign_keys=[requester_id], backref="sent_friend_requests")
     addressee = db.relationship(

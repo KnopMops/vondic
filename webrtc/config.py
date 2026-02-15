@@ -12,8 +12,7 @@ class Config:
     DEBUG = os.environ.get("DEBUG", "True").lower() in ("true", "1", "t")
     HOST = os.environ.get("HOST", "0.0.0.0")
     PORT = int(os.environ.get("PORT", 5000))
-    # Key for message encryption (Fernet).
-    # Must be 32 url-safe base64-encoded bytes.
-    # Default provided for dev convenience, BUT SHOULD BE CHANGED IN PROD.
+    BACKEND_INTERNAL_URL = os.environ.get(
+        "BACKEND_INTERNAL_URL") or "http://127.0.0.1:5050"
     MESSAGE_ENCRYPTION_KEY = os.environ.get(
         "MESSAGE_ENCRYPTION_KEY") or "mPuUjRV-t-5eeaSrEFhVh4yZud-L7rv31SjYdXx9uIU="

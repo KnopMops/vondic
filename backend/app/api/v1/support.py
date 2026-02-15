@@ -110,7 +110,6 @@ def chat_send(current_user):
     ts = int(time.time())
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    # If esc_id provided: append to that escalation if it's owned and not closed
     if esc_id_param:
         try:
             esc_id_val = int(esc_id_param)
@@ -137,7 +136,6 @@ def chat_send(current_user):
         conn.commit()
         conn.close()
         return jsonify({"ok": True, "answer": "Сообщение отправлено оператору", "escalation_id": esc_id_val})
-    # If explicit new_chat requested: enforce max 5 open chats
     if new_chat:
         cur.execute(
             "SELECT COUNT(*) FROM escalations WHERE user_id = ? AND status != 'closed'",
@@ -147,14 +145,12 @@ def chat_send(current_user):
         if cnt >= 5:
             conn.close()
             return jsonify({"ok": False, "error": "Chat limit reached (5)"}), 400
-        # Create new escalation
         esc_id = save_escalation(current_user.id, question)
         notify_admin(current_user.id, f"Новая заявка #{esc_id}: {question}")
         cur.execute(
             "INSERT INTO escalation_messages (escalation_id, content, created_at, delivered_user, sender, delivered_admin) VALUES (?, ?, ?, ?, ?, ?)",
             (esc_id, question, ts, 1, "user", 0),
         )
-        # Persist bot messages into history so they remain after reload
         cur.execute(
             "INSERT INTO escalation_messages (escalation_id, content, created_at, delivered_user, sender, delivered_admin) VALUES (?, ?, ?, ?, ?, ?)",
             (esc_id, "Перевожу на оператора. Ожидайте ответа.", ts, 0, "bot", 0),
@@ -166,7 +162,6 @@ def chat_send(current_user):
         conn.commit()
         conn.close()
         return jsonify({"ok": True, "answer": "Перевожу на оператора. Ожидайте ответа.", "escalation_id": esc_id})
-    # Default: append to latest non-closed if exists; otherwise create new if under limit
     cur.execute(
         "SELECT id FROM escalations WHERE user_id = ? AND status != 'closed' ORDER BY created_at DESC LIMIT 1",
         (current_user.id,),
@@ -188,7 +183,6 @@ def chat_send(current_user):
     needs_escalation = bool(err) or is_escalation(question) or is_escalation(
         answer) or is_low_confidence_answer(answer)
     if needs_escalation:
-        # Ensure we don't exceed limit when auto-escalating
         conn2 = sqlite3.connect(DB_PATH)
         cur2 = conn2.cursor()
         cur2.execute(
@@ -373,7 +367,6 @@ def admin_escalation_close(current_user, esc_id: int):
     ts = int(time.time())
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    # Mark as closed and notify the user
     cur.execute(
         "UPDATE escalations SET status = 'closed' WHERE id = ?", (esc_id,))
     cur.execute("SELECT user_id FROM escalations WHERE id = ?", (esc_id,))
@@ -384,7 +377,6 @@ def admin_escalation_close(current_user, esc_id: int):
             "INSERT INTO notifications (user_id, message, created_at, delivered) VALUES (?, ?, ?, ?)",
             (user_id, "Оператор закрыл обращение", ts, 0),
         )
-        # Persist bot close message in chat history
         cur.execute(
             "INSERT INTO escalation_messages (escalation_id, content, created_at, delivered_user, sender, delivered_admin) VALUES (?, ?, ?, ?, ?, ?)",
             (esc_id, "Оператор закрыл обращение", ts, 0, "bot", 0),

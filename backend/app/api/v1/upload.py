@@ -13,8 +13,6 @@ ATTACHMENT_EXTENSIONS = None
 LIMIT_FREE = 20 * 1024 * 1024
 LIMIT_PREMIUM = 100 * 1024 * 1024
 
-# Throttle speed for non-premium: ~1.6 MB/s
-# 200MB -> 120s => 1.66 MB/s => ~1,747,626 bytes/s
 THROTTLE_SPEED_BPS = 1_750_000
 
 
@@ -69,7 +67,6 @@ def upload_voice(current_user):
         if ext not in VOICE_EXTENSIONS:
             return jsonify({"message": "Invalid file extension"}), 400
 
-        # Determine limits
         max_size = LIMIT_PREMIUM if current_user.premium else LIMIT_FREE
 
         try:
@@ -79,24 +76,17 @@ def upload_voice(current_user):
 
         file_size = len(file_bytes)
         
-        # Check disk space limit
         if current_user.disk_usage + file_size > current_user.disk_limit:
              return jsonify({
                  "message": "Disk space limit exceeded. Upgrade to Premium for more space."
              }), 403
 
-        # Simulate slower upload for non-premium users
         if not current_user.premium:
-            # Calculate delay: size / speed
-            # e.g., 200MB / 1.6MB/s = 120s
-            # For 20MB (max free): 20/1.6 = 12.5s
             delay = file_size / THROTTLE_SPEED_BPS
             time.sleep(delay)
 
-        # Create voice directory if not exists
         file_url = _save_upload(file_bytes, ext, "voice")
 
-        # Update user disk usage
         current_user.disk_usage += file_size
         from app.core.extensions import db
         db.session.commit()
@@ -165,28 +155,23 @@ def upload_file(current_user):
 
     ext = _get_extension(filename) or "bin"
 
-    # Determine limits
     max_size = LIMIT_PREMIUM if current_user.premium else LIMIT_FREE
 
     try:
         file_bytes = _decode_base64(file_data, max_size)
         file_size = len(file_bytes)
 
-        # Check disk space limit
         if current_user.disk_usage + file_size > current_user.disk_limit:
              return jsonify({
                  "error": "Disk space limit exceeded. Upgrade to Premium for more space."
              }), 403
 
-        # Simulate slower upload for non-premium users
         if not current_user.premium:
-            # Calculate delay: size / speed
             delay = file_size / THROTTLE_SPEED_BPS
             time.sleep(delay)
 
         file_url = _save_upload(file_bytes, ext, "files")
 
-        # Update user disk usage
         current_user.disk_usage += file_size
         from app.core.extensions import db
         db.session.commit()

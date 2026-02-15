@@ -2,7 +2,6 @@ import json
 import os
 import sys
 
-# Add the current directory to sys.path so we can import app
 sys.path.append(os.getcwd())
 
 from app import create_app
@@ -12,7 +11,6 @@ def generate_swagger_json():
     app = create_app()
     
     with app.test_client() as client:
-        # The route is defined in __init__.py as /apispec.json
         response = client.get('/apispec.json')
         
         if response.status_code == 200:

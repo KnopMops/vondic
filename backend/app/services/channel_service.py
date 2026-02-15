@@ -18,7 +18,6 @@ class ChannelService:
             description=description,
             owner_id=user_id
         )
-        # Add owner to participants automatically
         owner = User.query.get(user_id)
         if owner:
             new_channel.participants.append(owner)
