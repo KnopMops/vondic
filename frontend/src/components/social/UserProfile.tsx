@@ -32,7 +32,10 @@ export default function UserProfile({ user, currentUser }: Props) {
 	const { user: authUser } = useAuth()
 	const [isFriend, setIsFriend] = useState(false)
 	const [isSubscribed, setIsSubscribed] = useState(false)
-	const [isBlocked, setIsBlocked] = useState(user.status === 'blocked')
+	const [isBlocked, setIsBlocked] = useState(Boolean((user as any).is_blocked))
+	const [blockedByAdmin, setBlockedByAdmin] = useState<string | null>(
+		(user as any).blocked_by_admin || null,
+	)
 	const [loading, setLoading] = useState(false)
 	const [checkingStatus, setCheckingStatus] = useState(true)
 	const [activeTab, setActiveTab] = useState<'posts' | 'friends' | 'gifts'>(
@@ -42,6 +45,8 @@ export default function UserProfile({ user, currentUser }: Props) {
 	const [loadingFriends, setLoadingFriends] = useState(false)
 	const [profilePosts, setProfilePosts] = useState<any[]>([])
 	const [loadingPosts, setLoadingPosts] = useState(false)
+	const [postsPage, setPostsPage] = useState(1)
+	const [hasMorePosts, setHasMorePosts] = useState(true)
 	const [giftSenders, setGiftSenders] = useState<Record<string, any>>({})
 	const [giftCatalogMap, setGiftCatalogMap] = useState<Record<string, any>>({})
 	const backendUrl =
@@ -90,6 +95,10 @@ export default function UserProfile({ user, currentUser }: Props) {
 	const [usernameEdit, setUsernameEdit] = useState(user.username || '')
 	const [isUpdating, setIsUpdating] = useState(false)
 	const [uploadingAvatar, setUploadingAvatar] = useState(false)
+	const [profileBgImageUrl, setProfileBgImageUrl] = useState<string>(
+		(user as any).profile_bg_image || '',
+	)
+	const [uploadingBgImage, setUploadingBgImage] = useState(false)
 	const [linkKey, setLinkKey] = useState<string | null>(null)
 	// Gift modal
 	const [isGiftModalOpen, setIsGiftModalOpen] = useState(false)
@@ -182,7 +191,8 @@ export default function UserProfile({ user, currentUser }: Props) {
 
 	const isMe = currentUser?.id === user.id
 	const isAdmin = currentUser?.role === 'Admin'
-	const activeThemeId = (isMe ? profileTheme : user.profile_bg_theme) || FREE_THEMES[0].id
+	const activeThemeId =
+		(isMe ? profileTheme : user.profile_bg_theme) || FREE_THEMES[0].id
 	const activeTheme =
 		FREE_THEMES.find(t => t.id === activeThemeId) || FREE_THEMES[0]
 	const activeGradient = user.premium
@@ -209,6 +219,10 @@ export default function UserProfile({ user, currentUser }: Props) {
 			}
 		}
 	}, [user.profile_bg_theme, user.profile_bg_gradient])
+	useEffect(() => {
+		setIsBlocked(Boolean((user as any).is_blocked))
+		setBlockedByAdmin((user as any).blocked_by_admin || null)
+	}, [user])
 
 	const generateLinkKey = async () => {
 		try {
@@ -298,35 +312,44 @@ export default function UserProfile({ user, currentUser }: Props) {
 		}
 	}, [activeTab, user.id, friends.length])
 
+	const fetchProfilePosts = async (page: number, replace = false) => {
+		setLoadingPosts(true)
+		try {
+			const res = await fetch(
+				`/api/posts?user_id=${user.id}&page=${page}&per_page=5`,
+				{ method: 'GET' },
+			)
+			if (res.ok) {
+				const data = await res.json()
+				const items = Array.isArray(data)
+					? data
+					: data.items || data.posts || []
+				setProfilePosts(prev => (replace ? items : [...prev, ...items]))
+				const currentPage = data.page || page
+				const totalPages = data.pages || currentPage
+				setPostsPage(currentPage)
+				setHasMorePosts(currentPage < totalPages)
+			} else if (replace) {
+				setProfilePosts([])
+				setHasMorePosts(false)
+			}
+		} catch (e) {
+			console.error('Failed to load posts', e)
+			if (replace) {
+				setProfilePosts([])
+				setHasMorePosts(false)
+			}
+		} finally {
+			setLoadingPosts(false)
+		}
+	}
+
 	useEffect(() => {
 		if (activeTab !== 'posts') return
-		setLoadingPosts(true)
-		const fetchPosts = async () => {
-			try {
-				const res = await fetch('/api/posts', { method: 'GET' })
-				if (res.ok) {
-					const data = await res.json()
-					const allPosts = Array.isArray(data) ? data : data.posts || []
-					const uid = String(user.id)
-					const filtered = allPosts
-						.filter((p: any) => String(p.posted_by) === uid)
-						.sort(
-							(a: any, b: any) =>
-								new Date(b.created_at).getTime() -
-								new Date(a.created_at).getTime(),
-						)
-					setProfilePosts(filtered)
-				} else {
-					setProfilePosts([])
-				}
-			} catch (e) {
-				console.error('Failed to load posts', e)
-				setProfilePosts([])
-			} finally {
-				setLoadingPosts(false)
-			}
-		}
-		fetchPosts()
+		setProfilePosts([])
+		setPostsPage(1)
+		setHasMorePosts(true)
+		fetchProfilePosts(1, true)
 	}, [activeTab, user.id])
 
 	useEffect(() => {
@@ -466,6 +489,9 @@ export default function UserProfile({ user, currentUser }: Props) {
 			if (!res.ok) throw new Error('Failed to block')
 			alert('Пользователь заблокирован')
 			setIsBlocked(true)
+			if (currentUser?.username) {
+				setBlockedByAdmin(currentUser.username)
+			}
 		} catch (error) {
 			console.error(error)
 			alert('Ошибка блокировки')
@@ -490,6 +516,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 			if (!res.ok) throw new Error('Failed to unblock')
 			alert('Пользователь разблокирован')
 			setIsBlocked(false)
+			setBlockedByAdmin(null)
 		} catch (error) {
 			console.error(error)
 			alert('Ошибка разблокировки')
@@ -563,6 +590,48 @@ export default function UserProfile({ user, currentUser }: Props) {
 		}
 	}
 
+	const handleProfileBgUpload = async (
+		e: React.ChangeEvent<HTMLInputElement>,
+	) => {
+		const file = e.target.files?.[0]
+		if (!file) return
+		if (!currentUser?.premium) {
+			alert('Фоновое изображение доступно только для Premium аккаунтов')
+			return
+		}
+		if (!file.type.startsWith('image/')) {
+			alert('Пожалуйста, загрузите изображение (JPG, PNG)')
+			return
+		}
+		setUploadingBgImage(true)
+		try {
+			const reader = new FileReader()
+			reader.readAsDataURL(file)
+			reader.onload = async () => {
+				const base64File = reader.result as string
+				const res = await fetch('/api/upload/file', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						file: base64File,
+						filename: file.name,
+					}),
+				})
+				if (!res.ok) {
+					const errText = await res.text()
+					throw new Error(errText || 'Upload failed')
+				}
+				const data = await res.json()
+				setProfileBgImageUrl(data.url)
+			}
+		} catch (error: any) {
+			console.error(error)
+			alert(error.message || 'Ошибка загрузки фонового изображения')
+		} finally {
+			setUploadingBgImage(false)
+		}
+	}
+
 	const handleUpdateProfile = async () => {
 		if (!currentUser) return
 		setIsUpdating(true)
@@ -572,16 +641,20 @@ export default function UserProfile({ user, currentUser }: Props) {
 				alert('Имя пользователя от 3 до 32 символов')
 				return
 			}
-			const payload = {
+			const payload: any = {
 				user_id: user.id,
 				email: user.email,
 				username: uname,
 				avatar_url: avatarUrl,
-				...(currentUser?.premium
-					? {
-							profile_bg_gradient: `linear-gradient(${gradAngle}deg, ${gradColor1}, ${gradColor2})`,
-						}
-					: { profile_bg_theme: profileTheme }),
+			}
+			if (currentUser?.premium) {
+				if ((profileBgImageUrl || '').trim()) {
+					payload.profile_bg_image = (profileBgImageUrl || '').trim()
+				} else {
+					payload.profile_bg_gradient = `linear-gradient(${gradAngle}deg, ${gradColor1}, ${gradColor2})`
+				}
+			} else {
+				payload.profile_bg_theme = profileTheme
 			}
 
 			const res = await fetch('/api/users/update', {
@@ -601,6 +674,9 @@ export default function UserProfile({ user, currentUser }: Props) {
 				setUsernameEdit(mergedUser.username || '')
 				if (mergedUser.profile_bg_theme) {
 					setProfileTheme(mergedUser.profile_bg_theme)
+				}
+				if ((mergedUser as any).profile_bg_image !== undefined) {
+					setProfileBgImageUrl((mergedUser as any).profile_bg_image || '')
 				}
 			}
 			alert('Профиль обновлен!')
@@ -623,16 +699,21 @@ export default function UserProfile({ user, currentUser }: Props) {
 			{/* Cover Image */}
 			<div
 				className={`relative h-48 rounded-2xl overflow-hidden shadow-lg ${
-					user.premium
-						? 'ring-2 ring-amber-400/30'
-						: activeTheme.class
+					user.premium ? 'ring-2 ring-amber-400/30' : activeTheme.class
 				}`}
 				style={
-					user.premium && activeGradient
+					user.premium && !user.profile_bg_image && activeGradient
 						? { backgroundImage: activeGradient }
 						: undefined
 				}
 			>
+				{user.profile_bg_image && (
+					<img
+						src={getAttachmentUrl(user.profile_bg_image)}
+						alt='Background'
+						className='absolute inset-0 w-full h-full object-cover'
+					/>
+				)}
 				<div className='absolute inset-0 bg-black/20' />
 				{user.premium && (
 					<div className='absolute inset-0 pointer-events-none'>
@@ -686,6 +767,14 @@ export default function UserProfile({ user, currentUser }: Props) {
 							>
 								{user.role === 'Admin' ? 'Администратор' : 'Пользователь'}
 							</p>
+							{isBlocked && !isAdmin && (
+								<p className='mt-2 text-sm font-semibold text-red-500'>
+									Пользователь заблокирован администратором{' '}
+									{blockedByAdmin ||
+										(user as any).blocked_by_admin ||
+										'администратором'}
+								</p>
+							)}
 						</div>
 
 						{/* Actions */}
@@ -790,6 +879,9 @@ export default function UserProfile({ user, currentUser }: Props) {
 											</label>
 											{currentUser?.premium ? (
 												<div className='space-y-3'>
+													<p className='text-xs text-gray-500'>
+														Выберите градиент или задайте картинку на фоне
+													</p>
 													<div className='grid grid-cols-2 gap-3'>
 														<div className='flex items-center gap-2'>
 															<span className='text-xs text-gray-400'>
@@ -836,9 +928,59 @@ export default function UserProfile({ user, currentUser }: Props) {
 															backgroundImage: `linear-gradient(${gradAngle}deg, ${gradColor1}, ${gradColor2})`,
 														}}
 													/>
-													<p className='text-xs text-gray-500'>
-														Премиум может задать любой градиент
-													</p>
+													<div className='pt-3 space-y-2'>
+														<label className='mb-1 block text-sm font-medium text-gray-400'>
+															Изображение фона (Премиум)
+														</label>
+														<div className='flex gap-2'>
+															<input
+																type='file'
+																accept='image/*'
+																onChange={handleProfileBgUpload}
+																className='hidden'
+																id='bg-upload'
+															/>
+															<label
+																htmlFor='bg-upload'
+																className={`flex-1 cursor-pointer flex items-center justify-center gap-2 rounded-xl border border-dashed border-gray-600 bg-black/30 p-3 text-gray-400 hover:border-indigo-500 hover:text-indigo-400 transition-all ${
+																	uploadingBgImage
+																		? 'opacity-50 pointer-events-none'
+																		: ''
+																}`}
+															>
+																{uploadingBgImage ? (
+																	<span>Загрузка...</span>
+																) : (
+																	<>
+																		<svg
+																			xmlns='http://www.w3.org/2000/svg'
+																			fill='none'
+																			viewBox='0 0 24 24'
+																			strokeWidth={1.5}
+																			stroke='currentColor'
+																			className='w-5 h-5'
+																		>
+																			<path
+																				strokeLinecap='round'
+																				strokeLinejoin='round'
+																				d='M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5'
+																			/>
+																		</svg>
+																		<span>Загрузить фон</span>
+																	</>
+																)}
+															</label>
+														</div>
+														<input
+															type='text'
+															value={profileBgImageUrl}
+															onChange={e =>
+																setProfileBgImageUrl(e.target.value)
+															}
+															className='w-full rounded-xl border border-gray-700 bg-black/50 px-4 py-3 text-white focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all'
+															placeholder='Или вставьте ссылку на изображение...'
+														/>
+													</div>
 												</div>
 											) : (
 												<div className='grid grid-cols-5 gap-2'>
@@ -1116,6 +1258,17 @@ export default function UserProfile({ user, currentUser }: Props) {
 											userRole={currentUser?.role}
 										/>
 									))}
+									{hasMorePosts && (
+										<div className='flex justify-center pt-2'>
+											<button
+												onClick={() => fetchProfilePosts(postsPage + 1)}
+												disabled={loadingPosts}
+												className='rounded-full border border-white/10 bg-white/5 px-5 py-2 text-sm text-white hover:bg-white/10 disabled:opacity-50'
+											>
+												{loadingPosts ? 'Загрузка...' : 'Показать ещё'}
+											</button>
+										</div>
+									)}
 								</div>
 							) : (
 								<div className='flex flex-col items-center justify-center py-12 text-center text-gray-400'>
@@ -1310,9 +1463,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 													{g.comment && (
 														<>
 															<span className='mx-1 text-gray-500'>•</span>
-															<span className='break-words'>
-																"{g.comment}"
-															</span>
+															<span className='break-words'>"{g.comment}"</span>
 														</>
 													)}
 												</div>

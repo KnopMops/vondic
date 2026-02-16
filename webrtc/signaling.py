@@ -494,6 +494,7 @@ class SignalingService:
         target_user_id = payload.get("target_user_id")
         channel_id = payload.get("channel_id")
         group_id = payload.get("group_id")
+        reply_to = payload.get("reply_to")
         content = payload.get("content")
         attachments = payload.get("attachments")
         msg_type = payload.get("type", "text")
@@ -553,6 +554,7 @@ class SignalingService:
                 "id": message_id,
                 "sender_id": sender_id,
                 "channel_id": channel_id,
+                "reply_to": reply_to,
                 "content": content,
                 "attachments": attachments,
                 "type": msg_type,
@@ -575,6 +577,7 @@ class SignalingService:
                 "id": message_id,
                 "sender_id": sender_id,
                 "channel_id": channel_id,
+                "reply_to": reply_to,
                 "content": content,
                 "attachments": attachments,
                 "type": msg_type,
@@ -606,6 +609,7 @@ class SignalingService:
                 "id": message_id,
                 "sender_id": sender_id,
                 "group_id": group_id,
+                "reply_to": reply_to,
                 "content": content,
                 "attachments": attachments,
                 "type": msg_type,
@@ -626,6 +630,7 @@ class SignalingService:
                 "id": message_id,
                 "sender_id": sender_id,
                 "group_id": group_id,
+                "reply_to": reply_to,
                 "content": content,
                 "attachments": attachments,
                 "type": msg_type,
@@ -650,6 +655,7 @@ class SignalingService:
                 "id": message_id,
                 "sender_id": sender_id,
                 "target_id": target_user_id,
+                "reply_to": reply_to,
                 "content": content,
                 "attachments": attachments,
                 "type": msg_type,
@@ -671,6 +677,7 @@ class SignalingService:
                 "id": message_id,
                 "sender_id": sender_id,
                 "target_id": target_user_id,
+                "reply_to": reply_to,
                 "content": content,
                 "attachments": attachments,
                 "type": msg_type,

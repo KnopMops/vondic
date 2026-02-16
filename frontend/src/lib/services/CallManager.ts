@@ -501,12 +501,20 @@ export class CallManager {
 		})
 
 		// Ошибка звонка
-		this.socket.on('error', (data: { message: string }) => {
-			this.handleCallFailed(data.message)
+		this.socket.on('error', (data: { message?: string }) => {
+			const message = typeof data?.message === 'string' ? data.message : ''
+			const hasActiveCall =
+				this.currentCalls.size > 0 ||
+				!!this.incomingCall ||
+				!!this.activeGroupCallId
+			if (!hasActiveCall) return
+			if (/attachments must be a list/i.test(message)) return
+			this.handleCallFailed(message || 'Unknown error')
 		})
 
-		this.socket.on('call_failed', (data: { message: string }) => {
-			this.handleCallFailed(data.message)
+		this.socket.on('call_failed', (data: { message?: string }) => {
+			const message = typeof data?.message === 'string' ? data.message : ''
+			this.handleCallFailed(message || 'Unknown error')
 		})
 
 		// ICE кандидаты

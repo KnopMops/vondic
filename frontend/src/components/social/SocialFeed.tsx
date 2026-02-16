@@ -1,7 +1,7 @@
 'use client'
 
 import { useAppSelector } from '@/lib/hooks'
-import { usePosts } from '@/lib/hooks/usePosts'
+import { type PostData, usePosts } from '@/lib/hooks/usePosts'
 import { Attachment } from '@/lib/types'
 import { formatMskDateTime } from '@/lib/utils'
 import { useEffect, useMemo, useState } from 'react'
@@ -20,12 +20,15 @@ type Props = {
 export default function SocialFeed({ email, onLogout }: Props) {
 	const { user } = useAppSelector(state => state.auth)
 	const {
-		data: posts = [],
+		posts,
 		isLoading: loading,
+		isLoadingMore,
+		hasMore,
+		loadMore,
 		createPost,
 		deletePost,
 		updatePost,
-	} = usePosts()
+	} = usePosts({ perPage: 5 })
 	const [activeTab, setActiveTab] = useState<'popular' | 'following'>('popular')
 	const [followingIds, setFollowingIds] = useState<string[]>([])
 	const [isFollowingLoading, setIsFollowingLoading] = useState(false)
@@ -68,8 +71,8 @@ export default function SocialFeed({ email, onLogout }: Props) {
 		fetchFollowing()
 	}, [user?.id])
 
-	const displayedPosts = useMemo(() => {
-		const byDateDesc = (a: any, b: any) =>
+	const displayedPosts = useMemo<PostData[]>(() => {
+		const byDateDesc = (a: PostData, b: PostData) =>
 			new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
 		if (activeTab === 'following' && followingIds.length > 0) {
 			return posts
@@ -151,6 +154,17 @@ export default function SocialFeed({ email, onLogout }: Props) {
 								onUpdate={handleUpdatePost}
 							/>
 						))}
+						{hasMore && (
+							<div className='flex justify-center pt-4'>
+								<button
+									onClick={() => loadMore()}
+									disabled={isLoadingMore}
+									className='rounded-full border border-gray-700 bg-white/5 px-5 py-2 text-sm text-white hover:bg-white/10 disabled:opacity-50'
+								>
+									{isLoadingMore ? 'Загрузка...' : 'Показать ещё'}
+								</button>
+							</div>
+						)}
 					</div>
 				</main>
 				<div className='hidden w-80 p-6 lg:block'>

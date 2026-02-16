@@ -20,6 +20,7 @@ class User(db.Model):
     socket_id = db.Column(TEXT)
     is_blocked = db.Column(INTEGER, default=0)
     is_blocked_at = db.Column(TIMESTAMP, default=None)
+    blocked_by_admin = db.Column(TEXT, default=None)
     role = db.Column(TEXT, default="User")
     status = db.Column(TEXT, default="offline")
     balance = db.Column(FLOAT, default=0.0)
@@ -38,8 +39,12 @@ class User(db.Model):
     login_alert_enabled = db.Column(INTEGER, default=0)
     profile_bg_theme = db.Column(TEXT, default=None)
     profile_bg_gradient = db.Column(TEXT, default=None)
+    profile_bg_image = db.Column(TEXT, default=None)
     gifts = db.Column(JSON, default=list)
     storis = db.Column(JSON, default=list)
+    is_developer = db.Column(INTEGER, default=0)
+    api_key_hash = db.Column(TEXT, default=None)
+    api_key = db.Column(TEXT, default=None)
     created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
     updated_at = db.Column(
         TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -77,11 +82,14 @@ class User(db.Model):
             "link_key": self.link_key,
             "profile_bg_theme": self.profile_bg_theme,
             "profile_bg_gradient": self.profile_bg_gradient,
+            "profile_bg_image": self.profile_bg_image,
             "avatar_url": self.avatar_url,
             "storis": self.storis or [],
             "is_blocked": bool(self.is_blocked),
+            "blocked_by_admin": self.blocked_by_admin,
             "two_factor_enabled": bool(self.two_factor_enabled),
             "two_factor_method": self.two_factor_method,
             "login_alert_enabled": bool(self.login_alert_enabled),
+            "is_developer": bool(self.is_developer),
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

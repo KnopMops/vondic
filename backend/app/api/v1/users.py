@@ -135,8 +135,7 @@ def block_user(current_user):
     if str(admin_user_id) != str(current_user.id):
         return jsonify({"error": "Admin User ID mismatch"}), 403
 
-    is_admin = current_user.role == "Admin"
-    user, error = UserService.block_user(user_id, is_admin)
+    user, error = UserService.block_user(user_id, current_user)
     if error:
         status_code = 404 if error == "User not found" else 403
         return jsonify({"error": error}), status_code
@@ -156,8 +155,7 @@ def unblock_user(current_user):
     if str(admin_user_id) != str(current_user.id):
         return jsonify({"error": "Admin User ID mismatch"}), 403
 
-    is_admin = current_user.role == "Admin"
-    user, error = UserService.unblock_user(user_id, is_admin)
+    user, error = UserService.unblock_user(user_id, current_user)
     if error:
         status_code = 404 if error == "User not found" else 403
         return jsonify({"error": error}), status_code

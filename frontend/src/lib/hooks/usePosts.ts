@@ -1,14 +1,19 @@
 import { setPosts } from '@/lib/features/postsSlice'
 import { useAppDispatch } from '@/lib/hooks'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect } from 'react'
 import { Attachment } from '@/lib/types'
+import {
+	useInfiniteQuery,
+	useMutation,
+	useQueryClient,
+} from '@tanstack/react-query'
+import { useEffect, useMemo } from 'react'
 
-type PostData = {
+export type PostData = {
 	id: string
 	posted_by: string
 	author_name: string
 	author_avatar: string | null
+	author_premium?: boolean
 	content: string
 	created_at: string
 	likes?: number
@@ -18,24 +23,51 @@ type PostData = {
 	attachments?: Attachment[]
 }
 
-export function usePosts() {
+type PostsResponse = {
+	items: PostData[]
+	total: number
+	pages: number
+	page: number
+	per_page: number
+}
+
+export function usePosts({ perPage = 5 }: { perPage?: number } = {}) {
 	const dispatch = useAppDispatch()
 	const queryClient = useQueryClient()
 
-	const query = useQuery({
-		queryKey: ['posts'],
-		queryFn: async () => {
-			const res = await fetch('/api/posts')
+	const query = useInfiniteQuery<
+		PostsResponse,
+		Error,
+		PostsResponse,
+		(string | number)[],
+		number
+	>({
+		queryKey: ['posts', perPage],
+		initialPageParam: 1,
+		queryFn: async ({ pageParam = 1 }) => {
+			const res = await fetch(
+				`/api/posts?page=${pageParam}&per_page=${perPage}`,
+			)
 			if (!res.ok) throw new Error('Failed to fetch posts')
-			return res.json() as Promise<PostData[]>
+			return res.json() as Promise<PostsResponse>
+		},
+		getNextPageParam: lastPage => {
+			const currentPage = lastPage.page || 1
+			const totalPages = lastPage.pages || 1
+			return currentPage < totalPages ? currentPage + 1 : undefined
 		},
 	})
 
+	const posts = useMemo<PostData[]>(() => {
+		const pages = (query.data?.pages || []) as PostsResponse[]
+		return pages.flatMap(p => p.items || [])
+	}, [query.data])
+
 	useEffect(() => {
 		if (query.data) {
-			dispatch(setPosts(query.data))
+			dispatch(setPosts(posts))
 		}
-	}, [query.data, dispatch])
+	}, [posts, dispatch, query.data])
 
 	const createPostMutation = useMutation({
 		mutationFn: async ({
@@ -108,6 +140,10 @@ export function usePosts() {
 
 	return {
 		...query,
+		posts,
+		loadMore: () => query.fetchNextPage(),
+		hasMore: query.hasNextPage,
+		isLoadingMore: query.isFetchingNextPage,
 		createPost: createPostMutation.mutate,
 		deletePost: deletePostMutation.mutate,
 		updatePost: updatePostMutation.mutate,

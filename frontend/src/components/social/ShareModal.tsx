@@ -4,6 +4,7 @@ import { useSocket } from '@/lib/SocketContext'
 import { User } from '@/lib/types'
 import { getAttachmentUrl } from '@/lib/utils'
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 interface ShareModalProps {
 	isOpen: boolean
@@ -23,12 +24,16 @@ export default function ShareModal({ isOpen, onClose, post }: ShareModalProps) {
 	const [isLoading, setIsLoading] = useState(false)
 	const [sendingTo, setSendingTo] = useState<Set<string>>(new Set())
 	const [sentTo, setSentTo] = useState<Set<string>>(new Set())
+	const [mounted, setMounted] = useState(false)
 
 	useEffect(() => {
 		if (isOpen) {
 			fetchFriends()
 		}
 	}, [isOpen])
+	useEffect(() => {
+		setMounted(true)
+	}, [])
 
 	const fetchFriends = async () => {
 		setIsLoading(true)
@@ -69,6 +74,7 @@ export default function ShareModal({ isOpen, onClose, post }: ShareModalProps) {
 		socket.emit('send_message', {
 			target_user_id: friend.id,
 			content: messageContent,
+			attachments: [],
 		})
 
 		// Simulate success (since we don't wait for ack here easily without callback in this setup,
@@ -85,18 +91,16 @@ export default function ShareModal({ isOpen, onClose, post }: ShareModalProps) {
 		}, 500)
 	}
 
-	if (!isOpen) return null
+	if (!isOpen || !mounted) return null
 
-	return (
-		<div className='fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4'>
-			<div className='flex h-[60vh] w-full max-w-md flex-col rounded-xl bg-white shadow-xl dark:bg-gray-800'>
-				<div className='flex items-center justify-between border-b border-gray-200 p-4 dark:border-gray-700'>
-					<h3 className='text-lg font-semibold text-gray-900 dark:text-white'>
-						Поделиться
-					</h3>
+	return createPortal(
+		<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4'>
+			<div className='flex h-[60vh] w-full max-w-md flex-col rounded-lg border border-white/10 bg-black/80 backdrop-blur shadow-xl'>
+				<div className='flex items-center justify-between border-b border-white/10 px-4 py-3'>
+					<h3 className='text-lg font-semibold text-white'>Поделиться</h3>
 					<button
 						onClick={onClose}
-						className='rounded-full p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200'
+						className='rounded-full p-1 text-gray-300 hover:bg-white/10 hover:text-white'
 					>
 						<svg
 							xmlns='http://www.w3.org/2000/svg'
@@ -115,13 +119,13 @@ export default function ShareModal({ isOpen, onClose, post }: ShareModalProps) {
 					</button>
 				</div>
 
-				<div className='flex-1 overflow-y-auto p-4'>
+				<div className='flex-1 overflow-y-auto px-4 py-3'>
 					{isLoading ? (
-						<div className='flex h-full items-center justify-center text-gray-500'>
+						<div className='flex h-full items-center justify-center text-gray-300'>
 							Загрузка...
 						</div>
 					) : friends.length === 0 ? (
-						<div className='flex h-full items-center justify-center text-gray-500'>
+						<div className='flex h-full items-center justify-center text-gray-300'>
 							У вас пока нет друзей
 						</div>
 					) : (
@@ -129,7 +133,7 @@ export default function ShareModal({ isOpen, onClose, post }: ShareModalProps) {
 							{friends.map(friend => (
 								<div
 									key={friend.id}
-									className='flex items-center justify-between rounded-lg p-2 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+									className='flex items-center justify-between rounded-lg p-2 hover:bg-white/5'
 								>
 									<div className='flex items-center gap-3'>
 										<img
@@ -141,10 +145,10 @@ export default function ShareModal({ isOpen, onClose, post }: ShareModalProps) {
 											className='h-10 w-10 rounded-full object-cover'
 										/>
 										<div className='flex flex-col'>
-											<span className='font-medium text-gray-900 dark:text-white'>
+											<span className='font-medium text-white'>
 												{friend.username}
 											</span>
-											<span className='text-xs text-gray-500'>
+											<span className='text-xs text-gray-400'>
 												{friend.status === 'Online' ? 'В сети' : 'Не в сети'}
 											</span>
 										</div>
@@ -158,7 +162,7 @@ export default function ShareModal({ isOpen, onClose, post }: ShareModalProps) {
 										}
 										className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
 											sentTo.has(friend.id)
-												? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+												? 'bg-green-900/30 text-green-300'
 												: 'bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50'
 										}`}
 									>
@@ -176,6 +180,7 @@ export default function ShareModal({ isOpen, onClose, post }: ShareModalProps) {
 					)}
 				</div>
 			</div>
-		</div>
+		</div>,
+		document.body,
 	)
 }

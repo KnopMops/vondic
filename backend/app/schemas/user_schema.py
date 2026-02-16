@@ -6,7 +6,8 @@ class UserSchema(ma.SQLAlchemyAutoSchema):
     class Meta:
         model = User
         load_instance = True
-        exclude = ("password_hash", "access_token", "refresh_token", "link_key")
+        exclude = ("password_hash", "access_token", "refresh_token",
+                   "link_key", "api_key_hash", "api_key")
 
 
 user_schema = UserSchema()

@@ -17,6 +17,15 @@ class PostService:
         )
 
     @staticmethod
+    def get_posts_paginated(page=1, per_page=5, user_id=None):
+        query = Post.query.filter_by(deleted=False)
+        if user_id:
+            query = query.filter_by(posted_by=user_id)
+        return query.order_by(Post.created_at.desc()).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
+
+    @staticmethod
     def get_post_by_id(post_id):
         return Post.query.filter_by(id=post_id, deleted=False).first()
 

@@ -7,6 +7,7 @@ const FEED_ROUTE = '/feed'
 
 export default async function proxy(req: NextRequest) {
 	const { pathname } = req.nextUrl
+	const frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || req.nextUrl.origin
 
 	// 1. Пропускаем статические файлы и API
 	if (
@@ -32,7 +33,7 @@ export default async function proxy(req: NextRequest) {
 			return NextResponse.next()
 		}
 		// Иначе редирект на логин
-		const loginUrl = new URL('/login', req.url)
+		const loginUrl = new URL('/login', frontendUrl)
 		loginUrl.searchParams.set('from', pathname)
 		return NextResponse.redirect(loginUrl)
 	}
@@ -56,7 +57,7 @@ export default async function proxy(req: NextRequest) {
       // Обновление не удалось - считаем пользователя неавторизованным
       // Если маршрут защищенный - редирект на логин
       if (!isPublicRoute && !isRootRoute) {
-        const resp = NextResponse.redirect(new URL("/login", req.url));
+        const resp = NextResponse.redirect(new URL("/login", frontendUrl));
         return clearTokens(resp);
       }
       // Если публичный - очищаем токены и пускаем (или оставляем как есть)
@@ -70,14 +71,14 @@ export default async function proxy(req: NextRequest) {
 	if (validAccessToken) {
 		// Редирект с корня на /feed
 		if (isRootRoute) {
-			response = NextResponse.redirect(new URL(FEED_ROUTE, req.url))
+			response = NextResponse.redirect(new URL(FEED_ROUTE, frontendUrl))
 		}
 
 		// (Опционально) Редирект с логина/регистрации на фид, если уже авторизован
 		if (isPublicRoute && pathname !== '/verify') {
 			// Обычно хорошая практика, но в задании не требовалось явно. Оставим как есть или добавим.
 			// Добавим для удобства.
-			response = NextResponse.redirect(new URL(FEED_ROUTE, req.url))
+			response = NextResponse.redirect(new URL(FEED_ROUTE, frontendUrl))
 		}
 	}
 

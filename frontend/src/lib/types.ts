@@ -24,6 +24,10 @@ export interface User {
 	telegram_id?: string | null
 	profile_bg_theme?: string | null
 	profile_bg_gradient?: string | null
+	profile_bg_image?: string | null
+	is_blocked?: boolean
+	blocked_by_admin?: string | null
+	is_developer?: boolean
 }
 
 export interface GiftItem {
@@ -69,6 +73,7 @@ export interface Message {
 	is_read?: boolean
 	channel_id?: string
 	group_id?: string
+	reply_to?: string
 	type?: 'text' | 'voice'
 	attachments?: Attachment[]
 	is_deleted?: boolean

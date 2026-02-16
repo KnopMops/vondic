@@ -1,6 +1,5 @@
 'use client'
 
-import BrandLogo from '@/components/social/BrandLogo'
 import { useAuth } from '@/lib/AuthContext'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
@@ -35,9 +34,7 @@ export default function RegisterPage() {
 					<div className='flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 shadow-lg shadow-indigo-500/20'>
 						<span className='text-2xl font-bold text-white'>V</span>
 					</div>
-					<h2 className='text-2xl font-bold text-white'>
-						Создать аккаунт
-					</h2>
+					<h2 className='text-2xl font-bold text-white'>Создать аккаунт</h2>
 				</div>
 
 				<form className='mt-8 space-y-6' onSubmit={handleSubmit}>
@@ -101,6 +98,18 @@ export default function RegisterPage() {
 							{isLoading ? 'Создание...' : 'Зарегистрироваться'}
 						</button>
 					</div>
+					<p className='mt-3 text-center text-xs text-gray-500'>
+						Регистрируясь, вы соглашаетесь с{' '}
+						<a
+							href={`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'}/static/privacy_policy.rtf`}
+							target='_blank'
+							rel='noopener noreferrer'
+							className='text-indigo-400 hover:text-indigo-300 transition-colors'
+						>
+							политикой конфиденциальности
+						</a>
+						.
+					</p>
 				</form>
 
 				<p className='mt-4 text-center text-sm text-gray-400'>

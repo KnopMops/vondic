@@ -6,6 +6,8 @@ export async function GET(req: NextRequest) {
 		const { searchParams } = new URL(req.url)
 		const code = searchParams.get('code')
 		const cid = searchParams.get('cid')
+		const frontendUrl =
+			process.env.NEXT_PUBLIC_FRONTEND_URL || req.nextUrl.origin
 
 		if (!code) {
 			return NextResponse.json({ error: 'No code provided' }, { status: 400 })
@@ -30,13 +32,13 @@ export async function GET(req: NextRequest) {
 		const data = await response.json()
 
 		if (!response.ok) {
-			const loginUrl = new URL('/login', req.url)
+			const loginUrl = new URL('/login', frontendUrl)
 			loginUrl.searchParams.set('error', data.error || 'Yandex login failed')
 			return NextResponse.redirect(loginUrl)
 		}
 
 		// Если успех, устанавливаем токены и редиректим на /feed
-		const nextResponse = NextResponse.redirect(new URL('/feed', req.url))
+		const nextResponse = NextResponse.redirect(new URL('/feed', frontendUrl))
 
 		// Устанавливаем токены
 		const responseWithTokens = setTokens(
@@ -62,7 +64,7 @@ export async function GET(req: NextRequest) {
 		return responseWithTokens
 	} catch (error) {
 		console.error('Yandex callback proxy error:', error)
-		const loginUrl = new URL('/login', req.url)
+		const loginUrl = new URL('/login', frontendUrl)
 		loginUrl.searchParams.set('error', 'Internal Server Error')
 		return NextResponse.redirect(loginUrl)
 	}

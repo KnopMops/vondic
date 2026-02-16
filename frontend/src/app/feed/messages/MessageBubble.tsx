@@ -15,6 +15,7 @@ interface Message {
 	type?: 'text' | 'voice'
 	channel_id?: string
 	group_id?: string
+	reply_to?: string
 	attachments?: Attachment[]
 	is_deleted?: boolean
 }
@@ -94,7 +95,21 @@ const MessageBubble = memo(
 			return null
 		}
 
+		const getStickerPayload = (content: string) => {
+			try {
+				if (!content.trim().startsWith('{')) return null
+				const data = JSON.parse(content)
+				if (data && data.type === 'sticker' && typeof data.url === 'string') {
+					return data
+				}
+			} catch {
+				return null
+			}
+			return null
+		}
+
 		const sharedPost = msg.is_deleted ? null : getSharedPost(msg.content)
+		const stickerPayload = msg.is_deleted ? null : getStickerPayload(msg.content)
 		const displayContent = msg.is_deleted ? 'Сообщение удалено' : msg.content
 		const reactionEntries = reactions ? Object.entries(reactions) : []
 
@@ -354,6 +369,12 @@ const MessageBubble = memo(
 								className='w-full h-8'
 							/>
 						</div>
+					) : stickerPayload ? (
+						<img
+							src={getAttachmentUrl(stickerPayload.url)}
+							alt='sticker'
+							className='w-full max-w-[240px] rounded-lg object-contain'
+						/>
 					) : sharedPost ? (
 						<>
 							<div

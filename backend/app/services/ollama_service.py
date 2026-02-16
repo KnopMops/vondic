@@ -11,7 +11,6 @@ from app.models.user import User
 
 AI_USERNAME = "Vondic AI"
 AI_EMAIL = "ai@vondic.com"
-SUPPORT_RESPONSE = "Пожалуйста, обратитесь в техническую поддержку для решения этого вопроса."
 logger = logging.getLogger(__name__)
 
 
@@ -47,46 +46,34 @@ class OllamaService:
         pass
 
     @staticmethod
-    def _is_support_request(text):
+    def _support_faq_answer(text):
         t = (text or "").strip().casefold()
         if not t:
-            return False
-        faq_phrases = (
-            "как войти через yandex",
-            "как войти через яндекс",
-            "почему меня просят ввести код",
-            "письмо с кодом не приходит",
-            "где вводить код 2fa",
-            "two factor code",
-            "two factor",
-            "2fa",
-            "двухфактор",
-            "отправить код на почту",
-            "код не приходит",
-            "не приходит письмо",
-            "не могу войти",
-            "не удается войти",
-            "ошибка входа",
-        )
-        support_terms = (
-            "vondic",
-            "вондик",
-            "техподдерж",
-            "поддержк",
-            "служба поддержки",
-            "вход",
-            "авториза",
-            "логин",
-            "яндекс",
-        )
-        if any(phrase in t for phrase in faq_phrases):
-            return True
-        if any(term in t for term in support_terms):
-            if "код" in t or "войти" in t or "почт" in t or "email" in t:
-                return True
-        if "код" in t and ("почт" in t or "email" in t):
-            return True
-        return False
+            return None
+        if "yandex" in t or "яндекс" in t:
+            if "войти" in t or "вход" in t or "авториза" in t or "логин" in t:
+                return (
+                    "На странице входа нажмите «Войти через Yandex» и подтвердите вход. "
+                    "После этого вас автоматически перенаправит в ленту (/feed). "
+                    "Если окно авторизации не открылось — обновите страницу и попробуйте ещё раз."
+                )
+        if "двухфактор" in t or "2fa" in t or "two factor" in t or "код" in t:
+            if "где" in t and ("код" in t or "2fa" in t or "two factor" in t):
+                return (
+                    "После запроса 2FA на странице входа появится поле «Two Factor Code». "
+                    "Введите шестизначный код из письма."
+                )
+            if "почему" in t or "просят" in t or "ввести" in t:
+                return (
+                    "Это двухфакторная защита (2FA). Нажмите «Отправить код на почту», "
+                    "откройте письмо и введите шестизначный код."
+                )
+            if "не приходит" in t or "не приш" in t or "письмо" in t or "почт" in t:
+                return (
+                    "Проверьте «Спам» и «Промоакции». Убедитесь, что адрес почты указан верно. "
+                    "Нажмите «Отправить код на почту» ещё раз. Если проблема сохраняется — напишите в поддержку."
+                )
+        return None
 
     @staticmethod
     def _send_reply(reply_content, ai_user, reply_target_id, reply_group_id, is_dm, message_id):
@@ -177,9 +164,12 @@ class OllamaService:
             ai_user = OllamaService.get_ai_user()
 
             system_prompt = (
-                "Ты — Vondic AI, полезный ассистент в мессенджере Vondic. "
+                "Ты — Vondic AI, созданный компанией Vondic. "
                 "Всегда отвечай на русском языке. "
-                "Твоя цель — помогать пользователям. "
+                "Ты помогаешь пользователям с функционалом и интерфейсом Vondic. "
+                "Знаешь базовые возможности: лента, посты, комментарии, реакции, друзья, чаты, группы, каналы, "
+                "ответы на сообщения, пересылка, закреп, поиск, профиль, настройки, уведомления, поддержка. "
+                "Давай краткие пошаговые решения, опираясь на интерфейс и функции фронтенда. "
                 "Если вопрос общий, отвечай вежливо и по делу. "
                 "Не упоминай, что ты ИИ, если тебя не спрашивают. Будь кратким."
             )
@@ -194,9 +184,10 @@ class OllamaService:
             }
 
             try:
-                if OllamaService._is_support_request(user_content):
+                support_answer = OllamaService._support_faq_answer(user_content)
+                if support_answer:
                     OllamaService._send_reply(
-                        SUPPORT_RESPONSE,
+                        support_answer,
                         ai_user,
                         reply_target_id,
                         reply_group_id,

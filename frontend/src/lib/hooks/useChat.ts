@@ -330,7 +330,12 @@ export const useChat = (
 	const e2ePendingRef = useRef<
 		Map<
 			string,
-			Array<{ content: string; type: 'text' | 'voice'; attachments?: any[] }>
+			Array<{
+				content: string
+				type: 'text' | 'voice'
+				attachments?: any[]
+				replyToId?: string
+			}>
 		>
 	>(new Map())
 	const e2eKeyId =
@@ -514,6 +519,7 @@ export const useChat = (
 										is_read: msg.is_read,
 										is_deleted: !!msg.is_deleted,
 										group_id: msg.group_id,
+										reply_to: msg.reply_to,
 										type: msg.type || 'text',
 										attachments: msg.is_deleted
 											? undefined
@@ -578,6 +584,7 @@ export const useChat = (
 								is_read: msg.is_read,
 								is_deleted: !!msg.is_deleted,
 								channel_id: msg.channel_id,
+								reply_to: msg.reply_to,
 								type: msg.type || 'text',
 								attachments: msg.is_deleted
 									? undefined
@@ -646,6 +653,7 @@ export const useChat = (
 									is_read: msg.is_read,
 									is_deleted: !!msg.is_deleted,
 									group_id: msg.group_id,
+									reply_to: msg.reply_to,
 									type: msg.type || 'text',
 									attachments: msg.is_deleted
 										? undefined
@@ -714,6 +722,7 @@ export const useChat = (
 							is_read: msg.is_read,
 							is_deleted: !!msg.is_deleted,
 							channel_id: msg.channel_id,
+							reply_to: msg.reply_to,
 							type: msg.type || 'text',
 							attachments: msg.is_deleted
 								? undefined
@@ -768,6 +777,7 @@ export const useChat = (
 					is_read: false,
 					is_deleted: !!data.is_deleted,
 					channel_id: data.channel_id,
+					reply_to: data.reply_to,
 					type: data.type || 'text',
 					attachments: Array.isArray(data.attachments)
 						? data.attachments
@@ -788,6 +798,7 @@ export const useChat = (
 					is_read: false,
 					is_deleted: !!data.is_deleted,
 					group_id: data.group_id,
+					reply_to: data.reply_to,
 					type: data.type || 'text',
 					attachments: Array.isArray(data.attachments)
 						? data.attachments
@@ -814,6 +825,7 @@ export const useChat = (
 					isOwn: false,
 					is_read: false,
 					is_deleted: !!data.is_deleted,
+					reply_to: data.reply_to,
 					type: data.type || 'text',
 					attachments: Array.isArray(data.attachments)
 						? data.attachments
@@ -838,6 +850,7 @@ export const useChat = (
 					is_read: false,
 					is_deleted: !!msg.is_deleted,
 					channel_id: msg.channel_id,
+					reply_to: msg.reply_to,
 					type: msg.type || 'text',
 					attachments: Array.isArray(msg.attachments)
 						? msg.attachments
@@ -858,6 +871,7 @@ export const useChat = (
 					is_read: false,
 					is_deleted: !!msg.is_deleted,
 					group_id: msg.group_id,
+					reply_to: msg.reply_to,
 					type: msg.type || 'text',
 					attachments: Array.isArray(msg.attachments)
 						? msg.attachments
@@ -888,6 +902,7 @@ export const useChat = (
 					isOwn: true,
 					is_read: false,
 					is_deleted: !!msg.is_deleted,
+					reply_to: msg.reply_to,
 					type: msg.type || 'text',
 					attachments: Array.isArray(msg.attachments)
 						? msg.attachments
@@ -966,6 +981,10 @@ export const useChat = (
 		socket.on('message_deleted', handleMessageDeleted)
 
 		const handleError = (err: any) => {
+			const message = err?.message
+			if (typeof message === 'string') {
+				if (/attachments must be a list/i.test(message)) return
+			}
 			console.error('Socket error:', err)
 			// Optional: Trigger a UI notification here if you have a toast system
 			// alert("Error: " + (err.message || "Unknown error"))
@@ -985,20 +1004,33 @@ export const useChat = (
 
 	// 3. Send function
 	const sendMessage = useCallback(
-		(content: string, type: 'text' | 'voice' = 'text', attachments?: any[]) => {
+		(
+			content: string,
+			type: 'text' | 'voice' = 'text',
+			attachments?: any[],
+			replyToId?: string,
+		) => {
 			if (
 				!socket ||
 				(!targetUserId && !channelId && !groupId) ||
 				!currentUserId
 			)
 				return
+			const normalizedAttachments = Array.isArray(attachments)
+				? attachments
+				: []
 
 			if (!channelId && !groupId && targetUserId && e2eKeyId) {
 				loadStoredKey()
 				const key = e2eKeysRef.current.get(e2eKeyId)
 				if (!key) {
 					const pending = e2ePendingRef.current.get(e2eKeyId) || []
-					pending.push({ content, type, attachments })
+					pending.push({
+						content,
+						type,
+						attachments: normalizedAttachments,
+						replyToId,
+					})
 					e2ePendingRef.current.set(e2eKeyId, pending)
 					ensureKeyExchange()
 					setTimeout(() => {
@@ -1010,8 +1042,13 @@ export const useChat = (
 									const payload: any = {
 										content: item.content,
 										type: item.type,
-										attachments: item.attachments,
+										attachments: Array.isArray(item.attachments)
+											? item.attachments
+											: [],
 										target_user_id: targetUserId,
+									}
+									if (item.replyToId) {
+										payload.reply_to = item.replyToId
 									}
 									socket?.emit('send_message', payload)
 								})
@@ -1021,14 +1058,18 @@ export const useChat = (
 					return
 				}
 				const encryptedContent = mtEncrypt(content, key)
-				const encryptedAttachments = attachments
-					? mtEncrypt(JSON.stringify(attachments), key)
-					: undefined
+				const encryptedAttachments =
+					normalizedAttachments.length > 0
+						? mtEncrypt(JSON.stringify(normalizedAttachments), key)
+						: undefined
 				const messagePayload: any = {
 					content: encryptedContent,
 					type: type,
 					attachments: encryptedAttachments,
 					target_user_id: targetUserId,
+				}
+				if (replyToId) {
+					messagePayload.reply_to = replyToId
 				}
 				socket.emit('send_message', messagePayload)
 				return
@@ -1037,7 +1078,10 @@ export const useChat = (
 			const messagePayload: any = {
 				content: content,
 				type: type,
-				attachments: attachments,
+				attachments: normalizedAttachments,
+			}
+			if (replyToId) {
+				messagePayload.reply_to = replyToId
 			}
 
 			if (channelId) {

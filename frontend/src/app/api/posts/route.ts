@@ -6,6 +6,11 @@ const BACKEND_URL =
 
 export async function GET(req: NextRequest) {
 	try {
+		const { searchParams } = new URL(req.url)
+		const page = searchParams.get('page')
+		const perPage = searchParams.get('per_page')
+		const userId = searchParams.get('user_id')
+
 		const accessToken = await getAccessToken(req)
 		const headers: HeadersInit = {
 			'Content-Type': 'application/json',
@@ -15,7 +20,12 @@ export async function GET(req: NextRequest) {
 		}
 
 		// 1. Fetch posts
-		const postsResponse = await fetch(`${BACKEND_URL}/api/v1/posts/`, {
+		const backendUrl = new URL(`${BACKEND_URL}/api/v1/posts/`)
+		if (page) backendUrl.searchParams.set('page', page)
+		if (perPage) backendUrl.searchParams.set('per_page', perPage)
+		if (userId) backendUrl.searchParams.set('user_id', userId)
+
+		const postsResponse = await fetch(backendUrl.toString(), {
 			method: 'GET',
 			headers,
 			cache: 'no-store',
@@ -29,7 +39,10 @@ export async function GET(req: NextRequest) {
 			)
 		}
 
-		const posts = await postsResponse.json()
+		const postsPayload = await postsResponse.json()
+		const items = Array.isArray(postsPayload)
+			? postsPayload
+			: postsPayload.items || postsPayload.posts || []
 
 		// 2. Fetch users (to map authors)
 		// We try to fetch all users to map names/avatars.
@@ -52,8 +65,8 @@ export async function GET(req: NextRequest) {
 		}
 
 		// 3. Merge data
-		const enrichedPosts = Array.isArray(posts)
-			? posts.map((post: any) => {
+		const enrichedPosts = Array.isArray(items)
+			? items.map((post: any) => {
 					const author = usersMap[post.posted_by]
 					return {
 						...post,
@@ -66,7 +79,13 @@ export async function GET(req: NextRequest) {
 				})
 			: []
 
-		return NextResponse.json(enrichedPosts)
+		return NextResponse.json({
+			items: enrichedPosts,
+			total: postsPayload.total ?? enrichedPosts.length,
+			pages: postsPayload.pages ?? 1,
+			page: postsPayload.page ?? Number(page || 1),
+			per_page: postsPayload.per_page ?? Number(perPage || enrichedPosts.length || 0),
+		})
 	} catch (error) {
 		console.error('Error fetching posts:', error)
 		return NextResponse.json(

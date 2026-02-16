@@ -10,8 +10,27 @@ posts_bp = Blueprint("posts", __name__, url_prefix="/api/v1/posts")
 
 @posts_bp.route("/", methods=["GET"])
 def get_posts():
-    posts = PostService.get_all_posts()
-    return jsonify(posts_schema.dump(posts)), 200
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 5, type=int)
+    user_id = request.args.get("user_id", type=str)
+
+    if page < 1:
+        page = 1
+    if per_page < 1:
+        per_page = 1
+    if per_page > 50:
+        per_page = 50
+
+    pagination = PostService.get_posts_paginated(
+        page=page, per_page=per_page, user_id=user_id
+    )
+    return jsonify({
+        "items": posts_schema.dump(pagination.items),
+        "total": pagination.total,
+        "pages": pagination.pages,
+        "page": pagination.page,
+        "per_page": pagination.per_page,
+    }), 200
 
 
 @posts_bp.route("/<post_id>", methods=["GET"])

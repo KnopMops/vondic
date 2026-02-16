@@ -1,3 +1,4 @@
+import hashlib
 import os
 import sqlite3
 import time
@@ -25,8 +26,13 @@ def ensure_support_tables():
         "CREATE TABLE IF NOT EXISTS escalation_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, escalation_id INTEGER, content TEXT, created_at INTEGER, delivered_user INTEGER DEFAULT 0, sender TEXT DEFAULT 'admin', delivered_admin INTEGER DEFAULT 0)"
     )
     cur.execute(
-        "CREATE TABLE IF NOT EXISTS notifications (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, message TEXT, created_at INTEGER, delivered INTEGER DEFAULT 0)"
+        "CREATE TABLE IF NOT EXISTS notifications (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, message TEXT, created_at INTEGER, delivered INTEGER DEFAULT 0, notification_hash TEXT)"
     )
+    cur.execute("PRAGMA table_info(notifications)")
+    columns = [c[1] for c in cur.fetchall()]
+    if "notification_hash" not in columns:
+        cur.execute(
+            "ALTER TABLE notifications ADD COLUMN notification_hash TEXT")
     conn.commit()
     conn.close()
 
@@ -74,6 +80,11 @@ def ask_rag(question: str) -> Tuple[str, Optional[str]]:
 
 def save_escalation(user_id: str, question: str) -> int:
     ts = int(time.time())
+    content_hash = None
+    if user_id:
+        content_hash = hashlib.sha256(
+            f"{user_id}|Оператор закрыл обращение|{ts}".encode("utf-8")
+        ).hexdigest()
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     cur.execute(
@@ -88,11 +99,14 @@ def save_escalation(user_id: str, question: str) -> int:
 
 def notify_admin(user_id: str, msg: str):
     ts = int(time.time())
+    content_hash = hashlib.sha256(
+        f"{user_id}|{msg}|{ts}".encode("utf-8")
+    ).hexdigest()
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     cur.execute(
-        "INSERT INTO notifications (user_id, message, created_at, delivered) VALUES (?, ?, ?, ?)",
-        (user_id, msg, ts, 0),
+        "INSERT INTO notifications (user_id, message, created_at, delivered, notification_hash) VALUES (?, ?, ?, ?, ?)",
+        (user_id, msg, ts, 0, content_hash),
     )
     conn.commit()
     conn.close()
@@ -374,8 +388,8 @@ def admin_escalation_close(current_user, esc_id: int):
     user_id = row[0] if row else None
     if user_id:
         cur.execute(
-            "INSERT INTO notifications (user_id, message, created_at, delivered) VALUES (?, ?, ?, ?)",
-            (user_id, "Оператор закрыл обращение", ts, 0),
+            "INSERT INTO notifications (user_id, message, created_at, delivered, notification_hash) VALUES (?, ?, ?, ?, ?)",
+            (user_id, "Оператор закрыл обращение", ts, 0, content_hash),
         )
         cur.execute(
             "INSERT INTO escalation_messages (escalation_id, content, created_at, delivered_user, sender, delivered_admin) VALUES (?, ?, ?, ?, ?, ?)",

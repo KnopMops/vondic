@@ -5,6 +5,7 @@ from app.core.extensions import db
 from app.models.user import User
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
+from werkzeug.security import check_password_hash, generate_password_hash
 
 
 class UserService:
@@ -72,14 +73,34 @@ class UserService:
             user.profile_bg_theme = data.get("profile_bg_theme")
             if user.profile_bg_theme:
                 user.profile_bg_gradient = None
+                user.profile_bg_image = None
         if "profile_bg_gradient" in data and current_user.premium:
             user.profile_bg_gradient = data.get("profile_bg_gradient")
+            if user.profile_bg_gradient:
+                user.profile_bg_theme = None
+                user.profile_bg_image = None
+        if "profile_bg_image" in data and current_user.premium:
+            user.profile_bg_image = data.get("profile_bg_image")
+            if user.profile_bg_image:
+                user.profile_bg_theme = None
+                user.profile_bg_gradient = None
+
+        if "status" in data:
+            raw_status = str(data.get("status") or "").strip().lower()
+            status_map = {
+                "online": "Online",
+                "offline": "Offline",
+                "в сети": "Online",
+                "не в сети": "Offline",
+            }
+            if raw_status in status_map:
+                user.status = status_map[raw_status]
+            else:
+                return None, "Invalid status"
 
         if current_user.role == "Admin":
             if "role" in data:
                 user.role = data["role"]
-            if "status" in data:
-                user.status = data["status"]
             if "premium" in data:
                 user.premium = int(data["premium"])
 
@@ -109,16 +130,14 @@ class UserService:
             return None, str(e)
 
     @staticmethod
-    def block_user(user_id, is_admin):
-        if not is_admin:
-            return None, "Unauthorized"
-
+    def set_developer(user_id, enabled: bool):
         user = User.query.get(user_id)
         if not user:
             return None, "User not found"
-
-        user.is_blocked = 1
-        user.is_blocked_at = datetime.utcnow()
+        user.is_developer = 1 if enabled else 0
+        if not enabled:
+            user.api_key_hash = None
+            user.api_key = None
         try:
             db.session.commit()
             return user, None
@@ -127,8 +146,62 @@ class UserService:
             return None, str(e)
 
     @staticmethod
-    def unblock_user(user_id, is_admin):
-        if not is_admin:
+    def generate_api_key(user_id, rotate: bool = False):
+        user = User.query.get(user_id)
+        if not user:
+            return None, "User not found"
+        if user.api_key and not rotate:
+            return user.api_key, None
+        token = secrets.token_urlsafe(32)
+        user.api_key_hash = generate_password_hash(token)
+        user.api_key = token
+        user.is_developer = 1
+        try:
+            db.session.commit()
+            return token, None
+        except Exception as e:
+            db.session.rollback()
+            return None, str(e)
+
+    @staticmethod
+    def get_api_key(user_id):
+        user = User.query.get(user_id)
+        if not user:
+            return None, "User not found"
+        return user.api_key, None
+
+    @staticmethod
+    def get_user_by_api_key(api_key):
+        if not api_key:
+            return None
+        users = User.query.filter(User.api_key_hash.isnot(None)).all()
+        for user in users:
+            if user.api_key_hash and check_password_hash(user.api_key_hash, api_key):
+                return user
+        return None
+
+    @staticmethod
+    def block_user(user_id, admin_user):
+        if not admin_user or admin_user.role != "Admin":
+            return None, "Unauthorized"
+
+        user = User.query.get(user_id)
+        if not user:
+            return None, "User not found"
+
+        user.is_blocked = 1
+        user.is_blocked_at = datetime.utcnow()
+        user.blocked_by_admin = admin_user.username
+        try:
+            db.session.commit()
+            return user, None
+        except Exception as e:
+            db.session.rollback()
+            return None, str(e)
+
+    @staticmethod
+    def unblock_user(user_id, admin_user):
+        if not admin_user or admin_user.role != "Admin":
             return None, "Unauthorized"
 
         user = User.query.get(user_id)
@@ -137,6 +210,7 @@ class UserService:
 
         user.is_blocked = 0
         user.is_blocked_at = None
+        user.blocked_by_admin = None
         try:
             db.session.commit()
             return user, None

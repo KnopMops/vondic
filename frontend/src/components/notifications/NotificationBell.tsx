@@ -12,13 +12,62 @@ export const NotificationBell: React.FC = () => {
 	const { showToast } = useToast()
 	const [polling, setPolling] = useState(false)
 	const escSeenRef = React.useRef<Set<string>>(new Set())
+	const userCacheRef = React.useRef<Map<string, string>>(new Map())
+	const audioRef = React.useRef<HTMLAudioElement | null>(null)
 	const [open, setOpen] = useState(false)
 
 	useEffect(() => {
+		const backendUrl =
+			process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+		const audioUrl = `${backendUrl}/static/message.mp3`
+		audioRef.current = new Audio(audioUrl)
+		audioRef.current.preload = 'auto'
+		audioRef.current.load()
+		return () => {
+			audioRef.current = null
+		}
+	}, [])
+
+	useEffect(() => {
 		if (!socket) return
+		let active = true
+		const playNotificationSound = () => {
+			const audio = audioRef.current
+			if (!audio) return
+			audio.currentTime = 0
+			audio.play().catch(() => {})
+		}
+
+		const resolveUsername = async (userId?: string) => {
+			if (!userId) return 'Пользователь'
+			const cached = userCacheRef.current.get(userId)
+			if (cached) return cached
+			try {
+				const res = await fetch(`/api/users/${userId}`)
+				if (res.ok) {
+					const data = await res.json()
+					const user = data?.user || data
+					const username = user?.username || `Пользователь ${userId}`
+					userCacheRef.current.set(userId, username)
+					return username
+				}
+			} catch {}
+			const fallback = `Пользователь ${userId}`
+			userCacheRef.current.set(userId, fallback)
+			return fallback
+		}
 
 		const onAny = (event: string, ...args: any[]) => {
 			try {
+				if (event === 'error') {
+					const message = args?.[0]?.message
+					if (
+						typeof message === 'string' &&
+						/attachments must be a list/i.test(message)
+					) {
+						return
+					}
+				}
 				console.log('[Notifications] Event:', event, args[0])
 			} catch {}
 		}
@@ -36,6 +85,7 @@ export const NotificationBell: React.FC = () => {
 			const title = data?.title || 'Уведомление'
 			const message = data?.message || ''
 			const type = (data?.type || 'info') as any
+			playNotificationSound()
 			add({ title, message, type })
 			const toastType =
 				type === 'success' ||
@@ -49,17 +99,33 @@ export const NotificationBell: React.FC = () => {
 		const onMessage = (data: any) => {
 			const from = data?.from_username || data?.from_name || 'Сообщение'
 			const text = data?.text || ''
+			playNotificationSound()
 			add({ title: from, message: text, type: 'message' })
 			showToast(`Новое сообщение от ${from}`, 'info')
+		}
+		const onReceiveMessage = (data: any) => {
+			const senderId = data?.sender_id
+			resolveUsername(senderId).then(username => {
+				if (!active) return
+				playNotificationSound()
+				add({
+					title: 'Вам отправили сообщение',
+					message: username,
+					type: 'message',
+				})
+				showToast(`Вам отправили сообщение от ${username}`, 'info')
+			})
 		}
 		const onSupport = (data: any) => {
 			const t = data?.title || 'Обновление поддержки'
 			const m = data?.message || ''
+			playNotificationSound()
 			add({ title: t, message: m, type: 'system' })
 			showToast(t, 'info')
 		}
 		const onMissed = (data: any) => {
 			const who = data?.from_username || 'Звонок'
+			playNotificationSound()
 			add({ title: 'Пропущенный звонок', message: who, type: 'call' })
 			showToast('Пропущенный звонок', 'warning')
 		}
@@ -69,38 +135,45 @@ export const NotificationBell: React.FC = () => {
 				data?.username ||
 				data?.caller_name ||
 				'Входящий звонок'
+			playNotificationSound()
 			add({ title: 'Входящий звонок', message: `${who}`, type: 'call' })
 			showToast('Входящий звонок', 'info')
 		}
 		const onCallAccepted = (data: any) => {
 			const who = data?.username || data?.responder_name || ''
+			playNotificationSound()
 			add({ title: 'Звонок принят', message: `${who}`, type: 'success' })
 			showToast('Звонок принят', 'success')
 		}
 		const onCallRejected = (data: any) => {
 			const who = data?.username || data?.responder_name || ''
+			playNotificationSound()
 			add({ title: 'Звонок отклонён', message: `${who}`, type: 'warning' })
 			showToast('Звонок отклонён', 'warning')
 		}
 		const onCallEnded = (data: any) => {
 			const who = data?.username || data?.responder_name || ''
+			playNotificationSound()
 			add({ title: 'Звонок завершён', message: `${who}`, type: 'info' })
 			showToast('Звонок завершён', 'info')
 		}
 		const onFollowed = (data: any) => {
 			const who =
 				data?.username || data?.user_name || data?.user || 'Новый подписчик'
+			playNotificationSound()
 			add({ title: 'Новый подписчик', message: `${who}`, type: 'success' })
 			showToast(`Новый подписчик: ${who}`, 'success')
 		}
 		const onSubscription = (data: any) => {
 			const who = data?.username || data?.user_name || 'Подписка'
+			playNotificationSound()
 			add({ title: 'Оформлена подписка', message: `${who}`, type: 'success' })
 			showToast('Оформлена подписка', 'success')
 		}
 		const onGift = (data: any) => {
 			const from = data?.from_username || data?.from_name || 'Подарок'
 			const gift = data?.gift_name || data?.gift_id || ''
+			playNotificationSound()
 			add({
 				title: 'Подарок',
 				message: `${from}${gift ? ` • ${gift}` : ''}`,
@@ -110,6 +183,7 @@ export const NotificationBell: React.FC = () => {
 		}
 		const onRequestCreated = (data: any) => {
 			const title = data?.title || 'Новая заявка'
+			playNotificationSound()
 			add({ title, message: data?.message || '', type: 'system' })
 			showToast(title, 'info')
 		}
@@ -121,6 +195,7 @@ export const NotificationBell: React.FC = () => {
 					: status === 'rejected'
 						? 'Заявка отклонена'
 						: 'Статус заявки обновлён'
+			playNotificationSound()
 			add({
 				title,
 				message: data?.message || '',
@@ -131,11 +206,13 @@ export const NotificationBell: React.FC = () => {
 		const onConfirmation = (data: any) => {
 			const title = 'Требуется подтверждение'
 			const msg = data?.message || ''
+			playNotificationSound()
 			add({ title, message: msg, type: 'warning' })
 			showToast(title, 'warning')
 		}
 		socket.on('notification', onGeneric)
 		socket.on('new_message', onMessage)
+		socket.on('receive_message', onReceiveMessage)
 		socket.on('support_update', onSupport)
 		socket.on('call_missed', onMissed)
 		socket.on('incoming_call', onIncomingCall)
@@ -158,11 +235,13 @@ export const NotificationBell: React.FC = () => {
 		socket.on('verify_required', onConfirmation)
 
 		return () => {
+			active = false
 			socket.offAny(onAny)
 			socket.off('connect', onConnect)
 			socket.off('disconnect', onDisconnect)
 			socket.off('notification', onGeneric)
 			socket.off('new_message', onMessage)
+			socket.off('receive_message', onReceiveMessage)
 			socket.off('support_update', onSupport)
 			socket.off('call_missed', onMissed)
 			socket.off('incoming_call', onIncomingCall)
@@ -208,6 +287,10 @@ export const NotificationBell: React.FC = () => {
 							const who =
 								item?.user_name || item?.username || item?.from_user || ''
 							const msg = who ? `${who}` : ''
+							if (audioRef.current) {
+								audioRef.current.currentTime = 0
+								audioRef.current.play().catch(() => {})
+							}
 							add({ title, message: msg, type: 'system' })
 							showToast(title, 'info')
 						}
@@ -233,7 +316,7 @@ export const NotificationBell: React.FC = () => {
 	const items = useMemo(() => notifications.slice(0, 10), [notifications])
 
 	return (
-		<div className='fixed top-4 right-4 z-50'>
+		<div className='fixed bottom-4 left-4 z-50'>
 			<button
 				onClick={() => {
 					setOpen(o => !o)
@@ -249,26 +332,34 @@ export const NotificationBell: React.FC = () => {
 				)}
 			</button>
 			{open && (
-				<div className='mt-2 w-80 max-w-[80vw] bg-black/80 backdrop-blur rounded-lg border border-white/10 shadow-xl p-2'>
-					{items.length === 0 && (
-						<div className='text-sm text-gray-300 px-2 py-3'>
-							Нет уведомлений
-						</div>
-					)}
-					{items.map(n => (
-						<div
-							key={n.id}
-							className='px-3 py-2 rounded hover:bg-white/5 transition'
-						>
-							<div className='text-sm font-medium text-white'>{n.title}</div>
-							{n.message && (
-								<div className='text-xs text-gray-300'>{n.message}</div>
-							)}
-							<div className='text-[10px] text-gray-500'>
-								{new Date(n.createdAt).toLocaleTimeString()}
+				<div
+					className='fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4'
+					onClick={() => setOpen(false)}
+				>
+					<div
+						className='w-full max-w-md bg-black/80 backdrop-blur rounded-lg border border-white/10 shadow-xl p-2'
+						onClick={e => e.stopPropagation()}
+					>
+						{items.length === 0 && (
+							<div className='text-sm text-gray-300 px-2 py-3'>
+								Нет уведомлений
 							</div>
-						</div>
-					))}
+						)}
+						{items.map(n => (
+							<div
+								key={n.id}
+								className='px-3 py-2 rounded hover:bg-white/5 transition'
+							>
+								<div className='text-sm font-medium text-white'>{n.title}</div>
+								{n.message && (
+									<div className='text-xs text-gray-300'>{n.message}</div>
+								)}
+								<div className='text-[10px] text-gray-500'>
+									{new Date(n.createdAt).toLocaleTimeString()}
+								</div>
+							</div>
+						))}
+					</div>
 				</div>
 			)}
 		</div>

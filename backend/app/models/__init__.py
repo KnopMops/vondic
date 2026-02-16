@@ -1,3 +1,4 @@
+from .bot import Bot
 from .channel import Channel
 from .comment import Comment
 from .community import Community
@@ -11,6 +12,6 @@ from .post import Post
 from .subscription import Subscription
 from .user import User
 
-__all__ = ["Channel", "Comment", "Friendship", "Group",
+__all__ = ["Bot", "Channel", "Comment", "Friendship", "Group",
            "Like", "Message", "Post", "Subscription", "User", "GiftCatalog",
            "Community", "CommunityChannel"]

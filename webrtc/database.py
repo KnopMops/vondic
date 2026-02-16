@@ -35,6 +35,8 @@ class UserRepository:
                     sender_id TEXT NOT NULL,
                     target_id TEXT,
                     channel_id TEXT,
+                    group_id TEXT,
+                    reply_to TEXT,
                     content TEXT NOT NULL,
                     attachments TEXT,
                     type TEXT DEFAULT 'text',
@@ -55,6 +57,11 @@ class UserRepository:
                 logger.info(
                     "Миграция: Добавление столбца group_id в таблицу messages")
                 conn.execute("ALTER TABLE messages ADD COLUMN group_id TEXT")
+
+            if "reply_to" not in columns:
+                logger.info(
+                    "Миграция: Добавление столбца reply_to в таблицу messages")
+                conn.execute("ALTER TABLE messages ADD COLUMN reply_to TEXT")
 
             if "target_id" not in columns:
                 logger.info(
@@ -287,17 +294,19 @@ class UserRepository:
 
             channel_id = msg_data.get("channel_id")
             group_id = msg_data.get("group_id")
+            reply_to = msg_data.get("reply_to")
             msg_type = msg_data.get("type", "text")
 
             if channel_id:
                 query = """
-                    INSERT INTO messages (id, sender_id, channel_id, content, attachments, type, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO messages (id, sender_id, channel_id, reply_to, content, attachments, type, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """
                 conn.execute(query, (
                     msg_data["id"],
                     msg_data["sender_id"],
                     channel_id,
+                    reply_to,
                     encrypted_content,
                     encrypted_attachments,
                     msg_type,
@@ -306,13 +315,14 @@ class UserRepository:
                 ))
             elif group_id:
                 query = """
-                    INSERT INTO messages (id, sender_id, group_id, content, attachments, type, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO messages (id, sender_id, group_id, reply_to, content, attachments, type, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """
                 conn.execute(query, (
                     msg_data["id"],
                     msg_data["sender_id"],
                     group_id,
+                    reply_to,
                     encrypted_content,
                     encrypted_attachments,
                     msg_type,
@@ -321,13 +331,14 @@ class UserRepository:
                 ))
             else:
                 query = """
-                    INSERT INTO messages (id, sender_id, target_id, content, attachments, type, created_at, updated_at, is_read)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
+                    INSERT INTO messages (id, sender_id, target_id, reply_to, content, attachments, type, created_at, updated_at, is_read)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
                 """
                 conn.execute(query, (
                     msg_data["id"],
                     msg_data["sender_id"],
                     msg_data.get("target_id"),
+                    reply_to,
                     encrypted_content,
                     encrypted_attachments,
                     msg_type,
@@ -471,8 +482,14 @@ class UserRepository:
                     msg["timestamp"] = msg.pop("created_at")
                 try:
                     msg["content"] = self._decrypt_payload(msg["content"])
-                except Exception:
-                    pass
+                except Exception as e:
+                    content_value = msg.get("content")
+                    if isinstance(content_value, str) and not content_value.startswith("mt:") and not content_value.startswith("gAAAA"):
+                        msg["content"] = content_value
+                    else:
+                        msg["content"] = "[Не удалось расшифровать]"
+                    logger.error(
+                        f"Ошибка дешифровки сообщения {msg['id']}: {e}")
                 if msg.get("attachments"):
                     try:
                         decrypted = self._decrypt_payload(msg["attachments"])

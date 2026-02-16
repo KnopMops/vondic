@@ -70,6 +70,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		initAuth()
 	}, [dispatch, isInitialized, user])
 
+	useEffect(() => {
+		const root = document.documentElement
+		const savedTheme = localStorage.getItem('app_theme')
+		if (savedTheme === 'dark' || savedTheme === 'light') {
+			root.setAttribute('data-theme', savedTheme)
+			root.style.colorScheme = savedTheme
+			return
+		}
+		root.removeAttribute('data-theme')
+		root.style.colorScheme = ''
+	}, [])
+
 	const login = async (email: string, password: string) => {
 		try {
 			// Запрос к нашему API Proxy (который установит cookies)

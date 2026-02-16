@@ -16,9 +16,9 @@ import {
 } from '@/lib/stores/callStore'
 import { useToast } from '@/lib/ToastContext'
 import { Channel, Group, Message, User } from '@/lib/types'
-import { getAvatarUrl } from '@/lib/utils'
+import { getAttachmentUrl, getAvatarUrl } from '@/lib/utils'
 import Link from 'next/link'
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import MessageBubble from './MessageBubble'
 
 // --- Icons Components ---
@@ -80,6 +80,23 @@ const SmileIcon = ({ className }: { className?: string }) => (
 		<path d='M8 14s1.5 2 4 2 4-2 4-2'></path>
 		<line x1='9' y1='9' x2='9.01' y2='9'></line>
 		<line x1='15' y1='9' x2='15.01' y2='9'></line>
+	</svg>
+)
+
+const StickerIcon = ({ className }: { className?: string }) => (
+	<svg
+		viewBox='0 0 24 24'
+		fill='none'
+		stroke='currentColor'
+		strokeWidth='2'
+		strokeLinecap='round'
+		strokeLinejoin='round'
+		className={className}
+	>
+		<rect x='3' y='3' width='18' height='18' rx='4' ry='4'></rect>
+		<circle cx='9' cy='9' r='1'></circle>
+		<circle cx='15' cy='9' r='1'></circle>
+		<path d='M8 15s1.5 2 4 2 4-2 4-2'></path>
 	</svg>
 )
 
@@ -338,6 +355,11 @@ const EMOJIS = [
 	'🤙',
 ]
 
+const STICKERS = Array.from({ length: 13 }, (_, index) => ({
+	id: `sticker-${index + 1}`,
+	url: `/static/sticker_pack/${index + 1}.png`,
+}))
+
 const BACKGROUNDS = [
 	{
 		id: 'default',
@@ -474,6 +496,27 @@ export default function MessengerPage() {
 	const { socket, isConnected } = useSocket()
 	const SUPPORT_API_URL =
 		process.env.NEXT_PUBLIC_SUPPORT_API_URL || 'http://127.0.0.1:8000'
+	const [aiUser, setAiUser] = useState<User>({
+		id: 'vondic-ai',
+		email: 'ai@vondic.local',
+		username: 'Vondic AI',
+		role: 'AI',
+		avatar_url: null,
+		status: 'Online',
+		premium: false,
+	})
+	const botUser = useMemo<User>(
+		() => ({
+			id: 'botik',
+			email: 'botik@vondic.local',
+			username: 'Botik',
+			role: 'Bot',
+			avatar_url: '/static/botik.png',
+			status: 'Online',
+			premium: false,
+		}),
+		[],
+	)
 	const [friends, setFriends] = useState<User[]>([])
 	const [selectedFriend, setSelectedFriend] = useState<User | null>(null)
 	const [isRagOpen, setIsRagOpen] = useState(false)
@@ -487,6 +530,86 @@ export default function MessengerPage() {
 	>([])
 	const [ragInput, setRagInput] = useState('')
 	const ragPollRef = useRef<number | null>(null)
+	const [aiMessages, setAiMessages] = useState<Message[]>([])
+	const aiStorageKey = user?.id
+		? `vondic_ai_history_${user.id}`
+		: 'vondic_ai_history'
+	const [botMessages, setBotMessages] = useState<Message[]>([])
+	const botMessageIdsRef = useRef<Set<string>>(new Set())
+	const botStorageLoadedRef = useRef(false)
+	const botStorageKeyRef = useRef<string | null>(null)
+	const botikStorageKey = user?.id
+		? `bot_history_${user.id}_${botUser.id}`
+		: `bot_history_${botUser.id}`
+	const activeBotId =
+		selectedFriend?.role === 'Bot' ? selectedFriend.id : botUser.id
+	const botStorageKey = user?.id
+		? `bot_history_${user.id}_${activeBotId}`
+		: `bot_history_${activeBotId}`
+	const [hasBotHistory, setHasBotHistory] = useState(false)
+	const botCommands = useMemo(
+		() => [
+			{ command: 'help', title: '/help', description: 'Список команд' },
+			{ command: 'about', title: '/about', description: 'О Botik' },
+			{ command: 'time', title: '/time', description: 'Текущее время' },
+			{ command: 'ping', title: '/ping', description: 'Проверка связи' },
+			{ command: 'echo', title: '/echo', description: 'Повторить текст' },
+			{
+				command: 'createbot',
+				title: '/createbot',
+				description: 'Создать бота',
+			},
+			{ command: 'clear', title: '/clear', description: 'Очистить чат' },
+		],
+		[],
+	)
+	const [botCommandHintsById, setBotCommandHintsById] = useState<
+		Record<string, { command: string; title: string; description: string }[]>
+	>({})
+	const activeBotCommands = useMemo(() => {
+		if (!selectedFriend || selectedFriend.role !== 'Bot') return []
+		if (selectedFriend.id === botUser.id) return botCommands
+		return botCommandHintsById[selectedFriend.id] || []
+	}, [selectedFriend, botUser.id, botCommands, botCommandHintsById])
+
+	useEffect(() => {
+		let active = true
+		const loadAiUser = async () => {
+			try {
+				const res = await fetch('/api/v1/auth/ai-user')
+				const text = await res.text()
+				let data: any = {}
+				try {
+					data = JSON.parse(text)
+				} catch {
+					return
+				}
+				if (!active || !res.ok || !data?.id) return
+				setAiUser(prev => ({
+					...prev,
+					...data,
+					username: data.username || prev.username,
+					email: data.email || prev.email,
+					avatar_url: data.avatar_url ?? prev.avatar_url,
+					role: data.role || prev.role,
+					status: data.status || prev.status,
+					premium: !!data.premium,
+				}))
+			} catch {}
+		}
+		loadAiUser()
+		return () => {
+			active = false
+		}
+	}, [])
+
+	useEffect(() => {
+		if (!selectedFriend) return
+		if (selectedFriend.id === aiUser.id) return
+		if (selectedFriend.username === aiUser.username) {
+			setSelectedFriend(aiUser)
+		}
+	}, [aiUser, selectedFriend])
 
 	const ragLoadHistory = async () => {
 		try {
@@ -550,11 +673,9 @@ export default function MessengerPage() {
 			{ id: tempId, sender: 'user', content: text, created_at: Date.now() },
 		])
 		try {
-			const res = await fetch(`${SUPPORT_API_URL}/chat/send`, {
+			const res = await fetch('/api/support/chat/send', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				credentials: 'include',
-				mode: 'cors',
 				body: JSON.stringify({ message: text }),
 			})
 			const respText = await res.text()
@@ -602,6 +723,179 @@ export default function MessengerPage() {
 		}
 	}, [isRagOpen])
 
+	useEffect(() => {
+		try {
+			const raw = localStorage.getItem(aiStorageKey)
+			if (raw) {
+				const parsed = JSON.parse(raw)
+				if (Array.isArray(parsed)) {
+					setAiMessages(parsed)
+					return
+				}
+			}
+		} catch {}
+		setAiMessages([])
+	}, [aiStorageKey])
+
+	useEffect(() => {
+		try {
+			localStorage.setItem(aiStorageKey, JSON.stringify(aiMessages))
+		} catch {}
+	}, [aiMessages, aiStorageKey])
+	useEffect(() => {
+		botStorageLoadedRef.current = false
+		try {
+			const raw = localStorage.getItem(botStorageKey)
+			if (raw) {
+				const parsed = JSON.parse(raw)
+				if (Array.isArray(parsed)) {
+					setBotMessages(parsed)
+					botMessageIdsRef.current = new Set(
+						parsed.map((item: Message) => item.id),
+					)
+					botStorageLoadedRef.current = true
+					botStorageKeyRef.current = botStorageKey
+					return
+				}
+			}
+			if (user?.id) {
+				const legacyKey = `bot_history_${activeBotId}`
+				if (legacyKey !== botStorageKey) {
+					const legacyRaw = localStorage.getItem(legacyKey)
+					if (legacyRaw) {
+						const legacyParsed = JSON.parse(legacyRaw)
+						if (Array.isArray(legacyParsed)) {
+							localStorage.setItem(botStorageKey, JSON.stringify(legacyParsed))
+							localStorage.removeItem(legacyKey)
+							setBotMessages(legacyParsed)
+							botMessageIdsRef.current = new Set(
+								legacyParsed.map((item: Message) => item.id),
+							)
+							botStorageLoadedRef.current = true
+							botStorageKeyRef.current = botStorageKey
+							return
+						}
+					}
+				}
+			}
+		} catch {}
+		setBotMessages([])
+		botMessageIdsRef.current = new Set()
+		botStorageLoadedRef.current = true
+		botStorageKeyRef.current = botStorageKey
+	}, [botStorageKey, activeBotId, user?.id])
+
+	useEffect(() => {
+		if (
+			!botStorageLoadedRef.current ||
+			botStorageKeyRef.current !== botStorageKey
+		) {
+			return
+		}
+		try {
+			localStorage.setItem(botStorageKey, JSON.stringify(botMessages))
+		} catch {}
+		botMessageIdsRef.current = new Set(botMessages.map(item => item.id))
+		if (botStorageKey === botikStorageKey) {
+			setHasBotHistory(botMessages.length > 0)
+		}
+	}, [botMessages, botStorageKey, botikStorageKey])
+
+	useEffect(() => {
+		try {
+			const raw = localStorage.getItem(botikStorageKey)
+			if (raw) {
+				const parsed = JSON.parse(raw)
+				if (Array.isArray(parsed)) {
+					setHasBotHistory(parsed.length > 0)
+					return
+				}
+			}
+		} catch {}
+		setHasBotHistory(false)
+	}, [botikStorageKey])
+
+	useEffect(() => {
+		if (!selectedFriend || selectedFriend.role !== 'Bot') return
+		if (selectedFriend.id === botUser.id) return
+		try {
+			const key = getBotHintsStorageKey(selectedFriend.id)
+			const raw = localStorage.getItem(key)
+			if (raw) {
+				const parsed = JSON.parse(raw)
+				if (Array.isArray(parsed)) {
+					setBotCommandHintsById(prev => ({
+						...prev,
+						[selectedFriend.id]: parsed,
+					}))
+				}
+			}
+		} catch {}
+	}, [selectedFriend, botUser.id, user?.id])
+
+	useEffect(() => {
+		if (!selectedFriend || selectedFriend.role !== 'Bot') return
+		if (selectedFriend.id === botUser.id) return
+		if (!user?.id || !user.access_token) return
+		let active = true
+		let pollTimeout: number | null = null
+		const baseUrl =
+			process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+		const poll = async () => {
+			try {
+				const url = new URL(
+					`${baseUrl}/api/v1/bots/${selectedFriend.id}/outbox`,
+				)
+				url.searchParams.set('chat_id', String(user.id))
+				const res = await fetch(url.toString(), {
+					headers: {
+						Authorization: `Bearer ${user.access_token}`,
+					},
+				})
+				if (!res.ok) return
+				const data: any = await res.json().catch(() => ({}))
+				const items = Array.isArray(data?.items) ? data.items : []
+				if (!items.length || !active) return
+				const texts: string[] = []
+				setBotMessages(prev => {
+					const next = [...prev]
+					for (const item of items) {
+						const messageId = String(
+							item?.message_id || `${Date.now()}-${Math.random()}`,
+						)
+						if (botMessageIdsRef.current.has(messageId)) continue
+						botMessageIdsRef.current.add(messageId)
+						const dateMs = item?.date ? Number(item.date) * 1000 : Date.now()
+						next.push({
+							id: messageId,
+							sender_id: selectedFriend.id,
+							content: String(item?.text || ''),
+							timestamp: new Date(dateMs).toISOString(),
+							isOwn: false,
+							is_read: true,
+							type: 'text',
+						})
+						if (item?.text) texts.push(String(item.text))
+					}
+					return next
+				})
+				for (const text of texts) {
+					mergeBotCommandHints(selectedFriend.id, text)
+				}
+			} catch {}
+			if (active) {
+				pollTimeout = window.setTimeout(poll, 1200)
+			}
+		}
+		poll()
+		return () => {
+			active = false
+			if (pollTimeout) {
+				window.clearTimeout(pollTimeout)
+			}
+		}
+	}, [selectedFriend, botUser.id, user?.id, user?.access_token])
+
 	// Groups State
 	const {
 		groups,
@@ -628,6 +922,7 @@ export default function MessengerPage() {
 	const messagesEndRef = useRef<HTMLDivElement>(null)
 	const messageRefs = useRef<Record<string, HTMLDivElement | null>>({})
 	const containerRef = useRef<HTMLDivElement>(null)
+	const forceScrollToBottomRef = useRef(false)
 	const [prevScrollHeight, setPrevScrollHeight] = useState(0)
 	const [isRestoringScroll, setIsRestoringScroll] = useState(false)
 	const [replyToMessage, setReplyToMessage] = useState<Message | null>(null)
@@ -699,6 +994,7 @@ export default function MessengerPage() {
 	const isWebRTCSupported = useIsWebRTCSupported()
 	const debouncedSearchQuery = useDebounce(searchQuery, 500)
 	const [userSearchResults, setUserSearchResults] = useState<User[]>([])
+	const [botSearchResults, setBotSearchResults] = useState<User[]>([])
 	const [isSearchingUsers, setIsSearchingUsers] = useState(false)
 
 	// Message Search State
@@ -707,7 +1003,10 @@ export default function MessengerPage() {
 	const [foundMessages, setFoundMessages] = useState<Message[]>([])
 	const [isSearchingMessages, setIsSearchingMessages] = useState(false)
 	const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false)
+	const [isStickerPickerOpen, setIsStickerPickerOpen] = useState(false)
 	const emojiPickerRef = useRef<HTMLDivElement>(null)
+	const stickerPickerRef = useRef<HTMLDivElement>(null)
+	const messageInputRef = useRef<HTMLTextAreaElement>(null)
 
 	// Voice Recording State
 	const [isRecording, setIsRecording] = useState(false)
@@ -786,6 +1085,10 @@ export default function MessengerPage() {
 	}
 
 	const handleStartRecording = async () => {
+		if (isAiChat || isBotChat) {
+			showToast('В этом чате доступны только текстовые сообщения', 'info')
+			return
+		}
 		try {
 			const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
 			const mediaRecorder = new MediaRecorder(stream)
@@ -826,6 +1129,10 @@ export default function MessengerPage() {
 	}
 
 	const handleSendVoice = () => {
+		if (isAiChat || isBotChat) {
+			showToast('В этом чате доступны только текстовые сообщения', 'info')
+			return
+		}
 		if (!mediaRecorderRef.current || !isRecording) return
 
 		mediaRecorderRef.current.onstop = async () => {
@@ -1113,6 +1420,7 @@ export default function MessengerPage() {
 				socket.emit('send_message', {
 					target_user_id: userId,
 					content: `Привет! Присоединяйся к моей группе "${selectedGroup.name}"!\nКод приглашения: ${details.invite_code}`,
+					attachments: [],
 				})
 				showToast('Приглашение отправлено!', 'success')
 				setIsAddMemberOpen(false)
@@ -1145,8 +1453,12 @@ export default function MessengerPage() {
 		localStorage.setItem('chat_theme', theme.id)
 	}
 
+	const isAiChat = selectedFriend?.id === aiUser.id
+	const isBotChat = selectedFriend?.role === 'Bot' && !isAiChat
+	const targetUserId = selectedFriend?.id
+
 	const {
-		messages,
+		messages: chatMessages,
 		sendMessage: sendChatMessage,
 		loadMoreMessages,
 		searchMessages,
@@ -1161,10 +1473,13 @@ export default function MessengerPage() {
 	} = useChat(
 		socket,
 		user?.id,
-		selectedFriend?.id,
+		targetUserId,
 		selectedChannel?.id,
 		selectedGroup?.id,
 	)
+	const messages = isBotChat ? botMessages : chatMessages
+	const isChatLoading = isBotChat ? false : isLoading
+	const isChatTyping = isBotChat ? false : isTyping
 
 	// Typing Indicator Logic
 	const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -1174,7 +1489,7 @@ export default function MessengerPage() {
 		const newValue = e.target.value
 		setInput(newValue)
 
-		if (!selectedFriend) return
+		if (!selectedFriend || isAiChat || isBotChat) return
 
 		if (!isTypingRef.current && newValue.trim()) {
 			isTypingRef.current = true
@@ -1193,10 +1508,19 @@ export default function MessengerPage() {
 			sendStopTyping()
 		}
 	}
+	const botCommandQuery =
+		isBotChat && input.startsWith('/') ? input.slice(1).toLowerCase() : ''
+	const botCommandToken = botCommandQuery.split(' ')[0]
+	const filteredBotCommands =
+		isBotChat && input.startsWith('/')
+			? activeBotCommands.filter(cmd => cmd.command.startsWith(botCommandToken))
+			: []
+	const showBotCommandHints =
+		isBotChat && input.startsWith('/') && filteredBotCommands.length > 0
 
 	// Read Receipts Logic
 	useEffect(() => {
-		if (!selectedFriend || !messages.length) return
+		if (!selectedFriend || isAiChat || isBotChat || !messages.length) return
 
 		// Find unread messages from the other user
 		const unreadIds = messages
@@ -1275,25 +1599,11 @@ export default function MessengerPage() {
 				})
 				if (res.ok) {
 					const data = await res.json()
-					let friendList = Array.isArray(data) ? data : []
-
-					// Add Vondic AI if not present
-					const hasAI = friendList.some(
-						f => f.username === 'Vondic AI' || f.username === 'vondic_ai',
+					const friendList = Array.isArray(data) ? data : []
+					const cleaned = friendList.filter(
+						f => f.username !== 'Vondic AI' && f.username !== 'vondic_ai',
 					)
-					if (!hasAI) {
-						try {
-							const aiRes = await fetch('/api/v1/auth/ai-user')
-							if (aiRes.ok) {
-								const aiUser = await aiRes.json()
-								friendList = [aiUser, ...friendList]
-							}
-						} catch (e) {
-							console.error('Failed to fetch AI user', e)
-						}
-					}
-
-					setFriends(friendList)
+					setFriends(cleaned)
 				}
 			} catch (e) {
 				console.error(e)
@@ -1302,26 +1612,91 @@ export default function MessengerPage() {
 		fetchFriends()
 	}, [user])
 
+	useEffect(() => {
+		const botId =
+			typeof window !== 'undefined'
+				? new URLSearchParams(window.location.search).get('bot_id')
+				: null
+		if (!botId) return
+		const baseUrl =
+			process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+		const loadBot = async () => {
+			try {
+				const res = await fetch(`${baseUrl}/api/public/v1/bots/${botId}`)
+				if (!res.ok) return
+				const data: any = await res.json().catch(() => ({}))
+				if (!data?.id || !data?.name) return
+				setSelectedFriend({
+					id: data.id,
+					email: `${data.name}@bot.local`,
+					username: data.name,
+					role: 'Bot',
+					avatar_url: data.avatar_url ?? null,
+					status: data.is_active === 0 ? 'Offline' : 'Online',
+					premium: false,
+				})
+				setSelectedGroup(null)
+				setIsChatSearchOpen(false)
+				setChatSearchQuery('')
+				setFoundMessages([])
+			} catch (error) {
+				console.error('Failed to load bot by id:', error)
+			}
+		}
+		loadBot()
+	}, [])
+
 	// Sidebar Search Effect
 	useEffect(() => {
 		const searchUsers = async () => {
-			if (!debouncedSearchQuery.trim()) {
+			const trimmedQuery = debouncedSearchQuery.trim()
+			if (!trimmedQuery) {
 				setUserSearchResults([])
+				setBotSearchResults([])
 				setIsSearchingUsers(false)
 				return
 			}
 
 			setIsSearchingUsers(true)
 			try {
-				const res = await fetch('/api/chats/search', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ query: debouncedSearchQuery }),
-				})
+				const [usersRes, botsRes] = await Promise.all([
+					fetch('/api/chats/search', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ query: trimmedQuery }),
+					}),
+					fetch('/api/v1/bots/search', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ query: trimmedQuery }),
+					}),
+				])
 
-				if (res.ok) {
-					const data = await res.json()
+				if (usersRes.ok) {
+					const data = await usersRes.json()
 					setUserSearchResults(Array.isArray(data) ? data : [])
+				} else {
+					setUserSearchResults([])
+				}
+
+				if (botsRes.ok) {
+					const data = await botsRes.json()
+					const bots = Array.isArray(data) ? data : []
+					const mappedBots = bots
+						.filter((bot: any) => bot?.id && bot?.name)
+						.map((bot: any) => ({
+							id: bot.id,
+							email: `${bot.name}@bot.local`,
+							username: bot.name,
+							role: 'Bot',
+							avatar_url: bot.avatar_url ?? null,
+							status: bot.is_active === 0 ? 'Offline' : 'Online',
+							premium: false,
+						}))
+						.filter((bot: User) => bot.id !== botUser.id)
+					setBotSearchResults(mappedBots)
+				} else {
+					setBotSearchResults([])
 				}
 			} catch (error) {
 				console.error('User search error:', error)
@@ -1353,6 +1728,26 @@ export default function MessengerPage() {
 		}
 	}, [isEmojiPickerOpen])
 
+	// Close sticker picker when clicking outside
+	useEffect(() => {
+		const handleClickOutside = (event: MouseEvent) => {
+			if (
+				stickerPickerRef.current &&
+				!stickerPickerRef.current.contains(event.target as Node)
+			) {
+				setIsStickerPickerOpen(false)
+			}
+		}
+
+		if (isStickerPickerOpen) {
+			document.addEventListener('mousedown', handleClickOutside)
+		}
+
+		return () => {
+			document.removeEventListener('mousedown', handleClickOutside)
+		}
+	}, [isStickerPickerOpen])
+
 	// Close settings menu when clicking outside
 	useEffect(() => {
 		const handleClickOutside = (event: MouseEvent) => {
@@ -1379,12 +1774,364 @@ export default function MessengerPage() {
 		if (!chatSearchQuery.trim()) return
 
 		setIsSearchingMessages(true)
+		if (isAiChat || isBotChat) {
+			const query = chatSearchQuery.trim().toLowerCase()
+			const results = messages.filter(m =>
+				m.content?.toLowerCase().includes(query),
+			)
+			setFoundMessages(results)
+			setIsSearchingMessages(false)
+			return
+		}
 		const results = await searchMessages(chatSearchQuery)
 		setFoundMessages(results)
 		setIsSearchingMessages(false)
 	}
 
+	const sendAiMessage = async () => {
+		const text = input.trim()
+		if (!text) return
+		if (files.length > 0) {
+			showToast('В AI чате доступны только текстовые сообщения', 'info')
+			setFiles([])
+			return
+		}
+		if (aiUser.id === 'vondic-ai') {
+			showToast('AI ещё загружается', 'info')
+			return
+		}
+		forceScrollToBottomRef.current = true
+		if (replyToMessage) {
+			pendingReplyRef.current = {
+				content: text,
+				reply: replyToMessage,
+				sentAt: Date.now(),
+				attachmentsCount: 0,
+			}
+		}
+		setInput('')
+		setReplyToMessage(null)
+		sendChatMessage(text, 'text', undefined, replyToMessage?.id)
+	}
+
+	const parseBotCommandArgs = (raw: string) => {
+		const args: Record<string, string> = {}
+		const keyRegex = /(\w+)=/g
+		const matches: { key: string; start: number; end: number }[] = []
+		let match = keyRegex.exec(raw)
+		while (match) {
+			matches.push({
+				key: match[1],
+				start: match.index,
+				end: match.index + match[0].length,
+			})
+			match = keyRegex.exec(raw)
+		}
+		for (let i = 0; i < matches.length; i++) {
+			const current = matches[i]
+			const next = matches[i + 1]
+			const valueEnd = next ? next.start : raw.length
+			let value = raw.slice(current.end, valueEnd).trim()
+			if (
+				(value.startsWith('"') && value.endsWith('"')) ||
+				(value.startsWith("'") && value.endsWith("'"))
+			) {
+				value = value.slice(1, -1)
+			}
+			if (value) {
+				args[current.key] = value
+			}
+		}
+		return args
+	}
+
+	const getBotHintsStorageKey = (botId: string) =>
+		user?.id
+			? `bot_command_hints_${user.id}_${botId}`
+			: `bot_command_hints_${botId}`
+
+	const extractCommandsFromText = (text: string) => {
+		const matches = text.match(/\/[a-zа-я0-9_]+/gi) || []
+		const unique = Array.from(
+			new Set(matches.map(item => item.slice(1).toLowerCase())),
+		)
+		return unique.map(command => ({
+			command,
+			title: `/${command}`,
+			description: 'Команда',
+		}))
+	}
+
+	const mergeBotCommandHints = (botId: string, text: string) => {
+		const extracted = extractCommandsFromText(text)
+		if (!extracted.length) return
+		setBotCommandHintsById(prev => {
+			const existing = prev[botId] || []
+			const map = new Map(existing.map(item => [item.command, item]))
+			for (const item of extracted) {
+				if (!map.has(item.command)) {
+					map.set(item.command, item)
+				}
+			}
+			const next = Array.from(map.values())
+			try {
+				const key = getBotHintsStorageKey(botId)
+				localStorage.setItem(key, JSON.stringify(next))
+			} catch {}
+			return { ...prev, [botId]: next }
+		})
+	}
+
+	const sendBotMessage = async () => {
+		const text = input.trim()
+		if (!text) return
+		if (files.length > 0) {
+			showToast('В этом чате доступны только текстовые сообщения', 'info')
+			setFiles([])
+			return
+		}
+		forceScrollToBottomRef.current = true
+		if (replyToMessage) {
+			pendingReplyRef.current = {
+				content: text,
+				reply: replyToMessage,
+				sentAt: Date.now(),
+				attachmentsCount: 0,
+			}
+		}
+		const nextMessage: Message = {
+			id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+			sender_id: user?.id || 'me',
+			content: text,
+			timestamp: new Date().toISOString(),
+			isOwn: true,
+			is_read: true,
+			reply_to: replyToMessage?.id,
+			type: 'text',
+		}
+		const activeBot = selectedFriend?.role === 'Bot' ? selectedFriend : botUser
+		const buildBotReply = (content: string): Message => ({
+			id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+			sender_id: activeBot.id,
+			content,
+			timestamp: new Date().toISOString(),
+			isOwn: false,
+			is_read: true,
+			type: 'text',
+		})
+		const isBotikChat =
+			selectedFriend?.role === 'Bot' && selectedFriend.id === botUser.id
+		if (!isBotikChat) {
+			setBotMessages(prev => [...prev, nextMessage])
+			if (!user?.access_token || !user?.id) {
+				setBotMessages(prev => [
+					...prev,
+					buildBotReply('Нужна авторизация для отправки боту.'),
+				])
+				setInput('')
+				setReplyToMessage(null)
+				return
+			}
+			const baseUrl =
+				process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+			try {
+				const res = await fetch(
+					`${baseUrl}/api/v1/bots/${selectedFriend.id}/updates/push`,
+					{
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+							Authorization: `Bearer ${user.access_token}`,
+						},
+						body: JSON.stringify({
+							message: {
+								text,
+								from_user: {
+									id: user.id,
+									username: user.username,
+									avatar_url: user.avatar_url,
+								},
+								chat: {
+									id: user.id,
+									type: 'private',
+									title: user.username,
+								},
+							},
+						}),
+					},
+				)
+				if (!res.ok) {
+					setBotMessages(prev => [
+						...prev,
+						buildBotReply('Не удалось отправить сообщение боту.'),
+					])
+				}
+			} catch {
+				setBotMessages(prev => [
+					...prev,
+					buildBotReply('Ошибка сети при отправке сообщения боту.'),
+				])
+			}
+			setInput('')
+			setReplyToMessage(null)
+			return
+		}
+		if (text.startsWith('/')) {
+			const raw = text.slice(1).trim()
+			const [cmdRaw, ...rest] = raw.split(' ')
+			const cmd = (cmdRaw || '').toLowerCase()
+			const argText = rest.join(' ').trim()
+			if (cmd === 'help') {
+				const list = botCommands.map(c => `${c.title} — ${c.description}`)
+				setBotMessages(prev => [
+					...prev,
+					nextMessage,
+					buildBotReply(`Команды:\n${list.join('\n')}`),
+				])
+			} else if (cmd === 'about') {
+				setBotMessages(prev => [
+					...prev,
+					nextMessage,
+					buildBotReply(
+						'Botik — встроенный бот для быстрых команд и подсказок.',
+					),
+				])
+			} else if (cmd === 'time') {
+				setBotMessages(prev => [
+					...prev,
+					nextMessage,
+					buildBotReply(`Сейчас ${new Date().toLocaleString()}`),
+				])
+			} else if (cmd === 'ping') {
+				setBotMessages(prev => [...prev, nextMessage, buildBotReply('pong')])
+			} else if (cmd === 'echo') {
+				setBotMessages(prev => [
+					...prev,
+					nextMessage,
+					buildBotReply(argText || 'Нечего повторять.'),
+				])
+			} else if (cmd === 'createbot') {
+				if (!user?.access_token) {
+					setBotMessages(prev => [
+						...prev,
+						nextMessage,
+						buildBotReply('Нужна авторизация для создания бота.'),
+					])
+				} else {
+					const args = parseBotCommandArgs(argText)
+					const name = args.name?.trim()
+					if (!name) {
+						setBotMessages(prev => [
+							...prev,
+							nextMessage,
+							buildBotReply(
+								'Укажите name=. Пример: /createbot name=Botik description="Описание"',
+							),
+						])
+					} else {
+						const payload: any = {
+							name,
+						}
+						if (args.description) payload.description = args.description
+						if (args.avatar_url) payload.avatar_url = args.avatar_url
+						if (args.is_active !== undefined) {
+							const rawVal = args.is_active.toLowerCase()
+							if (
+								rawVal === '1' ||
+								rawVal === 'true' ||
+								rawVal === 'yes' ||
+								rawVal === 'on'
+							) {
+								payload.is_active = 1
+							} else if (
+								rawVal === '0' ||
+								rawVal === 'false' ||
+								rawVal === 'no' ||
+								rawVal === 'off'
+							) {
+								payload.is_active = 0
+							}
+						}
+						try {
+							const res = await fetch('/api/v1/bots', {
+								method: 'POST',
+								headers: {
+									'Content-Type': 'application/json',
+								},
+								body: JSON.stringify({
+									...payload,
+									access_token: user.access_token,
+								}),
+							})
+							const text = await res.text()
+							let data: any = {}
+							try {
+								data = JSON.parse(text)
+							} catch {
+								data = {}
+							}
+							if (!res.ok) {
+								const errorText =
+									data?.error || text || 'Не удалось создать бота'
+								setBotMessages(prev => [
+									...prev,
+									nextMessage,
+									buildBotReply(errorText),
+								])
+							} else {
+								const chatUrl = data?.chat_url
+									? `${window.location.origin}${data.chat_url}`
+									: ''
+								const parts = [
+									`Бот создан: ${data?.name || name}.`,
+									data?.id ? `ID: ${data.id}` : '',
+									data?.bot_token ? `Токен: ${data.bot_token}` : '',
+									chatUrl ? `Чат: ${chatUrl}` : '',
+								].filter(Boolean)
+								setBotMessages(prev => [
+									...prev,
+									nextMessage,
+									buildBotReply(parts.join('\n')),
+								])
+							}
+						} catch (error) {
+							setBotMessages(prev => [
+								...prev,
+								nextMessage,
+								buildBotReply('Ошибка сети при создании бота.'),
+							])
+						}
+					}
+				}
+			} else if (cmd === 'clear') {
+				setBotMessages([])
+			} else {
+				setBotMessages(prev => [
+					...prev,
+					nextMessage,
+					buildBotReply('Команда не найдена. Введите /help для списка.'),
+				])
+			}
+		} else {
+			setBotMessages(prev => [
+				...prev,
+				nextMessage,
+				buildBotReply('Используйте команды. Список: /help'),
+			])
+		}
+		setInput('')
+		setReplyToMessage(null)
+	}
+
 	const handleSendMessage = () => {
+		if (isAiChat) {
+			sendAiMessage()
+			return
+		}
+		if (isBotChat) {
+			sendBotMessage()
+			return
+		}
 		const hasText = !!input.trim()
 		if (!hasText && files.length === 0) return
 		if (isUploading) return
@@ -1412,7 +2159,13 @@ export default function MessengerPage() {
 						attachmentsCount: attachments?.length ?? 0,
 					}
 				}
-				sendChatMessage(hasText ? input.trim() : '', 'text', attachments)
+				forceScrollToBottomRef.current = true
+				sendChatMessage(
+					hasText ? input.trim() : '',
+					'text',
+					attachments,
+					replyToMessage?.id,
+				)
 				setInput('')
 				setFiles([])
 				setReplyToMessage(null)
@@ -1424,6 +2177,32 @@ export default function MessengerPage() {
 			}
 		}
 		run()
+	}
+
+	const handleSendSticker = (stickerUrl: string) => {
+		if (isAiChat || isBotChat) {
+			showToast('В этом чате доступны только текстовые сообщения', 'info')
+			setIsStickerPickerOpen(false)
+			return
+		}
+		if (isUploading) return
+		const stickerPayload = JSON.stringify({
+			type: 'sticker',
+			url: stickerUrl,
+		})
+		if (replyToMessage) {
+			pendingReplyRef.current = {
+				content: stickerPayload,
+				reply: replyToMessage,
+				sentAt: Date.now(),
+				attachmentsCount: 0,
+			}
+		}
+		forceScrollToBottomRef.current = true
+		sendChatMessage(stickerPayload, 'text', [], replyToMessage?.id)
+		setInput('')
+		setReplyToMessage(null)
+		setIsStickerPickerOpen(false)
 	}
 
 	useEffect(() => {
@@ -1443,8 +2222,35 @@ export default function MessengerPage() {
 		}
 	}, [messages, replyMap])
 
+	useEffect(() => {
+		const withReplies = messages.filter(m => m.reply_to && !replyMap[m.id])
+		if (!withReplies.length) return
+		setReplyMap(prev => {
+			const next = { ...prev }
+			for (const msg of withReplies) {
+				if (next[msg.id]) continue
+				const referenced = messages.find(item => item.id === msg.reply_to)
+				if (referenced) {
+					next[msg.id] = referenced
+				}
+			}
+			return next
+		})
+	}, [messages, replyMap])
+
 	const getMessagePreview = (msg: Message) => {
 		if (msg.is_deleted) return 'Сообщение удалено'
+		const stickerPayload = (() => {
+			try {
+				if (!msg.content?.trim().startsWith('{')) return null
+				const data = JSON.parse(msg.content)
+				if (data?.type === 'sticker' && typeof data?.url === 'string') {
+					return data
+				}
+			} catch {}
+			return null
+		})()
+		if (stickerPayload) return 'Стикер'
 		if (msg.attachments && msg.attachments.length > 0) {
 			const a = msg.attachments[0]
 			const ext = (a.ext || '').toLowerCase()
@@ -1517,8 +2323,36 @@ export default function MessengerPage() {
 			showToast('Можно удалить только свои сообщения', 'error')
 			return
 		}
-		markMessageDeleted(msg.id)
-		deleteMessage(msg.id)
+		if (isAiChat) {
+			setAiMessages(prev =>
+				prev.map(m =>
+					m.id === msg.id
+						? {
+								...m,
+								content: 'Сообщение удалено',
+								attachments: [],
+								is_deleted: true,
+							}
+						: m,
+				),
+			)
+		} else if (isBotChat) {
+			setBotMessages(prev =>
+				prev.map(m =>
+					m.id === msg.id
+						? {
+								...m,
+								content: 'Сообщение удалено',
+								attachments: [],
+								is_deleted: true,
+							}
+						: m,
+				),
+			)
+		} else {
+			markMessageDeleted(msg.id)
+			deleteMessage(msg.id)
+		}
 		if (pinnedMessageId === msg.id) {
 			setPinnedMessageId(null)
 		}
@@ -1528,7 +2362,21 @@ export default function MessengerPage() {
 	}
 
 	const handleEditMessage = (msg: Message, text: string) => {
-		updateMessage(msg.id, { content: text, is_deleted: false })
+		if (isAiChat) {
+			setAiMessages(prev =>
+				prev.map(m =>
+					m.id === msg.id ? { ...m, content: text, is_deleted: false } : m,
+				),
+			)
+		} else if (isBotChat) {
+			setBotMessages(prev =>
+				prev.map(m =>
+					m.id === msg.id ? { ...m, content: text, is_deleted: false } : m,
+				),
+			)
+		} else {
+			updateMessage(msg.id, { content: text, is_deleted: false })
+		}
 	}
 
 	const handleReactMessage = (msg: Message, emoji: string) => {
@@ -1569,11 +2417,13 @@ export default function MessengerPage() {
 		const payload: any = {
 			content: forwardMessage.content,
 			type: forwardMessage.type || 'text',
-			attachments: forwardMessage.attachments,
+			attachments: Array.isArray(forwardMessage.attachments)
+				? forwardMessage.attachments
+				: [],
 		}
 		if (forwardMessage.type === 'voice') {
 			payload.type = 'voice'
-			payload.attachments = undefined
+			payload.attachments = []
 			payload.content = forwardMessage.content
 		}
 		if (isSharedPostPayload(forwardMessage.content)) {
@@ -1635,10 +2485,9 @@ export default function MessengerPage() {
 	const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
 		// Disable infinite scroll loading when searching messages
 		if (isChatSearchOpen && chatSearchQuery) return
-
 		const { scrollTop, scrollHeight } = e.currentTarget
 		requestAnimationFrame(() => resolvePinnedForScroll(scrollTop))
-		if (scrollTop < 30 && !isLoading && messages.length > 0) {
+		if (scrollTop < 30 && !isChatLoading && !isBotChat && messages.length > 0) {
 			setPrevScrollHeight(scrollHeight)
 			setIsRestoringScroll(true)
 			loadMoreMessages()
@@ -1649,13 +2498,31 @@ export default function MessengerPage() {
 	useLayoutEffect(() => {
 		if (isChatSearchOpen && chatSearchQuery) return // Don't handle scroll for search results
 
+		if (forceScrollToBottomRef.current) {
+			forceScrollToBottomRef.current = false
+			setIsRestoringScroll(false)
+			requestAnimationFrame(() => {
+				messagesEndRef.current?.scrollIntoView({
+					behavior: 'smooth',
+					block: 'end',
+				})
+			})
+			if (containerRef.current) {
+				resolvePinnedForScroll(containerRef.current.scrollTop)
+			}
+			return
+		}
+
 		if (isRestoringScroll && containerRef.current) {
 			const newScrollHeight = containerRef.current.scrollHeight
 			containerRef.current.scrollTop = newScrollHeight - prevScrollHeight
 			setIsRestoringScroll(false)
 		} else {
 			// Scroll to bottom for new messages or initial load
-			messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+			messagesEndRef.current?.scrollIntoView({
+				behavior: 'smooth',
+				block: 'end',
+			})
 		}
 		if (containerRef.current) {
 			resolvePinnedForScroll(containerRef.current.scrollTop)
@@ -1668,18 +2535,29 @@ export default function MessengerPage() {
 	}, [selectedFriend?.id, selectedChannel?.id, selectedGroup?.id])
 
 	// Separate AI from other entities
-	const aiFriend = friends.find(
-		f => f.username === 'Vondic AI' || f.username === 'vondic_ai',
-	)
-	const otherFriends = friends.filter(
-		f => f.username !== 'Vondic AI' && f.username !== 'vondic_ai',
-	)
+	const aiFriend = aiUser
+	const botFriend = botUser
+	const otherFriends = friends
 	const otherGroups = groups.filter(
 		g => g.name !== 'Vondic AI' && g.name !== 'AI Assistant',
 	)
 
 	// Determine list to show in sidebar
-	const sidebarList = searchQuery.trim() ? userSearchResults : otherFriends
+	const normalizedSearch = searchQuery.trim().toLowerCase()
+	const searchResultsWithBot = useMemo(() => {
+		if (!normalizedSearch) return []
+		const items: User[] = []
+		if (botFriend.username.toLowerCase().includes(normalizedSearch)) {
+			items.push(botFriend)
+		}
+		items.push(...userSearchResults)
+		items.push(...botSearchResults)
+		const unique = new Map<string, User>()
+		for (const item of items) unique.set(item.id, item)
+		return Array.from(unique.values())
+	}, [normalizedSearch, userSearchResults, botSearchResults, botFriend])
+	const showBotInHistory = hasBotHistory && !normalizedSearch
+	const sidebarList = normalizedSearch ? searchResultsWithBot : otherFriends
 
 	// Determine messages to show in chat
 	const messagesToDisplay =
@@ -1867,19 +2745,72 @@ export default function MessengerPage() {
 									</div>
 								</div>
 							)}
-
-							{sidebarList.length === 0 && (
-								<div className='p-8 text-center text-gray-500 flex flex-col items-center gap-3'>
-									<div className='w-12 h-12 bg-gray-900 rounded-full flex items-center justify-center text-gray-700'>
-										<SearchIcon className='w-6 h-6' />
+							{botFriend && showBotInHistory && (
+								<div
+									onClick={() => {
+										setSelectedFriend(botFriend)
+										setSelectedGroup(null)
+										setIsChatSearchOpen(false)
+										setChatSearchQuery('')
+										setFoundMessages([])
+									}}
+									className={`group p-3 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-200 border border-transparent ${
+										selectedFriend?.id === botFriend.id
+											? `bg-gray-800/50 ${currentBackground.borderColor} shadow-sm`
+											: 'hover:bg-gray-900 border-transparent'
+									}`}
+								>
+									<div className='relative'>
+										<img
+											src={getAvatarUrl(botFriend.avatar_url)}
+											alt={botFriend.username}
+											className={`w-12 h-12 rounded-full object-cover bg-gray-800 ring-2 transition-all duration-300 ${
+												selectedFriend?.id === botFriend.id
+													? currentBackground.accentColor.replace(
+															'text-',
+															'ring-',
+														)
+													: 'ring-gray-950'
+											}`}
+										/>
+										<div className='absolute bottom-0 right-0 w-3.5 h-3.5 bg-gray-950 rounded-full flex items-center justify-center'>
+											<div className='w-2.5 h-2.5 rounded-full bg-emerald-500' />
+										</div>
 									</div>
-									<span className='text-sm'>
-										{searchQuery
-											? 'Пользователи не найдены'
-											: 'Ничего не найдено'}
-									</span>
+									<div className='flex flex-col flex-1 min-w-0'>
+										<div className='flex justify-between items-baseline'>
+											<span
+												className={`font-semibold truncate transition-colors duration-300 ${
+													selectedFriend?.id === botFriend.id
+														? currentBackground.accentColor
+														: 'text-gray-200 group-hover:text-white'
+												}`}
+											>
+												{botFriend.username}
+											</span>
+											<span className='text-[10px] text-gray-600'>BOT</span>
+										</div>
+										<span className='text-xs text-gray-500 truncate group-hover:text-gray-400 transition-colors'>
+											Всегда онлайн
+										</span>
+									</div>
 								</div>
 							)}
+
+							{sidebarList.length === 0 &&
+								(!aiFriend || searchQuery) &&
+								!showBotInHistory && (
+									<div className='p-8 text-center text-gray-500 flex flex-col items-center gap-3'>
+										<div className='w-12 h-12 bg-gray-900 rounded-full flex items-center justify-center text-gray-700'>
+											<SearchIcon className='w-6 h-6' />
+										</div>
+										<span className='text-sm'>
+											{searchQuery
+												? 'Пользователи не найдены'
+												: 'Ничего не найдено'}
+										</span>
+									</div>
+								)}
 							{sidebarList.map(friend => (
 								<div
 									key={friend.id}
@@ -1944,16 +2875,18 @@ export default function MessengerPage() {
 										</span>
 									</div>
 									{/* Call Button */}
-									<CallButton
-										userId={friend.id}
-										userName={friend.username}
-										isOnline={friend.status?.toLowerCase() === 'online'}
-										isInCall={Array.from(activeCalls.values()).some(
-											call => call.userId === friend.id,
-										)}
-										onCallInitiate={handleCallInitiate}
-										className='ml-2'
-									/>
+									{friend.role !== 'Bot' && (
+										<CallButton
+											userId={friend.id}
+											userName={friend.username}
+											isOnline={friend.status?.toLowerCase() === 'online'}
+											isInCall={Array.from(activeCalls.values()).some(
+												call => call.userId === friend.id,
+											)}
+											onCallInitiate={handleCallInitiate}
+											className='ml-2'
+										/>
+									)}
 								</div>
 							))}
 
@@ -2542,7 +3475,7 @@ export default function MessengerPage() {
 							className='flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar scroll-smooth'
 						>
 							{/* Loading State for History */}
-							{isLoading && messages.length > 0 && !isChatSearchOpen && (
+							{isChatLoading && messages.length > 0 && !isChatSearchOpen && (
 								<div className='flex justify-center py-4'>
 									<div
 										className={`w-6 h-6 border-2 border-t-transparent rounded-full animate-spin ${currentBackground.borderColor.replace(
@@ -2576,7 +3509,7 @@ export default function MessengerPage() {
 							)}
 
 							{messagesToDisplay.length === 0 &&
-								!isLoading &&
+								!isChatLoading &&
 								!isSearchingMessages && (
 									<div className='flex flex-col h-full items-center justify-center text-gray-500 space-y-4 opacity-0 animate-in fade-in duration-700 fill-mode-forwards'>
 										<div className='w-24 h-24 rounded-3xl bg-gray-900/50 flex items-center justify-center border border-gray-800/50 rotate-3 transition-transform hover:rotate-6 duration-500'>
@@ -2638,7 +3571,7 @@ export default function MessengerPage() {
 							})}
 
 							{/* Typing Indicator */}
-							{isTyping && (
+							{isChatTyping && (
 								<div className='flex items-center gap-2 px-5 py-2 animate-in fade-in slide-in-from-bottom-2 duration-300'>
 									<div className='bg-gray-800/80 border border-gray-700 px-4 py-2 rounded-2xl rounded-tl-sm flex items-center gap-1.5'>
 										<span className='w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]'></span>
@@ -2741,8 +3674,60 @@ export default function MessengerPage() {
 												</div>
 											</div>
 										)}
+										{showBotCommandHints && (
+											<div className='absolute bottom-full left-0 right-0 mb-2 px-2'>
+												<div className='rounded-xl border border-gray-700/60 bg-gray-900/95 shadow-xl overflow-hidden'>
+													{filteredBotCommands.map(item => (
+														<button
+															key={item.command}
+															onClick={() => {
+																setInput(
+																	`/${item.command}${
+																		item.command === 'echo' ? ' ' : ''
+																	}`,
+																)
+																messageInputRef.current?.focus()
+															}}
+															className='w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-gray-800 transition-colors flex items-center justify-between gap-3'
+														>
+															<span className='font-medium'>{item.title}</span>
+															<span className='text-xs text-gray-500'>
+																{item.description}
+															</span>
+														</button>
+													))}
+												</div>
+											</div>
+										)}
+
+										{isStickerPickerOpen && (
+											<div
+												ref={stickerPickerRef}
+												className='absolute bottom-full right-20 mb-2 w-80 rounded-xl border border-gray-800 bg-gray-900/95 shadow-xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200'
+											>
+												<div className='px-3 py-2 border-b border-gray-800 text-[10px] font-semibold uppercase tracking-wider text-gray-400'>
+													Стандартные стикеры
+												</div>
+												<div className='p-3 grid grid-cols-4 gap-2 max-h-64 overflow-y-auto custom-scrollbar'>
+													{STICKERS.map(sticker => (
+														<button
+															key={sticker.id}
+															onClick={() => handleSendSticker(sticker.url)}
+															className='rounded-lg bg-gray-800/60 hover:bg-gray-700/60 transition-colors p-1'
+														>
+															<img
+																src={getAttachmentUrl(sticker.url)}
+																alt={sticker.id}
+																className='w-full h-14 object-contain'
+															/>
+														</button>
+													))}
+												</div>
+											</div>
+										)}
 
 										<textarea
+											ref={messageInputRef}
 											value={input}
 											onChange={handleInputChange}
 											onKeyDown={e => {
@@ -2780,9 +3765,27 @@ export default function MessengerPage() {
 											</div>
 										)}
 
+										{/* Sticker Button */}
+										<button
+											onClick={() => {
+												setIsStickerPickerOpen(!isStickerPickerOpen)
+												setIsEmojiPickerOpen(false)
+											}}
+											className={`p-2.5 text-gray-400 hover:text-indigo-300 hover:bg-gray-700/50 rounded-full transition-all ${
+												isStickerPickerOpen
+													? 'text-indigo-300 bg-gray-700/50'
+													: ''
+											}`}
+										>
+											<StickerIcon className='w-5 h-5' />
+										</button>
+
 										{/* Emoji Button */}
 										<button
-											onClick={() => setIsEmojiPickerOpen(!isEmojiPickerOpen)}
+											onClick={() => {
+												setIsEmojiPickerOpen(!isEmojiPickerOpen)
+												setIsStickerPickerOpen(false)
+											}}
 											className={`p-2.5 text-gray-400 hover:text-yellow-400 hover:bg-gray-700/50 rounded-full transition-all ${
 												isEmojiPickerOpen
 													? 'text-yellow-400 bg-gray-700/50'

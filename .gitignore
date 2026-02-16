@@ -43,3 +43,7 @@ _billing.tsx
 
 logs/
 *.log
+
+desktop/
+
+botiksdk.egg-info/

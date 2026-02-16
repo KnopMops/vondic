@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=70", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "botiksdk"
+version = "0.1.0"
+description = "Vondic Botik SDK"
+requires-python = ">=3.13"
+dependencies = ["requests>=2.32.5"]
+
+[tool.setuptools]
+packages = ["botiksdk"]
+
+[tool.setuptools.package-dir]
+botiksdk = "."

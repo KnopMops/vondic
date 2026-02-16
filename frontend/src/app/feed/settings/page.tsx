@@ -3,10 +3,13 @@
 import Header from '@/components/social/Header'
 import Sidebar from '@/components/social/Sidebar'
 import { useAuth } from '@/lib/AuthContext'
+import { setUser } from '@/lib/features/authSlice'
+import { useAppDispatch } from '@/lib/hooks'
 import { useToast } from '@/lib/ToastContext'
 import { motion } from 'framer-motion'
 import {
 	Bell,
+	Code,
 	Eye,
 	Mail,
 	Palette,
@@ -24,14 +27,18 @@ export default function SettingsPage() {
 	const [secretKey, setSecretKey] = useState<string | null>(null)
 	const [emailCode, setEmailCode] = useState('')
 	const [loginAlertEnabled, setLoginAlertEnabled] = useState(false)
+	const [developerEnabled, setDeveloperEnabled] = useState(false)
+	const [apiKey, setApiKey] = useState<string | null>(null)
+	const [apiKeyLoading, setApiKeyLoading] = useState(false)
 	const [notifAlerts, setNotifAlerts] = useState(true)
 	const [notifSounds, setNotifSounds] = useState(true)
 	const [notifIncomingCall, setNotifIncomingCall] = useState(true)
-	const [profileVisibility, setProfileVisibility] = useState<
-		'public' | 'friends' | 'private'
-	>('public')
+	const [presenceStatus, setPresenceStatus] = useState<'Online' | 'Offline'>(
+		'Online',
+	)
 	const [theme, setTheme] = useState<'system' | 'dark' | 'light'>('system')
 	/* removed experimental features state */
+	const dispatch = useAppDispatch()
 
 	useEffect(() => {
 		if (user) {
@@ -39,8 +46,73 @@ export default function SettingsPage() {
 			setTwoFAMethod((user.two_factor_method as any) || 'email')
 			setSecretKey(user.two_factor_secret || null)
 			setLoginAlertEnabled(!!user.login_alert_enabled)
+			setDeveloperEnabled(!!user.is_developer)
+			const rawStatus = String(user.status || '').toLowerCase()
+			setPresenceStatus(rawStatus === 'offline' ? 'Offline' : 'Online')
 		}
 	}, [user?.id])
+
+	const applyTheme = (nextTheme: 'system' | 'dark' | 'light') => {
+		const root = document.documentElement
+		if (nextTheme === 'system') {
+			root.removeAttribute('data-theme')
+			root.style.colorScheme = ''
+			return
+		}
+		root.setAttribute('data-theme', nextTheme)
+		root.style.colorScheme = nextTheme
+	}
+
+	useEffect(() => {
+		const savedTheme = localStorage.getItem('app_theme')
+		if (
+			savedTheme === 'system' ||
+			savedTheme === 'dark' ||
+			savedTheme === 'light'
+		) {
+			setTheme(savedTheme)
+			applyTheme(savedTheme)
+		} else {
+			applyTheme('system')
+		}
+	}, [])
+
+	useEffect(() => {
+		applyTheme(theme)
+		localStorage.setItem('app_theme', theme)
+	}, [theme])
+
+	const updateStatus = async (nextStatus: 'Online' | 'Offline') => {
+		if (!user) return
+		setPresenceStatus(nextStatus)
+		try {
+			const res = await fetch('/api/users/update', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ user_id: user.id, status: nextStatus }),
+			})
+			const data = await res.json()
+			if (!res.ok) {
+				throw new Error(data.error || 'Ошибка обновления статуса')
+			}
+			const updatedUser = data?.user || data
+			if (updatedUser) {
+				dispatch(setUser(updatedUser))
+				localStorage.setItem('user', JSON.stringify(updatedUser))
+			}
+			showToast(
+				nextStatus === 'Online' ? 'Статус: В сети' : 'Статус: Не в сети',
+				'success',
+			)
+		} catch (e: any) {
+			setPresenceStatus(
+				String(user.status || '').toLowerCase() === 'offline'
+					? 'Offline'
+					: 'Online',
+			)
+			showToast(e.message || 'Не удалось обновить статус', 'error')
+		}
+	}
 
 	const isTelegramAccount = !!user?.email?.endsWith('@telegram.bot')
 	const isYandexAccount = !!user?.email?.endsWith('@yandex.ru')
@@ -166,6 +238,76 @@ export default function SettingsPage() {
 		}
 	}
 
+	const loadApiKey = async () => {
+		try {
+			const res = await fetch('/api/auth/api-key', {
+				method: 'GET',
+				headers: { 'Content-Type': 'application/json' },
+			})
+			const data = await res.json()
+			if (!res.ok) throw new Error(data.error || 'Ошибка загрузки ключа')
+			setApiKey(data.api_key || null)
+		} catch (e: any) {
+			setApiKey(null)
+		}
+	}
+
+	const toggleDeveloper = async () => {
+		const next = !developerEnabled
+		setDeveloperEnabled(next)
+		try {
+			const res = await fetch('/api/auth/developer/toggle', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ enable: next }),
+			})
+			const data = await res.json()
+			if (!res.ok) throw new Error(data.error || 'Ошибка обновления')
+			const updatedUser = data?.user || data
+			if (updatedUser) {
+				dispatch(setUser(updatedUser))
+				localStorage.setItem('user', JSON.stringify(updatedUser))
+			}
+			if (!next) setApiKey(null)
+			if (next) await loadApiKey()
+			showToast(
+				next ? 'Режим разработчика включён' : 'Режим разработчика отключён',
+				'success',
+			)
+		} catch (e: any) {
+			setDeveloperEnabled(!next)
+			showToast(e.message || 'Ошибка', 'error')
+		}
+	}
+
+	const generateApiKey = async () => {
+		setApiKeyLoading(true)
+		try {
+			const res = await fetch('/api/auth/api-key', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+			})
+			const data = await res.json()
+			if (!res.ok) throw new Error(data.error || 'Ошибка генерации ключа')
+			if (data.api_key) {
+				setApiKey(data.api_key)
+			}
+			showToast('API ключ создан', 'success')
+		} catch (e: any) {
+			showToast(e.message || 'Ошибка', 'error')
+		} finally {
+			setApiKeyLoading(false)
+		}
+	}
+
+	useEffect(() => {
+		if (developerEnabled) {
+			loadApiKey()
+		} else {
+			setApiKey(null)
+		}
+	}, [developerEnabled])
+
 	return (
 		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white overflow-x-hidden relative'>
 			<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
@@ -215,6 +357,60 @@ export default function SettingsPage() {
 							<p className='text-sm text-gray-400 mt-2'>
 								Скоро здесь появятся параметры вашего аккаунта.
 							</p>
+						</motion.div>
+
+						<motion.div
+							initial={{ opacity: 0, y: 20 }}
+							animate={{ opacity: 1, y: 0 }}
+							transition={{ duration: 0.4 }}
+							className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
+						>
+							<motion.div
+								initial={{ rotate: 0 }}
+								animate={{ rotate: [0, 2, -2, 0] }}
+								transition={{ duration: 8, repeat: Infinity }}
+								className='absolute -top-20 -right-16 w-52 h-52 bg-gradient-to-br from-emerald-500/10 to-teal-500/10 rounded-full blur-3xl'
+							/>
+							<div className='flex items-center gap-3 mb-4'>
+								<Code className='w-5 h-5 text-emerald-400' />
+								<h2 className='text-xl font-semibold'>Разработчик</h2>
+							</div>
+							<div className='space-y-4'>
+								<div className='flex items-center justify-between'>
+									<div>
+										<p className='text-sm font-medium text-white'>
+											Я разработчик
+										</p>
+										<p className='text-xs text-gray-400'>
+											Доступ к публичной API и ключам
+										</p>
+									</div>
+									<button
+										onClick={toggleDeveloper}
+										className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${developerEnabled ? 'bg-emerald-500/60' : 'bg-white/10'}`}
+									>
+										<span
+											className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${developerEnabled ? 'translate-x-6' : 'translate-x-1'}`}
+										/>
+									</button>
+								</div>
+								{developerEnabled && (
+									<div className='space-y-2'>
+										<button
+											onClick={generateApiKey}
+											disabled={apiKeyLoading}
+											className='rounded-lg bg-white/10 border border-white/20 px-4 py-2 text-sm text-white hover:bg-white/20 transition disabled:opacity-60'
+										>
+											{apiKeyLoading
+												? 'Генерация...'
+												: 'Сгенерировать API ключ'}
+										</button>
+										<div className='rounded-lg border border-white/10 bg-black/30 p-3 text-sm text-gray-300 break-all'>
+											{apiKey || 'Ключ появится здесь после генерации'}
+										</div>
+									</div>
+								)}
+							</div>
 						</motion.div>
 
 						<motion.div
@@ -431,25 +627,19 @@ export default function SettingsPage() {
 							</div>
 							<div className='space-y-4'>
 								<div>
-									<p className='text-sm text-white mb-2'>Видимость профиля</p>
-									<div className='grid grid-cols-3 gap-2'>
+									<p className='text-sm text-white mb-2'>Статус</p>
+									<div className='grid grid-cols-2 gap-2'>
 										<button
-											onClick={() => setProfileVisibility('public')}
-											className={`rounded-lg px-4 py-2 text-sm border ${profileVisibility === 'public' ? 'border-indigo-500 bg-indigo-500/20 text-white' : 'border-white/10 bg-white/5 text-gray-300'}`}
+											onClick={() => updateStatus('Online')}
+											className={`rounded-lg px-4 py-2 text-sm border ${presenceStatus === 'Online' ? 'border-indigo-500 bg-indigo-500/20 text-white' : 'border-white/10 bg-white/5 text-gray-300'}`}
 										>
-											Публичный
+											В сети
 										</button>
 										<button
-											onClick={() => setProfileVisibility('friends')}
-											className={`rounded-lg px-4 py-2 text-sm border ${profileVisibility === 'friends' ? 'border-indigo-500 bg-indigo-500/20 text-white' : 'border-white/10 bg-white/5 text-gray-300'}`}
+											onClick={() => updateStatus('Offline')}
+											className={`rounded-lg px-4 py-2 text-sm border ${presenceStatus === 'Offline' ? 'border-indigo-500 bg-indigo-500/20 text-white' : 'border-white/10 bg-white/5 text-gray-300'}`}
 										>
-											Только друзья
-										</button>
-										<button
-											onClick={() => setProfileVisibility('private')}
-											className={`rounded-lg px-4 py-2 text-sm border ${profileVisibility === 'private' ? 'border-indigo-500 bg-indigo-500/20 text-white' : 'border-white/10 bg-white/5 text-gray-300'}`}
-										>
-											Приватный
+											Не в сети
 										</button>
 									</div>
 								</div>

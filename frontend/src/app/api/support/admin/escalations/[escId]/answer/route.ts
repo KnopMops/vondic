@@ -3,9 +3,10 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(
 	req: NextRequest,
-	{ params }: { params: { escId: string } },
+	{ params }: { params: Promise<{ escId: string }> },
 ) {
 	try {
+		const { escId } = await params
 		const token = await getAccessToken(req)
 		if (!token) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -14,7 +15,7 @@ export async function POST(
 		const backendUrl =
 			process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
 		let response = await fetch(
-			`${backendUrl}/api/v1/support/admin/escalations/${params.escId}/answer`,
+			`${backendUrl}/api/v1/support/admin/escalations/${escId}/answer`,
 			{
 				method: 'POST',
 				headers: {
@@ -29,7 +30,7 @@ export async function POST(
 			const legacyUrl =
 				process.env.NEXT_PUBLIC_SUPPORT_API_URL || 'http://127.0.0.1:8000'
 			response = await fetch(
-				`${legacyUrl}/admin/escalations/${params.escId}/answer`,
+				`${legacyUrl}/admin/escalations/${escId}/answer`,
 				{
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
