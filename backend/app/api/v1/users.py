@@ -194,9 +194,14 @@ def purchase_gift(current_user):
         return jsonify({"error": "Invalid parameters"}), 400
     from app.models.gift_catalog import GiftCatalog
     catalog_item = GiftCatalog.query.get(gift_id)
-    price = (catalog_item.coin_price if catalog_item else None) or GIFT_PRICING.get(
-        gift_id)
-    if not price:
+    if catalog_item is not None:
+        price = catalog_item.coin_price
+        if catalog_item.total_supply is not None:
+            if (catalog_item.minted_count or 0) + quantity > catalog_item.total_supply:
+                return jsonify({"error": "Gift supply exhausted"}), 400
+    else:
+        price = GIFT_PRICING.get(gift_id)
+    if price is None:
         return jsonify({"error": "Unknown gift"}), 400
     total = price * quantity
     if (current_user.balance or 0) < total:
@@ -212,6 +217,8 @@ def purchase_gift(current_user):
             "is_displayed": False
         })
         current_user.gifts = gifts
+        if catalog_item is not None and catalog_item.total_supply is not None:
+            catalog_item.minted_count = (catalog_item.minted_count or 0) + quantity
         db.session.commit()
         return jsonify({"success": True, "balance": current_user.balance, "gifts": current_user.gifts}), 200
     except Exception as e:
@@ -224,6 +231,7 @@ def purchase_gift(current_user):
 def send_gift(current_user):
     data = request.get_json() or {}
     gift_id = data.get("gift_id")
+    comment = (data.get("comment") or "").strip()
     qty_raw = data.get("quantity", 1)
     target_user_id = data.get("target_user_id")
     try:
@@ -232,8 +240,16 @@ def send_gift(current_user):
         quantity = 1
     if not gift_id or quantity <= 0 or not target_user_id:
         return jsonify({"error": "Invalid parameters"}), 400
-    price = GIFT_PRICING.get(gift_id)
-    if not price:
+    from app.models.gift_catalog import GiftCatalog
+    catalog_item = GiftCatalog.query.get(gift_id)
+    if catalog_item is not None:
+        price = catalog_item.coin_price
+        if catalog_item.total_supply is not None:
+            if (catalog_item.minted_count or 0) + quantity > catalog_item.total_supply:
+                return jsonify({"error": "Gift supply exhausted"}), 400
+    else:
+        price = GIFT_PRICING.get(gift_id)
+    if price is None:
         return jsonify({"error": "Unknown gift"}), 400
     total = price * quantity
     if (current_user.balance or 0) < total:
@@ -249,9 +265,12 @@ def send_gift(current_user):
             "quantity": quantity,
             "from_user_id": current_user.id,
             "created_at": datetime.utcnow().isoformat(),
-            "is_displayed": True
+            "is_displayed": True,
+            "comment": comment or None,
         })
         recipient.gifts = gifts
+        if catalog_item is not None and catalog_item.total_supply is not None:
+            catalog_item.minted_count = (catalog_item.minted_count or 0) + quantity
         db.session.commit()
         return jsonify({"success": True, "balance": current_user.balance, "recipient_gifts": recipient.gifts}), 200
     except Exception as e:

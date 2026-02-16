@@ -85,21 +85,48 @@ def create_storis(current_user):
     data = request.get_json() or {}
     media_url = data.get("url")
     media_type = data.get("type") or "image"
+    text = (data.get("text") or "").strip()
     if not media_url:
         return jsonify({"error": "url is required"}), 400
     try:
         user = User.query.get(current_user.id)
         items = user.storis or []
-        items.append({
+        item = {
             "id": str(uuid.uuid4()),
             "url": media_url,
             "type": media_type,
             "created_at": request.headers.get("X-Client-Time") or datetime.now(timezone.utc).isoformat(),
-            "reactions": []
-        })
+            "reactions": [],
+        }
+        if text:
+            item["text"] = text
+        items.append(item)
         user.storis = items
         db.session.commit()
         return jsonify({"success": True, "storis": user.storis}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
+@storis_bp.route("/delete", methods=["POST"])
+@token_required
+def delete_storis(current_user):
+    data = request.get_json() or {}
+    story_id = data.get("story_id")
+    if not story_id:
+        return jsonify({"error": "story_id is required"}), 400
+    try:
+        user = User.query.get(current_user.id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        items, _ = normalize_storis(user.storis)
+        new_items = [it for it in items if str(it.get("id")) != str(story_id)]
+        if len(new_items) == len(items):
+            return jsonify({"error": "Story not found"}), 404
+        user.storis = new_items
+        db.session.commit()
+        return jsonify({"success": True, "storis": user.storis}), 200
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500

@@ -4,6 +4,18 @@ import Sidebar from '@/components/social/Sidebar'
 import { useAuth } from '@/lib/AuthContext'
 import { Coffee, Crown, Flame, Flower, Gift, Heart, Star } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import birthdayImg from '../../../gifts/Birthday.jpg'
+import bouquetImg from '../../../gifts/bouquet.jpg'
+import crownImg from '../../../gifts/crown.jpg'
+import eggImg from '../../../gifts/egg.jpg'
+import femaleDayImg from '../../../gifts/female_day.jpg'
+import fireImg from '../../../gifts/fire.jpg'
+import fireworkImg from '../../../gifts/firework.jpg'
+import knowledgeImg from '../../../gifts/knowledge.jpg'
+import partnerImg from '../../../gifts/partner.jpg'
+import presentImg from '../../../gifts/present.jpg'
+import pumpkinImg from '../../../gifts/pumpkin.jpg'
+import starImg from '../../../gifts/star.jpg'
 
 export default function ShopPage() {
 	const { user } = useAuth()
@@ -20,9 +32,33 @@ export default function ShopPage() {
 	const [friendsLoading, setFriendsLoading] = useState(false)
 	const [friendsError, setFriendsError] = useState<string | null>(null)
 	const [recipientId, setRecipientId] = useState<string | null>(null)
+	const [giftComment, setGiftComment] = useState('')
 
 	const backendUrl =
 		process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+	const staticGiftImages: Record<string, any> = {
+		birthday_cake: birthdayImg,
+		womens_day_bouquet: femaleDayImg,
+		valentine_heart: bouquetImg,
+		anniversary_crown: crownImg,
+		easter_egg: eggImg,
+		party_flame: fireImg,
+		newyear_fireworks: fireworkImg,
+		knowledge_day_coffee: knowledgeImg,
+		partner_badge: partnerImg,
+		christmas_gift: presentImg,
+		halloween_pumpkin: pumpkinImg,
+		gold_star: starImg,
+	}
+
+	const getStaticSrc = (img: any): string | null => {
+		if (!img) return null
+		if (typeof img === 'string') return img
+		if (typeof img === 'object' && typeof img.src === 'string') {
+			return img.src
+		}
+		return null
+	}
 	const iconMap: Record<string, any> = {
 		Flame,
 		Heart,
@@ -74,11 +110,20 @@ export default function ShopPage() {
 			setFriendsLoading(true)
 			try {
 				const res = await fetch('/api/friends/list', { method: 'POST' })
-				if (!res.ok) {
-					const text = await res.text()
-					throw new Error(text || 'Ошибка загрузки друзей')
+				let data: any = null
+				try {
+					data = await res.json()
+				} catch {
+					data = null
 				}
-				const data = await res.json()
+				if (!res.ok) {
+					const raw = data && typeof data === 'object' ? data.error : null
+					const msg =
+						raw === 'Unauthorized'
+							? 'Требуется авторизация для загрузки списка друзей'
+							: raw || 'Ошибка загрузки друзей'
+					throw new Error(msg)
+				}
 				setFriends(Array.isArray(data) ? data : [])
 			} catch (e: any) {
 				setFriendsError(e.message || 'Не удалось загрузить друзей')
@@ -97,17 +142,13 @@ export default function ShopPage() {
 		setGiftLoading(true)
 		setGiftError(null)
 		try {
-			let token = user?.access_token
-			if (!token) {
-				const meRes = await fetch('/api/auth/me', { method: 'GET' })
-				if (meRes.ok) {
-					const meData = await meRes.json()
-					token = meData?.user?.access_token || meData?.access_token
-				}
-			}
-			if (!token) {
+			const meRes = await fetch('/api/auth/me', { method: 'GET' })
+			if (!meRes.ok) {
 				throw new Error('Требуется авторизация')
 			}
+			const meData = await meRes.json()
+			const token = meData?.user?.access_token || meData?.access_token
+			if (!token) throw new Error('Требуется авторизация')
 			const res = await fetch(`${backendUrl}/api/v1/users/send-gift`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -116,6 +157,7 @@ export default function ShopPage() {
 					target_user_id: recipientId,
 					gift_id: selectedGift.id,
 					quantity,
+					comment: giftComment.trim() || undefined,
 				}),
 			})
 			if (!res.ok) {
@@ -124,6 +166,7 @@ export default function ShopPage() {
 			}
 			await res.json()
 			setIsModalOpen(false)
+			setGiftComment('')
 		} catch (e: any) {
 			setGiftError(e.message || 'Не удалось отправить подарок')
 		} finally {
@@ -139,17 +182,13 @@ export default function ShopPage() {
 		setGiftLoading(true)
 		setGiftError(null)
 		try {
-			let token = user?.access_token
-			if (!token) {
-				const meRes = await fetch('/api/auth/me', { method: 'GET' })
-				if (meRes.ok) {
-					const meData = await meRes.json()
-					token = meData?.user?.access_token || meData?.access_token
-				}
-			}
-			if (!token) {
+			const meRes = await fetch('/api/auth/me', { method: 'GET' })
+			if (!meRes.ok) {
 				throw new Error('Требуется авторизация')
 			}
+			const meData = await meRes.json()
+			const token = meData?.user?.access_token || meData?.access_token
+			if (!token) throw new Error('Требуется авторизация')
 			const res = await fetch(`${backendUrl}/api/v1/users/purchase-gift`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -180,7 +219,7 @@ export default function ShopPage() {
 			</div>
 
 			<div className='relative z-20'>
-				<Header email={user?.email} onLogout={() => {}} />
+				<Header email={user?.email || ''} onLogout={() => {}} />
 			</div>
 
 			<div className='relative z-10 mx-auto flex max-w-7xl pt-6'>
@@ -209,19 +248,61 @@ export default function ShopPage() {
 								<div className='mt-4 grid grid-cols-2 gap-3'>
 									{(showAll ? gifts : gifts.slice(0, 4)).map(g => {
 										const Icon = iconMap[g.icon as string] || Gift
+										const backendImage =
+											typeof g.imageUrl === 'string' && g.imageUrl
+												? g.imageUrl.startsWith('http')
+													? g.imageUrl
+													: `${backendUrl}${g.imageUrl}`
+												: null
+										const staticImage = getStaticSrc(staticGiftImages[g.id])
+										const imgSrc = backendImage || staticImage || null
+										const hasImage = !!imgSrc
+										const supply =
+											typeof g.totalSupply === 'number'
+												? g.totalSupply
+												: g.totalSupply != null
+													? Number(g.totalSupply)
+													: null
+										const minted =
+											typeof g.mintedCount === 'number'
+												? g.mintedCount
+												: g.mintedCount != null
+													? Number(g.mintedCount)
+													: null
+										const limitLabel =
+											supply && minted != null
+												? `${minted}/${supply}`
+												: supply
+													? `до ${supply} шт.`
+													: null
 										return (
 											<button
 												key={g.id}
 												onClick={() => openGiftModal(g)}
 												className='flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-left hover:bg-white/60 dark:border-gray-700 dark:hover:bg-white/10'
 											>
-												<Icon className='h-5 w-5 text-pink-600 dark:text-pink-400' />
+												{hasImage && imgSrc ? (
+													<img
+														src={imgSrc}
+														alt={g.name}
+														className='h-8 w-8 rounded object-contain'
+													/>
+												) : (
+													<Icon className='h-5 w-5 text-pink-600 dark:text-pink-400' />
+												)}
 												<span className='text-sm text-gray-900 dark:text-gray-200'>
 													{g.name}
 												</span>
-												<span className='ml-auto text-xs text-gray-600 dark:text-gray-400'>
-													{g.coinPrice} коинов
-												</span>
+												<div className='ml-auto flex flex-col items-end gap-0.5'>
+													<span className='text-xs text-gray-600 dark:text-gray-400'>
+														{g.coinPrice} коинов
+													</span>
+													{limitLabel && (
+														<span className='text-[10px] text-indigo-600 dark:text-indigo-300'>
+															{limitLabel}
+														</span>
+													)}
+												</div>
 											</button>
 										)
 									})}
@@ -243,7 +324,21 @@ export default function ShopPage() {
 									<div className='flex items-center gap-3'>
 										{(() => {
 											const Icon = iconMap[selectedGift.icon as string] || Gift
-											return (
+											const hasImage = !!selectedGift.imageUrl
+											const imgSrc =
+												typeof selectedGift.imageUrl === 'string' &&
+												selectedGift.imageUrl
+													? selectedGift.imageUrl.startsWith('http')
+														? selectedGift.imageUrl
+														: `${backendUrl}${selectedGift.imageUrl}`
+													: null
+											return hasImage && imgSrc ? (
+												<img
+													src={imgSrc}
+													alt={selectedGift.name}
+													className='h-10 w-10 rounded object-contain'
+												/>
+											) : (
 												<Icon className='h-6 w-6 text-pink-600 dark:text-pink-400' />
 											)
 										})()}
@@ -291,51 +386,69 @@ export default function ShopPage() {
 												</button>
 											</div>
 											{giftMode && (
-												<div className='mt-3'>
-													<div className='text-sm text-gray-900 dark:text-gray-200'>
-														Выберите друга
-													</div>
-													{friendsError && (
-														<div className='mt-2 rounded-lg border border-red-500 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-600 dark:bg-red-900/30 dark:text-red-300'>
-															{friendsError}
+												<div className='mt-3 space-y-3'>
+													<div>
+														<div className='text-sm text-gray-900 dark:text-gray-200'>
+															Выберите друга
 														</div>
-													)}
-													<div className='mt-2 max-h-44 overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-700'>
-														{friendsLoading ? (
-															<div className='p-3 text-sm text-gray-600 dark:text-gray-400'>
-																Загрузка…
-															</div>
-														) : friends.length === 0 ? (
-															<div className='p-3 text-sm text-gray-600 dark:text-gray-400'>
-																Список друзей пуст
-															</div>
-														) : (
-															<div className='divide-y divide-gray-200 dark:divide-gray-700'>
-																{friends.map((f: any) => (
-																	<button
-																		key={f.id}
-																		onClick={() => setRecipientId(String(f.id))}
-																		className={`flex w-full items-center gap-2 p-3 text-left hover:bg-gray-50 dark:hover:bg-white/10 ${recipientId === String(f.id) ? 'bg-gray-100 dark:bg-white/10' : ''}`}
-																	>
-																		<div className='h-8 w-8 rounded-full bg-white/10' />
-																		<div className='flex-1'>
-																			<div className='text-sm text-gray-900 dark:text-gray-200'>
-																				{f.username ||
-																					`Пользователь ${String(f.id).slice(0, 6)}`}
-																			</div>
-																			<div className='text-xs text-gray-600 dark:text-gray-400'>
-																				{f.email || ''}
-																			</div>
-																		</div>
-																		<div className='text-xs text-gray-500'>
-																			{recipientId === String(f.id)
-																				? 'Выбран'
-																				: 'Выбрать'}
-																		</div>
-																	</button>
-																))}
+														{friendsError && (
+															<div className='mt-2 rounded-lg border border-red-500 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-600 dark:bg-red-900/30 dark:text-red-300'>
+																{friendsError}
 															</div>
 														)}
+														<div className='mt-2 max-h-44 overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-700'>
+															{friendsLoading ? (
+																<div className='p-3 text-sm text-gray-600 dark:text-gray-400'>
+																	Загрузка…
+																</div>
+															) : friends.length === 0 ? (
+																<div className='p-3 text-sm text-gray-600 dark:text-gray-400'>
+																	Список друзей пуст
+																</div>
+															) : (
+																<div className='divide-y divide-gray-200 dark:divide-gray-700'>
+																	{friends.map((f: any) => (
+																		<button
+																			key={f.id}
+																			onClick={() => setRecipientId(String(f.id))}
+																			className={`flex w-full items-center gap-2 p-3 text-left hover:bg-gray-50 dark:hover:bg-white/10 ${recipientId === String(f.id) ? 'bg-gray-100 dark:bg-white/10' : ''}`}
+																		>
+																			<div className='h-8 w-8 rounded-full bg-white/10' />
+																			<div className='flex-1'>
+																				<div className='text-sm text-gray-900 dark:text-gray-200'>
+																					{f.username ||
+																						`Пользователь ${String(f.id).slice(0, 6)}`}
+																				</div>
+																				<div className='text-xs text-gray-600 dark:text-gray-400'>
+																					{f.email || ''}
+																				</div>
+																			</div>
+																			<div className='text-xs text-gray-500'>
+																				{recipientId === String(f.id)
+																					? 'Выбран'
+																					: 'Выбрать'}
+																			</div>
+																		</button>
+																	))}
+																</div>
+															)}
+														</div>
+													</div>
+													<div>
+														<div className='text-sm text-gray-900 dark:text-gray-200'>
+															Подпись к подарку
+														</div>
+														<textarea
+															value={giftComment}
+															onChange={e => setGiftComment(e.target.value)}
+															rows={3}
+															maxLength={280}
+															placeholder='Напишите пару слов для получателя'
+															className='mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100'
+														/>
+														<div className='mt-1 text-xs text-gray-500 dark:text-gray-400 text-right'>
+															{giftComment.length}/280
+														</div>
 													</div>
 												</div>
 											)}

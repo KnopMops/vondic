@@ -9,6 +9,18 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Coffee, Crown, Flame, Flower, Gift, Heart, Star } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import birthdayImg from '../../../gifts/Birthday.jpg'
+import bouquetImg from '../../../gifts/bouquet.jpg'
+import crownImg from '../../../gifts/crown.jpg'
+import eggImg from '../../../gifts/egg.jpg'
+import femaleDayImg from '../../../gifts/female_day.jpg'
+import fireImg from '../../../gifts/fire.jpg'
+import fireworkImg from '../../../gifts/firework.jpg'
+import knowledgeImg from '../../../gifts/knowledge.jpg'
+import partnerImg from '../../../gifts/partner.jpg'
+import presentImg from '../../../gifts/present.jpg'
+import pumpkinImg from '../../../gifts/pumpkin.jpg'
+import starImg from '../../../gifts/star.jpg'
 import Post from './Post'
 
 type Props = {
@@ -31,6 +43,32 @@ export default function UserProfile({ user, currentUser }: Props) {
 	const [profilePosts, setProfilePosts] = useState<any[]>([])
 	const [loadingPosts, setLoadingPosts] = useState(false)
 	const [giftSenders, setGiftSenders] = useState<Record<string, any>>({})
+	const [giftCatalogMap, setGiftCatalogMap] = useState<Record<string, any>>({})
+	const backendUrl =
+		process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+	const STATIC_GIFT_IMAGES: Record<string, any> = {
+		birthday_cake: birthdayImg,
+		womens_day_bouquet: femaleDayImg,
+		valentine_heart: bouquetImg,
+		anniversary_crown: crownImg,
+		easter_egg: eggImg,
+		party_flame: fireImg,
+		newyear_fireworks: fireworkImg,
+		knowledge_day_coffee: knowledgeImg,
+		partner_badge: partnerImg,
+		christmas_gift: presentImg,
+		halloween_pumpkin: pumpkinImg,
+		gold_star: starImg,
+	}
+
+	const getStaticGiftSrc = (img: any): string | null => {
+		if (!img) return null
+		if (typeof img === 'string') return img
+		if (typeof img === 'object' && typeof img.src === 'string') {
+			return img.src
+		}
+		return null
+	}
 	const GIFT_NAME_MAP: Record<string, string> = {
 		newyear_fireworks: 'Новогодний салют',
 		valentine_heart: 'Валентинка',
@@ -81,11 +119,20 @@ export default function UserProfile({ user, currentUser }: Props) {
 		try {
 			const backendUrl =
 				process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+			const meRes = await fetch('/api/auth/me', { method: 'GET' })
+			if (!meRes.ok) {
+				throw new Error('Требуется авторизация')
+			}
+			const meData = await meRes.json()
+			const token = meData?.user?.access_token || meData?.access_token
+			if (!token) {
+				throw new Error('Требуется авторизация')
+			}
 			const res = await fetch(`${backendUrl}/api/v1/users/send-gift`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					access_token: authUser.access_token,
+					access_token: token,
 					target_user_id: user.id,
 					gift_id: giftId,
 					quantity: 1,
@@ -284,7 +331,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 
 	useEffect(() => {
 		if (activeTab !== 'gifts') return
-		const loadSenders = async () => {
+		const loadSendersAndCatalog = async () => {
 			try {
 				const ids = Array.isArray(user.gifts)
 					? Array.from(
@@ -295,22 +342,36 @@ export default function UserProfile({ user, currentUser }: Props) {
 							),
 						)
 					: []
-				const nextMap: Record<string, any> = { ...giftSenders }
+				const nextMap: Record<string, any> = {}
 				for (const id of ids) {
-					if (!nextMap[id]) {
-						const res = await fetch(`/api/users/${id}`, { method: 'GET' })
-						if (res.ok) {
-							const data = await res.json()
-							const u = data.user || data
-							nextMap[id] = u
-						}
+					const res = await fetch(`/api/users/${id}`, { method: 'GET' })
+					if (res.ok) {
+						const data = await res.json()
+						const u = data.user || data
+						nextMap[id] = u
 					}
 				}
 				setGiftSenders(nextMap)
+
+				const res = await fetch(`${backendUrl}/api/v1/gifts/`, {
+					method: 'GET',
+				})
+				if (res.ok) {
+					const data = await res.json()
+					if (Array.isArray(data)) {
+						const map: Record<string, any> = {}
+						for (const g of data) {
+							if (g && g.id) {
+								map[g.id] = g
+							}
+						}
+						setGiftCatalogMap(map)
+					}
+				}
 			} catch {}
 		}
-		loadSenders()
-	}, [activeTab, user.gifts, user.id])
+		loadSendersAndCatalog()
+	}, [activeTab, user.gifts, user.id, backendUrl])
 
 	const handleAddFriend = async () => {
 		if (!currentUser) return
@@ -1114,8 +1175,21 @@ export default function UserProfile({ user, currentUser }: Props) {
 								Кто купил: вы или другой пользователь
 							</p>
 							{Array.isArray(user.gifts) && user.gifts.length > 0 ? (
-								<div className='grid grid-cols-2 sm:grid-cols-3 gap-3'>
+								<div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'>
 									{user.gifts.map((g, idx) => {
+										const catalogGift = giftCatalogMap[g.gift_id || ''] || null
+										const backendImage =
+											catalogGift &&
+											typeof catalogGift.imageUrl === 'string' &&
+											catalogGift.imageUrl
+												? catalogGift.imageUrl.startsWith('http')
+													? catalogGift.imageUrl
+													: `${backendUrl}${catalogGift.imageUrl}`
+												: null
+										const staticImage = getStaticGiftSrc(
+											STATIC_GIFT_IMAGES[g.gift_id || ''],
+										)
+										const imageSrc = backendImage || staticImage
 										const Icon =
 											g.gift_id === 'newyear_fireworks'
 												? Flame
@@ -1146,39 +1220,102 @@ export default function UserProfile({ user, currentUser }: Props) {
 										const senderId = String(g.from_user_id || '')
 										const isSelf = senderId && senderId === String(user.id)
 										const sender = senderId ? giftSenders[senderId] : null
-										const whoText = isSelf
-											? 'Куплено вами'
-											: sender
-												? `Подарил ${sender.username || `#${String(sender.id || '').slice(0, 6)}`}`
-												: 'Подарил пользователь'
 										const dateText = g.created_at
 											? new Date(g.created_at).toLocaleDateString()
 											: ''
+										const supply =
+											typeof catalogGift?.totalSupply === 'number'
+												? catalogGift.totalSupply
+												: catalogGift?.totalSupply != null
+													? Number(catalogGift.totalSupply)
+													: null
+										const minted =
+											typeof catalogGift?.mintedCount === 'number'
+												? catalogGift.mintedCount
+												: catalogGift?.mintedCount != null
+													? Number(catalogGift.mintedCount)
+													: null
+										const limitLabel =
+											supply && minted != null
+												? `${minted}/${supply}`
+												: supply
+													? `до ${supply} шт.`
+													: null
+										const bgPresets = [
+											'from-emerald-500/70 via-emerald-600/80 to-teal-500/80',
+											'from-sky-500/70 via-sky-600/80 to-indigo-500/80',
+											'from-fuchsia-500/70 via-pink-500/80 to-rose-500/80',
+											'from-amber-500/70 via-orange-500/80 to-red-500/80',
+											'from-violet-500/70 via-purple-500/80 to-indigo-500/80',
+										]
+										const bg = bgPresets[idx % bgPresets.length]
 										return (
 											<motion.div
 												key={idx}
 												initial={{ opacity: 0, y: 10, scale: 0.95 }}
 												animate={{ opacity: 1, y: 0, scale: 1 }}
 												transition={{ duration: 0.3 }}
-												className='relative overflow-hidden rounded-xl bg-white/5 border border-white/10 p-3'
+												className='relative overflow-hidden rounded-2xl border border-white/10 bg-gray-900/80'
 											>
-												<div className='flex items-center gap-2'>
-													<Icon className='w-5 h-5 text-pink-400' />
-													<span className='text-sm text-white'>{giftName}</span>
-													<span className='ml-auto text-xs text-gray-400'>
-														x{g.quantity || 1}
-													</span>
-												</div>
-												<div className='mt-1 text-xs text-gray-400'>
-													{whoText}
-												</div>
-												{dateText && (
-													<div className='text-[10px] text-gray-500 mt-0.5'>
-														{dateText}
+												<div
+													className={`relative h-24 sm:h-28 w-full bg-gradient-to-r ${bg}`}
+												>
+													<div className='absolute inset-0 flex items-center justify-center'>
+														{imageSrc ? (
+															<img
+																src={imageSrc}
+																alt={giftName}
+																className='h-14 w-auto sm:h-16 object-contain drop-shadow-lg'
+															/>
+														) : (
+															<Icon className='h-10 w-10 text-white drop-shadow' />
+														)}
 													</div>
-												)}
-												<div className='absolute -top-6 -left-6 w-24 h-24 bg-pink-500/10 rounded-full blur-3xl pointer-events-none' />
-												<div className='absolute -bottom-6 -right-6 w-24 h-24 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none' />
+													{sender && sender.avatar_url && (
+														<div className='absolute left-2 top-2'>
+															<img
+																src={getAttachmentUrl(sender.avatar_url)}
+																alt={sender.username || 'sender'}
+																className='h-7 w-7 rounded-full border border-white/60 object-cover bg-black/40'
+															/>
+														</div>
+													)}
+													<div className='absolute right-2 top-2 flex flex-col items-end gap-0.5'>
+														<div className='rounded-full bg-black/40 px-2 py-0.5 text-[10px] font-semibold text-white'>
+															x{g.quantity || 1}
+														</div>
+														{limitLabel && (
+															<div className='rounded-full bg-black/30 px-2 py-0.5 text-[9px] font-semibold text-indigo-200'>
+																{limitLabel}
+															</div>
+														)}
+													</div>
+												</div>
+												<div className='px-3 pt-2 pb-1 flex items-center justify-between'>
+													<div className='mr-2 truncate text-xs font-medium text-white'>
+														{giftName}
+													</div>
+													{dateText && (
+														<div className='text-[10px] text-gray-300'>
+															{dateText}
+														</div>
+													)}
+												</div>
+												<div className='px-3 pb-2 text-[11px] text-gray-300'>
+													{isSelf
+														? 'Куплено вами'
+														: sender
+															? `Подарил ${sender.username || `#${String(sender.id || '').slice(0, 6)}`}`
+															: 'Подарок'}
+													{g.comment && (
+														<>
+															<span className='mx-1 text-gray-500'>•</span>
+															<span className='break-words'>
+																"{g.comment}"
+															</span>
+														</>
+													)}
+												</div>
 											</motion.div>
 										)
 									})}

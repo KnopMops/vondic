@@ -3,6 +3,7 @@
 import Header from '@/components/social/Header'
 import Sidebar from '@/components/social/Sidebar'
 import { useAuth } from '@/lib/AuthContext'
+import { Loader2, Paperclip } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
 type Escalation = {
@@ -13,7 +14,7 @@ type Escalation = {
 }
 
 export default function AdminSupportPage() {
-	const { user } = useAuth()
+	const { user, logout } = useAuth()
 	const [items, setItems] = useState<Escalation[]>([])
 	const [chatOpen, setChatOpen] = useState(false)
 	const [selectedId, setSelectedId] = useState<number | null>(null)
@@ -25,6 +26,21 @@ export default function AdminSupportPage() {
 	const lastMsgIdRef = useRef(0)
 	const BACKEND_URL =
 		process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:5050'
+
+	const backendUrl =
+		process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:5050'
+
+	const [gifts, setGifts] = useState<any[]>([])
+	const [giftsLoading, setGiftsLoading] = useState(false)
+	const [giftsError, setGiftsError] = useState<string | null>(null)
+	const [newGiftName, setNewGiftName] = useState('')
+	const [newGiftPrice, setNewGiftPrice] = useState('0')
+	const [newGiftIcon, setNewGiftIcon] = useState('Gift')
+	const [newGiftDesc, setNewGiftDesc] = useState('')
+	const [newGiftImageUrl, setNewGiftImageUrl] = useState('')
+	const [newGiftTotalSupply, setNewGiftTotalSupply] = useState('')
+	const [giftUploading, setGiftUploading] = useState(false)
+	const giftFileInputRef = useRef<HTMLInputElement | null>(null)
 
 	const renderInline = (text: string, keyPrefix: string) => {
 		const parts = text.split('`')
@@ -111,6 +127,26 @@ export default function AdminSupportPage() {
 			}
 		} catch (e) {
 			console.error('Admin escalations load error', e)
+		}
+	}
+
+	const loadGifts = async () => {
+		setGiftsLoading(true)
+		setGiftsError(null)
+		try {
+			const res = await fetch(`${backendUrl}/api/v1/gifts/`, {
+				method: 'GET',
+			})
+			if (!res.ok) {
+				const text = await res.text()
+				throw new Error(text || 'Ошибка загрузки подарков')
+			}
+			const data = await res.json()
+			setGifts(Array.isArray(data) ? data : [])
+		} catch (e: any) {
+			setGiftsError(e.message || 'Не удалось загрузить подарки')
+		} finally {
+			setGiftsLoading(false)
 		}
 	}
 
@@ -271,6 +307,134 @@ export default function AdminSupportPage() {
 		}
 	}
 
+	const ensureToken = async (): Promise<string> => {
+		const meRes = await fetch('/api/auth/me', { method: 'GET' })
+		if (meRes.ok) {
+			const meData = await meRes.json()
+			const token = meData?.user?.access_token || meData?.access_token
+			if (token) return token
+		}
+		throw new Error('Требуется авторизация')
+	}
+
+	const handleGiftFileSelect = async (
+		e: React.ChangeEvent<HTMLInputElement>,
+	) => {
+		const file = e.target.files?.[0]
+		if (!file) return
+		if (file.size > 10 * 1024 * 1024) {
+			alert('Файл слишком большой (макс 10МБ)')
+			return
+		}
+		setGiftUploading(true)
+		try {
+			const reader = new FileReader()
+			reader.onload = async () => {
+				const base64 = reader.result as string
+				try {
+					const res = await fetch('/api/v1/upload/file', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+							file: base64,
+							filename: file.name,
+						}),
+					})
+					const data = await res.json()
+					if (res.ok && data.url) {
+						setNewGiftImageUrl(data.url)
+					} else {
+						alert('Ошибка загрузки: ' + (data.error || 'Unknown error'))
+					}
+				} catch (err) {
+					console.error(err)
+					alert('Ошибка загрузки файла')
+				} finally {
+					setGiftUploading(false)
+					if (giftFileInputRef.current) {
+						giftFileInputRef.current.value = ''
+					}
+				}
+			}
+			reader.readAsDataURL(file)
+		} catch (err) {
+			setGiftUploading(false)
+		}
+	}
+
+	const createGift = async () => {
+		try {
+			const name = newGiftName.trim()
+			if (!name) {
+				setGiftsError('Введите название подарка')
+				return
+			}
+			const price = parseInt(newGiftPrice || '0', 10)
+			if (Number.isNaN(price) || price < 0) {
+				setGiftsError('Цена должна быть неотрицательным числом')
+				return
+			}
+			setGiftsError(null)
+			const token = await ensureToken()
+			const res = await fetch(`${backendUrl}/api/v1/gifts/admin/create`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`,
+				},
+				body: JSON.stringify({
+					name,
+					coin_price: price,
+					icon: newGiftIcon,
+					description: newGiftDesc.trim() || undefined,
+					image_url: newGiftImageUrl || undefined,
+					total_supply: newGiftTotalSupply.trim() || undefined,
+				}),
+			})
+			const text = await res.text()
+			let data: any = {}
+			try {
+				data = JSON.parse(text)
+			} catch {}
+			if (!res.ok || !data?.gift) {
+				throw new Error(data?.error || text || 'Не удалось создать подарок')
+			}
+			setGifts(prev => [...prev, data.gift])
+			setNewGiftName('')
+			setNewGiftPrice('0')
+			setNewGiftDesc('')
+			setNewGiftImageUrl('')
+			setNewGiftTotalSupply('')
+		} catch (e: any) {
+			setGiftsError(e.message || 'Не удалось создать подарок')
+		}
+	}
+
+	const deleteGift = async (id: string) => {
+		try {
+			const token = await ensureToken()
+			const res = await fetch(`${backendUrl}/api/v1/gifts/admin/delete`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`,
+				},
+				body: JSON.stringify({ id }),
+			})
+			const text = await res.text()
+			let data: any = {}
+			try {
+				data = JSON.parse(text)
+			} catch {}
+			if (!res.ok || data?.error) {
+				throw new Error(data?.error || text || 'Не удалось удалить подарок')
+			}
+			setGifts(prev => prev.filter(g => g.id !== id))
+		} catch (e: any) {
+			setGiftsError(e.message || 'Не удалось удалить подарок')
+		}
+	}
+
 	const closeEscalation = async (escId: number) => {
 		try {
 			const res = await fetch(`/api/support/admin/escalations/close`, {
@@ -300,11 +464,17 @@ export default function AdminSupportPage() {
 		loadEscalations()
 	}, [])
 
+	useEffect(() => {
+		if (user?.role === 'Admin') {
+			loadGifts()
+		}
+	}, [user?.role])
+
 	const roleAllowed = user?.role === 'Support' || user?.role === 'Admin'
 
 	return (
 		<div className='min-h-screen bg-gradient-to-b from-gray-950 to-gray-900'>
-			<Header />
+			<Header email={user?.email || ''} onLogout={logout} />
 			<main className='mx-auto max-w-6xl px-4 pt-6 sm:px-6 lg:px-8 grid grid-cols-12 gap-6'>
 				<div className='col-span-3'>
 					<Sidebar />
@@ -325,42 +495,205 @@ export default function AdminSupportPage() {
 						{!roleAllowed ? (
 							<div className='p-4 text-gray-400'>Недостаточно прав</div>
 						) : (
-							<div className='space-y-4'>
-								{items.length === 0 ? (
-									<div className='p-4 text-gray-400'>Нет заявок</div>
-								) : (
-									items.map(i => (
-										<div
-											key={i.id}
-											className='rounded-xl border border-gray-800 bg-gray-950 p-4'
-										>
-											<div className='text-sm text-gray-300'>
-												<div className='font-semibold text-white mb-1'>
-													Заявка #{i.id}
+							<div className='space-y-8'>
+								<div className='space-y-4'>
+									{items.length === 0 ? (
+										<div className='p-4 text-gray-400'>Нет заявок</div>
+									) : (
+										items.map(i => (
+											<div
+												key={i.id}
+												className='rounded-xl border border-gray-800 bg-gray-950 p-4'
+											>
+												<div className='text-sm text-gray-300'>
+													<div className='font-semibold text-white mb-1'>
+														Заявка #{i.id}
+													</div>
+													<div className='text-gray-400'>
+														Пользователь: {i.user_id}
+													</div>
+													<div className='mt-2 text-gray-200'>
+														Вопрос: {i.question}
+													</div>
 												</div>
-												<div className='text-gray-400'>
-													Пользователь: {i.user_id}
-												</div>
-												<div className='mt-2 text-gray-200'>
-													Вопрос: {i.question}
+												<div className='mt-3 flex gap-2'>
+													<button
+														onClick={() => openChat(i.id)}
+														className='px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium'
+													>
+														Чат
+													</button>
+													<button
+														onClick={() => closeEscalation(i.id)}
+														className='px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium'
+													>
+														Закрыть
+													</button>
 												</div>
 											</div>
-											<div className='mt-3 flex gap-2'>
-												<button
-													onClick={() => openChat(i.id)}
-													className='px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium'
+										))
+									)}
+								</div>
+
+								{user?.role === 'Admin' && (
+									<div className='rounded-xl border border-gray-800 bg-gray-950 p-4'>
+										<div className='flex items-center justify-between mb-2'>
+											<div className='text-sm font-semibold text-white'>
+												Подарки (админ)
+											</div>
+											<div className='text-xs text-gray-400'>
+												Управление списком подарков магазина
+											</div>
+										</div>
+										{giftsError && (
+											<div className='mb-3 rounded-md border border-red-500 bg-red-50 px-3 py-2 text-xs text-red-700'>
+												{giftsError}
+											</div>
+										)}
+										<div className='grid grid-cols-1 gap-3 md:grid-cols-4'>
+											<div className='md:col-span-2'>
+												<label className='block text-xs font-medium text-gray-300'>
+													Название
+												</label>
+												<input
+													value={newGiftName}
+													onChange={e => setNewGiftName(e.target.value)}
+													className='mt-1 w-full rounded-md border border-gray-700 bg-gray-900 px-2 py-1.5 text-sm text-gray-100 focus:border-indigo-500 focus:ring-indigo-500'
+												/>
+											</div>
+											<div>
+												<label className='block text-xs font-medium text-gray-300'>
+													Цена (коины)
+												</label>
+												<input
+													type='number'
+													min={0}
+													value={newGiftPrice}
+													onChange={e => setNewGiftPrice(e.target.value)}
+													className='mt-1 w-full rounded-md border border-gray-700 bg-gray-900 px-2 py-1.5 text-sm text-gray-100 focus:border-indigo-500 focus:ring-indigo-500'
+												/>
+											</div>
+											<div>
+												<label className='block text-xs font-medium text-gray-300'>
+													Иконка
+												</label>
+												<select
+													value={newGiftIcon}
+													onChange={e => setNewGiftIcon(e.target.value)}
+													className='mt-1 w-full rounded-md border border-gray-700 bg-gray-900 px-2 py-1.5 text-sm text-gray-100 focus:border-indigo-500 focus:ring-indigo-500'
 												>
-													Чат
+													<option value='Gift'>Gift</option>
+													<option value='Heart'>Heart</option>
+													<option value='Flame'>Flame</option>
+													<option value='Flower'>Flower</option>
+													<option value='Coffee'>Coffee</option>
+													<option value='Crown'>Crown</option>
+													<option value='Star'>Star</option>
+												</select>
+											</div>
+										</div>
+										<div className='mt-3 grid grid-cols-1 gap-3 md:grid-cols-2'>
+											<div>
+												<label className='block text-xs font-medium text-gray-300'>
+													Тираж (пусто — без лимита)
+												</label>
+												<input
+													type='number'
+													min={1}
+													value={newGiftTotalSupply}
+													onChange={e => setNewGiftTotalSupply(e.target.value)}
+													className='mt-1 w-full rounded-md border border-gray-700 bg-gray-900 px-2 py-1.5 text-sm text-gray-100 focus:border-indigo-500 focus:ring-indigo-500'
+													placeholder='Например, 500'
+												/>
+											</div>
+											<label className='block text-xs font-medium text-gray-300'>
+												Описание
+											</label>
+											<textarea
+												value={newGiftDesc}
+												onChange={e => setNewGiftDesc(e.target.value)}
+												rows={2}
+												className='mt-1 w-full rounded-md border border-gray-700 bg-gray-900 px-2 py-1.5 text-sm text-gray-100 focus:border-indigo-500 focus:ring-indigo-500'
+											/>
+										</div>
+										<div className='mt-3 grid grid-cols-1 md:grid-cols-[auto,1fr] gap-3 items-center'>
+											<div className='flex items-center gap-2'>
+												<input
+													ref={giftFileInputRef}
+													type='file'
+													accept='image/*,image/gif'
+													className='hidden'
+													onChange={handleGiftFileSelect}
+												/>
+												<button
+													type='button'
+													onClick={() => giftFileInputRef.current?.click()}
+													disabled={giftUploading}
+													className='inline-flex items-center gap-1 rounded-md border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs font-medium text-gray-100 hover:bg-gray-800 disabled:opacity-60'
+												>
+													{giftUploading ? (
+														<Loader2 className='h-4 w-4 animate-spin' />
+													) : (
+														<Paperclip className='h-4 w-4' />
+													)}
+													<span>Загрузить картинку</span>
 												</button>
+												{newGiftImageUrl && (
+													<span className='text-[10px] text-gray-400 max-w-[160px] truncate'>
+														{newGiftImageUrl}
+													</span>
+												)}
+											</div>
+											<div className='flex justify-end'>
 												<button
-													onClick={() => closeEscalation(i.id)}
-													className='px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium'
+													onClick={createGift}
+													className='rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-60'
+													disabled={giftsLoading}
 												>
-													Закрыть
+													Создать подарок
 												</button>
 											</div>
 										</div>
-									))
+										<div className='mt-4 border-t border-gray-800 pt-3'>
+											<div className='text-xs font-semibold uppercase tracking-wide text-gray-400'>
+												Текущие подарки
+											</div>
+											{giftsLoading ? (
+												<div className='mt-2 text-xs text-gray-500'>
+													Загрузка подарков...
+												</div>
+											) : (
+												<div className='mt-2 space-y-2'>
+													{gifts.map(g => (
+														<div
+															key={g.id}
+															className='flex items-center justify-between rounded-lg border border-gray-800 px-3 py-2 text-sm'
+														>
+															<div>
+																<div className='font-medium text-gray-100'>
+																	{g.name}
+																</div>
+																<div className='text-xs text-gray-400'>
+																	{g.coinPrice} коинов · {g.icon}
+																</div>
+															</div>
+															<button
+																onClick={() => deleteGift(g.id)}
+																className='text-xs text-red-500 hover:text-red-600'
+															>
+																Удалить
+															</button>
+														</div>
+													))}
+													{gifts.length === 0 && (
+														<div className='mt-1 text-xs text-gray-500'>
+															Пока нет ни одного подарка
+														</div>
+													)}
+												</div>
+											)}
+										</div>
+									</div>
 								)}
 							</div>
 						)}

@@ -9,6 +9,7 @@ export interface User {
 		url: string
 		type?: 'image' | 'video'
 		created_at?: string
+		text?: string
 		reactions?: { user_id: string; emoji: string; created_at?: string }[]
 	}[]
 	description?: string
@@ -31,6 +32,7 @@ export interface GiftItem {
 	from_user_id?: string
 	created_at?: string
 	is_displayed?: boolean
+	comment?: string | null
 }
 
 export interface Channel {
