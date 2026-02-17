@@ -150,6 +150,28 @@ def create_app():
         )
         return jsonify(messages), 200
 
+    @app.route("/messages/history", methods=["DELETE"])
+    def delete_messages_history():
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        token = data.get("token")
+        target_id = data.get("target_id")
+
+        if not token:
+            return jsonify({"error": "Token required"}), 401
+
+        if not target_id:
+            return jsonify({"error": "target_id is required"}), 400
+
+        user = user_repo.fetch_user_by_token(token)
+        if not user:
+            return jsonify({"error": "Invalid token"}), 401
+
+        deleted = user_repo.delete_messages_history(user["id"], target_id)
+        return jsonify({"deleted": deleted}), 200
+
     @app.route("/channels/history", methods=["POST"])
     def get_channel_history():
         data = request.get_json()
@@ -175,6 +197,66 @@ def create_app():
             channel_id, limit, offset
         )
         return jsonify(messages), 200
+
+    @app.route("/channels/history", methods=["DELETE"])
+    def delete_channel_history():
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        token = data.get("token")
+        channel_id = data.get("channel_id")
+
+        if not token:
+            return jsonify({"error": "Token required"}), 401
+
+        if not channel_id:
+            return jsonify({"error": "channel_id is required"}), 400
+
+        user = user_repo.fetch_user_by_token(token)
+        if not user:
+            return jsonify({"error": "Invalid token"}), 401
+
+        owner_id = user_repo.get_channel_owner(channel_id)
+        if owner_id and str(owner_id) != str(user["id"]):
+            return jsonify({"error": "Forbidden"}), 403
+
+        participants = user_repo.get_channel_participants(channel_id)
+        if not participants or str(user["id"]) not in [str(p) for p in participants]:
+            return jsonify({"error": "Access denied"}), 403
+
+        deleted = user_repo.delete_channel_history(channel_id)
+        return jsonify({"deleted": deleted}), 200
+
+    @app.route("/groups/history", methods=["DELETE"])
+    def delete_group_history():
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        token = data.get("token")
+        group_id = data.get("group_id")
+
+        if not token:
+            return jsonify({"error": "Token required"}), 401
+
+        if not group_id:
+            return jsonify({"error": "group_id is required"}), 400
+
+        user = user_repo.fetch_user_by_token(token)
+        if not user:
+            return jsonify({"error": "Invalid token"}), 401
+
+        participants = user_repo.get_group_participants(group_id)
+        if not participants or str(user["id"]) not in [str(p) for p in participants]:
+            return jsonify({"error": "Access denied"}), 403
+
+        owner_id = user_repo.get_group_owner(group_id)
+        if owner_id and str(owner_id) != str(user["id"]):
+            return jsonify({"error": "Forbidden"}), 403
+
+        deleted = user_repo.delete_group_history(group_id)
+        return jsonify({"deleted": deleted}), 200
 
     @app.route("/chats/search", methods=["POST"])
     def search_chats():

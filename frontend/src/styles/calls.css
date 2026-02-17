@@ -45,6 +45,22 @@
   font-size: 12px;
 }
 
+@media (max-width: 640px) {
+  .call-button {
+    padding: 10px;
+    border-radius: 999px;
+    gap: 0;
+  }
+
+  .call-icon {
+    font-size: 18px;
+  }
+
+  .call-text {
+    display: none;
+  }
+}
+
 /* Modal Overlay */
 .modal-overlay {
   position: fixed;

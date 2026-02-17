@@ -156,3 +156,66 @@ export async function DELETE(
 		)
 	}
 }
+
+export async function PUT(
+	req: NextRequest,
+	{ params }: { params: Promise<{ id: string }> },
+) {
+	try {
+		const { id } = await params
+		const accessToken = await getAccessToken(req)
+		if (!accessToken) {
+			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+		}
+
+		const body = await req.json().catch(() => ({}))
+		const { content, attachments, is_blog } = body || {}
+
+		const payload: Record<string, any> = {
+			access_token: accessToken,
+			post_id: id,
+		}
+
+		if (typeof content === 'string') {
+			payload.content = content
+		}
+		if (Array.isArray(attachments)) {
+			payload.attachments = attachments
+		}
+		if (typeof is_blog !== 'undefined') {
+			payload.is_blog = is_blog
+		}
+
+		const backendUrl =
+			process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+
+		const res = await fetch(`${backendUrl}/api/v1/posts/`, {
+			method: 'PUT',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${accessToken}`,
+			},
+			body: JSON.stringify(payload),
+		})
+
+		const text = await res.text()
+		let data: any = {}
+		try {
+			data = JSON.parse(text)
+		} catch {
+			data = { message: text }
+		}
+
+		if (!res.ok) {
+			return NextResponse.json(data, { status: res.status })
+		}
+
+		return NextResponse.json(data, { status: 200 })
+	} catch (error) {
+		console.error('Update post proxy error:', error)
+		return NextResponse.json(
+			{ error: 'Internal Server Error' },
+			{ status: 500 },
+		)
+	}
+}

@@ -2,9 +2,10 @@
 
 import { useAppSelector } from '@/lib/hooks'
 import { Attachment } from '@/lib/types'
-import { getAttachmentUrl, formatMskDateTime } from '@/lib/utils'
+import { formatMskDateTime, getAttachmentUrl } from '@/lib/utils'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 type PostData = {
 	id: string
@@ -42,6 +43,11 @@ export default function PostDetailsModal(props: Props) {
 	const [post, setPost] = useState<PostData | null>(null)
 	const [loading, setLoading] = useState(true)
 	const [error, setError] = useState('')
+	const [mounted, setMounted] = useState(false)
+
+	useEffect(() => {
+		setMounted(true)
+	}, [])
 
 	useEffect(() => {
 		if (!isOpen) return
@@ -74,7 +80,7 @@ export default function PostDetailsModal(props: Props) {
 		}
 	}, [postId, isOpen, props])
 
-	if (!isOpen) return null
+	if (!isOpen || !mounted) return null
 
 	const isImageAttachment = (a: Attachment) => {
 		const ext = (a.ext || '').toLowerCase()
@@ -89,17 +95,15 @@ export default function PostDetailsModal(props: Props) {
 		)
 	}
 
-	return (
-		<div className='fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm'>
-			<div className='w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-gray-800 flex flex-col max-h-[90vh]'>
+	return createPortal(
+		<div className='fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4'>
+			<div className='flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-white/10 bg-black/80 backdrop-blur shadow-xl'>
 				{/* Header */}
-				<div className='flex items-center justify-between border-b border-gray-200 p-4 dark:border-gray-700'>
-					<h2 className='text-lg font-bold text-gray-900 dark:text-white'>
-						Просмотр поста
-					</h2>
+				<div className='flex items-center justify-between border-b border-white/10 px-4 py-3'>
+					<h2 className='text-lg font-bold text-white'>Просмотр поста</h2>
 					<button
 						onClick={onClose}
-						className='rounded-full p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200'
+						className='rounded-full p-1 text-gray-300 hover:bg-white/10 hover:text-white'
 					>
 						<svg
 							xmlns='http://www.w3.org/2000/svg'
@@ -119,13 +123,13 @@ export default function PostDetailsModal(props: Props) {
 				</div>
 
 				{/* Content */}
-				<div className='overflow-y-auto p-6'>
+				<div className='overflow-y-auto p-6 text-gray-200'>
 					{loading ? (
 						<div className='flex justify-center py-10'>
 							<div className='h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent'></div>
 						</div>
 					) : error ? (
-						<div className='text-center text-red-500 py-10'>{error}</div>
+						<div className='text-center text-red-400 py-10'>{error}</div>
 					) : post ? (
 						<div className='space-y-4'>
 							{/* Author Info */}
@@ -141,16 +145,16 @@ export default function PostDetailsModal(props: Props) {
 											className='h-12 w-12 rounded-full object-cover'
 										/>
 									) : (
-										<div className='h-12 w-12 rounded-full bg-indigo-200 dark:bg-indigo-900/50' />
+										<div className='h-12 w-12 rounded-full bg-indigo-900/50' />
 									)}
 									<div>
-										<div className='font-bold text-gray-900 dark:text-white hover:underline'>
+										<div className='font-bold text-white hover:underline'>
 											{post.author_name || 'Unknown User'}
 											{post.author_premium && (
 												<span className='ml-1 text-amber-400'>★</span>
 											)}
 										</div>
-										<div className='text-sm text-gray-500 dark:text-gray-400'>
+										<div className='text-sm text-gray-400'>
 											{formatMskDateTime(post.created_at, {
 												month: 'long',
 											})}
@@ -160,7 +164,7 @@ export default function PostDetailsModal(props: Props) {
 							</div>
 
 							{/* Post Text */}
-							<div className='text-lg text-gray-800 dark:text-gray-200 whitespace-pre-wrap'>
+							<div className='text-lg text-gray-200 whitespace-pre-wrap'>
 								{post.content}
 							</div>
 
@@ -195,10 +199,10 @@ export default function PostDetailsModal(props: Props) {
 													href={getAttachmentUrl(a.url)}
 													target='_blank'
 													rel='noreferrer'
-													className='flex items-center justify-between rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-800 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-200 dark:hover:bg-gray-900/60 transition-colors'
+													className='flex items-center justify-between rounded-lg border border-white/10 bg-black/40 px-4 py-3 text-sm text-gray-200 hover:bg-white/5 transition-colors'
 												>
 													<span className='truncate'>{a.name}</span>
-													<span className='ml-4 text-xs text-gray-500 dark:text-gray-400'>
+													<span className='ml-4 text-xs text-gray-400'>
 														{a.ext ? a.ext.toUpperCase() : 'FILE'}
 													</span>
 												</a>
@@ -208,7 +212,7 @@ export default function PostDetailsModal(props: Props) {
 							)}
 
 							{/* Stats */}
-							<div className='mt-6 flex items-center gap-6 border-t border-gray-200 pt-4 dark:border-gray-700 text-gray-500 dark:text-gray-400'>
+							<div className='mt-6 flex items-center gap-6 border-t border-white/10 pt-4 text-gray-400'>
 								<div className='flex items-center gap-2'>
 									<svg
 										xmlns='http://www.w3.org/2000/svg'
@@ -248,6 +252,7 @@ export default function PostDetailsModal(props: Props) {
 					) : null}
 				</div>
 			</div>
-		</div>
+		</div>,
+		document.body,
 	)
 }

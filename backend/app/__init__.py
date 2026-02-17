@@ -134,6 +134,13 @@ def create_app(config_class=Config):
                     db.session.execute(
                         text("ALTER TABLE users ADD COLUMN api_key TEXT"))
                     db.session.commit()
+                pcols = db.session.execute(
+                    text("PRAGMA table_info(posts)")).fetchall()
+                pcolumn_names = [c[1] for c in pcols]
+                if pcolumn_names and "is_blog" not in pcolumn_names:
+                    db.session.execute(
+                        text("ALTER TABLE posts ADD COLUMN is_blog INTEGER DEFAULT 0"))
+                    db.session.commit()
                 gc_cols = db.session.execute(
                     text("PRAGMA table_info(gifts_catalog)")).fetchall()
                 if not gc_cols:
@@ -313,6 +320,8 @@ def create_app(config_class=Config):
                 except Exception as e:
                     print(f"Failed to ensure AI user: {e}")
 
+    from app.api.public.v1.account import public_account_bp
+    from app.api.public.v1.bots import public_bots_bp
     from app.api.v1.auth import auth_bp
     from app.api.v1.bots import bots_bp
     from app.api.v1.channels import channels_bp
@@ -330,8 +339,6 @@ def create_app(config_class=Config):
     from app.api.v1.support import support_bp
     from app.api.v1.upload import upload_bp
     from app.api.v1.users import users_bp
-    from app.api.public.v1.account import public_account_bp
-    from app.api.public.v1.bots import public_bots_bp
 
     app.register_blueprint(users_bp)
     app.register_blueprint(bots_bp)

@@ -1,6 +1,9 @@
 import logging
+import time
 import uuid
+from collections import defaultdict, deque
 from datetime import datetime
+from threading import Lock
 
 from flask import request, session
 from flask_socketio import ConnectionRefusedError, emit, join_room
@@ -17,6 +20,10 @@ class SignalingService:
         self.broker = broker
         self.group_calls = {}
         self.voice_channel_calls = {}
+        self._connect_buckets = defaultdict(deque)
+        self._connect_lock = Lock()
+        self._connect_limit = 20
+        self._connect_window_seconds = 60
         self._bind_events()
 
     def _bind_events(self):
@@ -45,6 +52,25 @@ class SignalingService:
         self.io.on_event("get_group_history", self.on_get_group_history)
         self.io.on_event("get_history", self.on_get_history)
 
+    def _client_key(self):
+        forwarded = request.headers.get("X-Forwarded-For", "")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+        return request.remote_addr or "unknown"
+
+    def _allow_connect(self):
+        now = time.time()
+        key = self._client_key()
+        with self._connect_lock:
+            bucket = self._connect_buckets[key]
+            cutoff = now - self._connect_window_seconds
+            while bucket and bucket[0] <= cutoff:
+                bucket.popleft()
+            if len(bucket) >= self._connect_limit:
+                return False
+            bucket.append(now)
+        return True
+
     def _get_sender(self):
         sender_id = session.get("user_id")
         sender = None
@@ -57,6 +83,10 @@ class SignalingService:
         return sender_id, sender
 
     def on_connect(self, auth=None):
+        if not self._allow_connect():
+            logger.warning("Отклонено: превышен лимит подключений")
+            raise ConnectionRefusedError(
+                "429 Too Many Requests: Превышен лимит подключений")
         token_value = None
         if auth and isinstance(auth, dict):
             token_value = auth.get("token")

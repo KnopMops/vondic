@@ -1,3 +1,10 @@
+import hashlib
+import os
+import sqlite3
+import time
+
+from app.core.config import Config
+from app.models.user import User
 from app.schemas.comment_schema import comment_schema, comments_schema
 from app.schemas.post_schema import post_schema, posts_schema
 from app.services.comment_service import CommentService
@@ -8,11 +15,30 @@ from flask import Blueprint, jsonify, request
 posts_bp = Blueprint("posts", __name__, url_prefix="/api/v1/posts")
 
 
+def notify_all_users(title: str, message: str, notification_type: str = "system"):
+    ts = int(time.time())
+    conn = sqlite3.connect(os.path.join(Config.BASE_DIR, "database.db"))
+    cur = conn.cursor()
+    users = User.query.filter(User.is_blocked == 0).all()
+    for u in users:
+        content_hash = hashlib.sha256(
+            f"{u.id}|{message}|{ts}".encode("utf-8")
+        ).hexdigest()
+        cur.execute(
+            "INSERT INTO notifications (user_id, title, type, message, created_at, delivered, notification_hash) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (u.id, title, notification_type, message, ts, 0, content_hash),
+        )
+    conn.commit()
+    conn.close()
+
+
 @posts_bp.route("/", methods=["GET"])
 def get_posts():
     page = request.args.get("page", 1, type=int)
     per_page = request.args.get("per_page", 5, type=int)
     user_id = request.args.get("user_id", type=str)
+    kind = (request.args.get("kind") or "").strip().lower()
+    is_blog = kind == "blog"
 
     if page < 1:
         page = 1
@@ -22,7 +48,7 @@ def get_posts():
         per_page = 50
 
     pagination = PostService.get_posts_paginated(
-        page=page, per_page=per_page, user_id=user_id
+        page=page, per_page=per_page, user_id=user_id, is_blog=is_blog
     )
     return jsonify({
         "items": posts_schema.dump(pagination.items),
@@ -66,9 +92,20 @@ def create_post(current_user):
     if attachments is not None and not isinstance(attachments, list):
         return jsonify({"error": "attachments must be a list"}), 400
 
-    post = PostService.create_post(data, current_user.id)
+    is_blog = bool(data.get("is_blog"))
+    if is_blog and current_user.role != "Admin":
+        return jsonify({"error": "Unauthorized"}), 403
+
+    post = PostService.create_post(data, current_user.id, is_blog=is_blog)
     if not post:
         return jsonify({"error": "Failed to create post"}), 500
+
+    if is_blog:
+        notify_all_users(
+            title=current_user.username,
+            message=post.content or "",
+            notification_type="blog",
+        )
 
     return jsonify(post_schema.dump(post)), 201
 
@@ -76,7 +113,7 @@ def create_post(current_user):
 @posts_bp.route("/", methods=["PUT"])
 @token_required
 def update_post(current_user):
-    data = request.get_json()
+    data = request.get_json() or {}
     post_id = data.get("post_id")
 
     if not post_id:

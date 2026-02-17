@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
 		const page = searchParams.get('page')
 		const perPage = searchParams.get('per_page')
 		const userId = searchParams.get('user_id')
+		const kind = searchParams.get('kind')
 
 		const accessToken = await getAccessToken(req)
 		const headers: HeadersInit = {
@@ -24,6 +25,7 @@ export async function GET(req: NextRequest) {
 		if (page) backendUrl.searchParams.set('page', page)
 		if (perPage) backendUrl.searchParams.set('per_page', perPage)
 		if (userId) backendUrl.searchParams.set('user_id', userId)
+		if (kind) backendUrl.searchParams.set('kind', kind)
 
 		const postsResponse = await fetch(backendUrl.toString(), {
 			method: 'GET',
@@ -84,7 +86,8 @@ export async function GET(req: NextRequest) {
 			total: postsPayload.total ?? enrichedPosts.length,
 			pages: postsPayload.pages ?? 1,
 			page: postsPayload.page ?? Number(page || 1),
-			per_page: postsPayload.per_page ?? Number(perPage || enrichedPosts.length || 0),
+			per_page:
+				postsPayload.per_page ?? Number(perPage || enrichedPosts.length || 0),
 		})
 	} catch (error) {
 		console.error('Error fetching posts:', error)
@@ -103,7 +106,7 @@ export async function POST(req: NextRequest) {
 		}
 
 		const body = await req.json()
-		const { title, content, attachments } = body
+		const { title, content, attachments, is_blog } = body
 
 		const response = await fetch(`${BACKEND_URL}/api/v1/posts/`, {
 			method: 'POST',
@@ -115,6 +118,7 @@ export async function POST(req: NextRequest) {
 				title,
 				content,
 				attachments,
+				is_blog,
 			}),
 		})
 

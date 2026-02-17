@@ -1159,6 +1159,12 @@ export const useChat = (
 		)
 	}, [])
 
+	const clearHistory = useCallback(() => {
+		setMessages([])
+		setOffset(0)
+		setHasMore(false)
+	}, [])
+
 	const searchMusicMessages = useCallback(async () => {
 		return []
 	}, [])
@@ -1177,5 +1183,6 @@ export const useChat = (
 		markMessagesAsRead,
 		updateMessage,
 		markMessageDeleted,
+		clearHistory,
 	}
 }

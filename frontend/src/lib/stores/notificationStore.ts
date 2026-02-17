@@ -8,6 +8,7 @@ export type NotificationType =
 	| 'message'
 	| 'call'
 	| 'system'
+	| 'blog'
 
 export interface NotificationItem {
 	id: string

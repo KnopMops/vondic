@@ -19,6 +19,7 @@ export type PostData = {
 	likes?: number
 	comments_count?: number
 	is_liked?: boolean
+	is_blog?: boolean
 	image?: string
 	attachments?: Attachment[]
 }
@@ -31,7 +32,10 @@ type PostsResponse = {
 	per_page: number
 }
 
-export function usePosts({ perPage = 5 }: { perPage?: number } = {}) {
+export function usePosts({
+	perPage = 5,
+	kind = 'feed',
+}: { perPage?: number; kind?: 'feed' | 'blog' } = {}) {
 	const dispatch = useAppDispatch()
 	const queryClient = useQueryClient()
 
@@ -42,12 +46,17 @@ export function usePosts({ perPage = 5 }: { perPage?: number } = {}) {
 		(string | number)[],
 		number
 	>({
-		queryKey: ['posts', perPage],
+		queryKey: ['posts', perPage, kind],
 		initialPageParam: 1,
 		queryFn: async ({ pageParam = 1 }) => {
-			const res = await fetch(
-				`/api/posts?page=${pageParam}&per_page=${perPage}`,
-			)
+			const params = new URLSearchParams({
+				page: String(pageParam),
+				per_page: String(perPage),
+			})
+			if (kind === 'blog') {
+				params.set('kind', 'blog')
+			}
+			const res = await fetch(`/api/posts?${params.toString()}`)
 			if (!res.ok) throw new Error('Failed to fetch posts')
 			return res.json() as Promise<PostsResponse>
 		},
@@ -84,6 +93,7 @@ export function usePosts({ perPage = 5 }: { perPage?: number } = {}) {
 					title: 'New Post',
 					content: text,
 					attachments,
+					is_blog: kind === 'blog',
 				}),
 			})
 			if (!res.ok) throw new Error('Failed to create post')
@@ -121,14 +131,23 @@ export function usePosts({ perPage = 5 }: { perPage?: number } = {}) {
 		mutationFn: async ({
 			id,
 			newText,
+			isBlog,
 		}: {
 			id: string | number
-			newText: string
+			newText?: string
+			isBlog?: boolean
 		}) => {
+			const payload: Record<string, any> = {}
+			if (typeof newText === 'string') {
+				payload.content = newText
+			}
+			if (typeof isBlog !== 'undefined') {
+				payload.is_blog = isBlog
+			}
 			const res = await fetch(`/api/posts/${id}`, {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ title: 'Updated Post', content: newText }),
+				body: JSON.stringify(payload),
 			})
 			if (!res.ok) throw new Error('Failed to update post')
 			return res.json()

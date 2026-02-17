@@ -21,6 +21,7 @@ class Post(db.Model):
         TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
     reports = db.Column(INTEGER, default=0)
     posted_by = db.Column(TEXT, db.ForeignKey("users.id"), nullable=False)
+    is_blog = db.Column(BOOLEAN, default=False)
 
     comments = db.relationship("Comment", backref="post", lazy=True)
 
@@ -34,5 +35,6 @@ class Post(db.Model):
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "posted_by": self.posted_by,
             "deleted": self.deleted,
+            "is_blog": self.is_blog,
             "comments_count": len([c for c in self.comments if not c.deleted]) if self.comments else 0,
         }

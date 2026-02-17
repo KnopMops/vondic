@@ -242,6 +242,60 @@ export class WebRTCService {
 		return this.createPeerConnection(targetSocketId)
 	}
 
+	async ensureLocalAudioSender(
+		targetSocketId: string,
+	): Promise<RTCPeerConnection> {
+		if (!this.localStream) {
+			await this.initializeLocalStream()
+		}
+		const pc = this.ensurePeerConnection(targetSocketId)
+		if (this.localStream) {
+			const audioTrack = this.localStream.getAudioTracks()[0]
+			if (audioTrack) {
+				try {
+					audioTrack.enabled = true
+				} catch {}
+				const senders = pc.getSenders()
+				const audioSender = senders.find(
+					s => s.track && s.track.kind === 'audio',
+				)
+				if (!audioSender) {
+					pc.addTrack(audioTrack, this.localStream)
+				} else if (audioSender.track !== audioTrack) {
+					try {
+						await audioSender.replaceTrack(audioTrack)
+					} catch {}
+				}
+				try {
+					const transceivers = pc.getTransceivers()
+					const audioTransceiver = transceivers.find(
+						t =>
+							(t.receiver &&
+								t.receiver.track &&
+								t.receiver.track.kind === 'audio') ||
+							(t.sender && t.sender.track && t.sender.track.kind === 'audio'),
+					)
+					if (audioTransceiver) {
+						const dir: any = (audioTransceiver as any).direction
+						if (dir !== 'sendrecv') {
+							try {
+								;(audioTransceiver as any).direction = 'sendrecv'
+							} catch {}
+							try {
+								if (
+									typeof (audioTransceiver as any).setDirection === 'function'
+								) {
+									;(audioTransceiver as any).setDirection('sendrecv')
+								}
+							} catch {}
+						}
+					}
+				} catch {}
+			}
+		}
+		return pc
+	}
+
 	migrateCall(oldKey: string, newKey: string): void {
 		const pc = this.peerConnections.get(oldKey)
 		if (pc) {
@@ -348,72 +402,7 @@ export class WebRTCService {
 
 	async acceptCall(callerSocketId: string): Promise<void> {
 		try {
-			const pc = this.peerConnections.get(callerSocketId)
-			if (!pc) {
-				throw new Error('Peer connection not found')
-			}
-
-			// Ensure local audio track is attached to the existing peer connection
-			if (!this.localStream) {
-				this.localStream = await navigator.mediaDevices.getUserMedia({
-					audio: true,
-					video: false,
-				})
-				if (this.onLocalStream) {
-					this.onLocalStream(this.localStream)
-				}
-			}
-			if (this.localStream) {
-				const audioTrack = this.localStream.getAudioTracks()[0]
-				if (audioTrack) {
-					try {
-						audioTrack.enabled = true
-					} catch {}
-					const senders = pc.getSenders()
-					const audioSender = senders.find(
-						s => s.track && s.track.kind === 'audio',
-					)
-					if (!audioSender) {
-						pc.addTrack(audioTrack, this.localStream)
-					} else if (audioSender.track !== audioTrack) {
-						try {
-							await audioSender.replaceTrack(audioTrack)
-						} catch {}
-					}
-					try {
-						const transceivers = pc.getTransceivers()
-						const audioTransceiver = transceivers.find(
-							t =>
-								(t.receiver &&
-									t.receiver.track &&
-									t.receiver.track.kind === 'audio') ||
-								(t.sender && t.sender.track && t.sender.track.kind === 'audio'),
-						)
-						if (audioTransceiver) {
-							const dir: any = (audioTransceiver as any).direction
-							if (dir !== 'sendrecv') {
-								try {
-									;(audioTransceiver as any).direction = 'sendrecv'
-								} catch {}
-								try {
-									if (
-										typeof (audioTransceiver as any).setDirection === 'function'
-									) {
-										;(audioTransceiver as any).setDirection('sendrecv')
-									}
-								} catch {}
-								console.log('Forced audio transceiver direction to sendrecv')
-							}
-						}
-					} catch {}
-					try {
-						const count = pc
-							.getSenders()
-							.filter(s => s.track && s.track.kind === 'audio').length
-						console.log('Audio senders before createAnswer:', count)
-					} catch {}
-				}
-			}
+			const pc = await this.ensureLocalAudioSender(callerSocketId)
 
 			// Создаем answer
 			const answer = await pc.createAnswer()

@@ -1,14 +1,16 @@
 'use client'
 
+import { useAppSelector } from '@/lib/hooks'
+import { useComments } from '@/lib/hooks/useComments'
+import { useToast } from '@/lib/ToastContext'
 import { Attachment } from '@/lib/types'
 import { getAttachmentUrl } from '@/lib/utils'
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import PostDetailsModal from './PostDetailsModal'
 import ShareModal from './ShareModal'
 import VideoPlayer from './VideoPlayer'
-import { useComments } from '@/lib/hooks/useComments'
-import { useAppSelector } from '@/lib/hooks'
 
 type Props = {
 	id: string | number
@@ -25,8 +27,9 @@ type Props = {
 	currentUserId?: string
 	userRole?: string
 	isLikedByCurrentUser?: boolean
+	isBlog?: boolean
 	onDelete?: (id: string | number, reason?: string) => void
-	onUpdate?: (id: string | number, newText: string) => void
+	onUpdate?: (id: string | number, newText?: string, isBlog?: boolean) => void
 }
 
 export default function Post({
@@ -44,6 +47,7 @@ export default function Post({
 	currentUserId,
 	userRole,
 	isLikedByCurrentUser = false,
+	isBlog = false,
 	onDelete,
 	onUpdate,
 }: Props) {
@@ -52,6 +56,14 @@ export default function Post({
 	const [editText, setEditText] = useState(text)
 	const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
 	const [deleteReason, setDeleteReason] = useState('')
+	const [isReportModalOpen, setIsReportModalOpen] = useState(false)
+	const [reportDescription, setReportDescription] = useState('')
+	const [reportUploading, setReportUploading] = useState(false)
+	const [reportAttachments, setReportAttachments] = useState<
+		{ url: string; name: string; ext?: string }[]
+	>([])
+	const reportFileInputRef = useRef<HTMLInputElement | null>(null)
+	const [mounted, setMounted] = useState(false)
 
 	const [likeCount, setLikeCount] = useState(likes)
 	const [isLiked, setIsLiked] = useState(isLikedByCurrentUser)
@@ -62,6 +74,7 @@ export default function Post({
 	const [isShareModalOpen, setIsShareModalOpen] = useState(false)
 
 	const { user } = useAppSelector(state => state.auth)
+	const { showToast } = useToast()
 	const {
 		data: comments = [],
 		isLoading: commentsLoading,
@@ -73,6 +86,10 @@ export default function Post({
 
 	const [newComment, setNewComment] = useState('')
 	const [replyTo, setReplyTo] = useState<any>(null)
+
+	useEffect(() => {
+		setMounted(true)
+	}, [])
 
 	useEffect(() => {
 		setCommentCount(comments_count)
@@ -100,6 +117,7 @@ export default function Post({
 	const isAdmin = userRole === 'Admin'
 	const canDelete = isOwner || isAdmin
 	const canEdit = isOwner
+	const isBlogPost = !!isBlog
 
 	const handleUpdate = () => {
 		if (onUpdate) {
@@ -109,6 +127,7 @@ export default function Post({
 	}
 
 	const handleLike = async () => {
+		if (isBlogPost) return
 		if (isLiking) return
 		setIsLiking(true)
 
@@ -179,6 +198,7 @@ export default function Post({
 
 	const handleSubmitComment = async (e: React.FormEvent) => {
 		e.preventDefault()
+		if (isBlogPost) return
 		if (!newComment.trim() || !user) return
 
 		createComment(
@@ -193,6 +213,88 @@ export default function Post({
 		)
 	}
 
+	const handleOpenReport = () => {
+		setIsReportModalOpen(true)
+		setIsMenuOpen(false)
+		setReportDescription('')
+		setReportAttachments([])
+	}
+
+	const handleReportFileSelect = async (
+		e: React.ChangeEvent<HTMLInputElement>,
+	) => {
+		const files = Array.from(e.target.files || [])
+		if (!files.length) return
+		setReportUploading(true)
+		for (const file of files) {
+			if (file.size > 20 * 1024 * 1024) {
+				showToast('Файл слишком большой (макс 20МБ)', 'error')
+				continue
+			}
+			try {
+				const base64 = await new Promise<string>((resolve, reject) => {
+					const reader = new FileReader()
+					reader.onload = () => resolve(reader.result as string)
+					reader.onerror = () => reject(new Error('read_error'))
+					reader.readAsDataURL(file)
+				})
+				const res = await fetch('/api/v1/upload/file', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ file: base64, filename: file.name }),
+				})
+				const data = await res.json().catch(() => ({}))
+				if (!res.ok || !data.url) {
+					showToast(data.error || 'Ошибка загрузки файла', 'error')
+					continue
+				}
+				setReportAttachments(prev => [
+					...prev,
+					{ url: data.url, name: file.name, ext: data.ext },
+				])
+			} catch {
+				showToast('Ошибка загрузки файла', 'error')
+			}
+		}
+		setReportUploading(false)
+		if (reportFileInputRef.current) {
+			reportFileInputRef.current.value = ''
+		}
+	}
+
+	const handleRemoveReportAttachment = (url: string) => {
+		setReportAttachments(prev => prev.filter(a => a.url !== url))
+	}
+
+	const handleSubmitReport = async () => {
+		if (!user) return
+		const description = reportDescription.trim()
+		if (!description) {
+			showToast('Опишите нарушение', 'error')
+			return
+		}
+		try {
+			const res = await fetch('/api/support/post-reports', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					post_id: id,
+					post_author_login: author,
+					description,
+					attachments: reportAttachments.map(a => a.url),
+				}),
+			})
+			const data = await res.json().catch(() => ({}))
+			if (!res.ok) {
+				throw new Error(data.error || 'Не удалось отправить жалобу')
+			}
+			showToast('Жалоба отправлена', 'success')
+			setIsReportModalOpen(false)
+		} catch (e: any) {
+			showToast(e.message || 'Не удалось отправить жалобу', 'error')
+		}
+	}
+
 	const handleReply = (comment: any) => {
 		setReplyTo(comment)
 		setNewComment(`@${comment.author_name || 'User'} `)
@@ -200,6 +302,12 @@ export default function Post({
 
 	const handleUpdateComment = async (commentId: string, content: string) => {
 		updateComment({ id: commentId, content })
+	}
+
+	const handleToggleBlog = () => {
+		if (!onUpdate || !isAdmin) return
+		onUpdate(id, undefined, !isBlogPost)
+		setIsMenuOpen(false)
 	}
 
 	const handleDeleteRequest = (comment: any) => {
@@ -253,14 +361,21 @@ export default function Post({
 
 	const renderComment = (comment: any, depth = 0) => {
 		const isOwner = user && String(user.id) === String(comment.user_id)
-		const canDelete = isOwner || user?.role === 'admin' || user?.role === 'Admin'
+		const canDelete =
+			isOwner || user?.role === 'admin' || user?.role === 'Admin'
 
 		return (
-			<div key={comment.id} className={`${depth > 0 ? 'ml-8 border-l-2 border-gray-700 pl-4' : ''}`}>
+			<div
+				key={comment.id}
+				className={`${depth > 0 ? 'ml-8 border-l-2 border-gray-700 pl-4' : ''}`}
+			>
 				<div className='flex gap-3 mb-3'>
 					<Link href={`/feed/profile/${comment.user_id}`}>
 						<img
-							src={getAttachmentUrl(comment.author_avatar) || '/placeholder-user.jpg'}
+							src={
+								getAttachmentUrl(comment.author_avatar) ||
+								'/placeholder-user.jpg'
+							}
 							alt={comment.author_name || 'User'}
 							className='h-8 w-8 rounded-full object-cover'
 						/>
@@ -275,7 +390,9 @@ export default function Post({
 									>
 										{comment.author_name || 'User'}
 									</Link>
-									{comment.author_premium && <span className='text-amber-400'>★</span>}
+									{comment.author_premium && (
+										<span className='text-amber-400'>★</span>
+									)}
 								</div>
 								{canDelete && (
 									<button
@@ -291,7 +408,11 @@ export default function Post({
 							</p>
 						</div>
 						<div className='mt-1 flex items-center gap-3 text-xs text-gray-500'>
-							<span>{new Date(comment.created_at || Date.now()).toLocaleDateString()}</span>
+							<span>
+								{new Date(
+									comment.created_at || Date.now(),
+								).toLocaleDateString()}
+							</span>
 							<button
 								onClick={() => handleReply(comment)}
 								className='hover:text-indigo-400 transition-colors'
@@ -338,7 +459,7 @@ export default function Post({
 							{author_premium && <span className='text-amber-400'>★</span>}
 							<span className='text-xs text-gray-500'>{time}</span>
 						</div>
-						{(canEdit || canDelete) && (
+						{user && (
 							<div className='relative'>
 								<button
 									onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -358,6 +479,14 @@ export default function Post({
 											>
 												Подробнее
 											</button>
+											{!isOwner && (
+												<button
+													onClick={handleOpenReport}
+													className='block w-full px-4 py-2.5 text-left text-sm text-amber-300 hover:bg-amber-500/10 hover:text-amber-200 transition-colors'
+												>
+													Пожаловаться
+												</button>
+											)}
 											{canEdit && (
 												<button
 													onClick={() => {
@@ -367,6 +496,14 @@ export default function Post({
 													className='block w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors'
 												>
 													Редактировать
+												</button>
+											)}
+											{isAdmin && (
+												<button
+													onClick={handleToggleBlog}
+													className='block w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors'
+												>
+													{isBlogPost ? 'В ленту' : 'В блог'}
 												</button>
 											)}
 											{canDelete && (
@@ -455,47 +592,51 @@ export default function Post({
 					)}
 
 					<div className='mt-4 flex items-center gap-6'>
-						<button
-							onClick={handleLike}
-							disabled={isLiking}
-							className={`flex items-center gap-2 transition-all ${isLiked ? 'text-red-500 scale-105' : 'text-gray-500 hover:text-indigo-400 hover:scale-105'} ${isLiking ? 'opacity-50 cursor-not-allowed' : ''}`}
-						>
-							<svg
-								xmlns='http://www.w3.org/2000/svg'
-								fill={isLiked ? 'currentColor' : 'none'}
-								viewBox='0 0 24 24'
-								strokeWidth={1.5}
-								stroke='currentColor'
-								className='h-5 w-5'
-							>
-								<path
-									strokeLinecap='round'
-									strokeLinejoin='round'
-									d='M6.633 10.5c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 012.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 00.322-1.672V3a2.25 2.25 0 012.25 2.25c0 1.152-.26 2.247-.723 3.218-.266.558.107 1.282.725 1.282h3.126c1.026 0 1.945.694 2.054 1.715.045.422.068.85.068 1.285a11.95 11.95 0 01-2.649 7.521c-.388.482-.987.729-1.605.729H13.48c-.483 0-.964-.078-1.423-.23l-3.114-1.04a4.501 4.501 0 00-1.423-.23H5.904M14.25 9h2.25M5.904 18.75c.083.205.173.405.27.602.197.4-.078.898-.523.898h-.908c-.889 0-1.713-.518-1.972-1.368a12 12 0 01-.521-3.507c0-1.553.295-3.036.831-4.398C3.287 9.483 4.122 9 5.01 9h.918c.445 0 .72.498.523.898a8.932 8.932 0 00-.27.602'
-								/>
-							</svg>
-							<span className='text-sm font-medium'>{likeCount}</span>
-						</button>
-						<button
-							onClick={() => setShowComments(!showComments)}
-							className='flex items-center gap-2 text-gray-500 transition-all hover:text-indigo-400 hover:scale-105'
-						>
-							<svg
-								xmlns='http://www.w3.org/2000/svg'
-								fill='none'
-								viewBox='0 0 24 24'
-								strokeWidth={1.5}
-								stroke='currentColor'
-								className='h-5 w-5'
-							>
-								<path
-									strokeLinecap='round'
-									strokeLinejoin='round'
-									d='M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 01-.923 1.785A5.969 5.969 0 006 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337z'
-								/>
-							</svg>
-							<span className='text-sm font-medium'>{commentCount}</span>
-						</button>
+						{!isBlogPost && (
+							<>
+								<button
+									onClick={handleLike}
+									disabled={isLiking}
+									className={`flex items-center gap-2 transition-all ${isLiked ? 'text-red-500 scale-105' : 'text-gray-500 hover:text-indigo-400 hover:scale-105'} ${isLiking ? 'opacity-50 cursor-not-allowed' : ''}`}
+								>
+									<svg
+										xmlns='http://www.w3.org/2000/svg'
+										fill={isLiked ? 'currentColor' : 'none'}
+										viewBox='0 0 24 24'
+										strokeWidth={1.5}
+										stroke='currentColor'
+										className='h-5 w-5'
+									>
+										<path
+											strokeLinecap='round'
+											strokeLinejoin='round'
+											d='M6.633 10.5c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 012.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 00.322-1.672V3a2.25 2.25 0 012.25 2.25c0 1.152-.26 2.247-.723 3.218-.266.558.107 1.282.725 1.282h3.126c1.026 0 1.945.694 2.054 1.715.045.422.068.85.068 1.285a11.95 11.95 0 01-2.649 7.521c-.388.482-.987.729-1.605.729H13.48c-.483 0-.964-.078-1.423-.23l-3.114-1.04a4.501 4.501 0 00-1.423-.23H5.904M14.25 9h2.25M5.904 18.75c.083.205.173.405.27.602.197.4-.078.898-.523.898h-.908c-.889 0-1.713-.518-1.972-1.368a12 12 0 01-.521-3.507c0-1.553.295-3.036.831-4.398C3.287 9.483 4.122 9 5.01 9h.918c.445 0 .72.498.523.898a8.932 8.932 0 00-.27.602'
+										/>
+									</svg>
+									<span className='text-sm font-medium'>{likeCount}</span>
+								</button>
+								<button
+									onClick={() => setShowComments(!showComments)}
+									className='flex items-center gap-2 text-gray-500 transition-all hover:text-indigo-400 hover:scale-105'
+								>
+									<svg
+										xmlns='http://www.w3.org/2000/svg'
+										fill='none'
+										viewBox='0 0 24 24'
+										strokeWidth={1.5}
+										stroke='currentColor'
+										className='h-5 w-5'
+									>
+										<path
+											strokeLinecap='round'
+											strokeLinejoin='round'
+											d='M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 01-.923 1.785A5.969 5.969 0 006 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337z'
+										/>
+									</svg>
+									<span className='text-sm font-medium'>{commentCount}</span>
+								</button>
+							</>
+						)}
 						<button
 							onClick={() => setIsShareModalOpen(true)}
 							className='flex items-center gap-2 text-gray-500 transition-all hover:text-indigo-400 hover:scale-105'
@@ -517,7 +658,7 @@ export default function Post({
 						</button>
 					</div>
 
-					{showComments && (
+					{showComments && !isBlogPost && (
 						<div className='mt-4 pt-4 border-t border-gray-800/50'>
 							<div className='space-y-4 max-h-96 overflow-y-auto'>
 								{commentsLoading ? (
@@ -653,6 +794,108 @@ export default function Post({
 					</div>
 				</div>
 			)}
+			{isReportModalOpen &&
+				mounted &&
+				createPortal(
+					<div className='fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4'>
+						<div className='w-full max-w-md rounded-lg border border-white/10 bg-black/80 backdrop-blur p-6 shadow-xl'>
+							<h3 className='text-xl font-bold text-white mb-2'>
+								Пожаловаться на публикацию
+							</h3>
+							<div className='space-y-4'>
+								<div>
+									<label className='block text-sm font-medium text-gray-300 mb-2'>
+										Идентификатор пользователя (логин)
+									</label>
+									<input
+										value={author}
+										readOnly
+										className='w-full rounded-xl border border-gray-700 bg-gray-800 p-3 text-white'
+									/>
+								</div>
+								<div>
+									<label className='block text-sm font-medium text-gray-300 mb-2'>
+										Ссылка на страницу (id)
+									</label>
+									<input
+										value={id}
+										readOnly
+										className='w-full rounded-xl border border-gray-700 bg-gray-800 p-3 text-white'
+									/>
+								</div>
+								<div>
+									<label className='block text-sm font-medium text-gray-300 mb-2'>
+										Описание нарушения
+									</label>
+									<textarea
+										className='w-full rounded-xl border border-gray-700 bg-gray-800 p-3 text-white focus:outline-none focus:ring-2 focus:ring-amber-500/40'
+										rows={4}
+										placeholder='Опишите нарушение...'
+										value={reportDescription}
+										onChange={e => setReportDescription(e.target.value)}
+									/>
+								</div>
+								<div className='space-y-2'>
+									<div className='flex items-center justify-between'>
+										<label className='block text-sm font-medium text-gray-300'>
+											Вложения (фото или видео)
+										</label>
+										<input
+											ref={reportFileInputRef}
+											type='file'
+											accept='image/*,video/*'
+											multiple
+											className='hidden'
+											onChange={handleReportFileSelect}
+										/>
+										<button
+											type='button'
+											onClick={() => reportFileInputRef.current?.click()}
+											disabled={reportUploading}
+											className='text-xs text-amber-300 hover:text-amber-200 disabled:opacity-60'
+										>
+											{reportUploading ? 'Загрузка...' : 'Добавить файл'}
+										</button>
+									</div>
+									{reportAttachments.length > 0 && (
+										<div className='space-y-2'>
+											{reportAttachments.map(a => (
+												<div
+													key={a.url}
+													className='flex items-center justify-between rounded-lg border border-gray-800 bg-gray-800/50 px-3 py-2 text-xs text-gray-200'
+												>
+													<span className='truncate'>{a.name}</span>
+													<button
+														type='button'
+														onClick={() => handleRemoveReportAttachment(a.url)}
+														className='text-red-400 hover:text-red-300'
+													>
+														Удалить
+													</button>
+												</div>
+											))}
+										</div>
+									)}
+								</div>
+							</div>
+							<div className='mt-6 flex gap-3 justify-end'>
+								<button
+									onClick={() => setIsReportModalOpen(false)}
+									className='px-4 py-2 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white transition-colors'
+								>
+									Отмена
+								</button>
+								<button
+									onClick={handleSubmitReport}
+									className='px-4 py-2 rounded-lg bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 transition-colors border border-amber-500/20'
+								>
+									Отправить
+								</button>
+							</div>
+						</div>
+					</div>,
+					document.body,
+				)}
 		</article>
 	)
 }

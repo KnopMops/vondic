@@ -236,12 +236,22 @@ export default function LoginPage() {
 							<p className='text-center text-xs text-gray-500'>
 								Входя через соцсети, вы соглашаетесь с{' '}
 								<a
-									href={`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'}/static/privacy_policy.rtf`}
+									href={`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'}/static/docs/privacy_policy.rtf`}
 									target='_blank'
 									rel='noopener noreferrer'
 									className='text-indigo-400 hover:text-indigo-300 transition-colors'
 								>
 									политикой конфиденциальности
+								</a>
+								{' '}
+								и{' '}
+								<a
+									href={`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'}/static/docs/consent_to_processing_personal_data.rtf`}
+									target='_blank'
+									rel='noopener noreferrer'
+									className='text-indigo-400 hover:text-indigo-300 transition-colors'
+								>
+									согласием на обработку данных
 								</a>
 								.
 							</p>

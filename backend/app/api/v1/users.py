@@ -162,6 +162,16 @@ def unblock_user(current_user):
     return jsonify({"message": "User unblocked successfully", "user": user_schema.dump(user)}), 200
 
 
+@users_bp.route("/delete", methods=["DELETE"])
+@token_required
+def delete_user_account(current_user):
+    success, error = UserService.delete_user_account(current_user.id)
+    if error:
+        status_code = 404 if error == "User not found" else 400
+        return jsonify({"error": error}), status_code
+    return jsonify({"message": "User deleted successfully"}), 200
+
+
 GIFT_PRICING = {
     "newyear_fireworks": 99,
     "valentine_heart": 39,

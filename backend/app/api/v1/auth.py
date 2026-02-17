@@ -1,13 +1,15 @@
 from app.schemas.user_schema import user_schema
 from app.services.auth_service import AuthService
 from app.services.user_service import UserService
-from app.utils.decorators import token_required
+from app.utils.decorators import rate_limit, token_required
 from flask import Blueprint, current_app, jsonify, request
+from itsdangerous import URLSafeTimedSerializer
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/v1/auth")
 
 
 @auth_bp.route("/register", methods=["POST"])
+@rate_limit("auth-register", limit=5, window_seconds=60)
 def register():
     data = request.get_json()
     if not data:
@@ -37,6 +39,7 @@ def verify_email(token):
 
 
 @auth_bp.route("/login", methods=["POST"])
+@rate_limit("auth-login", limit=10, window_seconds=60)
 def login():
     data = request.get_json()
     if not data:
@@ -113,6 +116,16 @@ def me():
         ),
         200,
     )
+
+
+@auth_bp.route("/socket-token", methods=["GET"])
+@token_required
+@rate_limit("socket-token", limit=20, window_seconds=60)
+def socket_token(current_user):
+    serializer = URLSafeTimedSerializer(current_app.config["SECRET_KEY"])
+    token = serializer.dumps(
+        {"uid": str(current_user.id)}, salt="socket-token")
+    return jsonify({"token": token, "expires_in": 300}), 200
 
 
 @auth_bp.route("/yandex/login", methods=["GET"])
@@ -197,6 +210,7 @@ def toggle_login_alerts(current_user):
 
 
 @auth_bp.route("/telegram-login", methods=["POST"])
+@rate_limit("auth-telegram-login", limit=10, window_seconds=60)
 def telegram_login():
     data = request.get_json()
     if not data:

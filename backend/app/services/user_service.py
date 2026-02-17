@@ -1,8 +1,23 @@
+import json
+import os
 import secrets
+import sqlite3
 from datetime import datetime
 
+from app.core.config import Config
 from app.core.extensions import db
+from app.models.channel import Channel, channel_participants
+from app.models.comment import Comment
+from app.models.community import Community, community_members
+from app.models.community_channel import CommunityChannel
+from app.models.friendship import Friendship
+from app.models.group import Group, group_participants
+from app.models.like import Like
+from app.models.message import Message
+from app.models.post import Post
+from app.models.subscription import Subscription
 from app.models.user import User
+from flask import current_app
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -214,6 +229,255 @@ class UserService:
         try:
             db.session.commit()
             return user, None
+        except Exception as e:
+            db.session.rollback()
+            return None, str(e)
+
+    @staticmethod
+    def delete_user_account(user_id: str):
+        user = User.query.get(user_id)
+        if not user:
+            return None, "User not found"
+
+        try:
+            def delete_local_file(url: str | None):
+                if not url or not isinstance(url, str):
+                    return
+                if url.startswith("http://") or url.startswith("https://"):
+                    return
+                abs_path = os.path.join(current_app.root_path, url.lstrip("/"))
+                if os.path.exists(abs_path):
+                    try:
+                        os.remove(abs_path)
+                    except Exception:
+                        pass
+
+            if user.avatar_url:
+                delete_local_file(user.avatar_url)
+            if user.profile_bg_image:
+                delete_local_file(user.profile_bg_image)
+
+            storis = user.storis or []
+            if isinstance(storis, list):
+                for item in storis:
+                    if isinstance(item, dict):
+                        delete_local_file(item.get("url"))
+
+            messages_for_cleanup = Message.query.filter(
+                or_(Message.sender_id == user_id, Message.target_id == user_id)
+            ).all()
+            for msg in messages_for_cleanup:
+                attachments = msg.attachments or []
+                if isinstance(attachments, list):
+                    for a in attachments:
+                        if isinstance(a, dict):
+                            delete_local_file(a.get("url"))
+
+            shared_db_path = os.path.join(Config.BASE_DIR, "database.db")
+            support_conn = sqlite3.connect(shared_db_path)
+            support_cur = support_conn.cursor()
+            support_cur.execute(
+                "SELECT attachments FROM post_reports WHERE reporter_id = ?",
+                (user_id,),
+            )
+            report_rows = support_cur.fetchall()
+            for row in report_rows:
+                try:
+                    payload = row[0] if row else None
+                    attachments = json.loads(payload) if payload else []
+                    if isinstance(attachments, list):
+                        for a in attachments:
+                            if isinstance(a, dict):
+                                delete_local_file(a.get("url"))
+                except Exception:
+                    continue
+
+            support_cur.execute(
+                "SELECT id FROM escalations WHERE user_id = ?", (user_id,)
+            )
+            esc_rows = support_cur.fetchall()
+            esc_ids = [r[0] for r in esc_rows if r and r[0] is not None]
+            if esc_ids:
+                placeholders = ",".join("?" for _ in esc_ids)
+                support_cur.execute(
+                    f"DELETE FROM escalation_messages WHERE escalation_id IN ({placeholders})",
+                    esc_ids,
+                )
+            support_cur.execute(
+                "DELETE FROM escalations WHERE user_id = ?", (user_id,)
+            )
+            support_cur.execute(
+                "DELETE FROM notifications WHERE user_id = ?", (user_id,)
+            )
+            support_cur.execute(
+                "DELETE FROM post_reports WHERE reporter_id = ?", (user_id,)
+            )
+            support_conn.commit()
+            support_conn.close()
+
+            webrtc_conn = sqlite3.connect(shared_db_path)
+            webrtc_cur = webrtc_conn.cursor()
+            webrtc_cur.execute(
+                "SELECT attachments FROM messages WHERE sender_id = ? OR target_id = ?",
+                (user_id, user_id),
+            )
+            webrtc_rows = webrtc_cur.fetchall()
+            for row in webrtc_rows:
+                try:
+                    payload = row[0] if row else None
+                    attachments = json.loads(payload) if payload else []
+                    if isinstance(attachments, list):
+                        for a in attachments:
+                            if isinstance(a, dict):
+                                delete_local_file(a.get("url"))
+                except Exception:
+                    continue
+            webrtc_cur.execute(
+                "DELETE FROM messages WHERE sender_id = ? OR target_id = ?",
+                (user_id, user_id),
+            )
+            webrtc_conn.commit()
+            webrtc_conn.close()
+
+            db.session.execute(
+                group_participants.delete().where(
+                    group_participants.c.user_id == user_id
+                )
+            )
+            db.session.execute(
+                community_members.delete().where(
+                    community_members.c.user_id == user_id
+                )
+            )
+            db.session.execute(
+                channel_participants.delete().where(
+                    channel_participants.c.user_id == user_id
+                )
+            )
+
+            Friendship.query.filter(
+                or_(
+                    Friendship.requester_id == user_id,
+                    Friendship.addressee_id == user_id,
+                )
+            ).delete(synchronize_session=False)
+
+            Subscription.query.filter(
+                or_(
+                    Subscription.subscriber_id == user_id,
+                    Subscription.target_id == user_id,
+                )
+            ).delete(synchronize_session=False)
+
+            Like.query.filter(Like.user_id == user_id).delete(
+                synchronize_session=False)
+
+            Comment.query.filter(
+                Comment.posted_by == user_id
+            ).delete(synchronize_session=False)
+
+            Message.query.filter(
+                or_(Message.sender_id == user_id, Message.target_id == user_id)
+            ).delete(synchronize_session=False)
+
+            posts = Post.query.filter(Post.posted_by == user_id).all()
+            for post in posts:
+                Comment.query.filter(
+                    Comment.post_id == post.id
+                ).delete(synchronize_session=False)
+                Like.query.filter(
+                    Like.post_id == post.id
+                ).delete(synchronize_session=False)
+                attachments = post.attachments or []
+                for a in attachments:
+                    try:
+                        url = a.get("url")
+                        if url and isinstance(url, str):
+                            abs_path = os.path.join(
+                                current_app.root_path, url.lstrip("/")
+                            )
+                            if os.path.exists(abs_path):
+                                try:
+                                    os.remove(abs_path)
+                                except Exception:
+                                    pass
+                    except Exception:
+                        continue
+                db.session.delete(post)
+
+            groups = Group.query.filter(Group.owner_id == user_id).all()
+            for group in groups:
+                group_messages = Message.query.filter(
+                    Message.group_id == group.id
+                ).all()
+                for msg in group_messages:
+                    attachments = msg.attachments or []
+                    if isinstance(attachments, list):
+                        for a in attachments:
+                            if isinstance(a, dict):
+                                delete_local_file(a.get("url"))
+                Message.query.filter(
+                    Message.group_id == group.id
+                ).delete(synchronize_session=False)
+                db.session.execute(
+                    group_participants.delete().where(
+                        group_participants.c.group_id == group.id
+                    )
+                )
+                db.session.delete(group)
+
+            communities = Community.query.filter(
+                Community.owner_id == user_id).all()
+            for community in communities:
+                CommunityChannel.query.filter(
+                    CommunityChannel.community_id == community.id
+                ).delete(synchronize_session=False)
+                db.session.execute(
+                    community_members.delete().where(
+                        community_members.c.community_id == community.id
+                    )
+                )
+                db.session.delete(community)
+
+            channels = Channel.query.filter(Channel.owner_id == user_id).all()
+            for channel in channels:
+                db.session.execute(
+                    channel_participants.delete().where(
+                        channel_participants.c.channel_id == channel.id
+                    )
+                )
+                db.session.delete(channel)
+
+            if channels:
+                webrtc_conn = sqlite3.connect(shared_db_path)
+                webrtc_cur = webrtc_conn.cursor()
+                channel_ids = [c.id for c in channels]
+                placeholders = ",".join("?" for _ in channel_ids)
+                webrtc_cur.execute(
+                    f"SELECT attachments FROM messages WHERE channel_id IN ({placeholders})",
+                    channel_ids,
+                )
+                channel_rows = webrtc_cur.fetchall()
+                for row in channel_rows:
+                    try:
+                        payload = row[0] if row else None
+                        attachments = json.loads(payload) if payload else []
+                        if isinstance(attachments, list):
+                            for a in attachments:
+                                if isinstance(a, dict):
+                                    delete_local_file(a.get("url"))
+                    except Exception:
+                        continue
+                webrtc_cur.execute(
+                    f"DELETE FROM messages WHERE channel_id IN ({placeholders})",
+                    channel_ids,
+                )
+                webrtc_conn.commit()
+                webrtc_conn.close()
+
+            db.session.delete(user)
+            db.session.commit()
+            return True, None
         except Exception as e:
             db.session.rollback()
             return None, str(e)

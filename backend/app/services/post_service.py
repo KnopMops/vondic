@@ -1,3 +1,4 @@
+import html
 import os
 from datetime import datetime
 
@@ -10,39 +11,62 @@ from flask import current_app
 
 class PostService:
     @staticmethod
-    def get_all_posts():
+    def _sanitize_text(value):
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            value = str(value)
+        return html.escape(value.strip(), quote=True)
+
+    @staticmethod
+    def get_all_posts(is_blog: bool | None = False):
         return (
-            Post.query.filter_by(deleted=False).order_by(
+            Post.query.join(User, Post.posted_by == User.id).filter(
+                Post.deleted.is_(False),
+                User.is_blocked == 0,
+                Post.is_blog.is_(True) if is_blog else Post.is_blog.is_(False),
+            ).order_by(
                 Post.created_at.desc()).all()
         )
 
     @staticmethod
-    def get_posts_paginated(page=1, per_page=5, user_id=None):
-        query = Post.query.filter_by(deleted=False)
+    def get_posts_paginated(page=1, per_page=5, user_id=None, is_blog: bool | None = False):
+        query = Post.query.join(User, Post.posted_by == User.id).filter(
+            Post.deleted.is_(False),
+            User.is_blocked == 0,
+            Post.is_blog.is_(True) if is_blog else Post.is_blog.is_(False),
+        )
         if user_id:
-            query = query.filter_by(posted_by=user_id)
+            query = query.filter(User.id == user_id)
         return query.order_by(Post.created_at.desc()).paginate(
             page=page, per_page=per_page, error_out=False
         )
 
     @staticmethod
     def get_post_by_id(post_id):
-        return Post.query.filter_by(id=post_id, deleted=False).first()
+        return Post.query.join(User, Post.posted_by == User.id).filter(
+            Post.id == post_id,
+            Post.deleted.is_(False),
+            User.is_blocked == 0,
+        ).first()
 
     @staticmethod
-    def search_posts(query_str):
+    def search_posts(query_str, is_blog: bool | None = False):
         search = f"%{query_str}%"
-        return Post.query.filter(
+        return Post.query.join(User, Post.posted_by == User.id).filter(
             Post.content.ilike(search),
-            Post.deleted.is_(False)
+            Post.deleted.is_(False),
+            User.is_blocked == 0,
+            Post.is_blog.is_(True) if is_blog else Post.is_blog.is_(False),
         ).order_by(Post.created_at.desc()).all()
 
     @staticmethod
-    def create_post(data, user_id):
+    def create_post(data, user_id, is_blog: bool = False):
         new_post = Post(
-            content=data.get("content"),
+            content=PostService._sanitize_text(data.get("content")),
             attachments=data.get("attachments"),
             posted_by=user_id,
+            is_blog=is_blog,
         )
         try:
             db.session.add(new_post)
@@ -62,9 +86,13 @@ class PostService:
             return None, "Unauthorized"
 
         if "content" in data:
-            post.content = data["content"]
+            post.content = PostService._sanitize_text(data["content"])
         if "attachments" in data:
             post.attachments = data["attachments"]
+        if "is_blog" in data:
+            if not is_admin:
+                return None, "Unauthorized"
+            post.is_blog = bool(data["is_blog"])
 
         try:
             db.session.commit()
@@ -78,6 +106,8 @@ class PostService:
         post = Post.query.filter_by(id=post_id, deleted=False).first()
         if not post:
             return None, "Post not found"
+        if post.is_blog:
+            return None, "Blog post is read-only"
 
         existing_like = Like.query.filter_by(
             user_id=user_id, post_id=post_id).first()
@@ -102,6 +132,8 @@ class PostService:
         post = Post.query.filter_by(id=post_id, deleted=False).first()
         if not post:
             return None, "Post not found"
+        if post.is_blog:
+            return None, "Blog post is read-only"
 
         existing_like = Like.query.filter_by(
             user_id=user_id, post_id=post_id).first()

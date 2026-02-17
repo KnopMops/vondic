@@ -37,6 +37,8 @@ export default function SettingsPage() {
 		'Online',
 	)
 	const [theme, setTheme] = useState<'system' | 'dark' | 'light'>('system')
+	const [deleteConfirmText, setDeleteConfirmText] = useState('')
+	const [deleteLoading, setDeleteLoading] = useState(false)
 	/* removed experimental features state */
 	const dispatch = useAppDispatch()
 
@@ -307,6 +309,33 @@ export default function SettingsPage() {
 			setApiKey(null)
 		}
 	}, [developerEnabled])
+
+	const handleDeleteAccount = async () => {
+		if (!user) return
+		const normalized = deleteConfirmText.trim().toLowerCase()
+		if (normalized !== 'удалить') {
+			showToast('Введите УДАЛИТЬ для подтверждения', 'error')
+			return
+		}
+		setDeleteLoading(true)
+		try {
+			const res = await fetch('/api/users/delete', {
+				method: 'DELETE',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ user_id: user.id }),
+			})
+			const data = await res.json().catch(() => ({}))
+			if (!res.ok) {
+				throw new Error(data.error || 'Не удалось удалить аккаунт')
+			}
+			showToast('Аккаунт удалён', 'success')
+			logout()
+		} catch (e: any) {
+			showToast(e.message || 'Не удалось удалить аккаунт', 'error')
+		} finally {
+			setDeleteLoading(false)
+		}
+	}
 
 	return (
 		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white overflow-x-hidden relative'>
@@ -681,6 +710,44 @@ export default function SettingsPage() {
 								>
 									Светлая
 								</button>
+							</div>
+						</motion.div>
+						<motion.div
+							initial={{ opacity: 0, y: 20 }}
+							animate={{ opacity: 1, y: 0 }}
+							transition={{ duration: 0.4 }}
+							className='relative rounded-2xl bg-white/5 border border-rose-500/20 p-6 overflow-hidden'
+						>
+							<motion.div
+								initial={{ opacity: 0.3 }}
+								animate={{ opacity: [0.3, 0.6, 0.3] }}
+								transition={{ duration: 6, repeat: Infinity }}
+								className='absolute -bottom-24 -left-24 w-64 h-64 bg-gradient-to-tr from-rose-500/10 to-red-500/10 rounded-full blur-3xl'
+							/>
+							<div className='flex items-center gap-3 mb-4'>
+								<Shield className='w-5 h-5 text-rose-400' />
+								<h2 className='text-xl font-semibold'>Удаление аккаунта</h2>
+							</div>
+							<div className='space-y-4'>
+								<p className='text-sm text-rose-200'>
+									Аккаунт и связанные данные будут удалены без возможности
+									восстановления.
+								</p>
+								<div className='space-y-2'>
+									<input
+										value={deleteConfirmText}
+										onChange={e => setDeleteConfirmText(e.target.value)}
+										placeholder='Введите УДАЛИТЬ'
+										className='w-full rounded-lg border border-rose-500/30 bg-black/40 p-2 text-sm text-white placeholder:text-rose-300/60'
+									/>
+									<button
+										onClick={handleDeleteAccount}
+										disabled={deleteLoading}
+										className='w-full rounded-lg bg-rose-600/80 border border-rose-400/60 px-4 py-2 text-sm text-white hover:bg-rose-600 disabled:opacity-60'
+									>
+										{deleteLoading ? 'Удаление...' : 'Удалить аккаунт'}
+									</button>
+								</div>
 							</div>
 						</motion.div>
 					</div>

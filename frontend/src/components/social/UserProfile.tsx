@@ -313,6 +313,14 @@ export default function UserProfile({ user, currentUser }: Props) {
 	}, [activeTab, user.id, friends.length])
 
 	const fetchProfilePosts = async (page: number, replace = false) => {
+		if (isBlocked && !isAdmin) {
+			if (replace) {
+				setProfilePosts([])
+			}
+			setHasMorePosts(false)
+			setLoadingPosts(false)
+			return
+		}
 		setLoadingPosts(true)
 		try {
 			const res = await fetch(
@@ -349,8 +357,12 @@ export default function UserProfile({ user, currentUser }: Props) {
 		setProfilePosts([])
 		setPostsPage(1)
 		setHasMorePosts(true)
+		if (isBlocked && !isAdmin) {
+			setHasMorePosts(false)
+			return
+		}
 		fetchProfilePosts(1, true)
-	}, [activeTab, user.id])
+	}, [activeTab, user.id, isBlocked, isAdmin])
 
 	useEffect(() => {
 		if (activeTab !== 'gifts') return
@@ -735,7 +747,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 							: 'ring-black'
 					} overflow-hidden shadow-xl z-10`}
 				>
-					{user.avatar_url ? (
+					{user.avatar_url && (!isBlocked || isAdmin) ? (
 						<img
 							src={getAttachmentUrl(user.avatar_url)}
 							alt={user.username}
@@ -1237,6 +1249,21 @@ export default function UserProfile({ user, currentUser }: Props) {
 								<div className='flex justify-center py-12'>
 									<div className='h-8 w-8 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent' />
 								</div>
+							) : isBlocked && !isAdmin ? (
+								<div className='flex flex-col items-center justify-center py-12 text-center text-gray-400'>
+									<motion.div
+										initial={{ scale: 0.8, opacity: 0 }}
+										animate={{ scale: 1, opacity: 1 }}
+										transition={{ delay: 0.4 }}
+										className='mb-4 text-6xl opacity-50'
+									>
+										🚫
+									</motion.div>
+									<p className='text-lg font-medium'>Публикации скрыты</p>
+									<p className='text-sm text-gray-500'>
+										Контент пользователя недоступен из-за блокировки
+									</p>
+								</div>
 							) : profilePosts.length > 0 ? (
 								<div className='space-y-4'>
 									{profilePosts.map(p => (
@@ -1301,7 +1328,10 @@ export default function UserProfile({ user, currentUser }: Props) {
 										className='flex items-center gap-3 rounded-xl bg-white/5 p-3 hover:bg-white/10 transition-colors'
 									>
 										<img
-											src={getAttachmentUrl(friend.avatar_url)}
+											src={
+												getAttachmentUrl(friend.avatar_url) ||
+												'/placeholder-user.jpg'
+											}
 											alt={friend.username}
 											className='h-12 w-12 rounded-full object-cover'
 										/>

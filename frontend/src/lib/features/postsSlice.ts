@@ -10,6 +10,7 @@ interface Post {
 	likes?: number
 	comments_count?: number
 	is_liked?: boolean
+	is_blog?: boolean
 	image?: string
 }
 

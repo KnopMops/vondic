@@ -1,8 +1,42 @@
+import time
+from collections import defaultdict, deque
 from functools import wraps
+from threading import Lock
 
 from app.services.auth_service import AuthService
 from app.services.user_service import UserService
 from flask import jsonify, request
+
+_RATE_BUCKETS = defaultdict(deque)
+_RATE_LOCK = Lock()
+
+
+def _client_key():
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.remote_addr or "unknown"
+
+
+def rate_limit(key_prefix: str, limit: int, window_seconds: int):
+    def decorator(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            now = time.time()
+            key = f"{key_prefix}:{_client_key()}"
+            with _RATE_LOCK:
+                bucket = _RATE_BUCKETS[key]
+                cutoff = now - window_seconds
+                while bucket and bucket[0] <= cutoff:
+                    bucket.popleft()
+                if len(bucket) >= limit:
+                    return jsonify({"error": "Too many requests"}), 429
+                bucket.append(now)
+            return f(*args, **kwargs)
+
+        return decorated
+
+    return decorator
 
 
 def token_required(f):

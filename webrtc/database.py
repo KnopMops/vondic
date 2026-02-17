@@ -462,6 +462,23 @@ class UserRepository:
         finally:
             conn.close()
 
+    def get_group_owner(self, group_id):
+        conn = self._connect()
+        conn.row_factory = sqlite3.Row
+        try:
+            cursor = conn.execute(
+                "SELECT owner_id FROM groups WHERE id = ?", (group_id,)
+            )
+            row = cursor.fetchone()
+            if row:
+                return row["owner_id"]
+            return None
+        except sqlite3.Error as e:
+            logger.error(f"DB Error get_group_owner: {e}")
+            return None
+        finally:
+            conn.close()
+
     def get_channel_history(self, channel_id, limit=50, offset=0):
         conn = self._connect()
         conn.row_factory = sqlite3.Row
@@ -510,6 +527,53 @@ class UserRepository:
         except sqlite3.Error as err:
             logger.error(f"Ошибка БД (история канала): {err}")
             return []
+        finally:
+            conn.close()
+
+    def delete_messages_history(self, user_id, target_id):
+        conn = self._connect()
+        try:
+            query = """
+                DELETE FROM messages
+                WHERE (sender_id = ? AND target_id = ?)
+                   OR (sender_id = ? AND target_id = ?)
+            """
+            cursor = conn.execute(query, (user_id, target_id, target_id, user_id))
+            conn.commit()
+            return cursor.rowcount
+        except sqlite3.Error as err:
+            logger.error(f"Ошибка БД (удаление истории): {err}")
+            return 0
+        finally:
+            conn.close()
+
+    def delete_channel_history(self, channel_id):
+        conn = self._connect()
+        try:
+            cursor = conn.execute(
+                "DELETE FROM messages WHERE channel_id = ?",
+                (channel_id,),
+            )
+            conn.commit()
+            return cursor.rowcount
+        except sqlite3.Error as err:
+            logger.error(f"Ошибка БД (удаление истории канала): {err}")
+            return 0
+        finally:
+            conn.close()
+
+    def delete_group_history(self, group_id):
+        conn = self._connect()
+        try:
+            cursor = conn.execute(
+                "DELETE FROM messages WHERE group_id = ?",
+                (group_id,),
+            )
+            conn.commit()
+            return cursor.rowcount
+        except sqlite3.Error as err:
+            logger.error(f"Ошибка БД (удаление истории группы): {err}")
+            return 0
         finally:
             conn.close()
 

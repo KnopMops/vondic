@@ -1,3 +1,4 @@
+import html
 from datetime import datetime
 
 from app.core.extensions import db
@@ -7,6 +8,14 @@ from app.models.post import Post
 
 
 class CommentService:
+    @staticmethod
+    def _sanitize_text(value):
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            value = str(value)
+        return html.escape(value.strip(), quote=True)
+
     @staticmethod
     def get_comments_by_post(post_id):
         return (
@@ -24,6 +33,8 @@ class CommentService:
         post = Post.query.filter_by(id=post_id, deleted=False).first()
         if not post:
             return None, "Post not found"
+        if post.is_blog:
+            return None, "Comments disabled"
 
         parent_id = data.get("parent_id")
         if parent_id:
@@ -33,7 +44,7 @@ class CommentService:
                 return None, "Parent comment not found"
 
         new_comment = Comment(
-            content=data.get("content"),
+            content=CommentService._sanitize_text(data.get("content")),
             posted_by=user_id,
             post_id=post_id,
             parent_id=parent_id
@@ -56,7 +67,7 @@ class CommentService:
             return None, "Unauthorized"
 
         if "content" in data:
-            comment.content = data["content"]
+            comment.content = CommentService._sanitize_text(data["content"])
 
         try:
             db.session.commit()
@@ -108,6 +119,11 @@ class CommentService:
         comment = Comment.query.filter_by(id=comment_id, deleted=False).first()
         if not comment:
             return None, "Comment not found"
+        post = Post.query.filter_by(id=comment.post_id, deleted=False).first()
+        if not post:
+            return None, "Post not found"
+        if post.is_blog:
+            return None, "Comments disabled"
 
         existing_like = Like.query.filter_by(
             user_id=user_id, comment_id=comment_id).first()
@@ -130,6 +146,11 @@ class CommentService:
         comment = Comment.query.filter_by(id=comment_id, deleted=False).first()
         if not comment:
             return None, "Comment not found"
+        post = Post.query.filter_by(id=comment.post_id, deleted=False).first()
+        if not post:
+            return None, "Post not found"
+        if post.is_blog:
+            return None, "Comments disabled"
 
         existing_like = Like.query.filter_by(
             user_id=user_id, comment_id=comment_id).first()

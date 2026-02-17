@@ -15,9 +15,10 @@ import StoriesBar from './StoriesBar'
 type Props = {
 	email: string
 	onLogout: () => void
+	mode?: 'feed' | 'blog'
 }
 
-export default function SocialFeed({ email, onLogout }: Props) {
+export default function SocialFeed({ email, onLogout, mode = 'feed' }: Props) {
 	const { user } = useAppSelector(state => state.auth)
 	const {
 		posts,
@@ -28,10 +29,12 @@ export default function SocialFeed({ email, onLogout }: Props) {
 		createPost,
 		deletePost,
 		updatePost,
-	} = usePosts({ perPage: 5 })
+	} = usePosts({ perPage: 5, kind: mode === 'blog' ? 'blog' : 'feed' })
 	const [activeTab, setActiveTab] = useState<'popular' | 'following'>('popular')
 	const [followingIds, setFollowingIds] = useState<string[]>([])
 	const [isFollowingLoading, setIsFollowingLoading] = useState(false)
+	const isBlogMode = mode === 'blog'
+	const canCreateBlogPost = user?.role === 'Admin'
 
 	const addPost = (text: string, attachments?: Attachment[]) => {
 		createPost({ text, attachments })
@@ -42,11 +45,16 @@ export default function SocialFeed({ email, onLogout }: Props) {
 		deletePost({ id, userId: user.id, reason })
 	}
 
-	const handleUpdatePost = (id: string | number, newText: string) => {
-		updatePost({ id, newText })
+	const handleUpdatePost = (
+		id: string | number,
+		newText?: string,
+		isBlog?: boolean,
+	) => {
+		updatePost({ id, newText, isBlog })
 	}
 
 	useEffect(() => {
+		if (isBlogMode) return
 		const fetchFollowing = async () => {
 			if (!user) return
 			setIsFollowingLoading(true)
@@ -74,6 +82,9 @@ export default function SocialFeed({ email, onLogout }: Props) {
 	const displayedPosts = useMemo<PostData[]>(() => {
 		const byDateDesc = (a: PostData, b: PostData) =>
 			new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+		if (isBlogMode) {
+			return [...posts].sort(byDateDesc)
+		}
 		if (activeTab === 'following' && followingIds.length > 0) {
 			return posts
 				.filter(p => followingIds.includes(String(p.posted_by)))
@@ -98,24 +109,29 @@ export default function SocialFeed({ email, onLogout }: Props) {
 				<Sidebar />
 				<main className='flex-1 px-4 sm:px-6 lg:px-8'>
 					<div className='mx-auto max-w-2xl space-y-6'>
-						<StoriesBar />
-						<Composer onCreate={addPost} />
-						<div className='rounded-xl bg-gray-900/40 backdrop-blur-md border border-gray-800/50 p-1'>
-							<div className='grid grid-cols-2 p-1 gap-2'>
-								<button
-									onClick={() => setActiveTab('popular')}
-									className={`rounded-lg py-2.5 text-sm font-medium transition-all ${activeTab === 'popular' ? 'bg-gray-800/50 text-white shadow-sm' : 'text-gray-400 hover:text-white hover:bg-gray-800/30'}`}
-								>
-									Популярное
-								</button>
-								<button
-									onClick={() => setActiveTab('following')}
-									className={`rounded-lg py-2.5 text-sm font-medium transition-all ${activeTab === 'following' ? 'bg-gray-800/50 text-white shadow-sm' : 'text-gray-400 hover:text-white hover:bg-gray-800/30'}`}
-								>
-									Подписки
-								</button>
+						{!isBlogMode && <StoriesBar />}
+						{!isBlogMode && <Composer onCreate={addPost} />}
+						{isBlogMode && canCreateBlogPost && (
+							<Composer onCreate={addPost} />
+						)}
+						{!isBlogMode && (
+							<div className='rounded-xl bg-gray-900/40 backdrop-blur-md border border-gray-800/50 p-1'>
+								<div className='grid grid-cols-2 p-1 gap-2'>
+									<button
+										onClick={() => setActiveTab('popular')}
+										className={`rounded-lg py-2.5 text-sm font-medium transition-all ${activeTab === 'popular' ? 'bg-gray-800/50 text-white shadow-sm' : 'text-gray-400 hover:text-white hover:bg-gray-800/30'}`}
+									>
+										Популярное
+									</button>
+									<button
+										onClick={() => setActiveTab('following')}
+										className={`rounded-lg py-2.5 text-sm font-medium transition-all ${activeTab === 'following' ? 'bg-gray-800/50 text-white shadow-sm' : 'text-gray-400 hover:text-white hover:bg-gray-800/30'}`}
+									>
+										Подписки
+									</button>
+								</div>
 							</div>
-						</div>
+						)}
 
 						{loading && (
 							<div className='flex justify-center py-8'>
@@ -123,7 +139,8 @@ export default function SocialFeed({ email, onLogout }: Props) {
 							</div>
 						)}
 
-						{activeTab === 'following' &&
+						{!isBlogMode &&
+							activeTab === 'following' &&
 							!isFollowingLoading &&
 							followingIds.length === 0 && (
 								<div className='text-center text-gray-400 py-6'>
@@ -146,6 +163,7 @@ export default function SocialFeed({ email, onLogout }: Props) {
 								likes={p.likes || 0}
 								comments_count={p.comments_count || 0}
 								isLikedByCurrentUser={p.is_liked || false}
+								isBlog={p.is_blog || false}
 								image={p.image}
 								attachments={p.attachments}
 								currentUserId={user?.id}

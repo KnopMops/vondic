@@ -313,6 +313,43 @@ export const NotificationBell: React.FC = () => {
 		}
 	}, [add, showToast])
 
+	useEffect(() => {
+		let timer: any
+		const poll = async () => {
+			try {
+				const res = await fetch('/api/support/notifications/updates')
+				const text = await res.text()
+				let data: any = {}
+				try {
+					data = JSON.parse(text)
+				} catch {
+					return
+				}
+				const list: any[] = Array.isArray(data)
+					? data
+					: data?.notifications || []
+				if (!Array.isArray(list) || list.length === 0) return
+				for (const item of list) {
+					const message = item?.message || ''
+					const title = item?.title || 'Уведомление'
+					const type = (item?.type || 'system') as any
+					if (!message && !title) continue
+					if (audioRef.current) {
+						audioRef.current.currentTime = 0
+						audioRef.current.play().catch(() => {})
+					}
+					add({ title, message, type })
+					showToast(message || title, type === 'blog' ? 'info' : 'info')
+				}
+			} catch {}
+		}
+		poll()
+		timer = setInterval(poll, 15000)
+		return () => {
+			if (timer) clearInterval(timer)
+		}
+	}, [add, showToast])
+
 	const items = useMemo(() => notifications.slice(0, 10), [notifications])
 
 	return (
@@ -348,7 +385,11 @@ export const NotificationBell: React.FC = () => {
 						{items.map(n => (
 							<div
 								key={n.id}
-								className='px-3 py-2 rounded hover:bg-white/5 transition'
+								className={`px-3 py-2 rounded transition ${
+									n.type === 'blog'
+										? 'bg-amber-400/20 hover:bg-amber-400/30'
+										: 'hover:bg-white/5'
+								}`}
 							>
 								<div className='text-sm font-medium text-white'>{n.title}</div>
 								{n.message && (

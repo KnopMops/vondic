@@ -84,7 +84,7 @@ export class CallManager {
 
 			if (iCreateOffer) {
 				console.log(`I (${mySocketId}) am creating offer for ${socket_id}`)
-				const pc = this.webRTCService.ensurePeerConnection(socket_id)
+				const pc = await this.webRTCService.ensureLocalAudioSender(socket_id)
 				const offer = await pc.createOffer()
 				await pc.setLocalDescription(offer)
 
@@ -97,7 +97,7 @@ export class CallManager {
 				})
 			} else {
 				console.log(`I (${mySocketId}) am waiting for offer from ${socket_id}`)
-				this.webRTCService.ensurePeerConnection(socket_id)
+				await this.webRTCService.ensureLocalAudioSender(socket_id)
 			}
 
 			const callState: CallState = {
@@ -158,7 +158,7 @@ export class CallManager {
 			const iCreateOffer = mySocketId < socket_id
 
 			if (iCreateOffer) {
-				const pc = this.webRTCService.ensurePeerConnection(socket_id)
+				const pc = await this.webRTCService.ensureLocalAudioSender(socket_id)
 				const offer = await pc.createOffer()
 				await pc.setLocalDescription(offer)
 				this.socket.emit('offer', {
@@ -169,7 +169,7 @@ export class CallManager {
 					caller_avatar_url: this.currentUser?.avatar,
 				})
 			} else {
-				this.webRTCService.ensurePeerConnection(socket_id)
+				await this.webRTCService.ensureLocalAudioSender(socket_id)
 			}
 
 			const callState: CallState = {

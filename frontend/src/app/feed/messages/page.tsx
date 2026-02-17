@@ -1456,6 +1456,14 @@ export default function MessengerPage() {
 	const isAiChat = selectedFriend?.id === aiUser.id
 	const isBotChat = selectedFriend?.role === 'Bot' && !isAiChat
 	const targetUserId = selectedFriend?.id
+	const hasActiveChat = !!(selectedFriend || selectedChannel || selectedGroup)
+	const isSelectedFriendOnline =
+		selectedFriend?.status?.toLowerCase() === 'online'
+	const isSelectedFriendInCall = selectedFriend
+		? Array.from(activeCalls.values()).some(
+				call => call.userId === selectedFriend.id,
+			)
+		: false
 
 	const {
 		messages: chatMessages,
@@ -1470,6 +1478,7 @@ export default function MessengerPage() {
 		deleteMessage,
 		updateMessage,
 		markMessageDeleted,
+		clearHistory,
 	} = useChat(
 		socket,
 		user?.id,
@@ -2361,6 +2370,97 @@ export default function MessengerPage() {
 		}
 	}
 
+	const handleDeleteAllHistory = async () => {
+		if (isAiChat || isBotChat) {
+			showToast('В этом чате нельзя удалить историю', 'info')
+			return
+		}
+		if (!user?.access_token) {
+			showToast('Необходима авторизация', 'error')
+			return
+		}
+		if (!selectedFriend && !selectedChannel && !selectedGroup) return
+		const confirmed = window.confirm(
+			'Удалить всю переписку без восстановления?',
+		)
+		if (!confirmed) return
+
+		try {
+			const baseUrl =
+				process.env.NEXT_PUBLIC_WEBRTC_URL || 'http://localhost:5000'
+			let res: Response | null = null
+
+			if (selectedChannel) {
+				if (
+					selectedChannel.owner_id &&
+					String(selectedChannel.owner_id) !== String(user.id)
+				) {
+					showToast('Недостаточно прав', 'error')
+					return
+				}
+				res = await fetch(`${baseUrl}/channels/history`, {
+					method: 'DELETE',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						token: user.access_token,
+						channel_id: selectedChannel.id,
+					}),
+				})
+			} else if (selectedGroup) {
+				if (
+					selectedGroup.owner_id &&
+					String(selectedGroup.owner_id) !== String(user.id)
+				) {
+					showToast('Недостаточно прав', 'error')
+					return
+				}
+				res = await fetch(`${baseUrl}/groups/history`, {
+					method: 'DELETE',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						token: user.access_token,
+						group_id: selectedGroup.id,
+					}),
+				})
+			} else if (selectedFriend) {
+				res = await fetch(`${baseUrl}/messages/history`, {
+					method: 'DELETE',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						token: user.access_token,
+						target_id: selectedFriend.id,
+					}),
+				})
+			}
+
+			if (!res) return
+			if (!res.ok) {
+				const errorText = await res.text()
+				showToast(
+					errorText
+						? `Не удалось удалить историю: ${errorText}`
+						: 'Не удалось удалить историю',
+					'error',
+				)
+				return
+			}
+
+			clearHistory()
+			setPinnedMessageIds([])
+			setPinnedMessageId(null)
+			setIsChatSearchOpen(false)
+			setChatSearchQuery('')
+			setFoundMessages([])
+			setReplyMap({})
+			setReactionsByMessage({})
+			setIsSettingsOpen(false)
+			showToast('История удалена', 'success')
+		} catch (e) {
+			console.error(e)
+			showToast('Не удалось удалить историю', 'error')
+		}
+	}
+
 	const handleEditMessage = (msg: Message, text: string) => {
 		if (isAiChat) {
 			setAiMessages(prev =>
@@ -2601,7 +2701,11 @@ export default function MessengerPage() {
 	return (
 		<div className='flex h-[calc(100vh-4rem)] w-full overflow-hidden bg-gray-950 text-gray-100 font-sans'>
 			{/* Sidebar */}
-			<div className='w-80 flex flex-col border-r border-gray-800 bg-gray-950 flex-shrink-0 z-20 shadow-xl'>
+			<div
+				className={`w-80 border-r border-gray-800 bg-gray-950 flex-shrink-0 z-20 shadow-xl flex-col ${
+					hasActiveChat ? 'hidden md:flex' : 'flex'
+				}`}
+			>
 				{/* Header */}
 				<div className='p-4 border-b border-gray-800 bg-gray-900/50 backdrop-blur-sm'>
 					<div className='flex justify-between items-center mb-4'>
@@ -2946,7 +3050,7 @@ export default function MessengerPage() {
 													</div>
 												</div>
 												<div className='flex flex-col flex-1 min-w-0'>
-													<div className='flex justify-between items-baseline'>
+													<div className='flex justify-between items-center gap-2'>
 														<span
 															className={`font-semibold truncate transition-colors duration-300 ${
 																selectedGroup?.id === group.id
@@ -2956,6 +3060,17 @@ export default function MessengerPage() {
 														>
 															{group.name}
 														</span>
+														<button
+															type='button'
+															onClick={e => {
+																e.stopPropagation()
+																initiateGroupCall(group.id)
+															}}
+															className='p-1.5 rounded-full text-emerald-400 hover:text-white hover:bg-emerald-500/20 transition-colors'
+															title='Голосовой звонок в группе'
+														>
+															<PhoneIcon className='w-4 h-4' />
+														</button>
 													</div>
 												</div>
 											</div>
@@ -3206,7 +3321,9 @@ export default function MessengerPage() {
 
 			{/* Chat Area */}
 			<div
-				className={`flex-1 flex flex-col relative min-w-0 transition-colors duration-500 ${currentBackground.class}`}
+				className={`flex-1 flex flex-col relative min-w-0 transition-colors duration-500 ${currentBackground.class} ${
+					!hasActiveChat ? 'hidden md:flex' : ''
+				}`}
 			>
 				{/* Background Decoration */}
 				<div className='absolute inset-0 bg-grid-pattern pointer-events-none opacity-20' />
@@ -3252,7 +3369,6 @@ export default function MessengerPage() {
 									<div className='flex items-center gap-4'>
 										<button
 											onClick={() => {
-												setActiveTab('community')
 												setSelectedFriend(null)
 												setSelectedGroup(null)
 												setSelectedChannel(null)
@@ -3357,6 +3473,36 @@ export default function MessengerPage() {
 
 									{/* Header Actions */}
 									<div className='flex items-center gap-2'>
+										{selectedFriend && !isAiChat && !isBotChat && (
+											<button
+												onClick={() =>
+													handleCallInitiate(
+														selectedFriend.id,
+														selectedFriend.username,
+													)
+												}
+												disabled={
+													!isSelectedFriendOnline || isSelectedFriendInCall
+												}
+												className={`p-2 sm:px-3 sm:py-2 rounded-full sm:rounded-lg flex items-center gap-2 transition-colors ${
+													!isSelectedFriendOnline || isSelectedFriendInCall
+														? 'text-gray-600 cursor-not-allowed'
+														: 'text-emerald-400 hover:text-white hover:bg-emerald-500/20'
+												}`}
+												title={
+													!isSelectedFriendOnline
+														? 'Пользователь не в сети'
+														: isSelectedFriendInCall
+															? 'Уже идет звонок'
+															: 'Позвонить'
+												}
+											>
+												<PhoneIcon className='w-5 h-5' />
+												<span className='hidden sm:inline text-xs font-medium'>
+													Позвонить
+												</span>
+											</button>
+										)}
 										<button
 											onClick={() => setIsChatSearchOpen(true)}
 											className='p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors'
@@ -3408,6 +3554,14 @@ export default function MessengerPage() {
 																	</button>
 																))}
 															</div>
+														</div>
+														<div className='pt-3 border-t border-gray-800'>
+															<button
+																onClick={handleDeleteAllHistory}
+																className='w-full text-left text-sm text-rose-500 hover:text-rose-400 hover:bg-rose-500/10 px-3 py-2 rounded-lg transition-colors'
+															>
+																Удалить всю переписку без восстановления
+															</button>
 														</div>
 													</div>
 												</div>

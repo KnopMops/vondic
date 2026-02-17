@@ -1,3 +1,4 @@
+import html
 from datetime import datetime
 
 from app.core.extensions import db
@@ -7,6 +8,14 @@ from app.models.user import User
 
 
 class MessageService:
+    @staticmethod
+    def _sanitize_text(value):
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            value = str(value)
+        return html.escape(value.strip(), quote=True)
+
     @staticmethod
     def create_message(data, user_id, group_id=None, target_id=None):
         content = data.get("content")
@@ -21,6 +30,8 @@ class MessageService:
 
         if not content:
             content = ""
+        else:
+            content = MessageService._sanitize_text(content)
 
         if group_id:
             group = Group.query.get(group_id)
