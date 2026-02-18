@@ -1,4 +1,4 @@
-import { getAccessToken } from '@/lib/auth.utils'
+import { withAccessTokenRefresh } from '@/lib/auth.utils'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(
@@ -6,36 +6,36 @@ export async function POST(
 	{ params }: { params: Promise<{ groupId: string }> },
 ) {
 	try {
-		const token = await getAccessToken(req)
-		const body = await req.json().catch(() => ({}))
-		const { groupId } = await params
-
-		if (!token) {
-			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-		}
-
 		const backendUrl =
 			process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
 
-		const response = await fetch(`${backendUrl}/api/v1/groups/${groupId}/messages`, {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				Authorization: `Bearer ${token}`,
-			},
-			body: JSON.stringify({ ...body, access_token: token }),
-		})
+		return await withAccessTokenRefresh(req, async token => {
+			const body = await req.json().catch(() => ({}))
+			const { groupId } = await params
 
-		if (!response.ok) {
-			const errorText = await response.text()
-			return NextResponse.json(
-				{ error: 'Failed to send group message', details: errorText },
-				{ status: response.status },
+			const response = await fetch(
+				`${backendUrl}/api/v1/groups/${groupId}/messages`,
+				{
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						Authorization: `Bearer ${token}`,
+					},
+					body: JSON.stringify({ ...body, access_token: token }),
+				},
 			)
-		}
 
-		const data = await response.json()
-		return NextResponse.json(data)
+			if (!response.ok) {
+				const errorText = await response.text()
+				return NextResponse.json(
+					{ error: 'Failed to send group message', details: errorText },
+					{ status: response.status },
+				)
+			}
+
+			const data = await response.json()
+			return NextResponse.json(data)
+		})
 	} catch (error) {
 		console.error('Send group message proxy error:', error)
 		return NextResponse.json(

@@ -8,17 +8,29 @@
 	<body>
 		<div class="app">
 			<div class="header">Proxy Receiver</div>
-			<label class="row">
-				<span>Включено</span>
-				<input id="enabled" type="checkbox" />
-			</label>
 			<label class="field">
 				<span>Хост</span>
 				<input id="host" type="text" placeholder="127.0.0.1" />
 			</label>
 			<label class="field">
-				<span>Порт</span>
-				<input id="port" type="number" min="1" max="65535" placeholder="9000" />
+				<span>HTTP порт</span>
+				<input
+					id="httpPort"
+					type="number"
+					min="1"
+					max="65535"
+					placeholder="9000"
+				/>
+			</label>
+			<label class="field">
+				<span>HTTPS порт</span>
+				<input
+					id="httpsPort"
+					type="number"
+					min="1"
+					max="65535"
+					placeholder="9000"
+				/>
 			</label>
 			<label class="field">
 				<span>API ключ</span>
@@ -32,7 +44,7 @@
 					placeholder="example.com, api.example.com"
 				></textarea>
 			</label>
-			<button id="save" class="btn">Сохранить</button>
+			<button id="save" class="btn">Проксировать</button>
 			<div id="status" class="status"></div>
 		</div>
 		<script src="popup.js"></script>

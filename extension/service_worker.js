@@ -1,14 +1,22 @@
 const DEFAULTS = {
 	enabled: false,
 	host: '127.0.0.1',
-	port: 9000,
+	httpPort: 9000,
+	httpsPort: 9000,
 	apiKey: '',
 	domains: '',
 }
 
 async function getSettings() {
-	const settings = await chrome.storage.local.get(DEFAULTS)
-	return { ...DEFAULTS, ...settings }
+	const stored = await chrome.storage.local.get(DEFAULTS)
+	const settings = { ...DEFAULTS, ...stored }
+	if (!settings.httpPort && settings.port) {
+		settings.httpPort = settings.port
+	}
+	if (!settings.httpsPort && settings.port) {
+		settings.httpsPort = settings.port
+	}
+	return settings
 }
 
 function normalizeDomains(input) {
@@ -18,13 +26,17 @@ function normalizeDomains(input) {
 		.filter(Boolean)
 }
 
-function buildPacScript(host, port, domains) {
-	const proxy = `PROXY ${host}:${port}`
+function buildPacScript(host, httpPort, httpsPort, domains) {
+	const httpProxy = `PROXY ${host}:${httpPort}`
+	const httpsProxy = `PROXY ${host}:${httpsPort}`
 	if (domains.length === 0) {
-		return `function FindProxyForURL(url, host) { return "${proxy}"; }`
+		return `function FindProxyForURL(url, host) { if (url.substring(0, 6) === "https:") return "${httpsProxy}"; return "${httpProxy}"; }`
 	}
 	const domainChecks = domains
-		.map(domain => `if (dnsDomainIs(host, "${domain}")) return "${proxy}";`)
+		.map(
+			domain =>
+				`if (dnsDomainIs(host, "${domain}")) { if (url.substring(0, 6) === "https:") return "${httpsProxy}"; return "${httpProxy}"; }`,
+		)
 		.join('')
 	return `function FindProxyForURL(url, host) { ${domainChecks} return "DIRECT"; }`
 }
@@ -43,7 +55,12 @@ async function applyProxySettings() {
 	}
 
 	const domains = normalizeDomains(settings.domains)
-	const pacScript = buildPacScript(settings.host, settings.port, domains)
+	const pacScript = buildPacScript(
+		settings.host,
+		settings.httpPort,
+		settings.httpsPort,
+		domains,
+	)
 	await chrome.proxy.settings.set({
 		value: {
 			mode: 'pac_script',

@@ -17,13 +17,21 @@ const initialState: AuthState = {
 
 export const fetchUser = createAsyncThunk('auth/fetchUser', async () => {
 	const response = await fetch('/api/auth/me')
+	const refreshed = response.headers.get('x-auth-refreshed') === '1'
+
 	if (!response.ok) {
 		if (response.status === 401 || response.status === 404) {
 			return null
 		}
 		throw new Error('Failed to fetch user')
 	}
+
 	const data = await response.json()
+
+	if (refreshed && typeof window !== 'undefined') {
+		window.location.reload()
+	}
+
 	return data.user
 })
 

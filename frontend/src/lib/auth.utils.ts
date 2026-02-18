@@ -121,3 +121,46 @@ export async function refreshAccessToken(
 		return null
 	}
 }
+
+/**
+ * Универсальная обёртка для API-роутов, которая:
+ * - достаёт access/refresh токены из cookies;
+ * - выполняет handler с access_token;
+ * - при 401 пробует обновить токены через refresh_token и повторяет handler;
+ * - при успешном рефреше обновляет cookies и проставляет заголовок x-auth-refreshed: 1.
+ */
+export async function withAccessTokenRefresh(
+	req: NextRequest,
+	handler: (accessToken: string) => Promise<NextResponse>,
+): Promise<NextResponse> {
+	const accessToken = await getAccessToken(req)
+	const refreshToken = await getRefreshToken(req)
+
+	if (!accessToken && !refreshToken) {
+		const res = NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+		return clearTokens(res)
+	}
+
+	if (accessToken) {
+		const res = await handler(accessToken)
+		if (res.status !== 401) {
+			return res
+		}
+	}
+
+	if (!refreshToken) {
+		const res = NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+		return clearTokens(res)
+	}
+
+	const newTokens = await refreshAccessToken(refreshToken)
+	if (!newTokens) {
+		const res = NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+		return clearTokens(res)
+	}
+
+	const res = await handler(newTokens.access_token)
+	setTokens(res, newTokens.access_token, newTokens.refresh_token)
+	res.headers.set('x-auth-refreshed', '1')
+	return res
+}

@@ -1,94 +1,20 @@
-import argparse
 import asyncio
-import base64
 import logging
-import os
-import re
-import secrets
-import struct
-import sys
-import time
-from dataclasses import dataclass, field
 from typing import Optional, Tuple
 from urllib.parse import urlsplit
 
-from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
-MAGIC = b"PXE1"
-VERSION = 1
-HANDSHAKE_NONCE_SIZE = 32
-FRAME_NONCE_SIZE = 12
-DEFAULT_LISTEN = "0.0.0.0:9000"
-DEFAULT_CHUNK_SIZE = 65536
-DEFAULT_MAX_FRAME_SIZE = 4 * 1024 * 1024
-HTTP_HEADER_LIMIT = 65536
-
-
-@dataclass(frozen=True)
-class ProxyConfig:
-    mode: str
-    listen_host: str
-    listen_port: int
-    upstream_host: Optional[str]
-    upstream_port: Optional[int]
-    channel_peer_host: Optional[str]
-    channel_peer_port: Optional[int]
-    master_key: Optional[bytes]
-    public_key: Optional[str]
-    chunk_size: int
-    max_frame_size: int
-    standalone_mode: str
-    enable_tui: bool
-
-
-@dataclass
-class ProxyStats:
-    total_connections: int = 0
-    active_connections: int = 0
-    accepted_connections: int = 0
-    rejected_connections: int = 0
-    bytes_in: int = 0
-    bytes_out: int = 0
-    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
-
-
-def parse_host_port(value: str) -> Tuple[str, int]:
-    if ":" not in value:
-        return "0.0.0.0", int(value)
-    host, port = value.rsplit(":", 1)
-    return host.strip() or "0.0.0.0", int(port)
-
-
-def normalize_key(key: str) -> bytes:
-    raw = key.strip()
-    try:
-        decoded = base64.urlsafe_b64decode(raw.encode())
-        if len(decoded) >= 32:
-            return decoded[:32]
-    except Exception:
-        pass
-    try:
-        decoded = bytes.fromhex(raw)
-        if len(decoded) >= 32:
-            return decoded[:32]
-    except Exception:
-        pass
-    raw_bytes = raw.encode()
-    if len(raw_bytes) >= 32:
-        return raw_bytes[:32]
-    raise ValueError("Master key must be at least 32 bytes")
-
-
-def derive_session_key(master_key: bytes, client_nonce: bytes, server_nonce: bytes) -> bytes:
-    hkdf = HKDF(
-        algorithm=hashes.SHA256(),
-        length=32,
-        salt=client_nonce + server_nonce,
-        info=b"proxy_receiver_session",
-    )
-    return hkdf.derive(master_key)
+from .config import HTTP_HEADER_LIMIT, ProxyConfig, ProxyStats, build_config
+from .crypto import (
+    encrypt_and_send,
+    perform_client_handshake,
+    perform_handshake,
+    read_api_key,
+    recv_and_decrypt,
+    send_api_key,
+)
+from .tui import tui_loop
 
 
 async def relay_stream(
@@ -128,17 +54,6 @@ async def relay_echo(
         await writer.drain()
 
 
-async def read_frame(reader: asyncio.StreamReader, max_frame_size: int) -> Optional[bytes]:
-    header = await reader.readexactly(4)
-    frame_len = struct.unpack(">I", header)[0]
-    if frame_len == 0:
-        return None
-    if frame_len > max_frame_size:
-        raise ValueError("Frame too large")
-    payload = await reader.readexactly(frame_len)
-    return payload
-
-
 async def read_http_request(
     reader: asyncio.StreamReader,
     limit: int,
@@ -155,59 +70,6 @@ async def read_http_request(
         return data, b""
     header_block, rest = data.split(b"\r\n\r\n", 1)
     return header_block, rest
-
-
-async def write_frame(writer: asyncio.StreamWriter, payload: bytes) -> None:
-    writer.write(struct.pack(">I", len(payload)) + payload)
-    await writer.drain()
-
-
-async def encrypt_and_send(
-    writer: asyncio.StreamWriter,
-    aesgcm: AESGCM,
-    plaintext: bytes,
-    stats: ProxyStats,
-) -> None:
-    nonce = secrets.token_bytes(FRAME_NONCE_SIZE)
-    ciphertext = aesgcm.encrypt(nonce, plaintext, None)
-    async with stats.lock:
-        stats.bytes_out += len(plaintext)
-    await write_frame(writer, nonce + ciphertext)
-
-
-async def recv_and_decrypt(
-    reader: asyncio.StreamReader,
-    aesgcm: AESGCM,
-    max_frame_size: int,
-    stats: ProxyStats,
-) -> Optional[bytes]:
-    payload = await read_frame(reader, max_frame_size)
-    if payload is None:
-        return None
-    if len(payload) < FRAME_NONCE_SIZE + 16:
-        raise ValueError("Invalid encrypted frame")
-    nonce = payload[:FRAME_NONCE_SIZE]
-    ciphertext = payload[FRAME_NONCE_SIZE:]
-    plaintext = aesgcm.decrypt(nonce, ciphertext, None)
-    async with stats.lock:
-        stats.bytes_in += len(plaintext)
-    return plaintext
-
-
-async def read_api_key(reader: asyncio.StreamReader, max_frame_size: int) -> Optional[str]:
-    payload = await read_frame(reader, max_frame_size)
-    if payload is None:
-        return None
-    return payload.decode(errors="ignore")
-
-
-async def send_api_key(
-    writer: asyncio.StreamWriter,
-    api_key: Optional[str],
-) -> None:
-    if not api_key:
-        return
-    await write_frame(writer, api_key.encode())
 
 
 def parse_http_headers(header_block: bytes) -> Tuple[str, list[Tuple[str, str]]]:
@@ -386,44 +248,6 @@ async def handle_http_proxy(
         )
 
 
-async def perform_handshake(
-    reader: asyncio.StreamReader,
-    writer: asyncio.StreamWriter,
-    master_key: bytes,
-) -> AESGCM:
-    header = await reader.readexactly(4 + 1 + HANDSHAKE_NONCE_SIZE)
-    if header[:4] != MAGIC:
-        raise ValueError("Invalid handshake magic")
-    version = header[4]
-    if version != VERSION:
-        raise ValueError("Unsupported protocol version")
-    client_nonce = header[5:]
-    server_nonce = secrets.token_bytes(HANDSHAKE_NONCE_SIZE)
-    writer.write(MAGIC + bytes([VERSION]) + server_nonce)
-    await writer.drain()
-    session_key = derive_session_key(master_key, client_nonce, server_nonce)
-    return AESGCM(session_key)
-
-
-async def perform_client_handshake(
-    reader: asyncio.StreamReader,
-    writer: asyncio.StreamWriter,
-    master_key: bytes,
-) -> AESGCM:
-    client_nonce = secrets.token_bytes(HANDSHAKE_NONCE_SIZE)
-    writer.write(MAGIC + bytes([VERSION]) + client_nonce)
-    await writer.drain()
-    header = await reader.readexactly(4 + 1 + HANDSHAKE_NONCE_SIZE)
-    if header[:4] != MAGIC:
-        raise ValueError("Invalid handshake magic")
-    version = header[4]
-    if version != VERSION:
-        raise ValueError("Unsupported protocol version")
-    server_nonce = header[5:]
-    session_key = derive_session_key(master_key, client_nonce, server_nonce)
-    return AESGCM(session_key)
-
-
 async def open_channel_connection(
     config: ProxyConfig,
     stats: ProxyStats,
@@ -576,8 +400,6 @@ async def handle_passive_connection(
             break
         async with stats.lock:
             stats.bytes_in += len(data)
-
-
 async def handle_client(
     reader: asyncio.StreamReader,
     writer: asyncio.StreamWriter,
@@ -605,196 +427,6 @@ async def handle_client(
             await writer.wait_closed()
         except Exception:
             pass
-
-
-def build_config() -> ProxyConfig:
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--mode",
-        choices=["active", "passive"],
-        default=os.getenv("PROXY_RECEIVER_MODE", "passive"),
-    )
-    parser.add_argument(
-        "--listen",
-        default=os.getenv("PROXY_RECEIVER_LISTEN", DEFAULT_LISTEN),
-    )
-    parser.add_argument(
-        "--upstream",
-        default=os.getenv("PROXY_RECEIVER_UPSTREAM"),
-    )
-    parser.add_argument(
-        "--channel-peer",
-        default=os.getenv("PROXY_RECEIVER_CHANNEL_PEER"),
-    )
-    parser.add_argument(
-        "--master-key",
-        default=os.getenv("PROXY_RECEIVER_MASTER_KEY"),
-    )
-    parser.add_argument(
-        "--public-key",
-        default=os.getenv("PROXY_RECEIVER_PUBLIC_KEY"),
-    )
-    parser.add_argument(
-        "--chunk-size",
-        type=int,
-        default=int(os.getenv("PROXY_RECEIVER_CHUNK_SIZE", DEFAULT_CHUNK_SIZE)),
-    )
-    parser.add_argument(
-        "--max-frame",
-        type=int,
-        default=int(os.getenv("PROXY_RECEIVER_MAX_FRAME",
-                    DEFAULT_MAX_FRAME_SIZE)),
-    )
-    parser.add_argument(
-        "--standalone-mode",
-        choices=["echo", "blackhole", "http"],
-        default=os.getenv("PROXY_RECEIVER_STANDALONE_MODE", "echo"),
-    )
-    parser.add_argument(
-        "--tui",
-        action="store_true",
-        default=os.getenv("PROXY_RECEIVER_TUI",
-                          "false").lower() in ("true", "1", "t"),
-    )
-    parser.add_argument(
-        "--gen-key",
-        action="store_true",
-        default=False,
-    )
-    args = parser.parse_args()
-
-    if args.gen_key:
-        key = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode()
-        print(key)
-        raise SystemExit(0)
-
-    listen_host, listen_port = parse_host_port(args.listen)
-    upstream_host = None
-    upstream_port = None
-    if args.upstream:
-        upstream_host, upstream_port = parse_host_port(args.upstream)
-    master_key = normalize_key(args.master_key) if args.master_key else None
-    if args.mode == "active" and not master_key:
-        raise SystemExit("master key required for active mode")
-    channel_peer_host = None
-    channel_peer_port = None
-    if args.channel_peer:
-        channel_peer_host, channel_peer_port = parse_host_port(
-            args.channel_peer)
-    if (channel_peer_host or channel_peer_port) and not master_key:
-        raise SystemExit("master key required for channel mode")
-
-    return ProxyConfig(
-        mode=args.mode,
-        listen_host=listen_host,
-        listen_port=listen_port,
-        upstream_host=upstream_host,
-        upstream_port=upstream_port,
-        channel_peer_host=channel_peer_host,
-        channel_peer_port=channel_peer_port,
-        master_key=master_key,
-        public_key=args.public_key,
-        chunk_size=max(1024, args.chunk_size),
-        max_frame_size=max(65536, args.max_frame),
-        standalone_mode=args.standalone_mode,
-        enable_tui=args.tui,
-    )
-
-
-def format_bytes(value: int) -> str:
-    units = ["B", "KB", "MB", "GB", "TB"]
-    size = float(value)
-    for unit in units:
-        if size < 1024 or unit == units[-1]:
-            return f"{size:.2f} {unit}"
-        size /= 1024
-    return f"{size:.2f} TB"
-
-
-def color(text: str, code: str) -> str:
-    return f"\033[{code}m{text}\033[0m"
-
-
-def strip_ansi(text: str) -> str:
-    return re.sub(r"\x1b\[[0-9;]*m", "", text)
-
-
-def draw_box(lines: list[str], width: int) -> str:
-    top = "┌" + "─" * (width - 2) + "┐"
-    bottom = "└" + "─" * (width - 2) + "┘"
-    body = []
-    for line in lines:
-        visible = strip_ansi(line)
-        padding = width - 2 - len(visible)
-        if padding < 0:
-            trimmed = visible[: width - 4] + "…"
-            line = trimmed
-            padding = width - 2 - len(trimmed)
-        body.append("│" + line + " " * padding + "│")
-    return "\n".join([top] + body + [bottom])
-
-
-async def tui_loop(config: ProxyConfig, stats: ProxyStats) -> None:
-    last_time = time.time()
-    last_in = 0
-    last_out = 0
-    while True:
-        await asyncio.sleep(1)
-        now = time.time()
-        async with stats.lock:
-            total = stats.total_connections
-            active = stats.active_connections
-            accepted = stats.accepted_connections
-            rejected = stats.rejected_connections
-            bytes_in = stats.bytes_in
-            bytes_out = stats.bytes_out
-        dt = max(0.001, now - last_time)
-        rate_in = (bytes_in - last_in) / dt
-        rate_out = (bytes_out - last_out) / dt
-        last_time = now
-        last_in = bytes_in
-        last_out = bytes_out
-        upstream = (
-            f"{config.upstream_host}:{config.upstream_port}"
-            if config.upstream_host and config.upstream_port
-            else "none"
-        )
-        channel_peer = (
-            f"{config.channel_peer_host}:{config.channel_peer_port}"
-            if config.channel_peer_host and config.channel_peer_port
-            else "none"
-        )
-        header = color("Proxy Receiver", "1;36")
-        stats_lines = [
-            f"{color('mode', '1;34')}: {color(config.mode, '1;33')}",
-            f"{color('listen', '1;34')}: {config.listen_host}:{config.listen_port}",
-            f"{color('upstream', '1;34')}: {color(upstream, '0;37')}",
-            f"{color('channel', '1;34')}: {color(channel_peer, '0;37')}",
-            f"{color('standalone', '1;34')}: {config.standalone_mode}",
-        ]
-        conn_line = (
-            f"{color('connections', '1;35')}: "
-            f"{color(str(active), '1;32')} active / {color(str(total), '1;36')} total"
-        )
-        auth_line = (
-            f"{color('auth', '1;35')}: "
-            f"{color(str(accepted), '1;32')} ok / {color(str(rejected), '1;31')} fail"
-        )
-        traffic_in = (
-            f"{color('traffic in', '1;35')}: "
-            f"{color(format_bytes(bytes_in), '1;32')} "
-            f"({color(format_bytes(int(rate_in)) + '/s', '0;32')})"
-        )
-        traffic_out = (
-            f"{color('traffic out', '1;35')}: "
-            f"{color(format_bytes(bytes_out), '1;36')} "
-            f"({color(format_bytes(int(rate_out)) + '/s', '0;36')})"
-        )
-        box_lines = [header, ""] + stats_lines + \
-            ["", conn_line, auth_line, "", traffic_in, traffic_out]
-        panel = draw_box(box_lines, 64)
-        sys.stdout.write("\033[2J\033[H" + panel + "\n")
-        sys.stdout.flush()
 
 
 async def run_server(config: ProxyConfig, stats: ProxyStats) -> None:
