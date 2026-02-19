@@ -200,6 +200,44 @@ class AuthService:
             return (False, str(e))
 
     @staticmethod
+    def login_with_user(user):
+        if not user:
+            return None, "User not found"
+        if getattr(user, "is_blocked", False):
+            return None, "User is blocked"
+        access_token = secrets.token_hex(32)
+        refresh_token = secrets.token_hex(32)
+        user.access_token = access_token
+        user.refresh_token = refresh_token
+        try:
+            db.session.commit()
+
+            try:
+                from app.services.ollama_service import OllamaService
+                OllamaService.ensure_chat_with_ai(user.id)
+            except Exception as e:
+                print(f"Failed to create AI chat: {e}")
+
+            if (
+                getattr(user, "login_alert_enabled", False)
+                and user.email
+                and not user.email.endswith("@telegram.bot")
+            ):
+                EmailService.send_login_alert(user.email)
+
+            return (
+                {
+                    "user": user,
+                    "access_token": access_token,
+                    "refresh_token": refresh_token,
+                },
+                None,
+            )
+        except Exception as e:
+            db.session.rollback()
+            return None, str(e)
+
+    @staticmethod
     def login_user(data):
         email = data.get("email")
         password = data.get("password")

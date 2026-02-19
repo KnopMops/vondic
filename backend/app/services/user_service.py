@@ -196,6 +196,29 @@ class UserService:
         return None
 
     @staticmethod
+    def set_or_reset_cloud_password(user, new_password):
+        if not user or not new_password:
+            return "Invalid arguments"
+        now = datetime.utcnow()
+        month_key = now.year * 100 + now.month
+        if not user.cloud_password_hash:
+            user.cloud_password_hash = generate_password_hash(new_password)
+            if user.cloud_password_reset_month is None:
+                user.cloud_password_reset_month = month_key
+                user.cloud_password_reset_count = 0
+            return None
+        if user.cloud_password_reset_month != month_key:
+            user.cloud_password_reset_month = month_key
+            user.cloud_password_reset_count = 0
+        if user.cloud_password_reset_count is None:
+            user.cloud_password_reset_count = 0
+        if user.cloud_password_reset_count >= 3:
+            return "Cloud password reset limit reached"
+        user.cloud_password_hash = generate_password_hash(new_password)
+        user.cloud_password_reset_count += 1
+        return None
+
+    @staticmethod
     def block_user(user_id, admin_user):
         if not admin_user or admin_user.role != "Admin":
             return None, "Unauthorized"

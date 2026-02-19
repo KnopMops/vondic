@@ -9,8 +9,12 @@ interface ActiveCallProps {
 	callInfo: CallState
 	onEndCall: (socketId: string) => void
 	onMuteToggle: () => void
+	onScreenShareToggle: () => void
 	isMuted: boolean
+	isScreenSharing: boolean
+	isScreenShareSupported: boolean
 	localStream: MediaStream | null
+	screenStream: MediaStream | null
 	remoteStream: MediaStream | null
 }
 
@@ -18,12 +22,18 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 	callInfo,
 	onEndCall,
 	onMuteToggle,
+	onScreenShareToggle,
 	isMuted,
+	isScreenSharing,
+	isScreenShareSupported,
 	localStream,
+	screenStream,
 	remoteStream,
 }) => {
 	const remoteAudioRef = useRef<HTMLAudioElement>(null)
 	const localAudioRef = useRef<HTMLAudioElement>(null)
+	const remoteVideoRef = useRef<HTMLVideoElement>(null)
+	const localScreenRef = useRef<HTMLVideoElement>(null)
 	const [duration, setDuration] = useState(0)
 	const [isMinimized, setIsMinimized] = useState(false)
 	const [connState, setConnState] = useState<string>('')
@@ -33,6 +43,9 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 	const [remoteTrackCount, setRemoteTrackCount] = useState<number>(0)
 	const [needUnmute, setNeedUnmute] = useState<boolean>(false)
 	const [pingMs, setPingMs] = useState<number>(0)
+	const [isScreenPip, setIsScreenPip] = useState(false)
+	const [isScreenFullscreen, setIsScreenFullscreen] = useState(false)
+	const [isScreenZoomed, setIsScreenZoomed] = useState(false)
 	const webRTCService = useWebRTCService()
 	const ringtoneRef = useRef<HTMLAudioElement | null>(null)
 	const playAttemptRef = useRef<any>(null)
@@ -111,6 +124,40 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 			if (p && typeof p.catch === 'function') p.catch(() => {})
 		}
 	}, [localStream])
+
+	useEffect(() => {
+		const el = remoteVideoRef.current
+		if (!el) return
+		const hasVideo = !!remoteStream?.getVideoTracks().length
+		if (remoteStream && hasVideo) {
+			el.srcObject = remoteStream
+			el.muted = true
+			const p = el.play()
+			if (p && typeof p.catch === 'function') p.catch(() => {})
+		} else {
+			try {
+				el.pause()
+			} catch {}
+			el.srcObject = null
+		}
+	}, [remoteStream])
+
+	useEffect(() => {
+		const el = localScreenRef.current
+		if (!el) return
+		const hasVideo = !!screenStream?.getVideoTracks().length
+		if (screenStream && hasVideo) {
+			el.srcObject = screenStream
+			el.muted = true
+			const p = el.play()
+			if (p && typeof p.catch === 'function') p.catch(() => {})
+		} else {
+			try {
+				el.pause()
+			} catch {}
+			el.srcObject = null
+		}
+	}, [screenStream])
 
 	useEffect(() => {
 		const start = () => {
@@ -264,6 +311,7 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 
 	useEffect(() => {
 		if (!remoteStream) return
+		if (!remoteStream.getAudioTracks().length) return
 		const AC: any =
 			(window as any).AudioContext || (window as any).webkitAudioContext
 		if (!AC) return
@@ -336,6 +384,59 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 			if (p && typeof p.catch === 'function') p.catch(() => setNeedUnmute(true))
 		}
 	}
+
+	const getPrimaryVideo = () => {
+		if (screenStream?.getVideoTracks().length && localScreenRef.current) {
+			return localScreenRef.current
+		}
+		if (remoteStream?.getVideoTracks().length && remoteVideoRef.current) {
+			return remoteVideoRef.current
+		}
+		return null
+	}
+
+	const togglePictureInPicture = async () => {
+		const video = getPrimaryVideo()
+		if (!video) return
+		if (
+			'pictureInPictureEnabled' in document &&
+			document.pictureInPictureEnabled
+		) {
+			if (document.pictureInPictureElement) {
+				await document.exitPictureInPicture()
+				setIsScreenPip(false)
+				return
+			}
+			try {
+				await (video as any).requestPictureInPicture()
+				setIsScreenPip(true)
+			} catch {}
+		}
+	}
+
+	const toggleFullscreen = async () => {
+		const root = document.documentElement
+		if (document.fullscreenElement) {
+			await document.exitFullscreen()
+			return
+		}
+		try {
+			await root.requestFullscreen()
+		} catch {}
+	}
+	useEffect(() => {
+		const handleFullscreenChange = () => {
+			setIsScreenFullscreen(!!document.fullscreenElement)
+		}
+		document.addEventListener('fullscreenchange', handleFullscreenChange)
+		return () => {
+			document.removeEventListener('fullscreenchange', handleFullscreenChange)
+		}
+	}, [])
+	const hasScreenVideo =
+		!!screenStream?.getVideoTracks().length ||
+		!!remoteStream?.getVideoTracks().length
+	const screenShareDisabled = !isScreenShareSupported
 
 	const handleUnlockAudio = async () => {
 		try {
@@ -448,6 +549,34 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 			</div>
 
 			<div className='call-content'>
+				{hasScreenVideo && (
+					<div
+						className={`screen-share-panel ${isScreenZoomed ? 'zoomed' : ''}`}
+					>
+						{screenStream?.getVideoTracks().length ? (
+							<div
+								className={`screen-share-tile local ${
+									isScreenZoomed ? 'zoomed' : ''
+								}`}
+							>
+								<video ref={localScreenRef} autoPlay playsInline muted />
+								<span className='screen-share-label'>Ваш экран</span>
+							</div>
+						) : null}
+						{remoteStream?.getVideoTracks().length ? (
+							<div
+								className={`screen-share-tile remote ${
+									isScreenZoomed ? 'zoomed' : ''
+								}`}
+							>
+								<video ref={remoteVideoRef} autoPlay playsInline muted />
+								<span className='screen-share-label'>
+									{callInfo.userName || 'Экран собеседника'}
+								</span>
+							</div>
+						) : null}
+					</div>
+				)}
 				<div className='audio-visualization'>
 					<div className='local-audio-indicator'>
 						<div className={`audio-level ${isMuted ? 'muted' : 'active'}`}>
@@ -494,34 +623,81 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 						Нажмите, чтобы разблокировать звук
 					</span>
 				)}
-				{webAudioEnabled && audioCtxRef.current && audioCtxRef.current.state === 'suspended' && (
-					<button
-						onClick={handleUnlockAudio}
-						className='unlock-audio-button'
-						title='Разблокировать аудио'
-					>
-						<span className='button-icon'>🔓</span>
-						<span className='button-text'>Разблокировать звук</span>
-					</button>
-				)}
+				{webAudioEnabled &&
+					audioCtxRef.current &&
+					audioCtxRef.current.state === 'suspended' && (
+						<button
+							onClick={handleUnlockAudio}
+							className='unlock-audio-button'
+							title='Разблокировать аудио'
+						>
+							<span className='button-icon'>🔓</span>
+							<span className='button-text'>Разблокировать звук</span>
+						</button>
+					)}
 				<button
 					onClick={handleMuteToggle}
-					className={`mute-button ${isMuted ? 'muted' : ''}`}
+					className={`mute-button icon-only ${isMuted ? 'muted' : ''}`}
 					title={isMuted ? 'Включить микрофон' : 'Выключить микрофон'}
 				>
 					<span className='button-icon'>{isMuted ? '🔇' : '🎤'}</span>
-					<span className='button-text'>
-						{isMuted ? 'Включить' : 'Выключить'}
-					</span>
+				</button>
+				{hasScreenVideo && (
+					<>
+						<button
+							onClick={togglePictureInPicture}
+							className={`screen-tool-button icon-only ${
+								isScreenPip ? 'active' : ''
+							}`}
+							title={isScreenPip ? 'Скрыть окно' : 'Вынести в окно'}
+						>
+							<span className='button-icon'>🗔</span>
+						</button>
+						<button
+							onClick={toggleFullscreen}
+							className={`screen-tool-button icon-only ${
+								isScreenFullscreen ? 'active' : ''
+							}`}
+							title={
+								isScreenFullscreen ? 'Выйти из полноэкранного' : 'Во весь экран'
+							}
+						>
+							<span className='button-icon'>⛶</span>
+						</button>
+						<button
+							onClick={() => setIsScreenZoomed(prev => !prev)}
+							className={`screen-tool-button icon-only ${
+								isScreenZoomed ? 'active' : ''
+							}`}
+							title={isScreenZoomed ? 'Обычный размер' : 'Увеличить'}
+						>
+							<span className='button-icon'>🔍</span>
+						</button>
+					</>
+				)}
+				<button
+					onClick={onScreenShareToggle}
+					disabled={screenShareDisabled}
+					className={`screen-share-button icon-only ${
+						isScreenSharing ? 'active' : ''
+					}`}
+					title={
+						screenShareDisabled
+							? 'Демонстрация экрана недоступна на этом устройстве'
+							: isScreenSharing
+								? 'Остановить демонстрацию'
+								: 'Демонстрация экрана'
+					}
+				>
+					<span className='button-icon'>🖥️</span>
 				</button>
 
 				<button
 					onClick={handleEndCall}
-					className='end-call-button'
+					className='end-call-button icon-only'
 					title='Завершить звонок'
 				>
 					<span className='button-icon'>📞</span>
-					<span className='button-text'>Завершить</span>
 				</button>
 			</div>
 

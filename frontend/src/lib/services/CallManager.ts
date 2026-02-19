@@ -76,6 +76,10 @@ export class CallManager {
 			console.log('Participant joined group call:', data)
 			const { call_id, user_id, socket_id } = data
 
+			if (!this.activeGroupCallId && call_id) {
+				this.activeGroupCallId = call_id
+				if (this.onGroupCallIdChange) this.onGroupCallIdChange(call_id)
+			}
 			if (this.activeGroupCallId !== call_id) return
 			if (socket_id === this.socket.id) return
 

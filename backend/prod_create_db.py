@@ -17,4 +17,4 @@ except Exception:
 app = create_app()
 with app.app_context():
     db.create_all()
-    print("Production database created (empty).")
+    print("Production database schema created (empty).")

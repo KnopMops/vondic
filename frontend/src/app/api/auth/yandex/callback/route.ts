@@ -1,11 +1,12 @@
 import { setTokens } from '@/lib/auth.utils'
+import { setDesktopSession } from '@/lib/desktopSessions'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(req: NextRequest) {
 	try {
 		const { searchParams } = new URL(req.url)
 		const code = searchParams.get('code')
-		const cid = searchParams.get('cid')
+		const cid = searchParams.get('cid') || searchParams.get('state')
 		const frontendUrl =
 			process.env.NEXT_PUBLIC_FRONTEND_URL || req.nextUrl.origin
 
@@ -35,6 +36,18 @@ export async function GET(req: NextRequest) {
 			const loginUrl = new URL('/login', frontendUrl)
 			loginUrl.searchParams.set('error', data.error || 'Yandex login failed')
 			return NextResponse.redirect(loginUrl)
+		}
+
+		if (cid) {
+			try {
+				setDesktopSession(cid, {
+					access_token: data.access_token,
+					refresh_token: data.refresh_token,
+					user: data.user,
+				})
+			} catch (e) {
+				console.error('Failed to register desktop session', e)
+			}
 		}
 
 		// Если успех, устанавливаем токены и редиректим на /feed

@@ -7,12 +7,15 @@ interface CallStore {
 	// Состояния
 	isInitialized: boolean
 	isWebRTCSupported: boolean
+	isScreenShareSupported: boolean
 	localStream: MediaStream | null
+	screenStream: MediaStream | null
 	remoteStreams: Map<string, MediaStream>
 	activeCalls: Map<string, CallState>
 	activeGroupCallId: string | null
 	incomingCall: CallState | null
 	isMuted: boolean
+	isScreenSharing: boolean
 	callHistory: CallRecord[]
 
 	// Сервисы
@@ -37,6 +40,9 @@ interface CallStore {
 	setMuted: (muted: boolean) => void
 	addToHistory: (record: CallRecord) => void
 	clearHistory: () => void
+	startScreenShare: () => Promise<void>
+	stopScreenShare: () => Promise<void>
+	toggleScreenShare: () => Promise<void>
 
 	// Действия звонков
 	initiateCall: (targetUserId: string, targetUserName: string) => Promise<void>
@@ -65,12 +71,19 @@ export const useCallStore = create<CallStore>((set, get) => ({
 	isInitialized: false,
 	isWebRTCSupported:
 		typeof window !== 'undefined' && 'RTCPeerConnection' in window,
+	isScreenShareSupported:
+		typeof window !== 'undefined' &&
+		typeof navigator !== 'undefined' &&
+		!!navigator.mediaDevices &&
+		typeof navigator.mediaDevices.getDisplayMedia === 'function',
 	localStream: null,
+	screenStream: null,
 	remoteStreams: new Map(),
 	activeCalls: new Map(),
 	activeGroupCallId: null,
 	incomingCall: null,
 	isMuted: false,
+	isScreenSharing: false,
 	callHistory: [],
 
 	// Сервисы
@@ -166,6 +179,13 @@ export const useCallStore = create<CallStore>((set, get) => ({
 				set({ activeCalls: newCalls, remoteStreams: newStreams })
 			}
 
+			webRTCService.onScreenShareStateChange = (
+				stream: MediaStream | null,
+				isSharing: boolean,
+			) => {
+				set({ screenStream: stream, isScreenSharing: isSharing })
+			}
+
 			callManager.onCallEnded = (call: CallState) => {
 				const { activeCalls, callHistory, remoteStreams } = get()
 				const newCalls = new Map(activeCalls)
@@ -224,6 +244,8 @@ export const useCallStore = create<CallStore>((set, get) => ({
 				callManager,
 				socket,
 				currentUserId: user.id,
+				screenStream: webRTCService.getScreenStream(),
+				isScreenSharing: webRTCService.isScreenSharing(),
 			})
 		} catch (error) {
 			console.error('Failed to initialize WebRTC:', error)
@@ -246,11 +268,13 @@ export const useCallStore = create<CallStore>((set, get) => ({
 		set({
 			isInitialized: false,
 			localStream: null,
+			screenStream: null,
 			remoteStreams: new Map(),
 			activeCalls: new Map(),
 			activeGroupCallId: null,
 			incomingCall: null,
 			isMuted: false,
+			isScreenSharing: false,
 			webRTCService: null,
 			callManager: null,
 			socket: null,
@@ -325,6 +349,48 @@ export const useCallStore = create<CallStore>((set, get) => ({
 
 	clearHistory: () => {
 		set({ callHistory: [] })
+	},
+
+	startScreenShare: async () => {
+		const { webRTCService, isScreenShareSupported } = get()
+		if (!webRTCService || !isScreenShareSupported) return
+		try {
+			await webRTCService.startScreenShare()
+		} catch {
+			return
+		}
+		set({
+			screenStream: webRTCService.getScreenStream(),
+			isScreenSharing: webRTCService.isScreenSharing(),
+		})
+	},
+
+	stopScreenShare: async () => {
+		const { webRTCService } = get()
+		if (!webRTCService) return
+		await webRTCService.stopScreenShare()
+		set({
+			screenStream: webRTCService.getScreenStream(),
+			isScreenSharing: webRTCService.isScreenSharing(),
+		})
+	},
+
+	toggleScreenShare: async () => {
+		const { webRTCService, isScreenSharing, isScreenShareSupported } = get()
+		if (!webRTCService || !isScreenShareSupported) return
+		try {
+			if (isScreenSharing) {
+				await webRTCService.stopScreenShare()
+			} else {
+				await webRTCService.startScreenShare()
+			}
+		} catch {
+			return
+		}
+		set({
+			screenStream: webRTCService.getScreenStream(),
+			isScreenSharing: webRTCService.isScreenSharing(),
+		})
 	},
 
 	// Действия звонков
@@ -463,3 +529,5 @@ export const useIsMuted = () => useCallStore(state => state.isMuted)
 export const useIsInitialized = () => useCallStore(state => state.isInitialized)
 export const useIsWebRTCSupported = () =>
 	useCallStore(state => state.isWebRTCSupported)
+export const useIsScreenShareSupported = () =>
+	useCallStore(state => state.isScreenShareSupported)

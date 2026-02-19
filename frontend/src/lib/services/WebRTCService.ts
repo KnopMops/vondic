@@ -21,6 +21,8 @@ export class WebRTCService {
 	private socket: Socket
 	private userId: string
 	private localStream: MediaStream | null = null
+	private screenStream: MediaStream | null = null
+	private isSharingScreen: boolean = false
 	private remoteStreams: Map<string, MediaStream> = new Map()
 	public peerConnections: Map<string, RTCPeerConnection> = new Map()
 	private iceCandidateQueue: Map<string, RTCIceCandidate[]> = new Map()
@@ -37,6 +39,10 @@ export class WebRTCService {
 	) => void
 	public onLocalStream?: (stream: MediaStream) => void
 	public onCallMigrated?: (oldKey: string, newKey: string) => void
+	public onScreenShareStateChange?: (
+		stream: MediaStream | null,
+		isSharing: boolean,
+	) => void
 
 	constructor(socket: Socket, userId: string) {
 		this.socket = socket
@@ -131,6 +137,133 @@ export class WebRTCService {
 			console.error('Error accessing microphone:', error)
 			throw new Error('Не удалось получить доступ к микрофону')
 		}
+	}
+
+	private notifyScreenShareState() {
+		if (this.onScreenShareStateChange) {
+			this.onScreenShareStateChange(this.screenStream, this.isSharingScreen)
+		}
+	}
+
+	private async ensureScreenStream(): Promise<MediaStream> {
+		if (this.screenStream) {
+			return this.screenStream
+		}
+		const mediaDevices =
+			typeof navigator !== 'undefined' ? navigator.mediaDevices : null
+		if (!mediaDevices || typeof mediaDevices.getDisplayMedia !== 'function') {
+			throw new Error('Демонстрация экрана недоступна на этом устройстве')
+		}
+		const userAgent =
+			typeof navigator !== 'undefined' ? navigator.userAgent : ''
+		const isMobile = /Android|iPhone|iPad|iPod/i.test(userAgent)
+		const videoConstraints = isMobile
+			? {
+					width: { ideal: 960, max: 1280 },
+					height: { ideal: 540, max: 720 },
+					frameRate: { ideal: 12, max: 24 },
+				}
+			: {
+					width: { ideal: 1280, max: 1920 },
+					height: { ideal: 720, max: 1080 },
+					frameRate: { ideal: 15, max: 30 },
+				}
+		const stream = await navigator.mediaDevices.getDisplayMedia({
+			video: videoConstraints,
+			audio: false,
+		})
+		this.screenStream = stream
+		this.isSharingScreen = true
+		const track = stream.getVideoTracks()[0]
+		if (track) {
+			track.onended = () => {
+				this.stopScreenShare().catch(() => {})
+			}
+		}
+		this.notifyScreenShareState()
+		return stream
+	}
+
+	private isSocketKey(key: string) {
+		return /^[A-Za-z0-9_-]{16,30}$/.test(key)
+	}
+
+	async startScreenShare(): Promise<void> {
+		const stream = await this.ensureScreenStream()
+		const track = stream.getVideoTracks()[0]
+		if (!track) return
+		const tasks: Promise<void>[] = []
+		for (const [socketId, pc] of this.peerConnections.entries()) {
+			if (!this.isSocketKey(socketId)) continue
+			const sender = pc.getSenders().find(s => s.track?.kind === 'video')
+			if (sender) {
+				try {
+					tasks.push(sender.replaceTrack(track))
+				} catch {}
+			} else {
+				try {
+					pc.addTrack(track, stream)
+				} catch {}
+			}
+			tasks.push(
+				(async () => {
+					const offer = await pc.createOffer()
+					await pc.setLocalDescription(offer)
+					this.socket.emit('offer', {
+						target_socket_id: socketId,
+						offer,
+						caller_user_id: this.userId,
+					})
+				})(),
+			)
+		}
+		await Promise.allSettled(tasks)
+	}
+
+	async stopScreenShare(): Promise<void> {
+		const stream = this.screenStream
+		if (!stream) return
+		stream.getTracks().forEach(track => {
+			try {
+				track.stop()
+			} catch {}
+		})
+		this.screenStream = null
+		this.isSharingScreen = false
+		this.notifyScreenShareState()
+		const tasks: Promise<void>[] = []
+		for (const [socketId, pc] of this.peerConnections.entries()) {
+			if (!this.isSocketKey(socketId)) continue
+			const sender = pc.getSenders().find(s => s.track?.kind === 'video')
+			if (sender) {
+				try {
+					pc.removeTrack(sender)
+				} catch {}
+				try {
+					await sender.replaceTrack(null)
+				} catch {}
+			}
+			tasks.push(
+				(async () => {
+					const offer = await pc.createOffer()
+					await pc.setLocalDescription(offer)
+					this.socket.emit('offer', {
+						target_socket_id: socketId,
+						offer,
+						caller_user_id: this.userId,
+					})
+				})(),
+			)
+		}
+		await Promise.allSettled(tasks)
+	}
+
+	getScreenStream(): MediaStream | null {
+		return this.screenStream
+	}
+
+	isScreenSharing(): boolean {
+		return this.isSharingScreen
 	}
 
 	private setupPeerConnectionHandlers(
@@ -739,6 +872,12 @@ export class WebRTCService {
 		if (this.localStream) {
 			this.localStream.getTracks().forEach(track => track.stop())
 			this.localStream = null
+		}
+		if (this.screenStream) {
+			this.screenStream.getTracks().forEach(track => track.stop())
+			this.screenStream = null
+			this.isSharingScreen = false
+			this.notifyScreenShareState()
 		}
 	}
 }

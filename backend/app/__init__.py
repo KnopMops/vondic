@@ -134,6 +134,18 @@ def create_app(config_class=Config):
                     db.session.execute(
                         text("ALTER TABLE users ADD COLUMN api_key TEXT"))
                     db.session.commit()
+                if ucolumn_names and "cloud_password_hash" not in ucolumn_names:
+                    db.session.execute(
+                        text("ALTER TABLE users ADD COLUMN cloud_password_hash TEXT"))
+                    db.session.commit()
+                if ucolumn_names and "cloud_password_reset_month" not in ucolumn_names:
+                    db.session.execute(
+                        text("ALTER TABLE users ADD COLUMN cloud_password_reset_month INTEGER DEFAULT NULL"))
+                    db.session.commit()
+                if ucolumn_names and "cloud_password_reset_count" not in ucolumn_names:
+                    db.session.execute(
+                        text("ALTER TABLE users ADD COLUMN cloud_password_reset_count INTEGER DEFAULT 0"))
+                    db.session.commit()
                 pcols = db.session.execute(
                     text("PRAGMA table_info(posts)")).fetchall()
                 pcolumn_names = [c[1] for c in pcols]

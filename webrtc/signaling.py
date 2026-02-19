@@ -24,6 +24,8 @@ class SignalingService:
         self._connect_lock = Lock()
         self._connect_limit = 20
         self._connect_window_seconds = 60
+        self._message_reactions = defaultdict(lambda: defaultdict(set))
+        self._pinned_messages = set()
         self._bind_events()
 
     def _bind_events(self):
@@ -45,6 +47,8 @@ class SignalingService:
         self.io.on_event("leave_voice_channel", self.on_leave_voice_channel)
         self.io.on_event("send_message", self.on_send_message)
         self.io.on_event("delete_message", self.on_delete_message)
+        self.io.on_event("react_message", self.on_react_message)
+        self.io.on_event("pin_message", self.on_pin_message)
         self.io.on_event("e2e_key_exchange", self.on_e2e_key_exchange)
         self.io.on_event("typing", self.on_typing)
         self.io.on_event("stop_typing", self.on_stop_typing)
@@ -325,6 +329,10 @@ class SignalingService:
             return
 
         call["joined"].add(str(sender_id))
+        participants_list = call.get("participants", [])
+        if str(sender_id) not in [str(p) for p in participants_list]:
+            participants_list.append(sender_id)
+            call["participants"] = participants_list
 
         caller_socket_id = call.get("caller_socket_id")
         if caller_socket_id and self.broker.resolve_recipient(caller_socket_id):
@@ -347,10 +355,27 @@ class SignalingService:
             emit("group_call_participant_joined",
                  notify_payload, room=caller_socket_id)
         for pid in call.get("participants", []):
+            if str(pid) == str(sender_id):
+                continue
             pid_socket = self.broker.get_user_socket(pid)
             if pid_socket and self.broker.resolve_recipient(pid_socket):
                 emit("group_call_participant_joined",
                      notify_payload, room=pid_socket)
+
+        for pid in call.get("participants", []):
+            if str(pid) == str(sender_id):
+                continue
+            pid_socket = self.broker.get_user_socket(pid)
+            if pid_socket and self.broker.resolve_recipient(pid_socket):
+                emit(
+                    "group_call_participant_joined",
+                    {
+                        "call_id": call_id,
+                        "user_id": pid,
+                        "socket_id": pid_socket,
+                    },
+                    room=request.sid,
+                )
 
     def on_group_call_reject(self, payload):
         call_id = payload.get("call_id")
@@ -808,6 +833,125 @@ class SignalingService:
         emit("message_deleted", payload, room=sender_id)
         if target_user_id:
             emit("message_deleted", payload, room=target_user_id)
+
+    def _get_message_participants(self, meta):
+        if not meta:
+            return []
+        if meta.get("channel_id"):
+            participants = self.broker.repo.get_channel_participants(
+                meta["channel_id"]
+            )
+            return participants or []
+        if meta.get("group_id"):
+            participants = self.broker.repo.get_group_participants(
+                meta["group_id"]
+            )
+            return participants or []
+        sender_id = meta.get("sender_id")
+        target_id = meta.get("target_id")
+        participants = []
+        if sender_id:
+            participants.append(sender_id)
+        if target_id and target_id != sender_id:
+            participants.append(target_id)
+        return participants
+
+    def on_react_message(self, payload):
+        if not isinstance(payload, dict):
+            emit("error", {"message": "Invalid payload"})
+            return
+
+        message_id = payload.get("message_id")
+        emoji = payload.get("emoji")
+        if not message_id or not emoji:
+            emit(
+                "error",
+                {"message": "message_id and emoji are required"},
+            )
+            return
+
+        sender_id, _ = self._get_sender()
+        if not sender_id:
+            emit("error", {"message": "Unauthorized"})
+            return
+
+        meta = self.broker.repo.get_message_meta(message_id)
+        if not meta:
+            emit("error", {"message": "Message not found"})
+            return
+
+        participants = self._get_message_participants(meta)
+        if not participants or str(sender_id) not in [
+            str(p) for p in participants
+        ]:
+            emit("error", {"message": "Forbidden"})
+            return
+
+        reactions_for_msg = self._message_reactions[message_id]
+        users_for_emoji = reactions_for_msg[emoji]
+
+        if sender_id in users_for_emoji:
+            users_for_emoji.remove(sender_id)
+        else:
+            users_for_emoji.add(sender_id)
+
+        if not users_for_emoji:
+            reactions_for_msg.pop(emoji, None)
+        if not reactions_for_msg:
+            self._message_reactions.pop(message_id, None)
+
+        count = len(users_for_emoji)
+        event_payload = {
+            "id": message_id,
+            "emoji": emoji,
+            "count": count,
+            "sender_id": sender_id,
+        }
+
+        for pid in participants:
+            emit("message_reaction_update", event_payload, room=pid)
+
+    def on_pin_message(self, payload):
+        if not isinstance(payload, dict):
+            emit("error", {"message": "Invalid payload"})
+            return
+
+        message_id = payload.get("message_id")
+        if not message_id:
+            emit("error", {"message": "message_id is required"})
+            return
+
+        sender_id, _ = self._get_sender()
+        if not sender_id:
+            emit("error", {"message": "Unauthorized"})
+            return
+
+        meta = self.broker.repo.get_message_meta(message_id)
+        if not meta:
+            emit("error", {"message": "Message not found"})
+            return
+
+        participants = self._get_message_participants(meta)
+        if not participants or str(sender_id) not in [
+            str(p) for p in participants
+        ]:
+            emit("error", {"message": "Forbidden"})
+            return
+
+        if message_id in self._pinned_messages:
+            self._pinned_messages.remove(message_id)
+            pinned = False
+        else:
+            self._pinned_messages.add(message_id)
+            pinned = True
+
+        event_payload = {
+            "id": message_id,
+            "pinned": pinned,
+        }
+
+        for pid in participants:
+            emit("message_pinned", event_payload, room=pid)
 
     def on_typing(self, payload):
         target_user_id = payload.get("target_user_id")

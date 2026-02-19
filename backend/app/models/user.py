@@ -45,6 +45,9 @@ class User(db.Model):
     is_developer = db.Column(INTEGER, default=0)
     api_key_hash = db.Column(TEXT, default=None)
     api_key = db.Column(TEXT, default=None)
+    cloud_password_hash = db.Column(TEXT, default=None)
+    cloud_password_reset_month = db.Column(INTEGER, default=None)
+    cloud_password_reset_count = db.Column(INTEGER, default=0)
     created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
     updated_at = db.Column(
         TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)

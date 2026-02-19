@@ -13,13 +13,17 @@ export const GlobalCallUI: React.FC = () => {
 		activeCalls,
 		activeGroupCallId,
 		localStream,
+		screenStream,
 		remoteStreams,
 		isMuted,
+		isScreenSharing,
+		isScreenShareSupported,
 		acceptCall,
 		rejectCall,
 		endCall,
 		leaveGroupCall,
 		toggleMute,
+		toggleScreenShare,
 	} = useCallStore()
 
 	const { showToast } = useToast()
@@ -31,7 +35,7 @@ export const GlobalCallUI: React.FC = () => {
 					? {
 							userId: incomingCall.userId,
 							userName: incomingCall.userName || 'Unknown',
-					  }
+						}
 					: { userId: '', userName: '' }
 
 			await acceptCall(callerSocketId, info)
@@ -81,10 +85,14 @@ export const GlobalCallUI: React.FC = () => {
 						c => c.isGroupCall && c.callId === activeGroupCallId,
 					)}
 					localStream={localStream}
+					screenStream={screenStream}
 					remoteStreams={remoteStreams}
 					onEndCall={handleLeaveGroupCall}
 					onMuteToggle={handleMuteToggle}
 					isMuted={isMuted}
+					onScreenShareToggle={toggleScreenShare}
+					isScreenSharing={isScreenSharing}
+					isScreenShareSupported={isScreenShareSupported}
 				/>
 			)}
 
@@ -99,7 +107,11 @@ export const GlobalCallUI: React.FC = () => {
 						onMuteToggle={handleMuteToggle}
 						isMuted={isMuted}
 						localStream={localStream}
+						screenStream={screenStream}
 						remoteStream={remoteStreams.get(call.socketId) || null}
+						onScreenShareToggle={toggleScreenShare}
+						isScreenSharing={isScreenSharing}
+						isScreenShareSupported={isScreenShareSupported}
 					/>
 				))}
 		</>

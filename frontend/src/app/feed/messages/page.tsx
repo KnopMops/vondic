@@ -12,6 +12,7 @@ import {
 	useActiveGroupCallId,
 	useCallStore,
 	useIsInitialized,
+	useIsScreenShareSupported,
 	useIsWebRTCSupported,
 } from '@/lib/stores/callStore'
 import { useToast } from '@/lib/ToastContext'
@@ -113,6 +114,23 @@ const MoreVerticalIcon = ({ className }: { className?: string }) => (
 		<circle cx='12' cy='12' r='1'></circle>
 		<circle cx='12' cy='5' r='1'></circle>
 		<circle cx='12' cy='19' r='1'></circle>
+	</svg>
+)
+
+const ScreenShareIcon = ({ className }: { className?: string }) => (
+	<svg
+		viewBox='0 0 24 24'
+		fill='none'
+		stroke='currentColor'
+		strokeWidth='2'
+		strokeLinecap='round'
+		strokeLinejoin='round'
+		className={className}
+	>
+		<rect x='2' y='3' width='20' height='14' rx='2'></rect>
+		<path d='M8 21h8'></path>
+		<path d='M12 17v4'></path>
+		<path d='M9 8l6 3-6 3z'></path>
 	</svg>
 )
 
@@ -928,11 +946,32 @@ export default function MessengerPage() {
 	const [replyToMessage, setReplyToMessage] = useState<Message | null>(null)
 	const [pinnedMessageId, setPinnedMessageId] = useState<string | null>(null)
 	const [pinnedMessageIds, setPinnedMessageIds] = useState<string[]>([])
-	const [replyMap, setReplyMap] = useState<Record<string, Message>>({})
-	const [reactionsByMessage, setReactionsByMessage] = useState<
-		Record<string, Record<string, { count: number; reacted: boolean }>>
+	const [reactionCounts, setReactionCounts] = useState<
+		Record<string, Record<string, number>>
 	>({})
+	const [myReactions, setMyReactions] = useState<
+		Record<string, Record<string, boolean>>
+	>({})
+	const [replyMap, setReplyMap] = useState<Record<string, Message>>({})
 	const [forwardMessage, setForwardMessage] = useState<Message | null>(null)
+
+	const getReactionsForMessage = (id: string) => {
+		const counts = reactionCounts[id] || {}
+		const mine = myReactions[id] || {}
+		const allEmojis = new Set<string>([
+			...Object.keys(counts),
+			...Object.keys(mine),
+		])
+		const result: Record<string, { count: number; reacted: boolean }> = {}
+		allEmojis.forEach(emoji => {
+			const count = counts[emoji] ?? 0
+			const reacted = !!mine[emoji]
+			if (count > 0 || reacted) {
+				result[emoji] = { count: count || (reacted ? 1 : 0), reacted }
+			}
+		})
+		return result
+	}
 	const [isForwardOpen, setIsForwardOpen] = useState(false)
 	const [forwardQuery, setForwardQuery] = useState('')
 	const pendingReplyRef = useRef<{
@@ -987,11 +1026,14 @@ export default function MessengerPage() {
 		joinVoiceChannel,
 		leaveVoiceChannel,
 		joinGroupCall,
+		toggleScreenShare,
+		isScreenSharing,
 	} = useCallStore()
 	const activeGroupCallId = useActiveGroupCallId()
 	const activeCalls = useActiveCalls()
 	const isInitialized = useIsInitialized()
 	const isWebRTCSupported = useIsWebRTCSupported()
+	const isScreenShareSupported = useIsScreenShareSupported()
 	const debouncedSearchQuery = useDebounce(searchQuery, 500)
 	const [userSearchResults, setUserSearchResults] = useState<User[]>([])
 	const [botSearchResults, setBotSearchResults] = useState<User[]>([])
@@ -1464,6 +1506,7 @@ export default function MessengerPage() {
 				call => call.userId === selectedFriend.id,
 			)
 		: false
+	const hasActiveCall = activeCalls.size > 0 || !!activeGroupCallId
 
 	const {
 		messages: chatMessages,
@@ -2308,18 +2351,23 @@ export default function MessengerPage() {
 	}
 
 	const handlePinMessage = (msg: Message) => {
-		setPinnedMessageIds(prev => {
-			if (prev.includes(msg.id)) {
-				const next = prev.filter(id => id !== msg.id)
-				setPinnedMessageId(current =>
-					current === msg.id ? next[next.length - 1] || null : current,
-				)
+		if (!socket || !isConnected) {
+			setPinnedMessageIds(prev => {
+				if (prev.includes(msg.id)) {
+					const next = prev.filter(id => id !== msg.id)
+					setPinnedMessageId(current =>
+						current === msg.id ? next[next.length - 1] || null : current,
+					)
+					return next
+				}
+				const next = [...prev, msg.id]
+				setPinnedMessageId(msg.id)
 				return next
-			}
-			const next = [...prev, msg.id]
-			setPinnedMessageId(msg.id)
-			return next
-		})
+			})
+			return
+		}
+
+		socket.emit('pin_message', { message_id: msg.id })
 	}
 
 	const handleReplyMessage = (msg: Message) => {
@@ -2480,25 +2528,42 @@ export default function MessengerPage() {
 	}
 
 	const handleReactMessage = (msg: Message, emoji: string) => {
-		setReactionsByMessage(prev => {
+		setMyReactions(prev => {
 			const current = prev[msg.id] || {}
-			const entry = current[emoji]
-			const reacted = entry?.reacted ?? false
-			const count = entry?.count ?? 0
-			const nextCount = reacted ? Math.max(0, count - 1) : count + 1
-			const nextEntry =
-				nextCount === 0 ? undefined : { count: nextCount, reacted: !reacted }
+			const reacted = !!current[emoji]
 			const nextForMsg = { ...current }
-			if (nextEntry) {
-				nextForMsg[emoji] = nextEntry
-			} else {
+			if (reacted) {
 				delete nextForMsg[emoji]
+			} else {
+				nextForMsg[emoji] = true
 			}
 			return {
 				...prev,
 				[msg.id]: nextForMsg,
 			}
 		})
+
+		if (!socket || !isConnected) {
+			setReactionCounts(prev => {
+				const current = prev[msg.id] || {}
+				const count = current[emoji] ?? 0
+				const reacted = !!(myReactions[msg.id] && myReactions[msg.id][emoji])
+				const nextCount = reacted ? Math.max(0, count - 1) : count + 1
+				const nextForMsg = { ...current }
+				if (nextCount <= 0) {
+					delete nextForMsg[emoji]
+				} else {
+					nextForMsg[emoji] = nextCount
+				}
+				return {
+					...prev,
+					[msg.id]: nextForMsg,
+				}
+			})
+			return
+		}
+
+		socket.emit('react_message', { message_id: msg.id, emoji })
 	}
 
 	const handleForwardMessage = (msg: Message) => {
@@ -2633,6 +2698,57 @@ export default function MessengerPage() {
 		setPinnedMessageIds([])
 		setPinnedMessageId(null)
 	}, [selectedFriend?.id, selectedChannel?.id, selectedGroup?.id])
+
+	useEffect(() => {
+		if (!socket) return
+
+		const handleReactionUpdate = (data: {
+			id?: string
+			emoji?: string
+			count?: number
+		}) => {
+			if (!data?.id || !data.emoji || typeof data.count !== 'number') return
+			setReactionCounts(prev => {
+				const current = prev[data.id] || {}
+				const nextForMsg = { ...current }
+				if (data.count <= 0) {
+					delete nextForMsg[data.emoji]
+				} else {
+					nextForMsg[data.emoji] = data.count
+				}
+				return {
+					...prev,
+					[data.id]: nextForMsg,
+				}
+			})
+		}
+
+		const handlePinnedUpdate = (data: { id?: string; pinned?: boolean }) => {
+			if (!data?.id || typeof data.pinned !== 'boolean') return
+			setPinnedMessageIds(prev => {
+				if (data.pinned) {
+					if (prev.includes(data.id)) return prev
+					const next = [...prev, data.id]
+					setPinnedMessageId(data.id)
+					return next
+				}
+				if (!prev.includes(data.id)) return prev
+				const next = prev.filter(id => id !== data.id)
+				setPinnedMessageId(current =>
+					current === data.id ? next[next.length - 1] || null : current,
+				)
+				return next
+			})
+		}
+
+		socket.on('message_reaction_update', handleReactionUpdate)
+		socket.on('message_pinned', handlePinnedUpdate)
+
+		return () => {
+			socket.off('message_reaction_update', handleReactionUpdate)
+			socket.off('message_pinned', handlePinnedUpdate)
+		}
+	}, [socket])
 
 	// Separate AI from other entities
 	const aiFriend = aiUser
@@ -3503,6 +3619,39 @@ export default function MessengerPage() {
 												</span>
 											</button>
 										)}
+										{hasActiveCall && (
+											<button
+												onClick={() => toggleScreenShare()}
+												disabled={
+													!isInitialized ||
+													!isWebRTCSupported ||
+													!isScreenShareSupported
+												}
+												className={`p-2 sm:px-3 sm:py-2 rounded-full sm:rounded-lg flex items-center gap-2 transition-colors ${
+													!isInitialized ||
+													!isWebRTCSupported ||
+													!isScreenShareSupported
+														? 'text-gray-600 cursor-not-allowed'
+														: isScreenSharing
+															? 'text-emerald-400 hover:text-white hover:bg-emerald-500/20'
+															: 'text-gray-400 hover:text-white hover:bg-gray-800'
+												}`}
+												title={
+													!isInitialized ||
+													!isWebRTCSupported ||
+													!isScreenShareSupported
+														? 'Демонстрация экрана недоступна'
+														: isScreenSharing
+															? 'Остановить демонстрацию'
+															: 'Демонстрация экрана'
+												}
+											>
+												<ScreenShareIcon className='w-5 h-5' />
+												<span className='hidden sm:inline text-xs font-medium'>
+													{isScreenSharing ? 'Стоп экран' : 'Экран'}
+												</span>
+											</button>
+										)}
 										<button
 											onClick={() => setIsChatSearchOpen(true)}
 											className='p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors'
@@ -3712,7 +3861,7 @@ export default function MessengerPage() {
 											}
 											isPinned={pinnedMessageIds.includes(msg.id)}
 											replyPreview={replyPreview}
-											reactions={reactionsByMessage[msg.id]}
+											reactions={getReactionsForMessage(msg.id)}
 											onReply={handleReplyMessage}
 											onPin={handlePinMessage}
 											onDelete={handleDeleteMessage}

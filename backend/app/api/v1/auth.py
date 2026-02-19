@@ -1,3 +1,5 @@
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
+
 from app.schemas.user_schema import user_schema
 from app.services.auth_service import AuthService
 from app.services.user_service import UserService
@@ -6,6 +8,8 @@ from flask import Blueprint, current_app, jsonify, request
 from itsdangerous import URLSafeTimedSerializer
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/v1/auth")
+
+desktop_yandex_sessions: dict[str, dict] = {}
 
 
 @auth_bp.route("/register", methods=["POST"])
@@ -130,15 +134,32 @@ def socket_token(current_user):
 
 @auth_bp.route("/yandex/login", methods=["GET"])
 def yandex_login():
+    cid = request.args.get("cid")
     auth_url, error = AuthService.get_yandex_auth_url()
     if error:
         return jsonify({"error": error}), 400
+    if cid and auth_url:
+        parsed = urlparse(auth_url)
+        query = parse_qs(parsed.query)
+        query["state"] = [cid]
+        new_query = urlencode(query, doseq=True)
+        auth_url = urlunparse(
+            (
+                parsed.scheme,
+                parsed.netloc,
+                parsed.path,
+                parsed.params,
+                new_query,
+                parsed.fragment,
+            )
+        )
     return jsonify({"auth_url": auth_url}), 200
 
 
 @auth_bp.route("/yandex/callback", methods=["GET"])
 def yandex_callback():
     code = request.args.get("code")
+    cid = request.args.get("state") or request.args.get("cid")
     if not code:
         return jsonify({"error": "No code provided"}), 400
 
@@ -146,17 +167,37 @@ def yandex_callback():
     if error:
         return jsonify({"error": error}), 400
 
-    return (
-        jsonify(
-            {
-                "message": "Login successful",
-                "access_token": result["access_token"],
-                "refresh_token": result["refresh_token"],
-                "user": user_schema.dump(result["user"]),
-            }
-        ),
-        200,
-    )
+    response_payload = {
+        "message": "Login successful",
+        "access_token": result["access_token"],
+        "refresh_token": result["refresh_token"],
+        "user": user_schema.dump(result["user"]),
+    }
+
+    if cid:
+        desktop_yandex_sessions[cid] = response_payload
+
+    return jsonify(response_payload), 200
+
+
+@auth_bp.route("/yandex/desktop-session", methods=["GET"])
+def yandex_desktop_session():
+    cid = request.args.get("cid")
+    if not cid:
+        return jsonify({"error": "cid is required"}), 400
+
+    data = desktop_yandex_sessions.get(cid)
+    if not data:
+        return jsonify({"ready": False}), 200
+
+    return jsonify(
+        {
+            "ready": True,
+            "access_token": data.get("access_token"),
+            "refresh_token": data.get("refresh_token"),
+            "user": data.get("user"),
+        }
+    ), 200
 
 
 @auth_bp.route("/2fa/setup", methods=["POST"])
@@ -225,6 +266,50 @@ def telegram_login():
                 "access_token": result["access_token"],
                 "refresh_token": result["refresh_token"],
                 "user": user_schema.dump(result["user"]),
+            }
+        ),
+        200,
+    )
+
+
+@auth_bp.route("/api-key-login", methods=["POST"])
+@rate_limit("auth-api-key-login", limit=20, window_seconds=60)
+def api_key_login():
+    data = request.get_json() or {}
+    api_key = data.get("api_key")
+    cloud_password = data.get("cloud_password")
+    if not api_key:
+        return jsonify({"error": "api_key is required"}), 400
+
+    user = UserService.get_user_by_api_key(api_key)
+    if not user:
+        return jsonify({"error": "Invalid api_key"}), 401
+
+    if cloud_password:
+        error_msg = UserService.set_or_reset_cloud_password(
+            user, cloud_password)
+        if error_msg:
+            return jsonify({"error": error_msg}), 400
+
+    tokens, error = AuthService.login_with_user(user)
+    if error:
+        return jsonify({"error": error}), 400
+
+    return (
+        jsonify(
+            {
+                "message": "Login successful",
+                "access_token": tokens["access_token"],
+                "refresh_token": tokens["refresh_token"],
+                "user": user_schema.dump(tokens["user"]),
+                "cloud_password_set": bool(
+                    getattr(tokens["user"], "cloud_password_hash", None)
+                ),
+                "cloud_password_resets_used": int(
+                    getattr(tokens["user"],
+                            "cloud_password_reset_count", 0) or 0
+                ),
+                "cloud_password_resets_limit": 3,
             }
         ),
         200,
