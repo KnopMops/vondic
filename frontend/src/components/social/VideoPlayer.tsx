@@ -16,9 +16,11 @@ type Props = {
 	src: string
 	poster?: string | null
 	className?: string
+	videoId?: string
+	onFirstPlay?: () => void
 }
 
-export default function VideoPlayer({ src, poster, className }: Props) {
+export default function VideoPlayer({ src, poster, className, videoId, onFirstPlay }: Props) {
 	const { user } = useAuth()
 	const videoRef = useRef<HTMLVideoElement>(null)
 	const containerRef = useRef<HTMLDivElement>(null)
@@ -46,7 +48,14 @@ export default function VideoPlayer({ src, poster, className }: Props) {
 		const onTime = () => setCurrentTime(v.currentTime || 0)
 		const onWaiting = () => setIsLoading(true)
 		const onCanPlay = () => setIsLoading(false)
-		const onPlay = () => setIsPlaying(true)
+		let hasCounted = false
+		const onPlay = () => {
+			setIsPlaying(true)
+			if (!hasCounted && videoId) {
+				hasCounted = true
+				onFirstPlay?.()
+			}
+		}
 		const onPause = () => setIsPlaying(false)
 		v.addEventListener('loadedmetadata', onLoaded)
 		v.addEventListener('timeupdate', onTime)

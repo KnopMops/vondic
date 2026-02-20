@@ -6,7 +6,7 @@ from flask import Flask
 from sqlalchemy import text
 
 from app.core.config import Config
-from app.core.extensions import cors, db, ma, mail, migrate
+from app.core.extensions import cache, cors, db, ma, mail, migrate
 
 
 def _tag_for_rule(rule: str) -> str:
@@ -73,21 +73,44 @@ def _build_swagger_paths(app: Flask):
     return paths
 
 
+def _build_allowed_origins() -> list[str]:
+    defaults = [
+        "https://responsibly-soothing-springtail.cloudpub.ru",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5000",
+        "http://localhost:1420",
+        "http://127.0.0.1:1420",
+        "tauri://localhost",
+    ]
+    raw = os.getenv("CORS_ALLOWED_ORIGINS", "")
+    extra = [origin.strip() for origin in raw.split(",") if origin.strip()]
+    frontend_url = os.getenv("FRONTEND_URL")
+    if frontend_url:
+        extra.append(frontend_url)
+    merged = []
+    seen = set()
+    for origin in defaults + extra:
+        if origin not in seen:
+            merged.append(origin)
+            seen.add(origin)
+    return merged
+
+
 def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
     db.init_app(app)
     migrate.init_app(app, db)
     ma.init_app(app)
+    cache.init_app(app)
 
-    allowed_origins = [
-        "https://poisonously-beloved-fawn.cloudpub.ru",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:5000"
-    ]
-    cors.init_app(app, resources={
-                  r"/*": {"origins": allowed_origins}}, supports_credentials=True)
+    allowed_origins = _build_allowed_origins()
+    cors.init_app(
+        app,
+        resources={r"/api/(?!public/).*": {"origins": allowed_origins}},
+        supports_credentials=True,
+    )
 
     mail.init_app(app)
 
@@ -351,6 +374,7 @@ def create_app(config_class=Config):
     from app.api.v1.support import support_bp
     from app.api.v1.upload import upload_bp
     from app.api.v1.users import users_bp
+    from app.api.v1.videos import videos_bp
 
     app.register_blueprint(users_bp)
     app.register_blueprint(bots_bp)
@@ -363,6 +387,7 @@ def create_app(config_class=Config):
     app.register_blueprint(subscriptions_bp)
     app.register_blueprint(search_bp)
     app.register_blueprint(upload_bp)
+    app.register_blueprint(videos_bp)
     app.register_blueprint(payments_bp)
     app.register_blueprint(gifts_bp)
     app.register_blueprint(communities_bp)

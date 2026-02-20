@@ -226,7 +226,8 @@ def purchase_gift(current_user):
         })
         current_user.gifts = gifts
         if catalog_item is not None and catalog_item.total_supply is not None:
-            catalog_item.minted_count = (catalog_item.minted_count or 0) + quantity
+            catalog_item.minted_count = (
+                catalog_item.minted_count or 0) + quantity
         db.session.commit()
         return jsonify({"success": True, "balance": current_user.balance, "gifts": current_user.gifts}), 200
     except Exception as e:
@@ -278,7 +279,8 @@ def send_gift(current_user):
         })
         recipient.gifts = gifts
         if catalog_item is not None and catalog_item.total_supply is not None:
-            catalog_item.minted_count = (catalog_item.minted_count or 0) + quantity
+            catalog_item.minted_count = (
+                catalog_item.minted_count or 0) + quantity
         db.session.commit()
         return jsonify({"success": True, "balance": current_user.balance, "recipient_gifts": recipient.gifts}), 200
     except Exception as e:

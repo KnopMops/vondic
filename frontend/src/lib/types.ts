@@ -3,7 +3,11 @@ export interface User {
 	email: string
 	username: string
 	role: string
+	is_bot?: boolean
 	avatar_url: string | null
+	displayName?: string
+	handle?: string
+	registeredAt?: string
 	storis?: {
 		id: string
 		url: string
@@ -28,6 +32,12 @@ export interface User {
 	is_blocked?: boolean
 	blocked_by_admin?: string | null
 	is_developer?: boolean
+	video_channel_id?: string | null
+	video_subscribers?: number
+	video_count?: number
+	video_likes?: string[]
+	video_watch_later?: string[]
+	video_history?: { video_id: string; last_watched_at?: string; position?: number }[]
 }
 
 export interface GiftItem {
@@ -64,6 +74,25 @@ export interface Attachment {
 	size: number
 }
 
+export interface Video {
+	id: string
+	author_id: string
+	title: string
+	description?: string
+	url: string
+	poster?: string | null
+	duration?: number
+	created_at?: string
+	updated_at?: string
+	views?: number
+	likes?: number
+	is_deleted?: boolean
+	tags?: string[]
+	author_name?: string
+	author_avatar?: string | null
+	author_premium?: boolean
+}
+
 export interface Message {
 	id: string
 	sender_id: string
@@ -75,6 +104,6 @@ export interface Message {
 	group_id?: string
 	reply_to?: string
 	type?: 'text' | 'voice'
-	attachments?: Attachment[]
+	attachments?: Attachment[] | string
 	is_deleted?: boolean
 }

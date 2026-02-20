@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/AuthContext'
 import { getAttachmentUrl } from '@/lib/utils'
 import { Loader2, Paperclip } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 type Escalation = {
 	id: number
@@ -32,6 +33,7 @@ type PostReport = {
 
 export default function AdminSupportPage() {
 	const { user, logout } = useAuth()
+	const router = useRouter()
 	const [items, setItems] = useState<Escalation[]>([])
 	const [postReports, setPostReports] = useState<PostReport[]>([])
 	const [postReportsLoading, setPostReportsLoading] = useState(false)
@@ -685,6 +687,13 @@ export default function AdminSupportPage() {
 	}, [user?.role])
 
 	const roleAllowed = user?.role === 'Support' || user?.role === 'Admin'
+
+	// Hard guard: redirect away if not allowed
+	useEffect(() => {
+		if (user && !roleAllowed) {
+			router.replace('/feed')
+		}
+	}, [user, roleAllowed, router])
 
 	return (
 		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white overflow-x-hidden relative'>

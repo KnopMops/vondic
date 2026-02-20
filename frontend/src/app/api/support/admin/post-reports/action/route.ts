@@ -9,6 +9,16 @@ export async function POST(req: NextRequest) {
 		}
 		const backendUrl =
 			process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+		// role guard
+		const meRes = await fetch(`${backendUrl}/api/v1/auth/me`, {
+			method: 'GET',
+			headers: { Authorization: `Bearer ${token}` },
+		})
+		const me = await meRes.json().catch(() => ({}))
+		const role = me?.user?.role || me?.role
+		if (role !== 'Admin' && role !== 'Support') {
+			return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+		}
 		const body = await req.json().catch(() => ({}))
 		const response = await fetch(
 			`${backendUrl}/api/v1/support/admin/post-reports/action`,

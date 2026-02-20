@@ -294,7 +294,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 										Напишите боту
 									</p>
 									<a
-										href='https://t.me/vodnic_registration_bot'
+										href='https://t.me/vondic_bot'
 										target='_blank'
 										rel='noopener noreferrer'
 										className='flex items-center justify-center gap-2 text-xl font-bold text-blue-400 hover:text-blue-300 transition-colors'
@@ -311,7 +311,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 												clipRule='evenodd'
 											/>
 										</svg>
-										@vodnic_registration_bot
+										@vondic_bot
 									</a>
 								</div>
 

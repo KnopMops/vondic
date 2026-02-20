@@ -11,16 +11,19 @@ class CommunityChannel(db.Model):
     __tablename__ = "community_channels"
 
     id = db.Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
-    community_id = db.Column(TEXT, db.ForeignKey("communities.id"), nullable=False)
+    community_id = db.Column(TEXT, db.ForeignKey(
+        "communities.id"), nullable=False)
     name = db.Column(TEXT, nullable=False)
     description = db.Column(TEXT, nullable=True)
     type = db.Column(TEXT, nullable=False, default="text")
 
     created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
-    updated_at = db.Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = db.Column(
+        TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     __table_args__ = (
-        db.UniqueConstraint("community_id", "name", name="uq_community_channel_name"),
+        db.UniqueConstraint("community_id", "name",
+                            name="uq_community_channel_name"),
         CheckConstraint("type IN ('text','voice')", name="ck_channel_type"),
     )
 

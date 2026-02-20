@@ -1,5 +1,11 @@
+import hashlib
+import json
+import uuid
+from datetime import datetime, timezone
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
+# from user_agents import parse as parse_ua
+from app.core.extensions import cache
 from app.schemas.user_schema import user_schema
 from app.services.auth_service import AuthService
 from app.services.user_service import UserService
@@ -12,6 +18,124 @@ auth_bp = Blueprint("auth", __name__, url_prefix="/api/v1/auth")
 desktop_yandex_sessions: dict[str, dict] = {}
 
 
+def _get_client_ip():
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()
+    return request.remote_addr or ""
+
+
+def _parse_user_agent(ua_string: str):
+    # Simple fallback without external library
+    ua_string = ua_string.lower()
+    if "mobile" in ua_string or "android" in ua_string or "iphone" in ua_string:
+        device = "mobile"
+    else:
+        device = "desktop"
+
+    platform = "unknown"
+    if "windows" in ua_string:
+        platform = "Windows"
+    elif "mac os" in ua_string:
+        platform = "Mac OS"
+    elif "linux" in ua_string:
+        platform = "Linux"
+    elif "android" in ua_string:
+        platform = "Android"
+    elif "ios" in ua_string or "iphone" in ua_string:
+        platform = "iOS"
+
+    browser = "unknown"
+    if "chrome" in ua_string:
+        browser = "Chrome"
+    elif "firefox" in ua_string:
+        browser = "Firefox"
+    elif "safari" in ua_string:
+        browser = "Safari"
+    elif "edge" in ua_string:
+        browser = "Edge"
+
+    return device, platform, browser
+
+
+def _extract_access_token():
+    data = request.get_json(silent=True) or {}
+    token = data.get("access_token")
+    if not token:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header.split(" ", 1)[1].strip()
+    if not token:
+        token = request.args.get("access_token")
+    if not token:
+        token = request.cookies.get("access_token")
+    return token
+
+
+def _store_login_session(user, access_token: str | None, refresh_token: str | None):
+    try:
+        if not user or not getattr(user, "id", None):
+            return
+        ttl = int(current_app.config.get("SESSION_TTL_SECONDS", 2592000))
+        now = datetime.now(timezone.utc).isoformat()
+        ip = _get_client_ip()
+        user_agent_str = request.headers.get("user-agent") or ""
+        device, platform, browser = _parse_user_agent(user_agent_str)
+        session_id = str(uuid.uuid4())
+        payload = {
+            "session_id": session_id,
+            "user_id": str(user.id),
+            "created_at": now,
+            "last_seen": now,
+            "ip": ip,
+            "user_agent": user_agent_str,
+            "device": device,
+            "platform": platform,
+            "browser": browser,
+            "access_token_hash": hashlib.sha256((access_token or "").encode("utf-8")).hexdigest()
+            if access_token
+            else None,
+            "refresh_token_hash": hashlib.sha256((refresh_token or "").encode("utf-8")).hexdigest()
+            if refresh_token
+            else None,
+        }
+        key = f"sessions:{user.id}"
+        existing = cache.get(key) or []
+        if isinstance(existing, dict):
+            existing = [existing]
+        if not isinstance(existing, list):
+            existing = []
+
+        # Remove duplicates based on IP and User-Agent to keep list clean
+        # Or keep history? User asked for "saving sessions", usually means active sessions.
+        # But let's just prepend new session.
+        existing.insert(0, payload)
+        existing = existing[:50]  # Limit to 50 sessions
+
+        cache.set(key, existing, timeout=ttl)
+        cache.set(f"session:{session_id}", payload, timeout=ttl)
+
+        # Also store JSON strings for easier debugging/external access if needed
+        cache.set(
+            f"sessions_json:{user.id}",
+            json.dumps(existing, ensure_ascii=False),
+            timeout=ttl,
+        )
+        cache.set(
+            f"session_json:{session_id}",
+            json.dumps(payload, ensure_ascii=False),
+            timeout=ttl,
+        )
+        current_app.logger.info(
+            f"Stored session {session_id} for user {user.id} in Redis")
+    except Exception as e:
+        current_app.logger.error(
+            f"Failed to store login session in Redis: {e}")
+
+
 @auth_bp.route("/register", methods=["POST"])
 @rate_limit("auth-register", limit=5, window_seconds=60)
 def register():
@@ -21,6 +145,10 @@ def register():
     user, error = AuthService.register_user(data)
     if error:
         return (jsonify({"error": error}), 400)
+    try:
+        _store_login_session(user, user.access_token, user.refresh_token)
+    except Exception:
+        pass
     return (
         jsonify(
             {
@@ -68,6 +196,8 @@ def login():
             else 400
         )
         return (jsonify({"error": error}), status_code)
+    _store_login_session(
+        result["user"], result["access_token"], result["refresh_token"])
     return (
         jsonify(
             {
@@ -173,6 +303,8 @@ def yandex_callback():
         "refresh_token": result["refresh_token"],
         "user": user_schema.dump(result["user"]),
     }
+    _store_login_session(
+        result["user"], result["access_token"], result["refresh_token"])
 
     if cid:
         desktop_yandex_sessions[cid] = response_payload
@@ -250,6 +382,109 @@ def toggle_login_alerts(current_user):
     return jsonify({"message": "Login alerts updated"}), 200
 
 
+@auth_bp.route("/sessions", methods=["GET"])
+@token_required
+def list_sessions(current_user):
+    token = _extract_access_token()
+    current_hash = (
+        hashlib.sha256(token.encode("utf-8")).hexdigest() if token else None
+    )
+    key = f"sessions:{current_user.id}"
+    sessions = cache.get(key)
+    if sessions is None:
+        json_value = cache.get(f"sessions_json:{current_user.id}")
+        if isinstance(json_value, str):
+            try:
+                sessions = json.loads(json_value)
+            except Exception:
+                sessions = []
+    if isinstance(sessions, dict):
+        sessions = [sessions]
+    if not isinstance(sessions, list):
+        sessions = []
+    items = []
+    for item in sessions:
+        if not isinstance(item, dict):
+            continue
+        item_copy = dict(item)
+        if current_hash and item_copy.get("access_token_hash") == current_hash:
+            item_copy["is_current"] = True
+        else:
+            item_copy["is_current"] = False
+        items.append(item_copy)
+    return jsonify({"items": items}), 200
+
+
+@auth_bp.route("/sessions/terminate", methods=["POST"])
+@token_required
+def terminate_session(current_user):
+    data = request.get_json() or {}
+    session_id = data.get("session_id")
+    if not session_id:
+        return jsonify({"error": "session_id is required"}), 400
+    token = _extract_access_token()
+    current_hash = (
+        hashlib.sha256(token.encode("utf-8")).hexdigest() if token else None
+    )
+    key = f"sessions:{current_user.id}"
+    sessions = cache.get(key)
+    if sessions is None:
+        json_value = cache.get(f"sessions_json:{current_user.id}")
+        if isinstance(json_value, str):
+            try:
+                sessions = json.loads(json_value)
+            except Exception:
+                sessions = []
+    if isinstance(sessions, dict):
+        sessions = [sessions]
+    if not isinstance(sessions, list):
+        sessions = []
+    target = next(
+        (s for s in sessions if isinstance(s, dict)
+         and s.get("session_id") == session_id),
+        None,
+    )
+    updated = [s for s in sessions if isinstance(
+        s, dict) and s.get("session_id") != session_id]
+    ttl = int(current_app.config.get("SESSION_TTL_SECONDS", 2592000))
+    cache.set(key, updated, timeout=ttl)
+    cache.set(
+        f"sessions_json:{current_user.id}",
+        json.dumps(updated, ensure_ascii=False),
+        timeout=ttl,
+    )
+    revoked_key = f"revoked_tokens:{current_user.id}"
+    revoked = cache.get(revoked_key) or []
+    if not isinstance(revoked, list):
+        revoked = []
+    access_hash = target.get("access_token_hash") if isinstance(
+        target, dict) else None
+    refresh_hash = target.get("refresh_token_hash") if isinstance(
+        target, dict) else None
+    if access_hash:
+        revoked.append(access_hash)
+    if refresh_hash:
+        revoked.append(refresh_hash)
+    if revoked:
+        unique_revoked = []
+        for value in revoked:
+            if value and value not in unique_revoked:
+                unique_revoked.append(value)
+        cache.set(revoked_key, unique_revoked[:200], timeout=ttl)
+    cache.delete(f"session:{session_id}")
+    cache.delete(f"session_json:{session_id}")
+    logout_current = bool(
+        access_hash and current_hash and access_hash == current_hash
+    )
+    return jsonify(
+        {
+            "message": "Session terminated",
+            "items": updated,
+            "logout_current": logout_current,
+        }
+    ), 200
+
+
 @auth_bp.route("/telegram-login", methods=["POST"])
 @rate_limit("auth-telegram-login", limit=10, window_seconds=60)
 def telegram_login():
@@ -259,6 +494,11 @@ def telegram_login():
     result, error = AuthService.login_telegram_user(data)
     if error:
         return (jsonify({"error": error}), 401)
+    try:
+        _store_login_session(
+            result["user"], result["access_token"], result["refresh_token"])
+    except Exception:
+        pass
     return (
         jsonify(
             {
@@ -294,6 +534,11 @@ def api_key_login():
     tokens, error = AuthService.login_with_user(user)
     if error:
         return jsonify({"error": error}), 400
+    try:
+        _store_login_session(
+            tokens["user"], tokens["access_token"], tokens["refresh_token"])
+    except Exception:
+        pass
 
     return (
         jsonify(

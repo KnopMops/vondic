@@ -60,7 +60,7 @@ class GroupService:
         user = User.query.get(user_id)
         if not user:
             return []
-        
+
         try:
             from app.services.ollama_service import OllamaService
             OllamaService.ensure_chat_with_ai(user_id)

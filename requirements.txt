@@ -7,6 +7,8 @@ flask-migrate
 flask-marshmallow
 marshmallow-sqlalchemy
 flask-cors
+flask-caching
+redis
 email-validator
 werkzeug
 Flask-Mail
@@ -17,3 +19,6 @@ eventlet
 cryptography
 stripe
 pytz
+psycopg2-binary
+asyncpg
+user-agents

@@ -275,7 +275,7 @@ export default function LoginPage() {
 										Напишите боту
 									</p>
 									<a
-										href='https://t.me/vodnic_registration_bot'
+										href='https://t.me/vondic_bot'
 										target='_blank'
 										rel='noopener noreferrer'
 										className='flex items-center justify-center gap-2 text-lg font-bold text-indigo-400 hover:text-indigo-300 transition-colors'
@@ -292,7 +292,7 @@ export default function LoginPage() {
 												clipRule='evenodd'
 											/>
 										</svg>
-										@vodnic_registration_bot
+										@vondic_bot
 									</a>
 								</div>
 

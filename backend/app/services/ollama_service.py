@@ -184,7 +184,8 @@ class OllamaService:
             }
 
             try:
-                support_answer = OllamaService._support_faq_answer(user_content)
+                support_answer = OllamaService._support_faq_answer(
+                    user_content)
                 if support_answer:
                     OllamaService._send_reply(
                         support_answer,

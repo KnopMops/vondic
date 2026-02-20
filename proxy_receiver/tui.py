@@ -44,9 +44,11 @@ def combine_panels(left: str, right: str, gap: int = 4) -> str:
     right_lines = right.splitlines()
     max_lines = max(len(left_lines), len(right_lines))
     while len(left_lines) < max_lines:
-        left_lines.append(" " * len(strip_ansi(left_lines[0])) if left_lines else "")
+        left_lines.append(
+            " " * len(strip_ansi(left_lines[0])) if left_lines else "")
     while len(right_lines) < max_lines:
-        right_lines.append(" " * len(strip_ansi(right_lines[0])) if right_lines else "")
+        right_lines.append(
+            " " * len(strip_ansi(right_lines[0])) if right_lines else "")
     rows = []
     for left, right in zip(left_lines, right_lines):
         rows.append(left + " " * gap + right)
@@ -110,4 +112,3 @@ async def tui_loop(config: ProxyConfig, stats: ProxyStats) -> None:
         output = banner + "\n\n" + dashboard
         sys.stdout.write("\033[2J\033[H" + output + "\n")
         sys.stdout.flush()
-

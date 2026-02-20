@@ -1,10 +1,11 @@
+import hashlib
 import os
 import secrets
 import sys
 
 import requests
 from app.core.config import Config
-from app.core.extensions import db
+from app.core.extensions import cache, db
 from app.models.user import User
 from app.services.email_service import EmailService
 
@@ -79,6 +80,10 @@ class AuthService:
     def get_user_by_token(access_token):
         user = User.query.filter_by(access_token=access_token).first()
         if not user:
+            return None, "Invalid or expired token"
+        token_hash = hashlib.sha256(access_token.encode("utf-8")).hexdigest()
+        revoked = cache.get(f"revoked_tokens:{user.id}") or []
+        if isinstance(revoked, list) and token_hash in revoked:
             return None, "Invalid or expired token"
         if user.is_blocked:
             return None, "User is blocked"

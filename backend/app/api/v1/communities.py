@@ -8,7 +8,8 @@ from app.services.community_service import CommunityService
 from app.utils.decorators import token_required
 from flask import Blueprint, jsonify, request
 
-communities_bp = Blueprint("communities", __name__, url_prefix="/api/v1/communities")
+communities_bp = Blueprint("communities", __name__,
+                           url_prefix="/api/v1/communities")
 
 
 @communities_bp.route("", methods=["POST"])

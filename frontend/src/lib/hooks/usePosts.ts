@@ -7,6 +7,7 @@ import {
 	useQueryClient,
 } from '@tanstack/react-query'
 import { useEffect, useMemo } from 'react'
+import { useSocket } from '@/lib/SocketContext'
 
 export type PostData = {
 	id: string
@@ -38,6 +39,7 @@ export function usePosts({
 }: { perPage?: number; kind?: 'feed' | 'blog' } = {}) {
 	const dispatch = useAppDispatch()
 	const queryClient = useQueryClient()
+	const { socket } = useSocket()
 
 	const query = useInfiniteQuery<
 		PostsResponse,
@@ -78,6 +80,67 @@ export function usePosts({
 		}
 	}, [posts, dispatch, query.data])
 
+	useEffect(() => {
+		if (!socket) return
+		const key = ['posts', perPage, kind] as const
+
+		const handlePostCreated = (payload: any) => {
+			queryClient.setQueryData<any>(key, (prev: any) => {
+				if (!prev) return prev
+				const pages = Array.isArray(prev.pages) ? prev.pages.slice() : []
+				if (!pages.length) return prev
+				const first = { ...(pages[0] || {}) }
+				const items = Array.isArray(first.items) ? first.items.slice() : []
+				if (!items.find((p: any) => String(p.id) === String(payload.id))) {
+					items.unshift(payload)
+				}
+				first.items = items
+				pages[0] = first
+				return { ...prev, pages }
+			})
+		}
+
+		const handlePostUpdated = (payload: any) => {
+			queryClient.setQueryData<any>(key, (prev: any) => {
+				if (!prev) return prev
+				const pages = Array.isArray(prev.pages) ? prev.pages.map((page: any) => {
+					const items = Array.isArray(page.items) ? page.items.map((p: any) => {
+						if (String(p.id) === String(payload.id)) {
+							return { ...p, ...payload }
+						}
+						return p
+					}) : page.items
+					return { ...page, items }
+				}) : prev.pages
+				return { ...prev, pages }
+			})
+		}
+
+		const handlePostDeleted = (payload: any) => {
+			const id = payload?.id
+			if (!id) return
+			queryClient.setQueryData<any>(key, (prev: any) => {
+				if (!prev) return prev
+				const pages = Array.isArray(prev.pages) ? prev.pages.map((page: any) => {
+					const items = Array.isArray(page.items)
+						? page.items.filter((p: any) => String(p.id) !== String(id))
+						: page.items
+					return { ...page, items }
+				}) : prev.pages
+				return { ...prev, pages }
+			})
+		}
+
+		socket.on('post_created', handlePostCreated)
+		socket.on('post_updated', handlePostUpdated)
+		socket.on('post_deleted', handlePostDeleted)
+		return () => {
+			socket.off('post_created', handlePostCreated)
+			socket.off('post_updated', handlePostUpdated)
+			socket.off('post_deleted', handlePostDeleted)
+		}
+	}, [socket, queryClient, perPage, kind])
+
 	const createPostMutation = useMutation({
 		mutationFn: async ({
 			text,
@@ -99,8 +162,11 @@ export function usePosts({
 			if (!res.ok) throw new Error('Failed to create post')
 			return res.json()
 		},
-		onSuccess: () => {
+		onSuccess: (data: any) => {
 			queryClient.invalidateQueries({ queryKey: ['posts'] })
+			try {
+				socket?.emit('post_create', data)
+			} catch {}
 		},
 	})
 
@@ -124,6 +190,9 @@ export function usePosts({
 		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ['posts'] })
+			try {
+				socket?.emit('post_delete', { id })
+			} catch {}
 		},
 	})
 
@@ -152,8 +221,12 @@ export function usePosts({
 			if (!res.ok) throw new Error('Failed to update post')
 			return res.json()
 		},
-		onSuccess: () => {
+		onSuccess: (data: any) => {
 			queryClient.invalidateQueries({ queryKey: ['posts'] })
+			try {
+				const payload = { id: data?.id ?? id, ...data }
+				socket?.emit('post_update', payload)
+			} catch {}
 		},
 	})
 

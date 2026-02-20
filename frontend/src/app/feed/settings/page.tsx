@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/AuthContext'
 import { setUser } from '@/lib/features/authSlice'
 import { useAppDispatch } from '@/lib/hooks'
 import { useToast } from '@/lib/ToastContext'
-import { motion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import {
 	Bell,
 	Code,
@@ -18,6 +18,18 @@ import {
 	Volume2,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
+
+type SessionItem = {
+	session_id: string
+	ip?: string
+	user_agent?: string
+	device?: string
+	platform?: string
+	browser?: string
+	created_at?: string
+	last_seen?: string
+	is_current?: boolean
+}
 
 export default function SettingsPage() {
 	const { user, logout } = useAuth()
@@ -39,6 +51,11 @@ export default function SettingsPage() {
 	const [theme, setTheme] = useState<'system' | 'dark' | 'light'>('system')
 	const [deleteConfirmText, setDeleteConfirmText] = useState('')
 	const [deleteLoading, setDeleteLoading] = useState(false)
+	const [sessions, setSessions] = useState<SessionItem[]>([])
+	const [sessionsLoading, setSessionsLoading] = useState(false)
+	const [terminatingSessionIds, setTerminatingSessionIds] = useState<string[]>(
+		[],
+	)
 	/* removed experimental features state */
 	const dispatch = useAppDispatch()
 
@@ -51,6 +68,29 @@ export default function SettingsPage() {
 			setDeveloperEnabled(!!user.is_developer)
 			const rawStatus = String(user.status || '').toLowerCase()
 			setPresenceStatus(rawStatus === 'offline' ? 'Offline' : 'Online')
+		}
+	}, [user?.id])
+
+	const loadSessions = async () => {
+		setSessionsLoading(true)
+		try {
+			const res = await fetch('/api/auth/sessions')
+			const data = await res.json()
+			if (!res.ok) {
+				throw new Error(data.error || 'Не удалось получить сессии')
+			}
+			const items = Array.isArray(data.items) ? data.items : []
+			setSessions(items)
+		} catch (e: any) {
+			showToast(e.message || 'Не удалось получить сессии', 'error')
+		} finally {
+			setSessionsLoading(false)
+		}
+	}
+
+	useEffect(() => {
+		if (user?.id) {
+			loadSessions()
 		}
 	}, [user?.id])
 
@@ -337,6 +377,80 @@ export default function SettingsPage() {
 		}
 	}
 
+	const terminateSession = async (sessionId: string) => {
+		setTerminatingSessionIds(prev => [...prev, sessionId])
+		try {
+			const res = await fetch('/api/auth/sessions/terminate', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ session_id: sessionId }),
+			})
+			const data = await res.json()
+			if (!res.ok) throw new Error(data.error || 'Не удалось завершить сессию')
+			const items = Array.isArray(data.items) ? data.items : []
+			if (items.length) {
+				setSessions(items)
+			} else {
+				setSessions(prev => prev.filter(item => item.session_id !== sessionId))
+			}
+			if (data.logout_current) {
+				showToast('Сессия завершена', 'success')
+				logout()
+				return
+			}
+			showToast('Сессия завершена', 'success')
+		} catch (e: any) {
+			showToast(e.message || 'Не удалось завершить сессию', 'error')
+		} finally {
+			setTerminatingSessionIds(prev => prev.filter(id => id !== sessionId))
+		}
+	}
+
+	const formatDateTime = (value?: string) => {
+		if (!value) return '—'
+		const date = new Date(value)
+		if (Number.isNaN(date.getTime())) return value
+		return date.toLocaleString('ru-RU')
+	}
+
+	const getSessionLabel = (session: SessionItem) => {
+		const parts = [
+			formatDevice(session.device),
+			formatPlatform(session.platform),
+		].filter(Boolean)
+		return parts.length ? parts.join(' · ') : 'Устройство'
+	}
+
+	const formatBrowser = (value?: string) => {
+		if (!value) return '—'
+		if (value === 'unknown' || value === 'node') return ''
+		if (value === 'edge') return 'Edge'
+		if (value === 'chrome') return 'Chrome'
+		if (value === 'firefox') return 'Firefox'
+		if (value === 'safari') return 'Safari'
+		if (value === 'opera') return 'Opera'
+		return value
+	}
+
+	const formatDevice = (value?: string) => {
+		if (!value) return ''
+		if (value === 'unknown') return ''
+		if (value === 'desktop') return 'Компьютер'
+		if (value === 'mobile') return 'Телефон'
+		if (value === 'tablet') return 'Планшет'
+		return value
+	}
+
+	const formatPlatform = (value?: string) => {
+		if (!value) return ''
+		if (value === 'unknown') return ''
+		if (value === 'macos') return 'macOS'
+		if (value === 'ios') return 'iOS'
+		if (value === 'android') return 'Android'
+		if (value === 'windows') return 'Windows'
+		return value
+	}
+
 	return (
 		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white overflow-x-hidden relative'>
 			<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
@@ -572,6 +686,100 @@ export default function SettingsPage() {
 										)}
 									</div>
 								)}
+								<div className='mt-4 rounded-xl border border-white/10 bg-black/30 p-4'>
+									<div className='flex items-center justify-between mb-3'>
+										<div>
+											<p className='text-sm font-medium text-white'>Сессии</p>
+											<p className='text-xs text-gray-400'>
+												Устройства, где выполнен вход
+											</p>
+										</div>
+										<button
+											onClick={loadSessions}
+											disabled={sessionsLoading}
+											className='rounded-lg border border-white/10 bg-white/5 px-3 py-1 text-xs text-gray-300 hover:bg-white/10 transition disabled:opacity-60'
+										>
+											{sessionsLoading ? 'Обновление...' : 'Обновить'}
+										</button>
+									</div>
+									{sessionsLoading ? (
+										<div className='text-sm text-gray-400'>Загрузка...</div>
+									) : sessions.length === 0 ? (
+										<div className='text-sm text-gray-400'>Сессий нет</div>
+									) : (
+										<div className='space-y-3'>
+											<AnimatePresence>
+												{sessions.map(session => {
+													const isCurrent = !!session.is_current
+													const isTerminating = terminatingSessionIds.includes(
+														session.session_id,
+													)
+													const browserLabel = formatBrowser(session.browser)
+													return (
+														<motion.div
+															layout
+															key={session.session_id}
+															initial={{ opacity: 0, y: 10 }}
+															animate={{ opacity: 1, y: 0 }}
+															exit={{ opacity: 0, y: -10 }}
+															transition={{ duration: 0.2 }}
+															className='flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-black/40 p-3'
+														>
+															<div className='space-y-2'>
+																<div className='flex flex-wrap items-center gap-2'>
+																	<p className='text-sm text-white'>
+																		{getSessionLabel(session)}
+																	</p>
+																	{browserLabel ? (
+																		<span className='rounded-full bg-indigo-500/20 px-2 py-0.5 text-[11px] text-indigo-200'>
+																			{browserLabel}
+																		</span>
+																	) : null}
+																</div>
+																<div className='text-xs text-gray-400 space-y-1'>
+																	<p>IP: {session.ip || '—'}</p>
+																	<p>
+																		Последняя активность:{' '}
+																		{formatDateTime(session.last_seen)}
+																	</p>
+																	<p>
+																		Создана:{' '}
+																		{formatDateTime(session.created_at)}
+																	</p>
+																</div>
+																{session.user_agent &&
+																session.user_agent !== 'node' ? (
+																	<p className='text-[11px] text-gray-500 break-all'>
+																		{session.user_agent}
+																	</p>
+																) : null}
+															</div>
+															<div className='flex flex-col items-end gap-2'>
+																{isCurrent ? (
+																	<span className='rounded-full bg-emerald-500/20 px-2 py-1 text-[11px] text-emerald-300'>
+																		Это устройство
+																	</span>
+																) : (
+																	<button
+																		onClick={() =>
+																			terminateSession(session.session_id)
+																		}
+																		disabled={isTerminating}
+																		className='rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-1 text-xs text-rose-200 hover:bg-rose-500/20 transition disabled:opacity-60'
+																	>
+																		{isTerminating
+																			? 'Завершаю...'
+																			: 'Завершить'}
+																	</button>
+																)}
+															</div>
+														</motion.div>
+													)
+												})}
+											</AnimatePresence>
+										</div>
+									)}
+								</div>
 							</div>
 						</motion.div>
 

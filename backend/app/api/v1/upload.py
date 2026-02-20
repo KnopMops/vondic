@@ -9,6 +9,7 @@ from flask import Blueprint, current_app, jsonify, request
 upload_bp = Blueprint("upload", __name__, url_prefix="/api/v1/upload")
 
 VOICE_EXTENSIONS = {"wav", "mp3", "ogg", "webm", "m4a"}
+VIDEO_EXTENSIONS = {"mp4", "mov", "webm", "mkv", "avi"}
 ATTACHMENT_EXTENSIONS = None
 LIMIT_FREE = 20 * 1024 * 1024
 LIMIT_PREMIUM = 100 * 1024 * 1024
@@ -75,11 +76,11 @@ def upload_voice(current_user):
             return jsonify({"message": str(e)}), 400
 
         file_size = len(file_bytes)
-        
+
         if current_user.disk_usage + file_size > current_user.disk_limit:
-             return jsonify({
-                 "message": "Disk space limit exceeded. Upgrade to Premium for more space."
-             }), 403
+            return jsonify({
+                "message": "Disk space limit exceeded. Upgrade to Premium for more space."
+            }), 403
 
         if not current_user.premium:
             delay = file_size / THROTTLE_SPEED_BPS
@@ -162,9 +163,9 @@ def upload_file(current_user):
         file_size = len(file_bytes)
 
         if current_user.disk_usage + file_size > current_user.disk_limit:
-             return jsonify({
-                 "error": "Disk space limit exceeded. Upgrade to Premium for more space."
-             }), 403
+            return jsonify({
+                "error": "Disk space limit exceeded. Upgrade to Premium for more space."
+            }), 403
 
         if not current_user.premium:
             delay = file_size / THROTTLE_SPEED_BPS
@@ -186,3 +187,53 @@ def upload_file(current_user):
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         return jsonify({"error": f"Failed to process file: {str(e)}"}), 400
+
+
+@upload_bp.route("/video", methods=["POST"])
+@token_required
+def upload_video(current_user):
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+
+    file_data = data.get("file")
+    filename = data.get("filename")
+
+    if not file_data or not filename:
+        return jsonify({"error": "file and filename are required"}), 400
+
+    ext = _get_extension(filename)
+    if not ext or ext.lower() not in VIDEO_EXTENSIONS:
+        return jsonify({"error": "Invalid video extension"}), 400
+
+    max_size = LIMIT_PREMIUM if current_user.premium else LIMIT_FREE
+
+    try:
+        file_bytes = _decode_base64(file_data, max_size)
+        file_size = len(file_bytes)
+
+        if current_user.disk_usage + file_size > current_user.disk_limit:
+            return jsonify({
+                "error": "Disk space limit exceeded. Upgrade to Premium for more space."
+            }), 403
+
+        if not current_user.premium:
+            delay = file_size / THROTTLE_SPEED_BPS
+            time.sleep(delay)
+
+        file_url = _save_upload(file_bytes, ext, "video")
+
+        current_user.disk_usage += file_size
+        from app.core.extensions import db
+        db.session.commit()
+
+        return jsonify({
+            "url": file_url,
+            "original_filename": filename,
+            "size_bytes": file_size,
+            "ext": ext
+        }), 201
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": f"Failed to upload video: {str(e)}"}), 400

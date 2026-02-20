@@ -10,7 +10,8 @@ class CommunityService:
         description = data.get("description")
         if not name:
             return None, "Community name is required"
-        community = Community(name=name, description=description, owner_id=user_id)
+        community = Community(
+            name=name, description=description, owner_id=user_id)
         owner = User.query.get(user_id)
         if owner:
             community.members.append(owner)

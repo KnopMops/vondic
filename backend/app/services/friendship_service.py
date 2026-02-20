@@ -48,7 +48,8 @@ class FriendshipService:
 
             return None, f"Request status: {existing.status}"
 
-        new_request = Friendship(requester_id=requester_id, addressee_id=addressee_id)
+        new_request = Friendship(
+            requester_id=requester_id, addressee_id=addressee_id)
         try:
             db.session.add(new_request)
             db.session.commit()
@@ -117,7 +118,8 @@ class FriendshipService:
     @staticmethod
     def get_friends(user_id):
         friendships = Friendship.query.filter(
-            or_(Friendship.requester_id == user_id, Friendship.addressee_id == user_id),
+            or_(Friendship.requester_id == user_id,
+                Friendship.addressee_id == user_id),
             Friendship.status == "accepted",
         ).all()
 

@@ -8,16 +8,16 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
 export default function FeedPage() {
-	const { user, logout, isLoading: isAuthLoading } = useAuth()
+	const { user, logout, isLoading: isAuthLoading, isInitialized } = useAuth()
 	const dispatch = useAppDispatch()
 	const router = useRouter()
 	const [isSocketLoading, setIsSocketLoading] = useState(false)
 
 	useEffect(() => {
-		if (!isAuthLoading && !user) {
+		if (isInitialized && !isAuthLoading && !user) {
 			router.push('/')
 		}
-	}, [user, isAuthLoading, router])
+	}, [user, isAuthLoading, isInitialized, router])
 
 	useEffect(() => {
 		if (user && !user.socket_id && !isSocketLoading) {
@@ -54,7 +54,8 @@ export default function FeedPage() {
 
 	// Блокируем отображение, пока загружается авторизация или (если пользователь есть) пока нет socket_id
 	// Также блокируем, если нет пользователя (ждем редиректа)
-	const isLoading = isAuthLoading || (!!user && !user.socket_id) || !user
+	const isLoading =
+		!isInitialized || isAuthLoading || (!!user && !user.socket_id) || !user
 
 	if (isLoading) {
 		return (

@@ -2,20 +2,17 @@
 import Header from '@/components/social/Header'
 import Sidebar from '@/components/social/Sidebar'
 import { useAuth } from '@/lib/AuthContext'
-import { Coffee, Crown, Flame, Flower, Gift, Heart, Star } from 'lucide-react'
+import {
+	Coffee,
+	Coins,
+	Crown,
+	Flame,
+	Flower,
+	Gift,
+	Heart,
+	Star,
+} from 'lucide-react'
 import { useEffect, useState } from 'react'
-import birthdayImg from '../../../gifts/Birthday.jpg'
-import bouquetImg from '../../../gifts/bouquet.jpg'
-import crownImg from '../../../gifts/crown.jpg'
-import eggImg from '../../../gifts/egg.jpg'
-import femaleDayImg from '../../../gifts/female_day.jpg'
-import fireImg from '../../../gifts/fire.jpg'
-import fireworkImg from '../../../gifts/firework.jpg'
-import knowledgeImg from '../../../gifts/knowledge.jpg'
-import partnerImg from '../../../gifts/partner.jpg'
-import presentImg from '../../../gifts/present.jpg'
-import pumpkinImg from '../../../gifts/pumpkin.jpg'
-import starImg from '../../../gifts/star.jpg'
 
 export default function ShopPage() {
 	const { user } = useAuth()
@@ -36,28 +33,19 @@ export default function ShopPage() {
 
 	const backendUrl =
 		process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
-	const staticGiftImages: Record<string, any> = {
-		birthday_cake: birthdayImg,
-		womens_day_bouquet: femaleDayImg,
-		valentine_heart: bouquetImg,
-		anniversary_crown: crownImg,
-		easter_egg: eggImg,
-		party_flame: fireImg,
-		newyear_fireworks: fireworkImg,
-		knowledge_day_coffee: knowledgeImg,
-		partner_badge: partnerImg,
-		christmas_gift: presentImg,
-		halloween_pumpkin: pumpkinImg,
-		gold_star: starImg,
-	}
-
-	const getStaticSrc = (img: any): string | null => {
-		if (!img) return null
-		if (typeof img === 'string') return img
-		if (typeof img === 'object' && typeof img.src === 'string') {
-			return img.src
-		}
-		return null
+	const staticGiftImages: Record<string, string> = {
+		newyear_fireworks: '/static/gifts/firework.png',
+		valentine_heart: '/static/gifts/bouquet.png',
+		womens_day_bouquet: '/static/gifts/female_day.png',
+		birthday_cake: '/static/gifts/Birthday.png',
+		halloween_pumpkin: '/static/gifts/pumpkin.png',
+		easter_egg: '/static/gifts/egg.png',
+		christmas_gift: '/static/gifts/present.png',
+		knowledge_day_coffee: '/static/gifts/knowledge.png',
+		anniversary_crown: '/static/gifts/crown.png',
+		party_flame: '/static/gifts/fire.png',
+		partner_badge: '/static/gifts/partner.png',
+		gold_star: '/static/gifts/star.png',
 	}
 	const iconMap: Record<string, any> = {
 		Flame,
@@ -230,6 +218,33 @@ export default function ShopPage() {
 						<p className='mt-1 text-gray-400'>
 							Поддержите проект и получите расширенные возможности
 						</p>
+						<div className='mt-4 rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm'>
+							<div className='flex items-center gap-3 text-white'>
+								<div className='h-10 w-10 rounded-xl bg-indigo-500/20 flex items-center justify-center'>
+									<Coins className='h-5 w-5 text-indigo-300' />
+								</div>
+								<div className='flex-1'>
+									<div className='text-sm text-gray-400'>Ваш баланс</div>
+									<div className='text-lg font-semibold'>
+										{typeof user?.balance === 'number' ? user.balance : 0}{' '}
+										Vondic Coins
+									</div>
+								</div>
+								<div className='flex items-center gap-3'>
+									<a
+										href='https://t.me/vondic_bot'
+										target='_blank'
+										rel='noopener noreferrer'
+										className='rounded-xl bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700'
+									>
+										Пополнить через Telegram
+									</a>
+									<span className='text-xs text-gray-400'>
+										Пополнение происходит через Telegram-бота @vondic_bot
+									</span>
+								</div>
+							</div>
+						</div>
 
 						{error && (
 							<div className='mt-4 rounded-lg border border-red-500 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-600 dark:bg-red-900/30 dark:text-red-300'>
@@ -254,8 +269,11 @@ export default function ShopPage() {
 													? g.imageUrl
 													: `${backendUrl}${g.imageUrl}`
 												: null
-										const staticImage = getStaticSrc(staticGiftImages[g.id])
-										const imgSrc = backendImage || staticImage || null
+										const staticImageUrl =
+											typeof g.id === 'string'
+												? staticGiftImages[g.id] || null
+												: null
+										const imgSrc = backendImage || staticImageUrl || null
 										const hasImage = !!imgSrc
 										const supply =
 											typeof g.totalSupply === 'number'
@@ -324,14 +342,19 @@ export default function ShopPage() {
 									<div className='flex items-center gap-3'>
 										{(() => {
 											const Icon = iconMap[selectedGift.icon as string] || Gift
-											const hasImage = !!selectedGift.imageUrl
-											const imgSrc =
+											const backendImage =
 												typeof selectedGift.imageUrl === 'string' &&
 												selectedGift.imageUrl
 													? selectedGift.imageUrl.startsWith('http')
 														? selectedGift.imageUrl
 														: `${backendUrl}${selectedGift.imageUrl}`
 													: null
+											const staticImageUrl =
+												typeof selectedGift.id === 'string'
+													? staticGiftImages[selectedGift.id] || null
+													: null
+											const imgSrc = backendImage || staticImageUrl
+											const hasImage = !!imgSrc
 											return hasImage && imgSrc ? (
 												<img
 													src={imgSrc}
@@ -410,7 +433,9 @@ export default function ShopPage() {
 																	{friends.map((f: any) => (
 																		<button
 																			key={f.id}
-																			onClick={() => setRecipientId(String(f.id))}
+																			onClick={() =>
+																				setRecipientId(String(f.id))
+																			}
 																			className={`flex w-full items-center gap-2 p-3 text-left hover:bg-gray-50 dark:hover:bg-white/10 ${recipientId === String(f.id) ? 'bg-gray-100 dark:bg-white/10' : ''}`}
 																		>
 																			<div className='h-8 w-8 rounded-full bg-white/10' />

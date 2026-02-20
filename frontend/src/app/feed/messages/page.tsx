@@ -19,7 +19,14 @@ import { useToast } from '@/lib/ToastContext'
 import { Channel, Group, Message, User } from '@/lib/types'
 import { getAttachmentUrl, getAvatarUrl } from '@/lib/utils'
 import Link from 'next/link'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
+} from 'react'
 import MessageBubble from './MessageBubble'
 
 // --- Icons Components ---
@@ -519,6 +526,7 @@ export default function MessengerPage() {
 		email: 'ai@vondic.local',
 		username: 'Vondic AI',
 		role: 'AI',
+		is_bot: false,
 		avatar_url: null,
 		status: 'Online',
 		premium: false,
@@ -529,6 +537,7 @@ export default function MessengerPage() {
 			email: 'botik@vondic.local',
 			username: 'Botik',
 			role: 'Bot',
+			is_bot: true,
 			avatar_url: '/static/botik.png',
 			status: 'Online',
 			premium: false,
@@ -536,6 +545,7 @@ export default function MessengerPage() {
 		[],
 	)
 	const [friends, setFriends] = useState<User[]>([])
+	const [recentContacts, setRecentContacts] = useState<User[]>([])
 	const [selectedFriend, setSelectedFriend] = useState<User | null>(null)
 	const [isRagOpen, setIsRagOpen] = useState(false)
 	const [ragMessages, setRagMessages] = useState<
@@ -560,7 +570,7 @@ export default function MessengerPage() {
 		? `bot_history_${user.id}_${botUser.id}`
 		: `bot_history_${botUser.id}`
 	const activeBotId =
-		selectedFriend?.role === 'Bot' ? selectedFriend.id : botUser.id
+		selectedFriend?.is_bot === true ? selectedFriend.id : botUser.id
 	const botStorageKey = user?.id
 		? `bot_history_${user.id}_${activeBotId}`
 		: `bot_history_${activeBotId}`
@@ -585,7 +595,7 @@ export default function MessengerPage() {
 		Record<string, { command: string; title: string; description: string }[]>
 	>({})
 	const activeBotCommands = useMemo(() => {
-		if (!selectedFriend || selectedFriend.role !== 'Bot') return []
+		if (!selectedFriend || selectedFriend.is_bot !== true) return []
 		if (selectedFriend.id === botUser.id) return botCommands
 		return botCommandHintsById[selectedFriend.id] || []
 	}, [selectedFriend, botUser.id, botCommands, botCommandHintsById])
@@ -852,24 +862,23 @@ export default function MessengerPage() {
 	}, [selectedFriend, botUser.id, user?.id])
 
 	useEffect(() => {
-		if (!selectedFriend || selectedFriend.role !== 'Bot') return
+		if (!selectedFriend || selectedFriend.is_bot !== true) return
 		if (selectedFriend.id === botUser.id) return
-		if (!user?.id || !user.access_token) return
+		if (!user?.id) return
 		let active = true
 		let pollTimeout: number | null = null
-		const baseUrl =
-			process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
 		const poll = async () => {
 			try {
-				const url = new URL(
-					`${baseUrl}/api/v1/bots/${selectedFriend.id}/outbox`,
+				const res = await fetch(
+					`/api/v1/bots?bot_id=${selectedFriend.id}&chat_id=${user.id}&mode=outbox`,
+					user?.access_token
+						? {
+								headers: {
+									Authorization: `Bearer ${user.access_token}`,
+								},
+							}
+						: undefined,
 				)
-				url.searchParams.set('chat_id', String(user.id))
-				const res = await fetch(url.toString(), {
-					headers: {
-						Authorization: `Bearer ${user.access_token}`,
-					},
-				})
 				if (!res.ok) return
 				const data: any = await res.json().catch(() => ({}))
 				const items = Array.isArray(data?.items) ? data.items : []
@@ -912,7 +921,7 @@ export default function MessengerPage() {
 				window.clearTimeout(pollTimeout)
 			}
 		}
-	}, [selectedFriend, botUser.id, user?.id, user?.access_token])
+	}, [selectedFriend, botUser.id, user?.id])
 
 	// Groups State
 	const {
@@ -1496,7 +1505,7 @@ export default function MessengerPage() {
 	}
 
 	const isAiChat = selectedFriend?.id === aiUser.id
-	const isBotChat = selectedFriend?.role === 'Bot' && !isAiChat
+	const isBotChat = selectedFriend?.is_bot === true && !isAiChat
 	const targetUserId = selectedFriend?.id
 	const hasActiveChat = !!(selectedFriend || selectedChannel || selectedGroup)
 	const isSelectedFriendOnline =
@@ -1655,7 +1664,12 @@ export default function MessengerPage() {
 					const cleaned = friendList.filter(
 						f => f.username !== 'Vondic AI' && f.username !== 'vondic_ai',
 					)
-					setFriends(cleaned)
+					setFriends(
+						cleaned.map((f: any) => ({
+							...f,
+							is_bot: f.is_bot === true ? true : false,
+						})),
+					)
 				}
 			} catch (e) {
 				console.error(e)
@@ -1664,17 +1678,71 @@ export default function MessengerPage() {
 		fetchFriends()
 	}, [user])
 
+	const fetchRecent = useCallback(async () => {
+		if (!user?.access_token) {
+			setRecentContacts([])
+			return
+		}
+		try {
+			const baseUrl =
+				process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+			const res = await fetch(`${baseUrl}/api/v1/dm/recent?limit=50`, {
+				headers: {
+					Authorization: `Bearer ${user.access_token}`,
+				},
+			})
+			if (!res.ok) return
+			const data: any = await res.json().catch(() => ({}))
+			const items = Array.isArray(data?.items) ? data.items : []
+			const cleaned = items
+				.filter((item: any) => {
+					const id = item?.id
+					if (!id) return false
+					if (user?.id && String(id) === String(user.id)) return false
+					// if (aiUser?.id && String(id) === String(aiUser.id)) return false
+					const username = String(item?.username || '')
+					// if (username === 'Vondic AI' || username === 'vondic_ai') return false
+					return true
+				})
+				.map((item: any) => ({
+					...item,
+					is_bot: item.is_bot === true ? true : false,
+				}))
+			setRecentContacts(cleaned)
+		} catch {}
+	}, [user?.access_token, user?.id, aiUser?.id])
+
+	useEffect(() => {
+		let active = true
+		fetchRecent()
+		return () => {
+			active = false
+		}
+	}, [fetchRecent])
+
+	// Listen for new messages to update recent contacts
+	useEffect(() => {
+		if (!socket) return
+		const handleMessageUpdate = () => {
+			fetchRecent()
+		}
+		socket.on('message_sent', handleMessageUpdate)
+		socket.on('receive_message', handleMessageUpdate)
+		return () => {
+			socket.off('message_sent', handleMessageUpdate)
+			socket.off('receive_message', handleMessageUpdate)
+		}
+	}, [socket, fetchRecent])
+
 	useEffect(() => {
 		const botId =
 			typeof window !== 'undefined'
 				? new URLSearchParams(window.location.search).get('bot_id')
 				: null
 		if (!botId) return
-		const baseUrl =
-			process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
 		const loadBot = async () => {
 			try {
-				const res = await fetch(`${baseUrl}/api/public/v1/bots/${botId}`)
+				const res = await fetch(`/api/v1/bots?bot_id=${botId}`)
 				if (!res.ok) return
 				const data: any = await res.json().catch(() => ({}))
 				if (!data?.id || !data?.name) return
@@ -1741,6 +1809,7 @@ export default function MessengerPage() {
 							email: `${bot.name}@bot.local`,
 							username: bot.name,
 							role: 'Bot',
+							is_bot: true,
 							avatar_url: bot.avatar_url ?? null,
 							status: bot.is_active === 0 ? 'Offline' : 'Online',
 							premium: false,
@@ -1961,7 +2030,7 @@ export default function MessengerPage() {
 			reply_to: replyToMessage?.id,
 			type: 'text',
 		}
-		const activeBot = selectedFriend?.role === 'Bot' ? selectedFriend : botUser
+		const activeBot = selectedFriend?.is_bot === true ? selectedFriend : botUser
 		const buildBotReply = (content: string): Message => ({
 			id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
 			sender_id: activeBot.id,
@@ -1972,7 +2041,7 @@ export default function MessengerPage() {
 			type: 'text',
 		})
 		const isBotikChat =
-			selectedFriend?.role === 'Bot' && selectedFriend.id === botUser.id
+			selectedFriend?.is_bot === true && selectedFriend.id === botUser.id
 		if (!isBotikChat) {
 			setBotMessages(prev => [...prev, nextMessage])
 			if (!user?.access_token || !user?.id) {
@@ -1996,6 +2065,7 @@ export default function MessengerPage() {
 							Authorization: `Bearer ${user.access_token}`,
 						},
 						body: JSON.stringify({
+							wait_for_reply: 5,
 							message: {
 								text,
 								from_user: {
@@ -2012,11 +2082,41 @@ export default function MessengerPage() {
 						}),
 					},
 				)
+				const textResponse = await res.text()
+				let data: any = {}
+				try {
+					data = textResponse ? JSON.parse(textResponse) : {}
+				} catch {
+					data = {}
+				}
 				if (!res.ok) {
 					setBotMessages(prev => [
 						...prev,
 						buildBotReply('Не удалось отправить сообщение боту.'),
 					])
+				} else if (Array.isArray(data?.outbox) && data.outbox.length > 0) {
+					const items = data.outbox
+					setBotMessages(prev => {
+						const next = [...prev]
+						for (const item of items) {
+							const messageId = String(
+								item?.message_id || `${Date.now()}-${Math.random()}`,
+							)
+							if (botMessageIdsRef.current.has(messageId)) continue
+							botMessageIdsRef.current.add(messageId)
+							const dateMs = item?.date ? Number(item.date) * 1000 : Date.now()
+							next.push({
+								id: messageId,
+								sender_id: selectedFriend.id,
+								content: String(item?.text || ''),
+								timestamp: new Date(dateMs).toISOString(),
+								isOwn: false,
+								is_read: true,
+								type: 'text',
+							})
+						}
+						return next
+					})
 				}
 			} catch {
 				setBotMessages(prev => [
@@ -2757,7 +2857,6 @@ export default function MessengerPage() {
 	const otherGroups = groups.filter(
 		g => g.name !== 'Vondic AI' && g.name !== 'AI Assistant',
 	)
-
 	// Determine list to show in sidebar
 	const normalizedSearch = searchQuery.trim().toLowerCase()
 	const searchResultsWithBot = useMemo(() => {
@@ -2773,7 +2872,32 @@ export default function MessengerPage() {
 		return Array.from(unique.values())
 	}, [normalizedSearch, userSearchResults, botSearchResults, botFriend])
 	const showBotInHistory = hasBotHistory && !normalizedSearch
-	const sidebarList = normalizedSearch ? searchResultsWithBot : otherFriends
+
+	const sidebarList = useMemo(() => {
+		if (normalizedSearch) return searchResultsWithBot
+
+		// Create a Set of IDs currently in the list to avoid duplicates
+		const addedIds = new Set<string>()
+		const list: User[] = []
+
+		// 1. Add recent contacts (friends + non-friends) sorted by backend (recency)
+		for (const contact of recentContacts) {
+			if (!addedIds.has(contact.id)) {
+				list.push(contact)
+				addedIds.add(contact.id)
+			}
+		}
+
+		// 2. Append friends who are NOT in recent contacts
+		for (const friend of otherFriends) {
+			if (!addedIds.has(friend.id)) {
+				list.push(friend)
+				addedIds.add(friend.id)
+			}
+		}
+
+		return list
+	}, [normalizedSearch, searchResultsWithBot, recentContacts, otherFriends])
 
 	// Determine messages to show in chat
 	const messagesToDisplay =

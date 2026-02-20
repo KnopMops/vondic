@@ -1,141 +1,235 @@
 'use client'
 
+import VideoPlayer from '@/components/social/VideoPlayer'
+import { Clock, Compass, Heart, Home, User2, Video } from 'lucide-react'
 import Link from 'next/link'
-import {
-	ArrowLeft,
-	Clock,
-	Compass,
-	History,
-	Home,
-	ListVideo,
-	Play,
-	Search,
-	TrendingUp,
-	Video,
-} from 'lucide-react'
+import { useEffect, useState } from 'react'
 
-const mockCards = Array.from({ length: 12 }, (_, i) => i)
+type VideoItem = {
+	id: string
+	title: string
+	description?: string
+	url: string
+	poster?: string | null
+	views?: number
+	likes?: number
+	author_name?: string
+	author_avatar?: string | null
+	author_premium?: boolean
+}
 
 export default function VideoPage() {
+	const [videos, setVideos] = useState<VideoItem[]>([])
+	const [sort, setSort] = useState<'likes' | 'views' | 'created_at'>('views')
+	const [order, setOrder] = useState<'asc' | 'desc'>('desc')
+	const [isUploading, setIsUploading] = useState(false)
+
+	const fetchVideos = async () => {
+		const params = new URLSearchParams({ sort, order, limit: '24' })
+		const res = await fetch(`/api/videos?${params.toString()}`, {
+			cache: 'no-store',
+		})
+		if (res.ok) {
+			const data = await res.json()
+			setVideos(Array.isArray(data) ? data : [])
+		}
+	}
+
+	useEffect(() => {
+		fetchVideos()
+	}, [sort, order])
+
+	const onFirstPlay = async (videoId: string) => {
+		try {
+			await fetch('/api/videos/view', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ video_id: videoId }),
+			})
+		} catch {}
+	}
+
+	const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+		const file = e.target.files?.[0]
+		if (!file) return
+		setIsUploading(true)
+		try {
+			const ext = (file.name.split('.').pop() || '').toLowerCase()
+			const valid = ['mp4', 'mov', 'webm', 'mkv', 'avi'].includes(ext)
+			if (!valid) {
+				setIsUploading(false)
+				return
+			}
+			const buf = await file.arrayBuffer()
+			const base64 = Buffer.from(buf).toString('base64')
+			const dataUrl = `data:video/${ext};base64,${base64}`
+			const upRes = await fetch('/api/upload/video', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ file: dataUrl, filename: file.name }),
+			})
+			if (!upRes.ok) throw new Error(await upRes.text())
+			const up = await upRes.json()
+			const url = up.url
+			const createRes = await fetch('/api/videos', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					title: file.name,
+					url,
+				}),
+			})
+			if (!createRes.ok) throw new Error(await createRes.text())
+			await fetchVideos()
+		} catch {
+		} finally {
+			setIsUploading(false)
+			e.target.value = ''
+		}
+	}
+
 	return (
-		<div className='min-h-screen bg-gradient-to-b from-gray-950 to-gray-900 text-gray-100'>
-			<div className='fixed inset-0 pointer-events-none'>
-				<div className='absolute -top-[20%] -left-[10%] w-[45%] h-[45%] rounded-full bg-indigo-900/20 blur-[140px]' />
-				<div className='absolute top-[35%] -right-[10%] w-[40%] h-[55%] rounded-full bg-purple-900/20 blur-[140px]' />
-				<div className='absolute bottom-[5%] left-[25%] w-[35%] h-[35%] rounded-full bg-emerald-900/10 blur-[120px]' />
-			</div>
-			<div className='relative z-10 flex min-h-screen flex-col'>
-				<header className='sticky top-0 z-20 border-b border-gray-800 bg-gray-950/80 backdrop-blur'>
-					<div className='mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4'>
-						<div className='flex items-center gap-3'>
-							<Link
-								href='/feed'
-								className='flex h-9 w-9 items-center justify-center rounded-full border border-gray-800 bg-gray-900/60 text-gray-300 hover:bg-gray-800/80 hover:text-white'
-							>
-								<ArrowLeft className='h-4 w-4' />
-							</Link>
-							<div className='flex items-center gap-2'>
-								<div className='flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600/20 text-indigo-300'>
-									<Video className='h-5 w-5' />
-								</div>
-								<span className='text-lg font-semibold text-white'>Vondic</span>
-								<span className='rounded-full border border-indigo-500/40 bg-indigo-500/10 px-2 py-0.5 text-[10px] uppercase tracking-widest text-indigo-300'>
-									Видео
-								</span>
-							</div>
+		<div className='min-h-screen bg-black text-gray-100'>
+			<header className='sticky top-0 z-20 flex h-14 items-center border-b border-gray-800 bg-[#0f0f0f]/95 px-4'>
+				<div className='flex items-center gap-4 w-full max-w-7xl mx-auto'>
+					<Link
+						href='/feed'
+						className='flex h-8 w-8 items-center justify-center rounded-full hover:bg-white/5'
+					>
+						<div className='h-4 w-4 rounded-[2px] border border-gray-300' />
+					</Link>
+					<div className='flex items-center gap-2'>
+						<div className='flex h-8 w-8 items-center justify-center rounded-full bg-red-600'>
+							<Video className='h-4 w-4 text-white' />
 						</div>
-						<div className='flex flex-1 max-w-xl items-center gap-2'>
-							<div className='relative flex-1'>
-								<Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500' />
-								<input
-									placeholder='Поиск видео'
-									className='h-10 w-full rounded-full border border-gray-800 bg-gray-900/70 pl-9 pr-4 text-sm text-gray-200 outline-none focus:border-indigo-500/60 focus:ring-2 focus:ring-indigo-500/20'
-								/>
-							</div>
-							<button className='h-10 rounded-full border border-gray-800 bg-gray-900/70 px-4 text-xs font-semibold text-gray-200 hover:bg-gray-800/80'>
-								Поиск
+						<span className='text-xl font-semibold tracking-tight'>Vondic</span>
+					</div>
+					<div className='ml-8 flex-1 max-w-2xl'>
+						<div className='flex items-center overflow-hidden rounded-full border border-gray-700 bg-[#0f0f0f]'>
+							<input
+								type='text'
+								placeholder='Поиск'
+								className='h-9 flex-1 bg-transparent px-4 text-sm outline-none placeholder:text-gray-500'
+							/>
+							<button className='flex h-9 w-12 items-center justify-center border-l border-gray-700 bg-[#222]'>
+								<span className='text-xs text-gray-300'>Поиск</span>
 							</button>
-						</div>
-						<div className='flex items-center gap-2'>
-							<button className='h-9 rounded-full border border-gray-800 bg-gray-900/60 px-4 text-xs font-semibold text-gray-200 hover:bg-gray-800/80'>
-								Загрузить
-							</button>
-							<div className='h-9 w-9 rounded-full border border-gray-800 bg-gray-900/60' />
 						</div>
 					</div>
-				</header>
-				<div className='mx-auto flex w-full max-w-7xl flex-1 gap-6 px-4 py-6'>
-					<aside className='hidden w-56 flex-shrink-0 space-y-2 lg:block'>
-						<div className='rounded-2xl border border-gray-800 bg-gray-950/60 p-3'>
-							<div className='space-y-1 text-sm text-gray-300'>
-								<div className='flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-gray-900/80'>
-									<Home className='h-4 w-4 text-indigo-300' />
-									<span>Главная</span>
-								</div>
-								<div className='flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-gray-900/80'>
-									<TrendingUp className='h-4 w-4 text-purple-300' />
-									<span>Тренды</span>
-								</div>
-								<div className='flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-gray-900/80'>
-									<Compass className='h-4 w-4 text-emerald-300' />
-									<span>Категории</span>
-								</div>
-								<div className='flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-gray-900/80'>
-									<Play className='h-4 w-4 text-amber-300' />
-									<span>Подписки</span>
-								</div>
-							</div>
+					<div className='flex items-center gap-2'>
+						<label className='h-9 rounded-full border border-gray-700 bg-[#222] px-4 text-xs font-semibold text-gray-100 hover:bg-[#333] cursor-pointer'>
+							{isUploading ? 'Загрузка...' : 'Загрузить'}
+							<input
+								type='file'
+								accept='video/*'
+								onChange={handleUpload}
+								className='hidden'
+							/>
+						</label>
+						<Link
+							href='/video/studio'
+							className='hidden sm:inline-flex h-9 items-center rounded-full border border-gray-700 bg-[#222] px-4 text-xs font-semibold text-gray-100 hover:bg-[#333]'
+						>
+							Студия
+						</Link>
+					</div>
+				</div>
+			</header>
+			<div className='flex'>
+				<aside className='hidden md:flex w-60 flex-col gap-1 border-r border-gray-900 bg-[#0f0f0f] px-2 pt-3'>
+					<Link
+						href='/video'
+						className='flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium bg-[#272727]'
+					>
+						<Home className='h-5 w-5' />
+						<span>Главная</span>
+					</Link>
+					<button className='flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-gray-200 hover:bg-[#272727]'>
+						<Compass className='h-5 w-5' />
+						<span>В тренде</span>
+					</button>
+					<button className='flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-gray-200 hover:bg-[#272727]'>
+						<Clock className='h-5 w-5' />
+						<span>История</span>
+					</button>
+					<button className='flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-gray-200 hover:bg-[#272727]'>
+						<Heart className='h-5 w-5' />
+						<span>Понравившиеся</span>
+					</button>
+					<Link
+						href='/video/studio'
+						className='flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-gray-200 hover:bg-[#272727]'
+					>
+						<User2 className='h-5 w-5' />
+						<span>Моя студия</span>
+					</Link>
+				</aside>
+				<main className='flex-1 min-h-screen bg-black'>
+					<div className='mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-4'>
+						<div className='flex flex-wrap items-center gap-2'>
+							<button className='rounded-full bg-white text-black px-3 py-1 text-xs font-medium'>
+								Все
+							</button>
+							<button className='rounded-full bg-[#272727] px-3 py-1 text-xs text-gray-200'>
+								Популярные
+							</button>
+							<button className='rounded-full bg-[#272727] px-3 py-1 text-xs text-gray-200'>
+								Новые
+							</button>
 						</div>
-						<div className='rounded-2xl border border-gray-800 bg-gray-950/60 p-3'>
-							<div className='space-y-1 text-sm text-gray-300'>
-								<div className='flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-gray-900/80'>
-									<History className='h-4 w-4 text-gray-400' />
-									<span>История</span>
-								</div>
-								<div className='flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-gray-900/80'>
-									<Clock className='h-4 w-4 text-gray-400' />
-									<span>Смотреть позже</span>
-								</div>
-								<div className='flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-gray-900/80'>
-									<ListVideo className='h-4 w-4 text-gray-400' />
-									<span>Плейлисты</span>
-								</div>
-							</div>
-						</div>
-					</aside>
-					<section className='flex-1 space-y-4'>
-						<div className='flex flex-wrap gap-2'>
-							{['Для вас', 'Музыка', 'Игры', 'Новости', 'Фильмы', 'Подкасты'].map(
-								item => (
-									<button
-										key={item}
-										className='rounded-full border border-gray-800 bg-gray-900/70 px-4 py-1.5 text-xs font-medium text-gray-200 hover:bg-gray-800/80'
-									>
-										{item}
-									</button>
-								),
-							)}
+						<div className='flex items-center gap-2 text-xs text-gray-400'>
+							<select
+								value={sort}
+								onChange={e =>
+									setSort(e.target.value as 'likes' | 'views' | 'created_at')
+								}
+								className='h-8 rounded-lg border border-gray-800 bg-[#0f0f0f] px-3 text-xs text-gray-200'
+							>
+								<option value='views'>По просмотрам</option>
+								<option value='likes'>По лайкам</option>
+								<option value='created_at'>По дате</option>
+							</select>
+							<select
+								value={order}
+								onChange={e => setOrder(e.target.value as 'asc' | 'desc')}
+								className='h-8 rounded-lg border border-gray-800 bg-[#0f0f0f] px-3 text-xs text-gray-200'
+							>
+								<option value='desc'>Сначала популярные</option>
+								<option value='asc'>Сначала новые</option>
+							</select>
 						</div>
 						<div className='grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3'>
-							{mockCards.map(card => (
+							{videos.map(v => (
 								<div
-									key={card}
-									className='overflow-hidden rounded-2xl border border-gray-800 bg-gray-950/60'
+									key={v.id}
+									className='overflow-hidden rounded-xl bg-[#181818]'
 								>
-									<div className='h-36 bg-gradient-to-br from-gray-900 via-gray-900/70 to-gray-950' />
-									<div className='space-y-2 p-4'>
-										<div className='h-3 w-3/4 rounded-full bg-gray-800' />
-										<div className='h-3 w-2/3 rounded-full bg-gray-800/70' />
-										<div className='flex items-center gap-2 pt-1'>
-											<div className='h-8 w-8 rounded-full bg-gray-800/80' />
-											<div className='h-3 w-1/2 rounded-full bg-gray-800/60' />
+									<VideoPlayer
+										src={v.url}
+										poster={v.poster || null}
+										className='w-full'
+										videoId={v.id}
+										onFirstPlay={() => onFirstPlay(v.id)}
+									/>
+									<div className='flex gap-3 p-3'>
+										<div className='mt-1 h-9 w-9 flex-shrink-0 rounded-full bg-gray-700' />
+										<div className='min-w-0 space-y-1'>
+											<div className='text-sm font-semibold text-white line-clamp-2'>
+												{v.title}
+											</div>
+											<div className='text-xs text-gray-400'>
+												{v.author_name || 'Автор'}
+											</div>
+											<div className='text-[11px] text-gray-500'>
+												{v.views || 0} просмотров · {v.likes || 0} лайков
+											</div>
 										</div>
 									</div>
 								</div>
 							))}
 						</div>
-					</section>
-				</div>
+					</div>
+				</main>
 			</div>
 		</div>
 	)

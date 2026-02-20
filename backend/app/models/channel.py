@@ -8,7 +8,8 @@ from app.core.extensions import db
 channel_participants = db.Table(
     "channel_participants",
     db.Column("user_id", TEXT, db.ForeignKey("users.id"), primary_key=True),
-    db.Column("channel_id", TEXT, db.ForeignKey("channels.id"), primary_key=True),
+    db.Column("channel_id", TEXT, db.ForeignKey(
+        "channels.id"), primary_key=True),
     db.Column("joined_at", TIMESTAMP, default=datetime.utcnow),
 )
 
@@ -19,13 +20,16 @@ class Channel(db.Model):
     id = db.Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
     name = db.Column(TEXT, nullable=False)
     description = db.Column(TEXT, nullable=True)
-    invite_code = db.Column(TEXT, unique=True, default=lambda: str(uuid.uuid4())[:8])
+    invite_code = db.Column(
+        TEXT, unique=True, default=lambda: str(uuid.uuid4())[:8])
     owner_id = db.Column(TEXT, db.ForeignKey("users.id"), nullable=False)
 
     created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
-    updated_at = db.Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = db.Column(
+        TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    owner = db.relationship("User", foreign_keys=[owner_id], backref="owned_channels")
+    owner = db.relationship("User", foreign_keys=[
+                            owner_id], backref="owned_channels")
     participants = db.relationship(
         "User",
         secondary=channel_participants,

@@ -346,11 +346,25 @@ export const useChat = (
 	const loadStoredKey = useCallback(() => {
 		if (!e2eKeyId) return
 		if (e2eKeysRef.current.has(e2eKeyId)) return
-		const stored = localStorage.getItem(`e2e_key_${e2eKeyId}`)
+		// 1) Текущий формат (отсортированная пара)
+		let stored =
+			localStorage.getItem(`e2e_key_${e2eKeyId}`) ||
+			sessionStorage.getItem(`e2e_key_${e2eKeyId}`)
+		// 2) Легаси-форматы (без сортировки)
+		if (!stored && currentUserId && targetUserId) {
+			const legacyA = `e2e_key_${currentUserId}:${targetUserId}`
+			const legacyB = `e2e_key_${targetUserId}:${currentUserId}`
+			stored =
+				localStorage.getItem(legacyA) ||
+				localStorage.getItem(legacyB) ||
+				sessionStorage.getItem(legacyA) ||
+				sessionStorage.getItem(legacyB) ||
+				null
+		}
 		if (stored) {
 			e2eKeysRef.current.set(e2eKeyId, bytesFromBase64(stored))
 		}
-	}, [e2eKeyId])
+	}, [e2eKeyId, currentUserId, targetUserId])
 
 	const storeKey = useCallback((keyId: string, keyBytes: Uint8Array) => {
 		e2eKeysRef.current.set(keyId, keyBytes)
@@ -385,6 +399,7 @@ export const useChat = (
 			target_user_id: targetUserId,
 			public_key: base64FromBytes(new Uint8Array(publicKeyRaw)),
 			key_id: e2eKeyId,
+			type: 'offer',
 		})
 	}, [socket, targetUserId, currentUserId, e2eKeyId, loadStoredKey])
 
@@ -397,6 +412,7 @@ export const useChat = (
 			if (typeof next.content === 'string' && next.content.startsWith('e2e:')) {
 				const decrypted = mtDecrypt(next.content, key)
 				if (decrypted !== null) next.content = decrypted
+				else console.warn('Decryption failed for content', next.content, key)
 			}
 			if (
 				typeof next.attachments === 'string' &&
@@ -407,8 +423,18 @@ export const useChat = (
 					try {
 						next.attachments = JSON.parse(decrypted)
 					} catch {
+						console.warn(
+							'Decryption failed for attachments JSON parse',
+							decrypted,
+						)
 						next.attachments = undefined
 					}
+				} else {
+					console.warn(
+						'Decryption failed for attachments',
+						next.attachments,
+						key,
+					)
 				}
 			}
 			return next
@@ -430,11 +456,15 @@ export const useChat = (
 					['deriveBits'],
 				)
 				e2ePairsRef.current.set(e2eKeyId, pair)
+			}
+
+			if (data.type !== 'answer') {
 				const myPublic = await crypto.subtle.exportKey('raw', pair.publicKey)
 				socket.emit('e2e_key_exchange', {
 					target_user_id: targetUserId,
 					public_key: base64FromBytes(new Uint8Array(myPublic)),
 					key_id: e2eKeyId,
+					type: 'answer',
 				})
 			}
 			const peerRaw = bytesFromBase64(data.public_key)
@@ -489,6 +519,14 @@ export const useChat = (
 		decryptMessage,
 	])
 
+	useEffect(() => {
+		if (!e2eKeyId) return
+		loadStoredKey()
+		if (e2eKeysRef.current.has(e2eKeyId)) {
+			setMessages(prev => prev.map(m => decryptMessage(m)))
+		}
+	}, [e2eKeyId, loadStoredKey, decryptMessage])
+
 	// 1. Load history when chat opens
 	useEffect(() => {
 		const fetchHistory = async () => {
@@ -521,11 +559,7 @@ export const useChat = (
 										group_id: msg.group_id,
 										reply_to: msg.reply_to,
 										type: msg.type || 'text',
-										attachments: msg.is_deleted
-											? undefined
-											: Array.isArray(msg.attachments)
-												? msg.attachments
-												: undefined,
+										attachments: msg.is_deleted ? undefined : msg.attachments,
 									}))
 								: []
 							const decryptedHistory = history.map(msg => decryptMessage(msg))
@@ -586,13 +620,10 @@ export const useChat = (
 								channel_id: msg.channel_id,
 								reply_to: msg.reply_to,
 								type: msg.type || 'text',
-								attachments: msg.is_deleted
-									? undefined
-									: Array.isArray(msg.attachments)
-										? msg.attachments
-										: undefined,
+								attachments: msg.is_deleted ? undefined : msg.attachments,
 							}))
 						: []
+					loadStoredKey()
 					const decryptedHistory = history.map(msg => decryptMessage(msg))
 
 					decryptedHistory.sort(
@@ -655,11 +686,7 @@ export const useChat = (
 									group_id: msg.group_id,
 									reply_to: msg.reply_to,
 									type: msg.type || 'text',
-									attachments: msg.is_deleted
-										? undefined
-										: Array.isArray(msg.attachments)
-											? msg.attachments
-											: undefined,
+									attachments: msg.is_deleted ? undefined : msg.attachments,
 								}))
 							: []
 						const decryptedHistory = newOldMessages.map(msg =>
@@ -766,6 +793,7 @@ export const useChat = (
 		if (!socket || (!targetUserId && !channelId && !groupId)) return
 
 		const handleReceiveMessage = (data: any) => {
+			console.log('handleReceiveMessage raw:', data)
 			// Handle Channel Message
 			if (channelId && data.channel_id === channelId) {
 				const newMessage: Message = {
@@ -779,9 +807,7 @@ export const useChat = (
 					channel_id: data.channel_id,
 					reply_to: data.reply_to,
 					type: data.type || 'text',
-					attachments: Array.isArray(data.attachments)
-						? data.attachments
-						: undefined,
+					attachments: data.attachments,
 				}
 				setMessages(prevMessages => [...prevMessages, newMessage])
 				return
@@ -800,9 +826,7 @@ export const useChat = (
 					group_id: data.group_id,
 					reply_to: data.reply_to,
 					type: data.type || 'text',
-					attachments: Array.isArray(data.attachments)
-						? data.attachments
-						: undefined,
+					attachments: data.attachments,
 				}
 				setMessages(prevMessages => [...prevMessages, newMessage])
 				return
@@ -827,9 +851,7 @@ export const useChat = (
 					is_deleted: !!data.is_deleted,
 					reply_to: data.reply_to,
 					type: data.type || 'text',
-					attachments: Array.isArray(data.attachments)
-						? data.attachments
-						: undefined,
+					attachments: data.attachments,
 				}
 				const decrypted = decryptMessage(newMessage)
 				setMessages(prevMessages => [...prevMessages, decrypted as Message])
@@ -852,9 +874,7 @@ export const useChat = (
 					channel_id: msg.channel_id,
 					reply_to: msg.reply_to,
 					type: msg.type || 'text',
-					attachments: Array.isArray(msg.attachments)
-						? msg.attachments
-						: undefined,
+					attachments: msg.attachments,
 				}
 				setMessages(prevMessages => [...prevMessages, newMessage])
 				return
@@ -873,9 +893,7 @@ export const useChat = (
 					group_id: msg.group_id,
 					reply_to: msg.reply_to,
 					type: msg.type || 'text',
-					attachments: Array.isArray(msg.attachments)
-						? msg.attachments
-						: undefined,
+					attachments: msg.attachments,
 				}
 				setMessages(prevMessages => [...prevMessages, newMessage])
 				return
@@ -904,9 +922,7 @@ export const useChat = (
 					is_deleted: !!msg.is_deleted,
 					reply_to: msg.reply_to,
 					type: msg.type || 'text',
-					attachments: Array.isArray(msg.attachments)
-						? msg.attachments
-						: undefined,
+					attachments: msg.attachments,
 				}
 				const decrypted = decryptMessage(newMessage)
 				setMessages(prevMessages => [...prevMessages, decrypted as Message])
@@ -981,11 +997,14 @@ export const useChat = (
 		socket.on('message_deleted', handleMessageDeleted)
 
 		const handleError = (err: any) => {
+			console.error('Socket error raw:', err)
+			if (typeof err === 'object') {
+				console.error('Socket error JSON:', JSON.stringify(err, null, 2))
+			}
 			const message = err?.message
 			if (typeof message === 'string') {
 				if (/attachments must be a list/i.test(message)) return
 			}
-			console.error('Socket error:', err)
 			// Optional: Trigger a UI notification here if you have a toast system
 			// alert("Error: " + (err.message || "Unknown error"))
 		}
@@ -1071,6 +1090,7 @@ export const useChat = (
 				if (replyToId) {
 					messagePayload.reply_to = replyToId
 				}
+				console.log('Emitting E2E send_message:', messagePayload)
 				socket.emit('send_message', messagePayload)
 				return
 			}
@@ -1092,6 +1112,7 @@ export const useChat = (
 				messagePayload.target_user_id = targetUserId
 			}
 
+			console.log('Emitting normal send_message:', messagePayload)
 			socket.emit('send_message', messagePayload)
 		},
 		[

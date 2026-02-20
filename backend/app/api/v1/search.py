@@ -24,8 +24,8 @@ def global_search(current_user):
     if query.startswith("@"):
         search_term = query[1:]
         if not search_term:
-             return jsonify({"results": [], "type": "users"}), 200
-             
+            return jsonify({"results": [], "type": "users"}), 200
+
         users = UserService.search_users(search_term)
         return jsonify({
             "type": "users",
@@ -35,7 +35,7 @@ def global_search(current_user):
     elif query.startswith("#"):
         search_term = query[1:]
         if not search_term:
-             return jsonify({"results": [], "type": "posts"}), 200
+            return jsonify({"results": [], "type": "posts"}), 200
 
         posts = PostService.search_posts(search_term)
         return jsonify({

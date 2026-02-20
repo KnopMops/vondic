@@ -69,11 +69,6 @@ export default async function proxy(req: NextRequest) {
 
 	// Если авторизован
 	if (validAccessToken) {
-		// Редирект с корня на /feed
-		if (isRootRoute) {
-			response = NextResponse.redirect(new URL(FEED_ROUTE, frontendUrl))
-		}
-
 		// (Опционально) Редирект с логина/регистрации на фид, если уже авторизован
 		if (isPublicRoute && pathname !== '/verify') {
 			// Обычно хорошая практика, но в задании не требовалось явно. Оставим как есть или добавим.

@@ -8,4 +8,5 @@ class FriendshipSchema(ma.SQLAlchemyAutoSchema):
         load_instance = True
         include_fk = True
 
+
 friendship_schema = FriendshipSchema()

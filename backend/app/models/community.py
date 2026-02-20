@@ -8,7 +8,8 @@ from app.core.extensions import db
 community_members = db.Table(
     "community_members",
     db.Column("user_id", TEXT, db.ForeignKey("users.id"), primary_key=True),
-    db.Column("community_id", TEXT, db.ForeignKey("communities.id"), primary_key=True),
+    db.Column("community_id", TEXT, db.ForeignKey(
+        "communities.id"), primary_key=True),
     db.Column("joined_at", TIMESTAMP, default=datetime.utcnow),
 )
 
@@ -19,13 +20,16 @@ class Community(db.Model):
     id = db.Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
     name = db.Column(TEXT, nullable=False)
     description = db.Column(TEXT, nullable=True)
-    invite_code = db.Column(TEXT, unique=True, default=lambda: str(uuid.uuid4())[:8])
+    invite_code = db.Column(
+        TEXT, unique=True, default=lambda: str(uuid.uuid4())[:8])
     owner_id = db.Column(TEXT, db.ForeignKey("users.id"), nullable=False)
 
     created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
-    updated_at = db.Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = db.Column(
+        TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    owner = db.relationship("User", foreign_keys=[owner_id], backref="owned_communities")
+    owner = db.relationship("User", foreign_keys=[
+                            owner_id], backref="owned_communities")
     members = db.relationship(
         "User",
         secondary=community_members,

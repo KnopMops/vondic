@@ -3,12 +3,14 @@
 import { useAuth } from '@/lib/AuthContext'
 import { formatBytes } from '@/lib/utils'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { sidebarItems } from './sidebar.items'
 
 export default function Sidebar() {
 	const [isExpanded, setIsExpanded] = useState(false)
 	const { user } = useAuth()
+	const pathname = usePathname()
 
 	useEffect(() => {
 		const saved = localStorage.getItem('sidebar_expanded')
@@ -68,6 +70,17 @@ export default function Sidebar() {
 
 				<nav className='flex w-full flex-col gap-2'>
 					{items.map(i => {
+						const isActive =
+							!!i.href &&
+							(pathname === i.href ||
+								(pathname?.startsWith(i.href) &&
+									(i.href === '/feed/profile' ||
+										i.href === '/feed/messages' ||
+										i.href === '/feed/admin' ||
+										i.href === '/feed/support' ||
+										i.href === '/feed/friends' ||
+										i.href === '/feed/settings')))
+						const activeClass = isActive ? 'bg-white/15 text-white' : ''
 						const content = (
 							<>
 								<span className='text-xl drop-shadow-lg'>{i.icon}</span>
@@ -79,7 +92,7 @@ export default function Sidebar() {
 							</>
 						)
 
-						const className = `flex items-center gap-4 rounded-xl px-2 py-2.5 text-gray-300 hover:bg-white/10 hover:text-white transition-all ${
+						const className = `flex items-center gap-4 rounded-xl px-2 py-2.5 text-gray-300 hover:bg-white/10 hover:text-white transition-all ${activeClass} ${
 							!isExpanded ? 'justify-center' : ''
 						}`
 

@@ -40,7 +40,8 @@ def send_request(current_user):
     if not friend_id:
         return jsonify({"error": "friend_id is required"}), 400
 
-    friendship, error = FriendshipService.send_request(current_user.id, friend_id)
+    friendship, error = FriendshipService.send_request(
+        current_user.id, friend_id)
     if error:
         return jsonify({"error": error}), 400
 
@@ -55,7 +56,8 @@ def accept_request(current_user):
     if not requester_id:
         return jsonify({"error": "requester_id is required"}), 400
 
-    friendship, error = FriendshipService.accept_request(current_user.id, requester_id)
+    friendship, error = FriendshipService.accept_request(
+        current_user.id, requester_id)
     if error:
         return jsonify({"error": error}), 400
 
@@ -70,7 +72,8 @@ def reject_request(current_user):
     if not requester_id:
         return jsonify({"error": "requester_id is required"}), 400
 
-    success, error = FriendshipService.reject_request(current_user.id, requester_id)
+    success, error = FriendshipService.reject_request(
+        current_user.id, requester_id)
     if error:
         return jsonify({"error": error}), 400
 
@@ -85,7 +88,8 @@ def remove_friend(current_user):
     if not friend_id:
         return jsonify({"error": "friend_id is required"}), 400
 
-    success, error = FriendshipService.remove_friend(current_user.id, friend_id)
+    success, error = FriendshipService.remove_friend(
+        current_user.id, friend_id)
     if error:
         return jsonify({"error": error}), 400
 

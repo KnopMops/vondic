@@ -49,6 +49,12 @@ class SignalingService:
         self.io.on_event("delete_message", self.on_delete_message)
         self.io.on_event("react_message", self.on_react_message)
         self.io.on_event("pin_message", self.on_pin_message)
+        self.io.on_event("post_create", self.on_post_create)
+        self.io.on_event("post_update", self.on_post_update)
+        self.io.on_event("post_delete", self.on_post_delete)
+        self.io.on_event("video_create", self.on_video_create)
+        self.io.on_event("video_update", self.on_video_update)
+        self.io.on_event("video_delete", self.on_video_delete)
         self.io.on_event("e2e_key_exchange", self.on_e2e_key_exchange)
         self.io.on_event("typing", self.on_typing)
         self.io.on_event("stop_typing", self.on_stop_typing)
@@ -556,12 +562,15 @@ class SignalingService:
 
         logger.info(
             f"Получен запрос send_message от {request.sid}. Target: {target_user_id}, Channel: {channel_id}, Group: {group_id}, Content: {content[:50] if content else 'None'}..., Type: {msg_type}")
+        logger.info(f"Full payload keys: {list(payload.keys())}")
 
-        if attachments is not None and not isinstance(attachments, list):
+        if attachments is not None and not isinstance(attachments, list) and not isinstance(attachments, str):
+            logger.error(f"Invalid attachments format: {type(attachments)}")
             emit("error", {"message": "attachments must be a list"})
             return
 
         if not content and not attachments:
+            logger.error("Content or attachments is required")
             emit("error", {"message": "Content or attachments is required"})
             return
 
@@ -569,15 +578,22 @@ class SignalingService:
             content = ""
 
         if not target_user_id and not channel_id and not group_id:
+            logger.error("Missing target_user_id, channel_id or group_id")
             emit(
                 "error", {"message": "Missing target_user_id, channel_id or group_id"})
             return
 
         sender_id = session.get("user_id")
+        logger.info(f"Session user_id: {sender_id}")
+
         if not sender_id:
             sender = self.broker.resolve_recipient(request.sid)
             if sender:
                 sender_id = sender["id"]
+                logger.info(f"Resolved sender from broker: {sender_id}")
+            else:
+                logger.warning(
+                    f"Failed to resolve sender from broker for SID {request.sid}")
 
         if not sender_id:
             logger.warning(
@@ -616,11 +632,11 @@ class SignalingService:
                 "timestamp": timestamp
             }
 
-            saved = self.broker.repo.save_message(msg_data)
+            saved, error = self.broker.repo.save_message(msg_data)
             if not saved:
                 logger.error(
-                    f"Не удалось сохранить сообщение канала {message_id}")
-                emit("error", {"message": "Failed to save message"})
+                    f"Не удалось сохранить сообщение канала {message_id}: {error}")
+                emit("error", {"message": f"Failed to save message: {error}"})
                 return
 
             logger.info(
@@ -671,11 +687,11 @@ class SignalingService:
                 "timestamp": timestamp
             }
 
-            saved = self.broker.repo.save_message(msg_data)
+            saved, error = self.broker.repo.save_message(msg_data)
             if not saved:
                 logger.error(
-                    f"Не удалось сохранить сообщение группы {message_id}")
-                emit("error", {"message": "Failed to save message"})
+                    f"Не удалось сохранить сообщение группы {message_id}: {error}")
+                emit("error", {"message": f"Failed to save message: {error}"})
                 return
 
             logger.info(
@@ -717,10 +733,11 @@ class SignalingService:
                 "timestamp": timestamp
             }
 
-            saved = self.broker.repo.save_message(msg_data)
+            saved, error = self.broker.repo.save_message(msg_data)
             if not saved:
-                logger.error(f"Не удалось сохранить сообщение {message_id}")
-                emit("error", {"message": "Failed to save message"})
+                logger.error(
+                    f"Не удалось сохранить сообщение {message_id}: {error}")
+                emit("error", {"message": f"Failed to save message: {error}"})
                 return
 
             logger.info(
@@ -833,6 +850,84 @@ class SignalingService:
         emit("message_deleted", payload, room=sender_id)
         if target_user_id:
             emit("message_deleted", payload, room=target_user_id)
+
+    def on_post_create(self, payload):
+        if not isinstance(payload, dict):
+            emit("error", {"message": "Invalid payload"})
+            return
+        post_id = payload.get("id")
+        posted_by = payload.get("posted_by")
+        if not post_id or not posted_by:
+            emit("error", {"message": "id and posted_by are required"})
+            return
+        emit("post_created", payload, broadcast=True)
+
+    def on_post_update(self, payload):
+        if not isinstance(payload, dict):
+            emit("error", {"message": "Invalid payload"})
+            return
+        post_id = payload.get("id")
+        if not post_id:
+            emit("error", {"message": "id is required"})
+            return
+        emit("post_updated", payload, broadcast=True)
+
+    def on_post_delete(self, payload):
+        if not isinstance(payload, dict):
+            emit("error", {"message": "Invalid payload"})
+            return
+        post_id = payload.get("id")
+        if not post_id:
+            emit("error", {"message": "id is required"})
+            return
+        emit("post_deleted", {"id": post_id}, broadcast=True)
+
+    def on_video_create(self, payload):
+        if not isinstance(payload, dict):
+            emit("error", {"message": "Invalid payload"})
+            return
+        video_id = payload.get("id")
+        author_id = payload.get("author_id")
+        title = payload.get("title")
+        url = payload.get("url")
+        if not video_id or not author_id or not title or not url:
+            emit("error", {"message": "id, author_id, title, url required"})
+            return
+        try:
+            self.broker.repo.save_video(payload)
+        except Exception:
+            pass
+        emit("video_created", payload, broadcast=True)
+
+    def on_video_update(self, payload):
+        if not isinstance(payload, dict):
+            emit("error", {"message": "Invalid payload"})
+            return
+        video_id = payload.get("id")
+        if not video_id:
+            emit("error", {"message": "id is required"})
+            return
+        try:
+            updates = {k: v for k, v in payload.items() if k != "id"}
+            if updates:
+                self.broker.repo.update_video(video_id, updates)
+        except Exception:
+            pass
+        emit("video_updated", payload, broadcast=True)
+
+    def on_video_delete(self, payload):
+        if not isinstance(payload, dict):
+            emit("error", {"message": "Invalid payload"})
+            return
+        video_id = payload.get("id")
+        if not video_id:
+            emit("error", {"message": "id is required"})
+            return
+        try:
+            self.broker.repo.delete_video(video_id)
+        except Exception:
+            pass
+        emit("video_deleted", {"id": video_id}, broadcast=True)
 
     def _get_message_participants(self, meta):
         if not meta:

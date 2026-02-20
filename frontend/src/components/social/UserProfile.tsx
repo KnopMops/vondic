@@ -9,18 +9,6 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Coffee, Crown, Flame, Flower, Gift, Heart, Star } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import birthdayImg from '../../../gifts/Birthday.jpg'
-import bouquetImg from '../../../gifts/bouquet.jpg'
-import crownImg from '../../../gifts/crown.jpg'
-import eggImg from '../../../gifts/egg.jpg'
-import femaleDayImg from '../../../gifts/female_day.jpg'
-import fireImg from '../../../gifts/fire.jpg'
-import fireworkImg from '../../../gifts/firework.jpg'
-import knowledgeImg from '../../../gifts/knowledge.jpg'
-import partnerImg from '../../../gifts/partner.jpg'
-import presentImg from '../../../gifts/present.jpg'
-import pumpkinImg from '../../../gifts/pumpkin.jpg'
-import starImg from '../../../gifts/star.jpg'
 import Post from './Post'
 
 type Props = {
@@ -51,28 +39,19 @@ export default function UserProfile({ user, currentUser }: Props) {
 	const [giftCatalogMap, setGiftCatalogMap] = useState<Record<string, any>>({})
 	const backendUrl =
 		process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
-	const STATIC_GIFT_IMAGES: Record<string, any> = {
-		birthday_cake: birthdayImg,
-		womens_day_bouquet: femaleDayImg,
-		valentine_heart: bouquetImg,
-		anniversary_crown: crownImg,
-		easter_egg: eggImg,
-		party_flame: fireImg,
-		newyear_fireworks: fireworkImg,
-		knowledge_day_coffee: knowledgeImg,
-		partner_badge: partnerImg,
-		christmas_gift: presentImg,
-		halloween_pumpkin: pumpkinImg,
-		gold_star: starImg,
-	}
-
-	const getStaticGiftSrc = (img: any): string | null => {
-		if (!img) return null
-		if (typeof img === 'string') return img
-		if (typeof img === 'object' && typeof img.src === 'string') {
-			return img.src
-		}
-		return null
+	const STATIC_GIFT_IMAGES: Record<string, string> = {
+		newyear_fireworks: '/static/gifts/firework.png',
+		valentine_heart: '/static/gifts/bouquet.png',
+		womens_day_bouquet: '/static/gifts/female_day.png',
+		birthday_cake: '/static/gifts/Birthday.png',
+		halloween_pumpkin: '/static/gifts/pumpkin.png',
+		easter_egg: '/static/gifts/egg.png',
+		christmas_gift: '/static/gifts/present.png',
+		knowledge_day_coffee: '/static/gifts/knowledge.png',
+		anniversary_crown: '/static/gifts/crown.png',
+		party_flame: '/static/gifts/fire.png',
+		partner_badge: '/static/gifts/partner.png',
+		gold_star: '/static/gifts/star.png',
 	}
 	const GIFT_NAME_MAP: Record<string, string> = {
 		newyear_fireworks: 'Новогодний салют',
@@ -1369,9 +1348,10 @@ export default function UserProfile({ user, currentUser }: Props) {
 													? catalogGift.imageUrl
 													: `${backendUrl}${catalogGift.imageUrl}`
 												: null
-										const staticImage = getStaticGiftSrc(
-											STATIC_GIFT_IMAGES[g.gift_id || ''],
-										)
+										const staticImage =
+											g.gift_id && typeof g.gift_id === 'string'
+												? STATIC_GIFT_IMAGES[g.gift_id] || null
+												: null
 										const imageSrc = backendImage || staticImage
 										const Icon =
 											g.gift_id === 'newyear_fireworks'

@@ -1,0 +1,9 @@
+.venv/
+.ruff_cache/
+.vscode/
+__pycache__/
+database.db
+botiksdk/
+extension/
+proxy_receiver/
+*.rdb

@@ -375,7 +375,8 @@ def chat_history(current_user):
 @support_bp.route("/admin/escalations", methods=["GET"])
 @token_required
 def admin_escalations(current_user):
-    if current_user.role not in ("Support", "Admin"):
+    role = str(current_user.role or "").strip().lower()
+    if role not in ("support", "admin"):
         return jsonify({"error": "Forbidden"}), 403
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
@@ -391,7 +392,8 @@ def admin_escalations(current_user):
 @support_bp.route("/admin/escalations/<int:esc_id>/answer", methods=["POST"])
 @token_required
 def admin_answer(current_user, esc_id: int):
-    if current_user.role not in ("Support", "Admin"):
+    role = str(current_user.role or "").strip().lower()
+    if role not in ("support", "admin"):
         return jsonify({"error": "Forbidden"}), 403
     data = request.get_json() or {}
     answer = str(data.get("answer", "")).strip()
@@ -416,7 +418,8 @@ def admin_answer(current_user, esc_id: int):
 @support_bp.route("/admin/escalations/<int:esc_id>/messages", methods=["GET"])
 @token_required
 def admin_escalation_messages(current_user, esc_id: int):
-    if current_user.role not in ("Support", "Admin"):
+    role = str(current_user.role or "").strip().lower()
+    if role not in ("support", "admin"):
         return jsonify({"error": "Forbidden"}), 403
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
@@ -437,7 +440,8 @@ def admin_escalation_messages(current_user, esc_id: int):
 @support_bp.route("/admin/escalations/<int:esc_id>/updates", methods=["GET"])
 @token_required
 def admin_escalation_updates(current_user, esc_id: int):
-    if current_user.role not in ("Support", "Admin"):
+    role = str(current_user.role or "").strip().lower()
+    if role not in ("support", "admin"):
         return jsonify({"error": "Forbidden"}), 403
     since_id = int(request.args.get("since_id", "0") or "0")
     conn = sqlite3.connect(DB_PATH)
@@ -465,7 +469,8 @@ def admin_escalation_updates(current_user, esc_id: int):
 @support_bp.route("/admin/escalations/<int:esc_id>/close", methods=["POST"])
 @token_required
 def admin_escalation_close(current_user, esc_id: int):
-    if current_user.role not in ("Support", "Admin"):
+    role = str(current_user.role or "").strip().lower()
+    if role not in ("support", "admin"):
         return jsonify({"error": "Forbidden"}), 403
     ts = int(time.time())
     conn = sqlite3.connect(DB_PATH)
@@ -571,7 +576,8 @@ def create_post_report(current_user):
 @support_bp.route("/admin/post-reports", methods=["GET"])
 @token_required
 def admin_post_reports(current_user):
-    if current_user.role not in ("Support", "Admin"):
+    role = str(current_user.role or "").strip().lower()
+    if role not in ("support", "admin"):
         return jsonify({"error": "Forbidden"}), 403
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
@@ -650,10 +656,11 @@ def admin_post_report_action(current_user):
     if action not in ("request_removal", "force_remove", "legal_remove", "no_violation"):
         return jsonify({"error": "Invalid action"}), 400
 
-    if action == "request_removal" and current_user.role not in ("Support", "Admin"):
+    role = str(current_user.role or "").strip().lower()
+    if action == "request_removal" and role not in ("support", "admin"):
         return jsonify({"error": "Forbidden"}), 403
 
-    if action in ("force_remove", "legal_remove") and current_user.role != "Admin":
+    if action in ("force_remove", "legal_remove") and role != "admin":
         return jsonify({"error": "Forbidden"}), 403
 
     if action == "no_violation":

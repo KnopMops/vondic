@@ -400,6 +400,8 @@ async def handle_passive_connection(
             break
         async with stats.lock:
             stats.bytes_in += len(data)
+
+
 async def handle_client(
     reader: asyncio.StreamReader,
     writer: asyncio.StreamWriter,

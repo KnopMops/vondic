@@ -7,13 +7,23 @@ export async function GET(req: NextRequest) {
     if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+    // role guard
+    const meRes = await fetch(`${backendUrl}/api/v1/auth/me`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const me = await meRes.json().catch(() => ({}))
+    const role = me?.user?.role || me?.role
+    if (role !== 'Admin' && role !== 'Support') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
     const params = req.nextUrl.searchParams
     const escId = Number(params.get('escId') || '0')
     const sinceId = Number(params.get('since_id') || '0')
     if (!escId) {
       return NextResponse.json({ error: 'escId required' }, { status: 400 })
     }
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
     const url = `${backendUrl}/api/v1/support/admin/escalations/${escId}/updates${sinceId ? `?since_id=${sinceId}` : ''}`
     const response = await fetch(url, {
       method: 'GET',

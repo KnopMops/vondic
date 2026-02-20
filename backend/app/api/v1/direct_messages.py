@@ -6,6 +6,18 @@ from flask import Blueprint, jsonify, request
 dm_bp = Blueprint("direct_messages", __name__, url_prefix="/api/v1/dm")
 
 
+@dm_bp.route("/recent", methods=["GET"])
+@token_required
+def get_recent_contacts(current_user):
+    limit = request.args.get("limit", 30, type=int)
+    if limit < 1:
+        limit = 1
+    if limit > 100:
+        limit = 100
+    contacts = MessageService.get_recent_contacts(current_user.id, limit=limit)
+    return jsonify({"items": contacts}), 200
+
+
 @dm_bp.route("/<target_id>/messages", methods=["POST"])
 @token_required
 def send_dm(current_user, target_id):

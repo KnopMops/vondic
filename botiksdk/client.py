@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import Any, Dict, Optional
 
 import requests
@@ -13,7 +14,10 @@ from botiksdk.exceptions import (
 
 class PublicAPIClient:
     def __init__(self, base_url: str = "http://localhost:5050"):
-        self.base_url = base_url.rstrip("/")
+        normalized = (base_url or "http://localhost:5050").strip()
+        if "://" not in normalized:
+            normalized = f"http://{normalized}"
+        self.base_url = normalized.rstrip("/")
 
     def _request(
         self,
@@ -27,6 +31,7 @@ class PublicAPIClient:
         json_body: Optional[Dict[str, Any]] = None,
     ):
         url = f"{self.base_url}{path}"
+        logger = logging.getLogger(__name__)
         headers: Dict[str, str] = {"Content-Type": "application/json"}
         if access_token:
             headers["Authorization"] = f"Bearer {access_token}"
@@ -34,14 +39,23 @@ class PublicAPIClient:
             headers["X-API-Key"] = api_key
         if bot_token:
             headers["X-Bot-Token"] = bot_token
-        response = requests.request(
-            method,
-            url,
-            headers=headers,
-            params=params,
-            json=json_body,
-            timeout=30,
-        )
+        try:
+            response = requests.request(
+                method,
+                url,
+                headers=headers,
+                params=params,
+                json=json_body,
+                timeout=30,
+            )
+        except requests.RequestException:
+            logger.exception(
+                "botiksdk_request_error method=%s url=%s params=%s",
+                method,
+                url,
+                params,
+            )
+            raise
         if response.ok:
             if not response.text:
                 return None
@@ -54,6 +68,17 @@ class PublicAPIClient:
             payload = response.json()
         except json.JSONDecodeError:
             payload = response.text
+        if response.status_code >= 400:
+            text_preview = str(payload)
+            if len(text_preview) > 500:
+                text_preview = f"{text_preview[:500]}..."
+            logger.info(
+                "botiksdk_request_failed method=%s url=%s status=%s body=%s",
+                method,
+                url,
+                response.status_code,
+                text_preview,
+            )
         if response.status_code == 401:
             raise UnauthorizedError(
                 response.status_code, "Unauthorized", payload)

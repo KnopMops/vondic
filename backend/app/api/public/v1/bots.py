@@ -1,3 +1,4 @@
+import logging
 import time
 from collections import defaultdict, deque
 from threading import Lock
@@ -10,6 +11,8 @@ from flask import Blueprint, jsonify, request
 public_bots_bp = Blueprint(
     "public_bots", __name__, url_prefix="/api/public/v1/bots"
 )
+
+logger = logging.getLogger(__name__)
 
 UPDATE_QUEUES = defaultdict(deque)
 UPDATE_COUNTERS = defaultdict(int)
@@ -83,6 +86,7 @@ def generate_public_bot_token(current_user, bot_id):
 def get_bot_updates(bot_id):
     _, error_response = _verify_bot_token(bot_id)
     if error_response:
+        logger.info("bot_updates_auth_failed bot_id=%s", bot_id)
         return error_response
 
     offset = request.args.get("offset", 0, type=int)
@@ -111,8 +115,20 @@ def get_bot_updates(bot_id):
             while queue and len(updates) < limit:
                 updates.append(queue.popleft())
         if updates:
+            logger.info(
+                "bot_updates_delivered bot_id=%s count=%s offset=%s",
+                bot_id,
+                len(updates),
+                offset,
+            )
             return jsonify({"items": updates}), 200
         if time.time() - start >= timeout:
+            logger.info(
+                "bot_updates_timeout bot_id=%s offset=%s timeout=%s",
+                bot_id,
+                offset,
+                timeout,
+            )
             return jsonify({"items": []}), 200
         time.sleep(0.2)
 
@@ -121,6 +137,7 @@ def get_bot_updates(bot_id):
 def push_bot_update(bot_id):
     _, error_response = _verify_bot_token(bot_id)
     if error_response:
+        logger.info("bot_updates_push_auth_failed bot_id=%s", bot_id)
         return error_response
     data = request.get_json() or {}
     message = data.get("message") or {}
@@ -128,10 +145,13 @@ def push_bot_update(bot_id):
     from_user = message.get("from_user") or {}
     chat = message.get("chat") or {}
     if not text:
+        logger.info("bot_updates_push_missing_text bot_id=%s", bot_id)
         return jsonify({"error": "message.text is required"}), 400
     if not from_user.get("id"):
+        logger.info("bot_updates_push_missing_from_user bot_id=%s", bot_id)
         return jsonify({"error": "message.from_user.id is required"}), 400
     if not chat.get("id"):
+        logger.info("bot_updates_push_missing_chat bot_id=%s", bot_id)
         return jsonify({"error": "message.chat.id is required"}), 400
     with QUEUE_LOCK:
         UPDATE_COUNTERS[bot_id] += 1
@@ -155,6 +175,13 @@ def push_bot_update(bot_id):
             },
         }
         UPDATE_QUEUES[bot_id].append(update)
+    logger.info(
+        "bot_updates_pushed bot_id=%s update_id=%s chat_id=%s from_user_id=%s",
+        bot_id,
+        update_id,
+        chat.get("id"),
+        from_user.get("id"),
+    )
     return jsonify({"ok": True, "update_id": update_id}), 200
 
 
@@ -162,13 +189,16 @@ def push_bot_update(bot_id):
 def send_bot_message(bot_id):
     _, error_response = _verify_bot_token(bot_id)
     if error_response:
+        logger.info("bot_send_auth_failed bot_id=%s", bot_id)
         return error_response
     data = request.get_json() or {}
     chat_id = data.get("chat_id")
     text = data.get("text")
     if not chat_id:
+        logger.info("bot_send_missing_chat_id bot_id=%s", bot_id)
         return jsonify({"error": "chat_id is required"}), 400
     if not text:
+        logger.info("bot_send_missing_text bot_id=%s", bot_id)
         return jsonify({"error": "text is required"}), 400
     with OUTBOX_LOCK:
         OUTBOX_COUNTERS[bot_id] += 1
@@ -181,4 +211,10 @@ def send_bot_message(bot_id):
                 "date": int(time.time()),
             }
         )
+    logger.info(
+        "bot_send_queued bot_id=%s message_id=%s chat_id=%s",
+        bot_id,
+        message_id,
+        chat_id,
+    )
     return jsonify({"ok": True, "chat_id": str(chat_id), "text": text}), 200

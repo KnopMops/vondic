@@ -1,8 +1,5 @@
 import logging
-
-import eventlet
-
-eventlet.monkey_patch()
+import os
 
 from flasgger import Swagger
 from flask import Flask, jsonify, request
@@ -18,6 +15,7 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
 
 def _tag_for_rule(rule: str) -> str:
     if rule.startswith("/messages"):
@@ -52,11 +50,13 @@ def _build_swagger_paths(app: Flask):
             continue
         if rule.rule in ("/apispec.json", "/docs/"):
             continue
-        methods = sorted(m for m in rule.methods if m not in {"HEAD", "OPTIONS"})
+        methods = sorted(m for m in rule.methods if m not in {
+                         "HEAD", "OPTIONS"})
         if not methods:
             continue
         is_protected = rule.rule in protected_rules
-        tags = [_tag_for_rule(rule.rule), "Protected" if is_protected else "Public"]
+        tags = [_tag_for_rule(rule.rule),
+                "Protected" if is_protected else "Public"]
         entry = paths.setdefault(rule.rule, {})
         for method in methods:
             responses = {"200": {"description": "Success"}}
@@ -69,16 +69,43 @@ def _build_swagger_paths(app: Flask):
             }
     return paths
 
+
+def _build_allowed_origins() -> list[str]:
+    defaults = [
+        "https://responsibly-soothing-springtail.cloudpub.ru",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5000",
+        "http://localhost:1420",
+        "http://127.0.0.1:1420",
+        "tauri://localhost",
+    ]
+    raw = os.getenv("CORS_ALLOWED_ORIGINS", "")
+    extra = [origin.strip() for origin in raw.split(",") if origin.strip()]
+    frontend_url = os.getenv("FRONTEND_URL")
+    if frontend_url:
+        extra.append(frontend_url)
+    merged = []
+    seen = set()
+    for origin in defaults + extra:
+        if origin not in seen:
+            merged.append(origin)
+            seen.add(origin)
+    return merged
+
+
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
-    CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+    allowed_origins = _build_allowed_origins()
+    CORS(app, resources={r"/*": {"origins": allowed_origins}},
+         supports_credentials=True)
 
     socketio = SocketIO(
         app,
-        cors_allowed_origins="*",
-        async_mode="eventlet",
+        cors_allowed_origins=allowed_origins,
+        async_mode="threading",
         logger=True,
         engineio_logger=True,
     )
@@ -307,28 +334,44 @@ def create_app():
     def broadcast_message():
         data = request.get_json()
         if not data:
+            logger.error("broadcast_message: No data provided")
             return jsonify({"error": "No data"}), 400
-        
+
         group_id = data.get("group_id")
         target_id = data.get("target_id")
         payload = data.get("payload")
-        
+
+        logger.info(
+            f"broadcast_message: target_id={target_id}, group_id={group_id}, payload_keys={list(payload.keys()) if payload else 'None'}")
+
         if not payload:
+            logger.error("broadcast_message: Missing payload")
             return jsonify({"error": "Missing payload"}), 400
-            
+
         if group_id:
             participants = user_repo.get_group_participants(group_id)
+            logger.info(
+                f"broadcast_message: Found {len(participants)} participants for group {group_id}")
             for pid in participants:
                 pid_socket = broker.get_user_socket(pid)
                 if pid_socket:
                     socketio.emit("receive_message", payload, room=pid_socket)
+                else:
+                    logger.warning(
+                        f"broadcast_message: No socket found for participant {pid}")
         elif target_id:
             target_socket = broker.get_user_socket(target_id)
             if target_socket:
+                logger.info(
+                    f"broadcast_message: Sending to target {target_id} on socket {target_socket}")
                 socketio.emit("receive_message", payload, room=target_socket)
+            else:
+                logger.warning(
+                    f"broadcast_message: No socket found for target {target_id}")
         else:
+            logger.error("broadcast_message: Missing group_id or target_id")
             return jsonify({"error": "Missing group_id or target_id"}), 400
-                
+
         return jsonify({"status": "success"}), 200
 
     swagger_config = {

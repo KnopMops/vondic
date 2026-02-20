@@ -1,3 +1,4 @@
+import logging
 import time
 
 from app.api.public.v1.bots import (
@@ -13,6 +14,8 @@ from app.utils.decorators import token_required
 from flask import Blueprint, jsonify, request
 
 bots_bp = Blueprint("bots", __name__, url_prefix="/api/v1/bots")
+
+logger = logging.getLogger(__name__)
 
 
 @bots_bp.route("/", methods=["GET"])
@@ -56,11 +59,13 @@ def create_bot(current_user):
 def push_bot_update(current_user, bot_id):
     bot = BotService.get_active_bot_by_id(bot_id)
     if not bot:
+        logger.info("bot_updates_push_bot_not_found bot_id=%s", bot_id)
         return jsonify({"error": "Bot not found"}), 404
     data = request.get_json() or {}
     message = data.get("message") or {}
     text = (message.get("text") or "").strip()
     if not text:
+        logger.info("bot_updates_push_missing_text bot_id=%s", bot_id)
         return jsonify({"error": "message.text is required"}), 400
     from_user = message.get("from_user") or {}
     chat = message.get("chat") or {}
@@ -89,7 +94,58 @@ def push_bot_update(current_user, bot_id):
             },
         }
         UPDATE_QUEUES[bot_id].append(update)
-    return jsonify({"ok": True, "update_id": update_id}), 200
+    logger.info(
+        "bot_updates_pushed bot_id=%s update_id=%s chat_id=%s from_user_id=%s",
+        bot_id,
+        update_id,
+        chat_id,
+        from_user_id,
+    )
+    wait_seconds = request.args.get("wait", type=int)
+    if wait_seconds is None:
+        wait_seconds = data.get("wait_for_reply")
+    try:
+        wait_seconds = int(wait_seconds) if wait_seconds is not None else 0
+    except Exception:
+        wait_seconds = 0
+    if wait_seconds < 0:
+        wait_seconds = 0
+    if wait_seconds > 10:
+        wait_seconds = 10
+    if wait_seconds <= 0:
+        return jsonify({"ok": True, "update_id": update_id}), 200
+    start = time.time()
+    chat_id = str(chat.get("id") or current_user.id)
+    while True:
+        items = []
+        with OUTBOX_LOCK:
+            queue = OUTBOX_QUEUES[bot_id]
+            remaining = []
+            while queue:
+                item = queue.popleft()
+                if str(item.get("chat_id")) == chat_id:
+                    items.append(item)
+                else:
+                    remaining.append(item)
+            for item in remaining:
+                queue.append(item)
+        if items:
+            logger.info(
+                "bot_updates_reply_delivered bot_id=%s update_id=%s count=%s",
+                bot_id,
+                update_id,
+                len(items),
+            )
+            return jsonify({"ok": True, "update_id": update_id, "outbox": items}), 200
+        if time.time() - start >= wait_seconds:
+            logger.info(
+                "bot_updates_reply_timeout bot_id=%s update_id=%s timeout=%s",
+                bot_id,
+                update_id,
+                wait_seconds,
+            )
+            return jsonify({"ok": True, "update_id": update_id, "outbox": []}), 200
+        time.sleep(0.2)
 
 
 @bots_bp.route("/<bot_id>/outbox", methods=["GET"])
@@ -97,6 +153,7 @@ def push_bot_update(current_user, bot_id):
 def get_bot_outbox(current_user, bot_id):
     bot = BotService.get_active_bot_by_id(bot_id)
     if not bot:
+        logger.info("bot_outbox_bot_not_found bot_id=%s", bot_id)
         return jsonify({"error": "Bot not found"}), 404
     chat_id = request.args.get("chat_id") or str(current_user.id)
     items = []
@@ -111,4 +168,10 @@ def get_bot_outbox(current_user, bot_id):
                 remaining.append(item)
         for item in remaining:
             queue.append(item)
+    logger.info(
+        "bot_outbox_delivered bot_id=%s chat_id=%s count=%s",
+        bot_id,
+        chat_id,
+        len(items),
+    )
     return jsonify({"items": items}), 200

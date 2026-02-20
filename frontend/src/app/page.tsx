@@ -4,7 +4,15 @@ import LoginModal from '@/components/auth/LoginModal'
 import BrandLogo from '@/components/social/BrandLogo'
 import { useAuth } from '@/lib/AuthContext'
 import { motion } from 'framer-motion'
-import { MessageCircle, Share2, Shield, Zap } from 'lucide-react'
+import {
+	Github,
+	MessageCircle,
+	Monitor,
+	Share2,
+	Shield,
+	Smartphone,
+	Zap,
+} from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 
@@ -17,7 +25,8 @@ export default function Home() {
 	useEffect(() => {
 		const fetchOnlineUsers = async () => {
 			try {
-				const webrtcUrl = process.env.NEXT_PUBLIC_WEBRTC_URL || 'http://localhost:5000'
+				const webrtcUrl =
+					process.env.NEXT_PUBLIC_WEBRTC_URL || 'http://localhost:5000'
 				const res = await fetch(`${webrtcUrl}/api/online-users`)
 				if (res.ok) {
 					const data = await res.json()
@@ -71,7 +80,7 @@ export default function Home() {
 							href='/feed'
 							className='px-6 py-2.5 text-sm font-medium text-white transition-all bg-indigo-600 rounded-full hover:bg-indigo-500 shadow-lg shadow-indigo-500/20'
 						>
-							Открыть Vondic
+							Открыть Vondic Web
 						</Link>
 					) : (
 						<>
@@ -151,6 +160,29 @@ export default function Home() {
 								У меня есть аккаунт
 							</button>
 						)}
+					</div>
+
+					<div className='flex flex-col sm:flex-row items-center justify-center gap-3 pt-6'>
+						<a
+							href='https://github.com/KnopMops/vondic'
+							target='_blank'
+							rel='noreferrer'
+							className='w-full sm:w-auto px-6 py-3 text-sm font-semibold text-white transition-all bg-white/10 rounded-full hover:bg-white/20 border border-white/10 hover:border-white/20 flex items-center justify-center gap-2'
+						>
+							<Github className='h-4 w-4' />
+						</a>
+						<Link
+							href='/download/desktop'
+							className='w-full sm:w-auto px-6 py-3 text-sm font-semibold text-white transition-all bg-white/10 rounded-full hover:bg-white/20 border border-white/10 hover:border-white/20 flex items-center justify-center gap-2'
+						>
+							<Monitor className='h-4 w-4' />
+						</Link>
+						<Link
+							href='/download/mobile'
+							className='w-full sm:w-auto px-6 py-3 text-sm font-semibold text-white transition-all bg-white/10 rounded-full hover:bg-white/20 border border-white/10 hover:border-white/20 flex items-center justify-center gap-2'
+						>
+							<Smartphone className='h-4 w-4' />
+						</Link>
 					</div>
 				</motion.div>
 

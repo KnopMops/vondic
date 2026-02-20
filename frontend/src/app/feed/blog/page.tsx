@@ -8,16 +8,16 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
 export default function BlogPage() {
-	const { user, logout, isLoading: isAuthLoading } = useAuth()
+	const { user, logout, isLoading: isAuthLoading, isInitialized } = useAuth()
 	const dispatch = useAppDispatch()
 	const router = useRouter()
 	const [isSocketLoading, setIsSocketLoading] = useState(false)
 
 	useEffect(() => {
-		if (!isAuthLoading && !user) {
+		if (isInitialized && !isAuthLoading && !user) {
 			router.push('/')
 		}
-	}, [user, isAuthLoading, router])
+	}, [user, isAuthLoading, isInitialized, router])
 
 	useEffect(() => {
 		if (user && !user.socket_id && !isSocketLoading) {
@@ -52,7 +52,8 @@ export default function BlogPage() {
 		}
 	}, [user, dispatch, isSocketLoading])
 
-	const isLoading = isAuthLoading || (!!user && !user.socket_id) || !user
+	const isLoading =
+		!isInitialized || isAuthLoading || (!!user && !user.socket_id) || !user
 
 	if (isLoading) {
 		return (

@@ -5,6 +5,7 @@ from app.core.extensions import db
 from app.models.group import Group
 from app.models.message import Message
 from app.models.user import User
+from sqlalchemy import or_
 
 
 class MessageService:
@@ -130,3 +131,40 @@ class MessageService:
             .paginate(page=page, per_page=per_page, error_out=False)
 
         return messages, None
+
+    @staticmethod
+    def get_recent_contacts(user_id, limit=30):
+        query = Message.query.filter(
+            Message.group_id.is_(None),
+            Message.target_id.isnot(None),
+            or_(Message.sender_id == user_id, Message.target_id == user_id),
+        ).order_by(Message.created_at.desc())
+        messages = query.limit(max(limit * 5, limit)).all()
+        seen = {}
+        ordered = []
+        for msg in messages:
+            other_id = msg.target_id if str(
+                msg.sender_id) == str(user_id) else msg.sender_id
+            if not other_id or str(other_id) == str(user_id):
+                continue
+            if other_id in seen:
+                continue
+            seen[other_id] = msg.created_at
+            ordered.append(other_id)
+            if len(ordered) >= limit:
+                break
+        if not ordered:
+            return []
+        users = User.query.filter(User.id.in_(ordered)).all()
+        users_map = {u.id: u for u in users}
+        result = []
+        for uid in ordered:
+            user = users_map.get(uid)
+            if not user:
+                continue
+            data = user.to_dict()
+            last_at = seen.get(uid)
+            if last_at:
+                data["last_message_at"] = last_at.isoformat()
+            result.append(data)
+        return result

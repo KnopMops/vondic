@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from typing import Iterable
 
 from botiksdk.bot_types import Message, Update
@@ -22,12 +23,23 @@ class Dispatcher:
             return
         message = update.message
         if message is not None:
+            logging.getLogger(__name__).info(
+                "botiksdk_update_received bot_id=%s update_id=%s text=%s",
+                getattr(bot, "bot_id", None),
+                update.update_id,
+                message.text,
+            )
             await self._dispatch_message(bot, message)
 
     async def _dispatch_message(self, bot, message: Message):
         for router in self._routers:
             for handler in router.message_handlers:
                 if await self._check_filters(handler.filters, message):
+                    logging.getLogger(__name__).info(
+                        "botiksdk_handler_matched bot_id=%s text=%s",
+                        getattr(bot, "bot_id", None),
+                        message.text,
+                    )
                     await handler.callback(message, bot)
 
     async def _check_filters(self, filters: Iterable[BaseFilter], message: Message):
@@ -54,7 +66,15 @@ class Dispatcher:
     async def _poll_bot(self, bot):
         offset = 0
         while True:
-            updates = bot.get_updates(offset=offset, timeout=20, limit=100)
+            try:
+                updates = bot.get_updates(offset=offset, timeout=20, limit=100)
+            except Exception:
+                logging.getLogger(__name__).exception(
+                    "botiksdk_poll_error bot_id=%s", getattr(
+                        bot, "bot_id", None)
+                )
+                await asyncio.sleep(1)
+                continue
             if not updates:
                 await asyncio.sleep(0.2)
                 continue

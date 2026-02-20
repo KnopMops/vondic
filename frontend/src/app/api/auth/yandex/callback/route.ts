@@ -9,6 +9,9 @@ export async function GET(req: NextRequest) {
 		const cid = searchParams.get('cid') || searchParams.get('state')
 		const frontendUrl =
 			process.env.NEXT_PUBLIC_FRONTEND_URL || req.nextUrl.origin
+		const userAgent = req.headers.get('user-agent') || ''
+		const forwardedFor = req.headers.get('x-forwarded-for') || ''
+		const realIp = req.headers.get('x-real-ip') || ''
 
 		if (!code) {
 			return NextResponse.json({ error: 'No code provided' }, { status: 400 })
@@ -27,7 +30,12 @@ export async function GET(req: NextRequest) {
 		// Делаем запрос к бэкенду
 		const response = await fetch(backendCallbackUrl.toString(), {
 			method: 'GET',
-			headers: { 'Content-Type': 'application/json' },
+			headers: {
+				'Content-Type': 'application/json',
+				'User-Agent': userAgent,
+				'X-Forwarded-For': forwardedFor,
+				'X-Real-IP': realIp,
+			},
 		})
 
 		const data = await response.json()

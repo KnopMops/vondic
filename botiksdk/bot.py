@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 
 from botiksdk.client import PublicAPIClient
@@ -29,7 +30,14 @@ class Bot:
         self.api_key = api_key
         return self
 
+    def _ensure_ready(self):
+        if not self.bot_id:
+            raise ValueError("bot_id is required")
+        if not self.token:
+            raise ValueError("bot token is required")
+
     def get_updates(self, *, offset: int = 0, limit: int = 100, timeout: int = 20):
+        self._ensure_ready()
         return self.public.get_updates(
             self.bot_id,
             self.token,
@@ -39,4 +47,11 @@ class Bot:
         )
 
     def send_message(self, chat_id: str, text: str):
+        self._ensure_ready()
+        logging.getLogger(__name__).info(
+            "botiksdk_send_message bot_id=%s chat_id=%s text=%s",
+            self.bot_id,
+            chat_id,
+            text,
+        )
         return self.public.send_message(self.bot_id, self.token, chat_id, text)

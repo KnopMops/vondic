@@ -128,4 +128,3 @@ async def perform_client_handshake(
     server_nonce = header[5:]
     session_key = derive_session_key(master_key, client_nonce, server_nonce)
     return AESGCM(session_key)
-

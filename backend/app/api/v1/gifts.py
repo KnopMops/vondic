@@ -25,7 +25,8 @@ def list_gifts():
             except Exception:
                 db.session.rollback()
                 return jsonify({"error": msg}), 500
-            gifts = GiftCatalog.query.order_by(GiftCatalog.coin_price.asc()).all()
+            gifts = GiftCatalog.query.order_by(
+                GiftCatalog.coin_price.asc()).all()
         elif "no such column: gifts_catalog.total_supply" in msg:
             try:
                 db.session.execute(
@@ -40,7 +41,8 @@ def list_gifts():
             except Exception:
                 db.session.rollback()
                 return jsonify({"error": msg}), 500
-            gifts = GiftCatalog.query.order_by(GiftCatalog.coin_price.asc()).all()
+            gifts = GiftCatalog.query.order_by(
+                GiftCatalog.coin_price.asc()).all()
         else:
             return jsonify({"error": msg}), 500
     return jsonify([g.to_dict() for g in gifts])

@@ -48,7 +48,7 @@ export function setTokens(
 		secure: process.env.NODE_ENV === 'production',
 		path: '/',
 		sameSite: 'lax',
-		maxAge: 15 * 60, // 15 минут (примерно как на бэкенде)
+		maxAge: 24 * 60 * 60, // 24 часа
 	})
 
 	res.cookies.set({
@@ -58,7 +58,7 @@ export function setTokens(
 		secure: process.env.NODE_ENV === 'production',
 		path: '/',
 		sameSite: 'lax',
-		maxAge: 7 * 24 * 60 * 60, // 7 дней
+		maxAge: 30 * 24 * 60 * 60, // 30 дней
 	})
 
 	return res
@@ -133,12 +133,23 @@ export async function withAccessTokenRefresh(
 	req: NextRequest,
 	handler: (accessToken: string) => Promise<NextResponse>,
 ): Promise<NextResponse> {
-	const accessToken = await getAccessToken(req)
+	let accessToken = await getAccessToken(req)
 	const refreshToken = await getRefreshToken(req)
 
 	if (!accessToken && !refreshToken) {
 		const res = NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 		return clearTokens(res)
+	}
+
+	// Если access истёк, пробуем рефреш до выполнения handler
+	if (accessToken && isTokenExpired(accessToken) && refreshToken) {
+		const newTokens = await refreshAccessToken(refreshToken)
+		if (newTokens) {
+			const res = await handler(newTokens.access_token)
+			setTokens(res, newTokens.access_token, newTokens.refresh_token)
+			res.headers.set('x-auth-refreshed', '1')
+			return res
+		}
 	}
 
 	if (accessToken) {

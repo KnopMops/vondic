@@ -7,6 +7,9 @@ export async function POST(req: NextRequest) {
 		let { key } = body
 		const backendUrl =
 			process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+		const userAgent = req.headers.get('user-agent') || ''
+		const forwardedFor = req.headers.get('x-forwarded-for') || ''
+		const realIp = req.headers.get('x-real-ip') || ''
 
 		let payload = body
 
@@ -42,7 +45,12 @@ export async function POST(req: NextRequest) {
 
 		const response = await fetch(`${backendUrl}/api/v1/auth/telegram-login`, {
 			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
+			headers: {
+				'Content-Type': 'application/json',
+				'User-Agent': userAgent,
+				'X-Forwarded-For': forwardedFor,
+				'X-Real-IP': realIp,
+			},
 			body: JSON.stringify(payload),
 		})
 

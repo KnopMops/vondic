@@ -64,7 +64,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
                 const socketPath = process.env.NEXT_PUBLIC_SOCKET_PATH || '/socket.io'
 				socketInstance = io(socketUrl, {
 					auth: { token },
-					transports: ['websocket'],
+					transports: ['polling', 'websocket'],
 					path: socketPath,
 				})
 

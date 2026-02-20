@@ -141,7 +141,8 @@ def build_config() -> ProxyConfig:
     channel_peer_host = None
     channel_peer_port = None
     if args.channel_peer:
-        channel_peer_host, channel_peer_port = parse_host_port(args.channel_peer)
+        channel_peer_host, channel_peer_port = parse_host_port(
+            args.channel_peer)
     if (channel_peer_host or channel_peer_port) and not master_key:
         raise SystemExit("master key required for channel mode")
 
@@ -160,4 +161,3 @@ def build_config() -> ProxyConfig:
         standalone_mode=args.standalone_mode,
         enable_tui=args.tui,
     )
-
