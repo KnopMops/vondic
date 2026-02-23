@@ -12,6 +12,18 @@ from .post import Post
 from .subscription import Subscription
 from .user import User
 
-__all__ = ["Bot", "Channel", "Comment", "Friendship", "Group",
-           "Like", "Message", "Post", "Subscription", "User", "GiftCatalog",
-           "Community", "CommunityChannel"]
+__all__ = [
+    "Bot",
+    "Channel",
+    "Comment",
+    "Friendship",
+    "Group",
+    "Like",
+    "Message",
+    "Post",
+    "Subscription",
+    "User",
+    "GiftCatalog",
+    "Community",
+    "CommunityChannel",
+]

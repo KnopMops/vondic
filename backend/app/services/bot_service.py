@@ -13,36 +13,36 @@ class BotService:
 
     @staticmethod
     def get_active_bots():
-        return Bot.query.filter(
-            Bot.is_active == 1
-        ).order_by(Bot.created_at.desc()).all()
+        return (
+            Bot.query.filter(Bot.is_active == 1).order_by(
+                Bot.created_at.desc()).all()
+        )
 
     @staticmethod
     def search_bots(query_str):
         if not query_str:
             return []
         search = f"%{query_str}%"
-        return Bot.query.filter(
-            or_(
-                Bot.name.ilike(search),
-                Bot.description.ilike(search)
-            )
-        ).order_by(Bot.created_at.desc()).all()
+        return (
+            Bot.query.filter(or_(Bot.name.ilike(search),
+                             Bot.description.ilike(search)))
+            .order_by(Bot.created_at.desc())
+            .all()
+        )
 
     @staticmethod
     def search_active_bots(query_str):
         if not query_str:
             return []
         search = f"%{query_str}%"
-        return Bot.query.filter(
-            (Bot.is_active == 1)
-            & (
-                or_(
-                    Bot.name.ilike(search),
-                    Bot.description.ilike(search)
-                )
+        return (
+            Bot.query.filter(
+                (Bot.is_active == 1)
+                & (or_(Bot.name.ilike(search), Bot.description.ilike(search)))
             )
-        ).order_by(Bot.created_at.desc()).all()
+            .order_by(Bot.created_at.desc())
+            .all()
+        )
 
     @staticmethod
     def get_active_bot_by_id(bot_id):

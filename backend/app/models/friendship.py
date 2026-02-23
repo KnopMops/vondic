@@ -17,14 +17,17 @@ class Friendship(db.Model):
         TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     __table_args__ = (
-        db.UniqueConstraint('requester_id', 'addressee_id',
-                            name='uq_friendship_request'),
+        db.UniqueConstraint(
+            "requester_id", "addressee_id", name="uq_friendship_request"
+        ),
     )
 
     requester = db.relationship(
-        "User", foreign_keys=[requester_id], backref="sent_friend_requests")
+        "User", foreign_keys=[requester_id], backref="sent_friend_requests"
+    )
     addressee = db.relationship(
-        "User", foreign_keys=[addressee_id], backref="friendships")
+        "User", foreign_keys=[addressee_id], backref="friendships"
+    )
 
     def to_dict(self):
         return {

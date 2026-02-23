@@ -38,11 +38,9 @@ def ensure_support_tables():
     cur.execute("PRAGMA table_info(notifications)")
     columns = [c[1] for c in cur.fetchall()]
     if "title" not in columns:
-        cur.execute(
-            "ALTER TABLE notifications ADD COLUMN title TEXT")
+        cur.execute("ALTER TABLE notifications ADD COLUMN title TEXT")
     if "type" not in columns:
-        cur.execute(
-            "ALTER TABLE notifications ADD COLUMN type TEXT")
+        cur.execute("ALTER TABLE notifications ADD COLUMN type TEXT")
     if "notification_hash" not in columns:
         cur.execute(
             "ALTER TABLE notifications ADD COLUMN notification_hash TEXT")
@@ -82,8 +80,9 @@ def is_low_confidence_answer(text: str) -> bool:
 
 def ask_rag(question: str) -> Tuple[str, Optional[str]]:
     try:
-        resp = requests.post(DEFAULT_RAG_API_URL, json={
-                             "question": question}, timeout=60)
+        resp = requests.post(
+            DEFAULT_RAG_API_URL, json={"question": question}, timeout=60
+        )
         if resp.status_code == 200:
             try:
                 data = resp.json()
@@ -109,11 +108,12 @@ def save_escalation(user_id: str, question: str) -> int:
     return esc_id
 
 
-def notify_admin(user_id: str, msg: str, title: str | None = None, notification_type: str = "system"):
+def notify_admin(
+    user_id: str, msg: str, title: str | None = None, notification_type: str = "system"
+):
     ts = int(time.time())
     content_hash = hashlib.sha256(
-        f"{user_id}|{msg}|{ts}".encode("utf-8")
-    ).hexdigest()
+        f"{user_id}|{msg}|{ts}".encode("utf-8")).hexdigest()
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     cur.execute(
@@ -124,11 +124,12 @@ def notify_admin(user_id: str, msg: str, title: str | None = None, notification_
     conn.close()
 
 
-def notify_user(user_id: str, msg: str, title: str | None = None, notification_type: str = "system"):
+def notify_user(
+    user_id: str, msg: str, title: str | None = None, notification_type: str = "system"
+):
     ts = int(time.time())
     content_hash = hashlib.sha256(
-        f"{user_id}|{msg}|{ts}".encode("utf-8")
-    ).hexdigest()
+        f"{user_id}|{msg}|{ts}".encode("utf-8")).hexdigest()
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     cur.execute(
@@ -139,7 +140,9 @@ def notify_user(user_id: str, msg: str, title: str | None = None, notification_t
     conn.close()
 
 
-def set_post_report_status(report_id: int, status: str, verdict_at: Optional[int] = None):
+def set_post_report_status(
+    report_id: int, status: str, verdict_at: Optional[int] = None
+):
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     if verdict_at is None:
@@ -183,7 +186,9 @@ def chat_send(current_user):
             conn.close()
             return jsonify({"ok": False, "error": "Invalid esc_id"}), 400
         cur.execute(
-            "SELECT user_id, status FROM escalations WHERE id = ?", (esc_id_val,))
+            "SELECT user_id, status FROM escalations WHERE id = ?", (
+                esc_id_val,)
+        )
         row = cur.fetchone()
         if not row:
             conn.close()
@@ -201,7 +206,13 @@ def chat_send(current_user):
         )
         conn.commit()
         conn.close()
-        return jsonify({"ok": True, "answer": "Сообщение отправлено оператору", "escalation_id": esc_id_val})
+        return jsonify(
+            {
+                "ok": True,
+                "answer": "Сообщение отправлено оператору",
+                "escalation_id": esc_id_val,
+            }
+        )
     if new_chat:
         cur.execute(
             "SELECT COUNT(*) FROM escalations WHERE user_id = ? AND status != 'closed'",
@@ -227,7 +238,13 @@ def chat_send(current_user):
         )
         conn.commit()
         conn.close()
-        return jsonify({"ok": True, "answer": "Перевожу на оператора. Ожидайте ответа.", "escalation_id": esc_id})
+        return jsonify(
+            {
+                "ok": True,
+                "answer": "Перевожу на оператора. Ожидайте ответа.",
+                "escalation_id": esc_id,
+            }
+        )
     cur.execute(
         "SELECT id FROM escalations WHERE user_id = ? AND status != 'closed' ORDER BY created_at DESC LIMIT 1",
         (current_user.id,),
@@ -242,12 +259,22 @@ def chat_send(current_user):
         )
         conn.commit()
         conn.close()
-        return jsonify({"ok": True, "answer": "Сообщение отправлено оператору", "escalation_id": esc_id})
+        return jsonify(
+            {
+                "ok": True,
+                "answer": "Сообщение отправлено оператору",
+                "escalation_id": esc_id,
+            }
+        )
     conn.close()
 
     answer, err = ask_rag(question)
-    needs_escalation = bool(err) or is_escalation(question) or is_escalation(
-        answer) or is_low_confidence_answer(answer)
+    needs_escalation = (
+        bool(err)
+        or is_escalation(question)
+        or is_escalation(answer)
+        or is_low_confidence_answer(answer)
+    )
     if needs_escalation:
         conn2 = sqlite3.connect(DB_PATH)
         cur2 = conn2.cursor()
@@ -277,7 +304,13 @@ def chat_send(current_user):
         )
         conn2.commit()
         conn2.close()
-        return jsonify({"ok": True, "answer": "Перевожу на оператора. Ожидайте ответа.", "escalation_id": esc_id})
+        return jsonify(
+            {
+                "ok": True,
+                "answer": "Перевожу на оператора. Ожидайте ответа.",
+                "escalation_id": esc_id,
+            }
+        )
     return jsonify({"ok": True, "answer": answer})
 
 
@@ -297,8 +330,17 @@ def chat_updates(current_user):
         (current_user.id,),
     )
     rows = cur.fetchall()
-    updates = [{"id": r[0], "question": r[1],
-                "answer": r[2], "answered_at": r[3], "escalation_id": r[4], "sender": r[5] or "admin"} for r in rows]
+    updates = [
+        {
+            "id": r[0],
+            "question": r[1],
+            "answer": r[2],
+            "answered_at": r[3],
+            "escalation_id": r[4],
+            "sender": r[5] or "admin",
+        }
+        for r in rows
+    ]
     if rows:
         ids = [r[0] for r in rows]
         cur.execute(
@@ -365,8 +407,13 @@ def chat_history(current_user):
     rows = cur.fetchall()
     conn.close()
     messages = [
-        {"id": r[0], "sender": r[1] or "admin", "content": r[2],
-            "created_at": r[3], "escalation_id": r[4]}
+        {
+            "id": r[0],
+            "sender": r[1] or "admin",
+            "content": r[2],
+            "created_at": r[3],
+            "escalation_id": r[4],
+        }
         for r in rows
     ]
     return jsonify({"ok": True, "messages": messages})
@@ -383,8 +430,10 @@ def admin_escalations(current_user):
     cur.execute(
         "SELECT id, user_id, question, created_at FROM escalations WHERE status != 'closed' ORDER BY created_at DESC"
     )
-    escalations = [{"id": r[0], "user_id": r[1], "question": r[2],
-                    "created_at": r[3]} for r in cur.fetchall()]
+    escalations = [
+        {"id": r[0], "user_id": r[1], "question": r[2], "created_at": r[3]}
+        for r in cur.fetchall()
+    ]
     conn.close()
     return jsonify({"ok": True, "escalations": escalations})
 
@@ -508,8 +557,11 @@ def user_chats(current_user):
     )
     rows = cur.fetchall()
     conn.close()
-    chats = [{"id": r[0], "question": r[1], "status": r[2]
-              or "open", "created_at": r[3]} for r in rows]
+    chats = [
+        {"id": r[0], "question": r[1], "status": r[2]
+            or "open", "created_at": r[3]}
+        for r in rows
+    ]
     return jsonify({"ok": True, "chats": chats})
 
 
@@ -601,8 +653,7 @@ def admin_post_reports(current_user):
             post = Post.query.filter_by(id=post_id).first()
             if not post or post.deleted:
                 cur.execute(
-                    "DELETE FROM post_reports WHERE id = ?", (report_id,)
-                )
+                    "DELETE FROM post_reports WHERE id = ?", (report_id,))
                 updated = True
                 continue
         if status == "closed":
@@ -653,7 +704,12 @@ def admin_post_report_action(current_user):
     if not post_id:
         return jsonify({"error": "post_id is required"}), 400
 
-    if action not in ("request_removal", "force_remove", "legal_remove", "no_violation"):
+    if action not in (
+        "request_removal",
+        "force_remove",
+        "legal_remove",
+        "no_violation",
+    ):
         return jsonify({"error": "Invalid action"}), 400
 
     role = str(current_user.role or "").strip().lower()
@@ -701,8 +757,7 @@ def admin_post_report_action(current_user):
         if not reason:
             return jsonify({"error": "reason is required"}), 400
         _, error = PostService.delete_post_by_admin(
-            post_id, current_user.id, reason
-        )
+            post_id, current_user.id, reason)
         if error:
             status_code = 404 if error == "Post not found" else 403
             return jsonify({"error": error}), status_code

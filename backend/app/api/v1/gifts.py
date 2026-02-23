@@ -80,7 +80,9 @@ def create_gift(current_user):
         return jsonify({"error": "coin_price must be integer"}), 400
     try:
         supply_value = (
-            int(total_supply) if total_supply is not None and total_supply != "" else None
+            int(total_supply)
+            if total_supply is not None and total_supply != ""
+            else None
         )
         if supply_value is not None and supply_value <= 0:
             return jsonify({"error": "total_supply must be positive"}), 400

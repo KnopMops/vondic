@@ -27,10 +27,7 @@ def global_search(current_user):
             return jsonify({"results": [], "type": "users"}), 200
 
         users = UserService.search_users(search_term)
-        return jsonify({
-            "type": "users",
-            "results": users_schema.dump(users)
-        }), 200
+        return jsonify({"type": "users", "results": users_schema.dump(users)}), 200
 
     elif query.startswith("#"):
         search_term = query[1:]
@@ -38,14 +35,13 @@ def global_search(current_user):
             return jsonify({"results": [], "type": "posts"}), 200
 
         posts = PostService.search_posts(search_term)
-        return jsonify({
-            "type": "posts",
-            "results": posts_schema.dump(posts)
-        }), 200
+        return jsonify({"type": "posts", "results": posts_schema.dump(posts)}), 200
 
     else:
-        return jsonify({
-            "type": "unknown",
-            "message": "Start query with @ for users or # for posts",
-            "results": []
-        }), 200
+        return jsonify(
+            {
+                "type": "unknown",
+                "message": "Start query with @ for users or # for posts",
+                "results": [],
+            }
+        ), 200

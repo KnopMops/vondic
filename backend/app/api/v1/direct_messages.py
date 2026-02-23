@@ -23,11 +23,13 @@ def get_recent_contacts(current_user):
 def send_dm(current_user, target_id):
     data = request.get_json() or {}
     message, error = MessageService.create_message(
-        data, current_user.id, target_id=target_id)
+        data, current_user.id, target_id=target_id
+    )
     if error:
         return jsonify({"error": error}), 400
 
     from app.services.ollama_service import OllamaService
+
     ai_user = OllamaService.get_ai_user()
     if str(target_id) == str(ai_user.id):
         OllamaService.process_message_async(message.id, is_dm=True)
@@ -56,10 +58,12 @@ def get_dm_history(current_user, target_id):
         last_item = items[-1]
         next_cursor = last_item.get("created_at")
 
-    return jsonify({
-        "items": items,
-        "total": messages_pagination.total,
-        "pages": messages_pagination.pages,
-        "page": messages_pagination.page,
-        "next_cursor": next_cursor
-    }), 200
+    return jsonify(
+        {
+            "items": items,
+            "total": messages_pagination.total,
+            "pages": messages_pagination.pages,
+            "page": messages_pagination.page,
+            "next_cursor": next_cursor,
+        }
+    ), 200

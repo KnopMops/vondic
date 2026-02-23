@@ -112,6 +112,7 @@ const MessageBubble = memo(
 		const stickerPayload = msg.is_deleted ? null : getStickerPayload(msg.content)
 		const displayContent = msg.is_deleted ? 'Сообщение удалено' : msg.content
 		const reactionEntries = reactions ? Object.entries(reactions) : []
+		const attachments = Array.isArray(msg.attachments) ? msg.attachments : []
 
 		const renderInline = (text: string, keyPrefix: string) => {
 			const parts = text.split('`')
@@ -424,9 +425,9 @@ const MessageBubble = memo(
 							{renderFormattedContent(displayContent)}
 						</div>
 					)}
-					{msg.attachments && msg.attachments.length > 0 && (
+					{attachments.length > 0 && (
 						<div className='mt-2 space-y-2'>
-							{msg.attachments.map(a => {
+							{attachments.map(a => {
 								const ext = (a.ext || '').toLowerCase()
 								const isImage =
 									ext === 'png' ||
@@ -513,7 +514,7 @@ const MessageBubble = memo(
 								{sender.username}
 							</span>
 						)}
-						{formatMskTime(msg.timestamp)}
+						{formatMskTime((msg as any).timestamp || (msg as any).created_at || '')}
 						{msg.isOwn && (
 							<div className='flex items-center'>
 								{msg.is_read ? (

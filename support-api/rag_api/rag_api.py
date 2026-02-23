@@ -55,10 +55,11 @@ class RAGEngine:
                                       for x in df["question"].fillna("")]
                     self.contents = [str(x or "")
                                      for x in df["content"].fillna("")]
-                    self.categories = [str(x or "прочее")
-                                       for x in df["category"].fillna("прочее")]
-                    self.norm_questions = [self._preprocess(q)
-                                           for q in self.questions]
+                    self.categories = [
+                        str(x or "прочее") for x in df["category"].fillna("прочее")
+                    ]
+                    self.norm_questions = [
+                        self._preprocess(q) for q in self.questions]
                     loaded = True
             except Exception:
                 loaded = False
@@ -106,7 +107,8 @@ class RAGEngine:
         if SentenceTransformer is not None and np is not None:
             try:
                 self.embedder = SentenceTransformer(
-                    "paraphrase-multilingual-MiniLM-L12-v2")
+                    "paraphrase-multilingual-MiniLM-L12-v2"
+                )
                 proc_q = [self._preprocess(q) for q in self.questions]
                 self.embeddings = self.embedder.encode(
                     proc_q, convert_to_numpy=True)
@@ -121,7 +123,8 @@ class RAGEngine:
         if pipeline is not None:
             try:
                 self.generator = pipeline(
-                    "text-generation", model="ai-forever/rugpt3small_based_on_gpt2")
+                    "text-generation", model="ai-forever/rugpt3small_based_on_gpt2"
+                )
             except Exception:
                 self.generator = None
 
@@ -134,6 +137,7 @@ class RAGEngine:
                 return i
         try:
             import difflib as _dif
+
             close = _dif.get_close_matches(
                 q, self.norm_questions, n=1, cutoff=0.85)
             if close:
@@ -175,7 +179,8 @@ class RAGEngine:
             if self.generator is not None and content:
                 try:
                     out = self.generator(
-                        content, max_new_tokens=120, num_return_sequences=1)
+                        content, max_new_tokens=120, num_return_sequences=1
+                    )
                     text = out[0].get("generated_text") or ""
                     return text.strip() or content
                 except Exception:

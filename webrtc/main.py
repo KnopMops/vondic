@@ -99,8 +99,9 @@ def create_app():
     app.config.from_object(Config)
 
     allowed_origins = _build_allowed_origins()
-    CORS(app, resources={r"/*": {"origins": allowed_origins}},
-         supports_credentials=True)
+    CORS(
+        app, resources={r"/*": {"origins": allowed_origins}}, supports_credentials=True
+    )
 
     socketio = SocketIO(
         app,
@@ -147,8 +148,10 @@ def create_app():
         if updated_user:
             return (
                 jsonify(
-                    {"message": "User socket updated successfully",
-                        "user": updated_user}
+                    {
+                        "message": "User socket updated successfully",
+                        "user": updated_user,
+                    }
                 ),
                 200,
             )
@@ -173,8 +176,7 @@ def create_app():
             return jsonify({"error": "Invalid token"}), 401
 
         messages = user_repo.get_messages_history(
-            user["id"], target_id, limit, offset
-        )
+            user["id"], target_id, limit, offset)
         return jsonify(messages), 200
 
     @app.route("/messages/history", methods=["DELETE"])
@@ -220,9 +222,7 @@ def create_app():
         if not user:
             return jsonify({"error": "Invalid token"}), 401
 
-        messages = user_repo.get_channel_history(
-            channel_id, limit, offset
-        )
+        messages = user_repo.get_channel_history(channel_id, limit, offset)
         return jsonify(messages), 200
 
     @app.route("/channels/history", methods=["DELETE"])
@@ -342,7 +342,8 @@ def create_app():
         payload = data.get("payload")
 
         logger.info(
-            f"broadcast_message: target_id={target_id}, group_id={group_id}, payload_keys={list(payload.keys()) if payload else 'None'}")
+            f"broadcast_message: target_id={target_id}, group_id={group_id}, payload_keys={list(payload.keys()) if payload else 'None'}"
+        )
 
         if not payload:
             logger.error("broadcast_message: Missing payload")
@@ -351,23 +352,27 @@ def create_app():
         if group_id:
             participants = user_repo.get_group_participants(group_id)
             logger.info(
-                f"broadcast_message: Found {len(participants)} participants for group {group_id}")
+                f"broadcast_message: Found {len(participants)} participants for group {group_id}"
+            )
             for pid in participants:
                 pid_socket = broker.get_user_socket(pid)
                 if pid_socket:
                     socketio.emit("receive_message", payload, room=pid_socket)
                 else:
                     logger.warning(
-                        f"broadcast_message: No socket found for participant {pid}")
+                        f"broadcast_message: No socket found for participant {pid}"
+                    )
         elif target_id:
             target_socket = broker.get_user_socket(target_id)
             if target_socket:
                 logger.info(
-                    f"broadcast_message: Sending to target {target_id} on socket {target_socket}")
+                    f"broadcast_message: Sending to target {target_id} on socket {target_socket}"
+                )
                 socketio.emit("receive_message", payload, room=target_socket)
             else:
                 logger.warning(
-                    f"broadcast_message: No socket found for target {target_id}")
+                    f"broadcast_message: No socket found for target {target_id}"
+                )
         else:
             logger.error("broadcast_message: Missing group_id or target_id")
             return jsonify({"error": "Missing group_id or target_id"}), 400

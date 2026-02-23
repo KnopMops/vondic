@@ -39,7 +39,8 @@ class CommentService:
         parent_id = data.get("parent_id")
         if parent_id:
             parent_comment = Comment.query.filter_by(
-                id=parent_id, deleted=False).first()
+                id=parent_id, deleted=False
+            ).first()
             if not parent_comment:
                 return None, "Parent comment not found"
 
@@ -47,7 +48,7 @@ class CommentService:
             content=CommentService._sanitize_text(data.get("content")),
             posted_by=user_id,
             post_id=post_id,
-            parent_id=parent_id
+            parent_id=parent_id,
         )
         try:
             db.session.add(new_comment)
@@ -126,7 +127,8 @@ class CommentService:
             return None, "Comments disabled"
 
         existing_like = Like.query.filter_by(
-            user_id=user_id, comment_id=comment_id).first()
+            user_id=user_id, comment_id=comment_id
+        ).first()
         if existing_like:
             return None, "Already liked"
 
@@ -153,7 +155,8 @@ class CommentService:
             return None, "Comments disabled"
 
         existing_like = Like.query.filter_by(
-            user_id=user_id, comment_id=comment_id).first()
+            user_id=user_id, comment_id=comment_id
+        ).first()
         if not existing_like:
             return None, "Not liked"
 

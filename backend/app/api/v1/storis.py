@@ -99,7 +99,8 @@ def create_storis(current_user):
             "id": str(uuid.uuid4()),
             "url": media_url,
             "type": media_type,
-            "created_at": request.headers.get("X-Client-Time") or datetime.now(timezone.utc).isoformat(),
+            "created_at": request.headers.get("X-Client-Time")
+            or datetime.now(timezone.utc).isoformat(),
             "reactions": [],
         }
         if text:
@@ -173,18 +174,29 @@ def react_storis(current_user):
         return jsonify({"error": "Story not found"}), 404
     reactions = [r for r in (target.get("reactions")
                              or []) if isinstance(r, dict)]
-    idx = next((i for i, r in enumerate(reactions) if str(
-        r.get("user_id")) == str(current_user.id)), None)
+    idx = next(
+        (
+            i
+            for i, r in enumerate(reactions)
+            if str(r.get("user_id")) == str(current_user.id)
+        ),
+        None,
+    )
     now = datetime.now(timezone.utc).isoformat()
     if idx is not None:
         if reactions[idx].get("emoji") == emoji:
             reactions.pop(idx)
         else:
-            reactions[idx] = {"user_id": str(
-                current_user.id), "emoji": emoji, "created_at": now}
+            reactions[idx] = {
+                "user_id": str(current_user.id),
+                "emoji": emoji,
+                "created_at": now,
+            }
     else:
-        reactions.append({"user_id": str(current_user.id),
-                         "emoji": emoji, "created_at": now})
+        reactions.append(
+            {"user_id": str(current_user.id), "emoji": emoji,
+             "created_at": now}
+        )
     target["reactions"] = reactions
     user.storis = items
     db.session.commit()

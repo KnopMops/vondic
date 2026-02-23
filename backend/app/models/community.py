@@ -28,8 +28,9 @@ class Community(db.Model):
     updated_at = db.Column(
         TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    owner = db.relationship("User", foreign_keys=[
-                            owner_id], backref="owned_communities")
+    owner = db.relationship(
+        "User", foreign_keys=[owner_id], backref="owned_communities"
+    )
     members = db.relationship(
         "User",
         secondary=community_members,

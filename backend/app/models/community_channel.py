@@ -28,7 +28,9 @@ class CommunityChannel(db.Model):
     )
 
     community = db.relationship(
-        "Community", foreign_keys=[community_id], backref=db.backref("channels", lazy=True)
+        "Community",
+        foreign_keys=[community_id],
+        backref=db.backref("channels", lazy=True),
     )
 
     def to_dict(self):

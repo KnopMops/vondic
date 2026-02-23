@@ -17,8 +17,7 @@ class SubscriptionService:
             return None, "User not found"
 
         existing = Subscription.query.filter_by(
-            subscriber_id=subscriber_id,
-            target_id=target_id
+            subscriber_id=subscriber_id, target_id=target_id
         ).first()
 
         if existing:
@@ -39,8 +38,7 @@ class SubscriptionService:
         target_id = str(target_id)
 
         sub = Subscription.query.filter_by(
-            subscriber_id=subscriber_id,
-            target_id=target_id
+            subscriber_id=subscriber_id, target_id=target_id
         ).first()
 
         if not sub:
@@ -63,7 +61,7 @@ class SubscriptionService:
             user = User.query.get(s.subscriber_id)
             if user:
                 data = user.to_dict()
-                data['subscription_created_at'] = s.created_at.isoformat()
+                data["subscription_created_at"] = s.created_at.isoformat()
                 result.append(data)
         return result
 
@@ -76,6 +74,6 @@ class SubscriptionService:
             user = User.query.get(s.target_id)
             if user:
                 data = user.to_dict()
-                data['subscription_created_at'] = s.created_at.isoformat()
+                data["subscription_created_at"] = s.created_at.isoformat()
                 result.append(data)
         return result

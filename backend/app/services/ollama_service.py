@@ -31,7 +31,7 @@ class OllamaService:
                 role="Bot",
                 is_verified=1,
                 status="online",
-                avatar_url="/static/vondic_ai.jpg"
+                avatar_url="/static/vondic_ai.jpg",
             )
             user.set_password("ai_secret_password_very_long")
             db.session.add(user)
@@ -76,13 +76,15 @@ class OllamaService:
         return None
 
     @staticmethod
-    def _send_reply(reply_content, ai_user, reply_target_id, reply_group_id, is_dm, message_id):
+    def _send_reply(
+        reply_content, ai_user, reply_target_id, reply_group_id, is_dm, message_id
+    ):
         reply_msg = Message(
             content=reply_content,
             type="text",
             sender_id=ai_user.id,
             target_id=reply_target_id,
-            group_id=reply_group_id
+            group_id=reply_group_id,
         )
         db.session.add(reply_msg)
         db.session.commit()
@@ -94,25 +96,22 @@ class OllamaService:
                 "sender_id": str(ai_user.id),
                 "content": reply_content,
                 "type": "text",
-                "timestamp": reply_msg.created_at.isoformat() if reply_msg.created_at else datetime.utcnow().isoformat(),
-                "is_read": 0
+                "timestamp": reply_msg.created_at.isoformat()
+                if reply_msg.created_at
+                else datetime.utcnow().isoformat(),
+                "is_read": 0,
             }
 
             if is_dm:
                 payload["target_id"] = str(reply_target_id)
-                broadcast_data = {
-                    "target_id": str(reply_target_id),
-                    "payload": payload
-                }
+                broadcast_data = {"target_id": str(
+                    reply_target_id), "payload": payload}
             else:
                 payload["group_id"] = str(reply_group_id)
-                broadcast_data = {
-                    "group_id": str(reply_group_id),
-                    "payload": payload
-                }
+                broadcast_data = {"group_id": str(
+                    reply_group_id), "payload": payload}
 
-            requests.post(
-                signaling_url, json=broadcast_data, timeout=5)
+            requests.post(signaling_url, json=broadcast_data, timeout=5)
         except Exception as e:
             logger.exception(
                 "ai_signal_error message_id=%s error=%s",
@@ -129,12 +128,15 @@ class OllamaService:
             sender_id,
         )
         thread = threading.Thread(
-            target=OllamaService._generate_reply, args=(message_id, is_dm, content, sender_id))
+            target=OllamaService._generate_reply,
+            args=(message_id, is_dm, content, sender_id),
+        )
         thread.start()
 
     @staticmethod
     def _generate_reply(message_id, is_dm=True, content=None, sender_id=None):
         from app import create_app
+
         app = create_app()
         with app.app_context():
             message = Message.query.get(message_id)
@@ -142,8 +144,9 @@ class OllamaService:
                 logger.warning("ai_skip_no_message message_id=%s", message_id)
                 return
 
-            user_content = content if content else (
-                message.content if message else None)
+            user_content = (
+                content if content else (message.content if message else None)
+            )
             if not user_content:
                 logger.warning("ai_skip_no_content message_id=%s", message_id)
                 return
@@ -152,8 +155,10 @@ class OllamaService:
             reply_group_id = None
 
             if is_dm:
-                reply_target_id = sender_id if sender_id else (
-                    message.sender_id if message else None)
+                reply_target_id = (
+                    sender_id if sender_id else (
+                        message.sender_id if message else None)
+                )
             else:
                 reply_group_id = message.group_id if message else None
 
@@ -178,9 +183,9 @@ class OllamaService:
                 "model": Config.OLLAMA_MODEL,
                 "messages": [
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_content}
+                    {"role": "user", "content": user_content},
                 ],
-                "stream": False
+                "stream": False,
             }
 
             try:
@@ -203,7 +208,8 @@ class OllamaService:
                     f"{Config.OLLAMA_API_URL}/api/chat",
                 )
                 response = requests.post(
-                    f"{Config.OLLAMA_API_URL}/api/chat", json=payload, timeout=60)
+                    f"{Config.OLLAMA_API_URL}/api/chat", json=payload, timeout=60
+                )
                 elapsed = time.perf_counter() - started
                 logger.info(
                     "ai_request_done message_id=%s status=%s elapsed=%.3fs",

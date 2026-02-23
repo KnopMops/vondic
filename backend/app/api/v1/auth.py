@@ -95,10 +95,14 @@ def _store_login_session(user, access_token: str | None, refresh_token: str | No
             "device": device,
             "platform": platform,
             "browser": browser,
-            "access_token_hash": hashlib.sha256((access_token or "").encode("utf-8")).hexdigest()
+            "access_token_hash": hashlib.sha256(
+                (access_token or "").encode("utf-8")
+            ).hexdigest()
             if access_token
             else None,
-            "refresh_token_hash": hashlib.sha256((refresh_token or "").encode("utf-8")).hexdigest()
+            "refresh_token_hash": hashlib.sha256(
+                (refresh_token or "").encode("utf-8")
+            ).hexdigest()
             if refresh_token
             else None,
         }
@@ -130,7 +134,8 @@ def _store_login_session(user, access_token: str | None, refresh_token: str | No
             timeout=ttl,
         )
         current_app.logger.info(
-            f"Stored session {session_id} for user {user.id} in Redis")
+            f"Stored session {session_id} for user {user.id} in Redis"
+        )
     except Exception as e:
         current_app.logger.error(
             f"Failed to store login session in Redis: {e}")
@@ -192,12 +197,18 @@ def login():
         status_code = (
             401
             if error
-            in ["Invalid email or password", "User is blocked", "Email not verified", "InvalidTwoFactorCode"]
+            in [
+                "Invalid email or password",
+                "User is blocked",
+                "Email not verified",
+                "InvalidTwoFactorCode",
+            ]
             else 400
         )
         return (jsonify({"error": error}), status_code)
     _store_login_session(
-        result["user"], result["access_token"], result["refresh_token"])
+        result["user"], result["access_token"], result["refresh_token"]
+    )
     return (
         jsonify(
             {
@@ -224,7 +235,10 @@ def link_telegram_account():
     if error:
         return jsonify({"error": error}), 400
 
-    return jsonify({"message": "Account linked successfully", "user": user_schema.dump(user)}), 200
+    return jsonify(
+        {"message": "Account linked successfully",
+            "user": user_schema.dump(user)}
+    ), 200
 
 
 @auth_bp.route("/me", methods=["POST"])
@@ -304,7 +318,8 @@ def yandex_callback():
         "user": user_schema.dump(result["user"]),
     }
     _store_login_session(
-        result["user"], result["access_token"], result["refresh_token"])
+        result["user"], result["access_token"], result["refresh_token"]
+    )
 
     if cid:
         desktop_yandex_sessions[cid] = response_payload
@@ -352,10 +367,12 @@ def send_2fa_email(current_user):
         mail_server = current_app.config.get("MAIL_SERVER")
         env = current_app.config.get("ENV")
         if not mail_server or (env and env != "production"):
-            return jsonify({
-                "message": "Code generated (dev)",
-                "dev_code": current_user.two_factor_email_code
-            }), 200
+            return jsonify(
+                {
+                    "message": "Code generated (dev)",
+                    "dev_code": current_user.two_factor_email_code,
+                }
+            ), 200
         return jsonify({"error": error}), 400
     return jsonify({"message": "Code sent"}), 200
 
@@ -386,9 +403,8 @@ def toggle_login_alerts(current_user):
 @token_required
 def list_sessions(current_user):
     token = _extract_access_token()
-    current_hash = (
-        hashlib.sha256(token.encode("utf-8")).hexdigest() if token else None
-    )
+    current_hash = hashlib.sha256(token.encode(
+        "utf-8")).hexdigest() if token else None
     key = f"sessions:{current_user.id}"
     sessions = cache.get(key)
     if sessions is None:
@@ -423,9 +439,8 @@ def terminate_session(current_user):
     if not session_id:
         return jsonify({"error": "session_id is required"}), 400
     token = _extract_access_token()
-    current_hash = (
-        hashlib.sha256(token.encode("utf-8")).hexdigest() if token else None
-    )
+    current_hash = hashlib.sha256(token.encode(
+        "utf-8")).hexdigest() if token else None
     key = f"sessions:{current_user.id}"
     sessions = cache.get(key)
     if sessions is None:
@@ -440,12 +455,16 @@ def terminate_session(current_user):
     if not isinstance(sessions, list):
         sessions = []
     target = next(
-        (s for s in sessions if isinstance(s, dict)
-         and s.get("session_id") == session_id),
+        (
+            s
+            for s in sessions
+            if isinstance(s, dict) and s.get("session_id") == session_id
+        ),
         None,
     )
-    updated = [s for s in sessions if isinstance(
-        s, dict) and s.get("session_id") != session_id]
+    updated = [
+        s for s in sessions if isinstance(s, dict) and s.get("session_id") != session_id
+    ]
     ttl = int(current_app.config.get("SESSION_TTL_SECONDS", 2592000))
     cache.set(key, updated, timeout=ttl)
     cache.set(
@@ -459,8 +478,9 @@ def terminate_session(current_user):
         revoked = []
     access_hash = target.get("access_token_hash") if isinstance(
         target, dict) else None
-    refresh_hash = target.get("refresh_token_hash") if isinstance(
-        target, dict) else None
+    refresh_hash = (
+        target.get("refresh_token_hash") if isinstance(target, dict) else None
+    )
     if access_hash:
         revoked.append(access_hash)
     if refresh_hash:
@@ -474,8 +494,7 @@ def terminate_session(current_user):
     cache.delete(f"session:{session_id}")
     cache.delete(f"session_json:{session_id}")
     logout_current = bool(
-        access_hash and current_hash and access_hash == current_hash
-    )
+        access_hash and current_hash and access_hash == current_hash)
     return jsonify(
         {
             "message": "Session terminated",
@@ -496,7 +515,8 @@ def telegram_login():
         return (jsonify({"error": error}), 401)
     try:
         _store_login_session(
-            result["user"], result["access_token"], result["refresh_token"])
+            result["user"], result["access_token"], result["refresh_token"]
+        )
     except Exception:
         pass
     return (
@@ -536,7 +556,8 @@ def api_key_login():
         return jsonify({"error": error}), 400
     try:
         _store_login_session(
-            tokens["user"], tokens["access_token"], tokens["refresh_token"])
+            tokens["user"], tokens["access_token"], tokens["refresh_token"]
+        )
     except Exception:
         pass
 
@@ -564,5 +585,6 @@ def api_key_login():
 @auth_bp.route("/ai-user", methods=["GET"])
 def get_ai_user():
     from app.services.ollama_service import OllamaService
+
     ai_user = OllamaService.get_ai_user()
     return jsonify(user_schema.dump(ai_user)), 200

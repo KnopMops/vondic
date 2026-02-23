@@ -31,7 +31,9 @@ class BCrypter:
             return False
         return bcrypt.checkpw(key.encode("utf-8"), hashed_key.encode("utf-8"))
 
-    def register_user(self, user_id: str, username: str = None, avatar_url: str = None) -> str:
+    def register_user(
+        self, user_id: str, username: str = None, avatar_url: str = None
+    ) -> str:
         if self.repo.user_exists(user_id):
             return None
         key = self._generate_random_key()

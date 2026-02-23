@@ -14,7 +14,7 @@ class RequestThread:
         api_url: str,
         question: str,
         on_success: Optional[Callable[[str], None]] = None,
-        on_error: Optional[Callable[[str], None]] = None
+        on_error: Optional[Callable[[str], None]] = None,
     ):
         """
         Args:
@@ -33,9 +33,7 @@ class RequestThread:
         """Основная логика выполнения запроса"""
         try:
             response = requests.post(
-                self.api_url,
-                json={"question": self.question},
-                timeout=60
+                self.api_url, json={"question": self.question}, timeout=60
             )
 
             if response.status_code == 200:
@@ -79,10 +77,7 @@ def simple_request(api_url: str, question: str) -> str:
     """
     try:
         response = requests.post(
-            api_url,
-            json={"question": question},
-            timeout=60
-        )
+            api_url, json={"question": question}, timeout=60)
 
         if response.status_code == 200:
             try:

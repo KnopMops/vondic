@@ -42,6 +42,7 @@ class AuthService:
 
             try:
                 from app.services.ollama_service import OllamaService
+
                 OllamaService.ensure_chat_with_ai(new_user.id)
             except Exception as e:
                 print(f"Failed to create AI chat: {e}")
@@ -168,11 +169,16 @@ class AuthService:
 
             try:
                 from app.services.ollama_service import OllamaService
+
                 OllamaService.ensure_chat_with_ai(user.id)
             except Exception as e:
                 print(f"Failed to create AI chat: {e}")
 
-            if user.login_alert_enabled and user.email and not user.email.endswith("@telegram.bot"):
+            if (
+                user.login_alert_enabled
+                and user.email
+                and not user.email.endswith("@telegram.bot")
+            ):
                 EmailService.send_login_alert(user.email)
             return (
                 {
@@ -219,6 +225,7 @@ class AuthService:
 
             try:
                 from app.services.ollama_service import OllamaService
+
                 OllamaService.ensure_chat_with_ai(user.id)
             except Exception as e:
                 print(f"Failed to create AI chat: {e}")
@@ -326,11 +333,16 @@ class AuthService:
 
             try:
                 from app.services.ollama_service import OllamaService
+
                 OllamaService.ensure_chat_with_ai(user.id)
             except Exception as e:
                 print(f"Failed to create AI chat: {e}")
 
-            if user.login_alert_enabled and user.email and not user.email.endswith("@telegram.bot"):
+            if (
+                user.login_alert_enabled
+                and user.email
+                and not user.email.endswith("@telegram.bot")
+            ):
                 EmailService.send_login_alert(user.email)
             return (
                 {
@@ -389,9 +401,11 @@ class AuthService:
         current_user.two_factor_method = "email"
         current_user.two_factor_secret = None
         from datetime import datetime, timedelta
+
         current_user.two_factor_email_code = code
-        current_user.two_factor_email_code_expires = datetime.utcnow() + \
-            timedelta(minutes=10)
+        current_user.two_factor_email_code_expires = datetime.utcnow() + timedelta(
+            minutes=10
+        )
         try:
             db.session.commit()
         except Exception as e:
@@ -404,9 +418,13 @@ class AuthService:
     @staticmethod
     def verify_2fa_email_code(current_user, code):
         from datetime import datetime
+
         if current_user.two_factor_method != "email":
             return False, "2FA method is not email"
-        if not current_user.two_factor_email_code or not current_user.two_factor_email_code_expires:
+        if (
+            not current_user.two_factor_email_code
+            or not current_user.two_factor_email_code_expires
+        ):
             return False, "No code requested"
         if current_user.two_factor_email_code != str(code):
             return False, "Invalid code"
@@ -438,6 +456,7 @@ class AuthService:
             import hmac
             import struct
             import time
+
             if not secret_hex:
                 return False
             secret = bytes.fromhex(secret_hex)
@@ -451,8 +470,12 @@ class AuthService:
                 msg = struct.pack(">Q", c)
                 hmac_hash = hmac.new(secret, msg, hashlib.sha1).digest()
                 o = hmac_hash[19] & 0x0F
-                binary = ((hmac_hash[o] & 0x7f) << 24) | ((hmac_hash[o + 1] & 0xff) << 16) | (
-                    (hmac_hash[o + 2] & 0xff) << 8) | (hmac_hash[o + 3] & 0xff)
+                binary = (
+                    ((hmac_hash[o] & 0x7F) << 24)
+                    | ((hmac_hash[o + 1] & 0xFF) << 16)
+                    | ((hmac_hash[o + 2] & 0xFF) << 8)
+                    | (hmac_hash[o + 3] & 0xFF)
+                )
                 otp = binary % 1000000
                 if f"{otp:06d}" == code:
                     return True

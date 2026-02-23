@@ -32,14 +32,15 @@ def _build_postgres_url() -> str | None:
 class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY") or "secret!"
     DATABASE_URL = (
-        (_build_postgres_url() or os.environ.get("DATABASE_URL") or "")
-        .replace("postgresql+psycopg2://", "postgresql://")
-        or None
-    )
+        _build_postgres_url() or os.environ.get("DATABASE_URL") or ""
+    ).replace("postgresql+psycopg2://", "postgresql://") or None
     DEBUG = os.environ.get("DEBUG", "True").lower() in ("true", "1", "t")
     HOST = os.environ.get("HOST", "0.0.0.0")
     PORT = int(os.environ.get("PORT", 5000))
-    BACKEND_INTERNAL_URL = os.environ.get(
-        "BACKEND_INTERNAL_URL") or "http://127.0.0.1:5050"
-    MESSAGE_ENCRYPTION_KEY = os.environ.get(
-        "MESSAGE_ENCRYPTION_KEY") or "mPuUjRV-t-5eeaSrEFhVh4yZud-L7rv31SjYdXx9uIU="
+    BACKEND_INTERNAL_URL = (
+        os.environ.get("BACKEND_INTERNAL_URL") or "http://127.0.0.1:5050"
+    )
+    MESSAGE_ENCRYPTION_KEY = (
+        os.environ.get("MESSAGE_ENCRYPTION_KEY")
+        or "mPuUjRV-t-5eeaSrEFhVh4yZud-L7rv31SjYdXx9uIU="
+    )

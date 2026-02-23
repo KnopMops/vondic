@@ -1,13 +1,29 @@
 [build-system]
-requires = ["setuptools>=70", "wheel"]
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "botiksdk"
 version = "0.1.0"
 description = "Vondic Botik SDK"
-requires-python = ">=3.13"
-dependencies = ["requests>=2.32.5"]
+readme = "README.md"
+authors = [
+  { name = "Vondic", email = "support@vondic.com" },
+]
+license = { text = "MIT" }
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "requests>=2.32.5",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/vondic/botiksdk"
+"Bug Tracker" = "https://github.com/vondic/botiksdk/issues"
 
 [tool.setuptools]
 packages = ["botiksdk"]

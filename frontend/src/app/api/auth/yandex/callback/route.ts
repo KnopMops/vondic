@@ -3,12 +3,12 @@ import { setDesktopSession } from '@/lib/desktopSessions'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(req: NextRequest) {
+	const frontendUrl =
+		process.env.NEXT_PUBLIC_FRONTEND_URL || req.nextUrl.origin
 	try {
 		const { searchParams } = new URL(req.url)
 		const code = searchParams.get('code')
 		const cid = searchParams.get('cid') || searchParams.get('state')
-		const frontendUrl =
-			process.env.NEXT_PUBLIC_FRONTEND_URL || req.nextUrl.origin
 		const userAgent = req.headers.get('user-agent') || ''
 		const forwardedFor = req.headers.get('x-forwarded-for') || ''
 		const realIp = req.headers.get('x-real-ip') || ''

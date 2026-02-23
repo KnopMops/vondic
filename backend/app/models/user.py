@@ -27,7 +27,8 @@ class User(db.Model):
     premium = db.Column(INTEGER, default=0)
     premium_started_at = db.Column(TIMESTAMP, default=None)
     premium_expired_at = db.Column(TIMESTAMP, default=None)
-    disk_usage = db.Column(INTEGER, default=0)
+    disk_usage = db.Column(db.BigInteger, default=0)
+    storage_bonus = db.Column(db.BigInteger, default=0)
     is_messaging = db.Column(INTEGER, default=0)
     telegram_id = db.Column(TEXT, unique=True, nullable=True)
     link_key = db.Column(TEXT, unique=True, nullable=True)
@@ -54,9 +55,8 @@ class User(db.Model):
 
     @property
     def disk_limit(self):
-        if self.premium:
-            return 5 * 1024 * 1024 * 1024
-        return 1 * 1024 * 1024 * 1024
+        base = 5 * 1024 * 1024 * 1024 if self.premium else 1 * 1024 * 1024 * 1024
+        return base + (self.storage_bonus or 0)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -77,10 +77,15 @@ class User(db.Model):
             "balance": self.balance,
             "gifts": self.gifts or [],
             "premium": bool(self.premium),
-            "premium_started_at": self.premium_started_at.isoformat() if self.premium_started_at else None,
-            "premium_expired_at": self.premium_expired_at.isoformat() if self.premium_expired_at else None,
+            "premium_started_at": self.premium_started_at.isoformat()
+            if self.premium_started_at
+            else None,
+            "premium_expired_at": self.premium_expired_at.isoformat()
+            if self.premium_expired_at
+            else None,
             "disk_usage": self.disk_usage,
             "disk_limit": self.disk_limit,
+            "storage_bonus": self.storage_bonus,
             "telegram_id": self.telegram_id,
             "link_key": self.link_key,
             "profile_bg_theme": self.profile_bg_theme,

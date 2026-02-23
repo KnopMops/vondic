@@ -36,5 +36,7 @@ class Post(db.Model):
             "posted_by": self.posted_by,
             "deleted": self.deleted,
             "is_blog": self.is_blog,
-            "comments_count": len([c for c in self.comments if not c.deleted]) if self.comments else 0,
+            "comments_count": len([c for c in self.comments if not c.deleted])
+            if self.comments
+            else 0,
         }

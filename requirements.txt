@@ -12,7 +12,10 @@ redis
 email-validator
 werkzeug
 Flask-Mail
-requests
+requests==2.32.5
+urllib3==2.2.3
+charset-normalizer==3.3.2
+chardet==5.2.0
 flasgger
 flask-socketio
 eventlet
@@ -22,3 +25,7 @@ pytz
 psycopg2-binary
 asyncpg
 user-agents
+openai-whisper
+safetext
+nudenetv2
+pika

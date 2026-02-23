@@ -48,7 +48,7 @@ class MessageService:
                 attachments=attachments,
                 type=msg_type,
                 sender_id=user_id,
-                group_id=group_id
+                group_id=group_id,
             )
         elif target_id:
             target_user = User.query.get(target_id)
@@ -60,7 +60,7 @@ class MessageService:
                 attachments=attachments,
                 type=msg_type,
                 sender_id=user_id,
-                target_id=target_id
+                target_id=target_id,
             )
         else:
             return None, "Either group_id or target_id is required"
@@ -73,8 +73,11 @@ class MessageService:
 
             if group_id:
                 ai_participant = next(
-                    (p for p in group.participants if p.username == AI_USERNAME), None)
-                if ai_participant and str(new_message.sender_id) != str(ai_participant.id):
+                    (p for p in group.participants if p.username == AI_USERNAME), None
+                )
+                if ai_participant and str(new_message.sender_id) != str(
+                    ai_participant.id
+                ):
                     OllamaService.process_message_async(
                         new_message.id, is_dm=False)
 
@@ -92,8 +95,8 @@ class MessageService:
     @staticmethod
     def get_direct_messages(user_id, target_id, page=1, per_page=50, cursor=None):
         query = Message.query.filter(
-            ((Message.sender_id == user_id) & (Message.target_id == target_id)) |
-            ((Message.sender_id == target_id) & (Message.target_id == user_id))
+            ((Message.sender_id == user_id) & (Message.target_id == target_id))
+            | ((Message.sender_id == target_id) & (Message.target_id == user_id))
         )
 
         if cursor:
@@ -103,8 +106,9 @@ class MessageService:
             except ValueError:
                 pass
 
-        messages = query.order_by(Message.created_at.desc())\
-            .paginate(page=page, per_page=per_page, error_out=False)
+        messages = query.order_by(Message.created_at.desc()).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
 
         return messages, None
 
@@ -127,8 +131,9 @@ class MessageService:
             except ValueError:
                 pass
 
-        messages = query.order_by(Message.created_at.desc())\
-            .paginate(page=page, per_page=per_page, error_out=False)
+        messages = query.order_by(Message.created_at.desc()).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
 
         return messages, None
 
@@ -143,8 +148,10 @@ class MessageService:
         seen = {}
         ordered = []
         for msg in messages:
-            other_id = msg.target_id if str(
-                msg.sender_id) == str(user_id) else msg.sender_id
+            other_id = (
+                msg.target_id if str(msg.sender_id) == str(
+                    user_id) else msg.sender_id
+            )
             if not other_id or str(other_id) == str(user_id):
                 continue
             if other_id in seen:

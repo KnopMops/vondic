@@ -46,14 +46,13 @@ class UserService:
             return []
 
         search = f"%{query_str}%"
-        return User.query.filter(
-            or_(
-                User.username.ilike(search),
-                User.email.ilike(search)
+        return (
+            User.query.filter(
+                or_(User.username.ilike(search), User.email.ilike(search))
             )
-        ).filter(
-            ~User.email.like("%@telegram.bot")
-        ).all()
+            .filter(~User.email.like("%@telegram.bot"))
+            .all()
+        )
 
     @staticmethod
     def create_user(data):
@@ -263,6 +262,7 @@ class UserService:
             return None, "User not found"
 
         try:
+
             def delete_local_file(url: str | None):
                 if not url or not isinstance(url, str):
                     return
@@ -327,8 +327,7 @@ class UserService:
                     esc_ids,
                 )
             support_cur.execute(
-                "DELETE FROM escalations WHERE user_id = ?", (user_id,)
-            )
+                "DELETE FROM escalations WHERE user_id = ?", (user_id,))
             support_cur.execute(
                 "DELETE FROM notifications WHERE user_id = ?", (user_id,)
             )
@@ -368,9 +367,7 @@ class UserService:
                 )
             )
             db.session.execute(
-                community_members.delete().where(
-                    community_members.c.user_id == user_id
-                )
+                community_members.delete().where(community_members.c.user_id == user_id)
             )
             db.session.execute(
                 channel_participants.delete().where(
@@ -395,9 +392,9 @@ class UserService:
             Like.query.filter(Like.user_id == user_id).delete(
                 synchronize_session=False)
 
-            Comment.query.filter(
-                Comment.posted_by == user_id
-            ).delete(synchronize_session=False)
+            Comment.query.filter(Comment.posted_by == user_id).delete(
+                synchronize_session=False
+            )
 
             Message.query.filter(
                 or_(Message.sender_id == user_id, Message.target_id == user_id)
@@ -405,12 +402,12 @@ class UserService:
 
             posts = Post.query.filter(Post.posted_by == user_id).all()
             for post in posts:
-                Comment.query.filter(
-                    Comment.post_id == post.id
-                ).delete(synchronize_session=False)
-                Like.query.filter(
-                    Like.post_id == post.id
-                ).delete(synchronize_session=False)
+                Comment.query.filter(Comment.post_id == post.id).delete(
+                    synchronize_session=False
+                )
+                Like.query.filter(Like.post_id == post.id).delete(
+                    synchronize_session=False
+                )
                 attachments = post.attachments or []
                 for a in attachments:
                     try:
@@ -439,9 +436,9 @@ class UserService:
                         for a in attachments:
                             if isinstance(a, dict):
                                 delete_local_file(a.get("url"))
-                Message.query.filter(
-                    Message.group_id == group.id
-                ).delete(synchronize_session=False)
+                Message.query.filter(Message.group_id == group.id).delete(
+                    synchronize_session=False
+                )
                 db.session.execute(
                     group_participants.delete().where(
                         group_participants.c.group_id == group.id

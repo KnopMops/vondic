@@ -1151,8 +1151,8 @@ export const useChat = (
 		(messageIds: string[]) => {
 			if (!socket || !targetUserId || channelId || groupId) return // Only for DMs
 
-			socket.emit('messages_read', {
-				sender_id: targetUserId,
+			socket.emit('message_read', {
+				target_sender_id: targetUserId,
 				message_ids: messageIds,
 			})
 		},

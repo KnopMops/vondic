@@ -1,4 +1,3 @@
-
 from app.core.extensions import db
 from app.models.group import Group
 from app.models.user import User
@@ -13,11 +12,7 @@ class GroupService:
         if not name:
             return None, "Group name is required"
 
-        new_group = Group(
-            name=name,
-            description=description,
-            owner_id=user_id
-        )
+        new_group = Group(name=name, description=description, owner_id=user_id)
         owner = User.query.get(user_id)
         if owner:
             new_group.participants.append(owner)
@@ -63,6 +58,7 @@ class GroupService:
 
         try:
             from app.services.ollama_service import OllamaService
+
             OllamaService.ensure_chat_with_ai(user_id)
         except Exception as e:
             print(f"Error ensuring AI chat: {e}")

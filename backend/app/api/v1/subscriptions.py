@@ -3,7 +3,8 @@ from app.utils.decorators import token_required
 from flask import Blueprint, jsonify, request
 
 subscriptions_bp = Blueprint(
-    "subscriptions", __name__, url_prefix="/api/v1/subscriptions")
+    "subscriptions", __name__, url_prefix="/api/v1/subscriptions"
+)
 
 
 @subscriptions_bp.route("/subscribe", methods=["POST"])

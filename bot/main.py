@@ -46,23 +46,37 @@ async def cmd_start(message: types.Message):
     builder.row(InlineKeyboardButton(
         text="✅ Регистрация", callback_data="register"))
 
-    builder.row(InlineKeyboardButton(
-        text="🔄 Войти / Восстановить ключ", callback_data="restore"))
+    builder.row(
+        InlineKeyboardButton(
+            text="🔄 Войти / Восстановить ключ", callback_data="restore"
+        )
+    )
 
-    builder.row(InlineKeyboardButton(
-        text="💎 Купить Vondic Premium", callback_data="buy_premium_tg"))
-    builder.row(InlineKeyboardButton(
-        text="💰 Купить Vondic Coins", callback_data="buy_coins"))
+    builder.row(
+        InlineKeyboardButton(
+            text="💎 Купить Vondic Premium", callback_data="buy_premium_tg"
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(text="💰 Купить Vondic Coins",
+                             callback_data="buy_coins")
+    )
 
-    builder.row(InlineKeyboardButton(
-        text="🚪 У меня нет Telegram аккаунта", callback_data="no_telegram"))
+    builder.row(
+        InlineKeyboardButton(
+            text="🚪 У меня нет Telegram аккаунта", callback_data="no_telegram"
+        )
+    )
 
-    builder.row(InlineKeyboardButton(
-        text="🔗 Привязать аккаунт (Yandex)", callback_data="link_yandex"))
+    builder.row(
+        InlineKeyboardButton(
+            text="🔗 Привязать аккаунт (Yandex)", callback_data="link_yandex"
+        )
+    )
 
     await message.answer(
         "👋 Добро пожаловать в Vondic Bot!\n\nВыберите действие:",
-        reply_markup=builder.as_markup()
+        reply_markup=builder.as_markup(),
     )
 
 
@@ -73,7 +87,9 @@ async def buy_premium_tg_start(callback: types.CallbackQuery):
 
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(f"{BACKEND_URL}/api/v1/users/by-telegram/{user_id}") as response:
+            async with session.get(
+                f"{BACKEND_URL}/api/v1/users/by-telegram/{user_id}"
+            ) as response:
                 if response.status == 200:
                     linked_user = await response.json()
     except Exception as e:
@@ -83,20 +99,25 @@ async def buy_premium_tg_start(callback: types.CallbackQuery):
 
     if not linked_user and not is_local_registered:
         builder = InlineKeyboardBuilder()
-        builder.add(InlineKeyboardButton(
-            text="✅ Зарегистрироваться", callback_data="register"))
+        builder.add(
+            InlineKeyboardButton(text="✅ Зарегистрироваться",
+                                 callback_data="register")
+        )
         await callback.message.answer(
             "⚠️ Вы не зарегистрированы в системе.\nСначала пройдите регистрацию или привяжите существующий аккаунт, чтобы купить Premium.",
-            reply_markup=builder.as_markup()
+            reply_markup=builder.as_markup(),
         )
         await callback.answer()
         return
 
-    target_user_id = linked_user['id'] if linked_user else user_id
+    target_user_id = linked_user["id"] if linked_user else user_id
 
     builder = InlineKeyboardBuilder()
-    builder.add(InlineKeyboardButton(
-        text="💳 Оплатить Premium", callback_data=f"buy_premium:{target_user_id}"))
+    builder.add(
+        InlineKeyboardButton(
+            text="💳 Оплатить Premium", callback_data=f"buy_premium:{target_user_id}"
+        )
+    )
 
     await callback.message.answer(
         "💎 **Vondic Premium**\n\n"
@@ -109,7 +130,7 @@ async def buy_premium_tg_start(callback: types.CallbackQuery):
         "• 🎨 Расширенные возможности кастомизации\n\n"
         "Нажмите кнопку ниже, чтобы оформить подписку.",
         parse_mode="Markdown",
-        reply_markup=builder.as_markup()
+        reply_markup=builder.as_markup(),
     )
     await callback.answer()
 
@@ -117,14 +138,23 @@ async def buy_premium_tg_start(callback: types.CallbackQuery):
 @dp.callback_query(F.data == "buy_coins")
 async def buy_coins_menu(callback: types.CallbackQuery):
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(
-        text="Для Telegram аккаунта", callback_data="buy_coins_tg"))
-    builder.row(InlineKeyboardButton(
-        text="Для Yandex/Email аккаунта", callback_data="buy_coins_email"))
-    builder.row(InlineKeyboardButton(
-        text="По Email (ввести адрес)", callback_data="buy_coins_email"))
+    builder.row(
+        InlineKeyboardButton(text="Для Telegram аккаунта",
+                             callback_data="buy_coins_tg")
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text="Для Yandex/Email аккаунта", callback_data="buy_coins_email"
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text="По Email (ввести адрес)", callback_data="buy_coins_email"
+        )
+    )
     await callback.message.answer(
-        "Выберите, для какого аккаунта купить Vondic Coins:", reply_markup=builder.as_markup()
+        "Выберите, для какого аккаунта купить Vondic Coins:",
+        reply_markup=builder.as_markup(),
     )
     await callback.answer()
 
@@ -135,20 +165,27 @@ async def buy_coins_tg(callback: types.CallbackQuery):
     linked_user = None
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(f"{BACKEND_URL}/api/v1/users/by-telegram/{user_id}") as response:
+            async with session.get(
+                f"{BACKEND_URL}/api/v1/users/by-telegram/{user_id}"
+            ) as response:
                 if response.status == 200:
                     linked_user = await response.json()
     except Exception as e:
         logger.error(f"Error checking linked user: {e}")
     if not linked_user:
         builder = InlineKeyboardBuilder()
-        builder.add(InlineKeyboardButton(
-            text="🔗 Привязать аккаунт (Yandex)", callback_data="link_yandex"))
-        builder.add(InlineKeyboardButton(
-            text="✅ Регистрация", callback_data="register"))
+        builder.add(
+            InlineKeyboardButton(
+                text="🔗 Привязать аккаунт (Yandex)", callback_data="link_yandex"
+            )
+        )
+        builder.add(
+            InlineKeyboardButton(text="✅ Регистрация",
+                                 callback_data="register")
+        )
         await callback.message.answer(
             "Сначала привяжите или зарегистрируйте аккаунт, чтобы купить Vondic Coins.",
-            reply_markup=builder.as_markup()
+            reply_markup=builder.as_markup(),
         )
         await callback.answer()
         return
@@ -156,11 +193,17 @@ async def buy_coins_tg(callback: types.CallbackQuery):
     builder = InlineKeyboardBuilder()
     builder.row(
         InlineKeyboardButton(
-            text="100 coins (10 ₽)", callback_data=f"buy_coins_pack:{target_user_id}:100:1000"),
+            text="100 coins (10 ₽)",
+            callback_data=f"buy_coins_pack:{target_user_id}:100:1000",
+        ),
         InlineKeyboardButton(
-            text="500 coins (45 ₽)", callback_data=f"buy_coins_pack:{target_user_id}:500:4500"),
-        InlineKeyboardButton(text="2000 coins (150 ₽)",
-                             callback_data=f"buy_coins_pack:{target_user_id}:2000:15000"),
+            text="500 coins (45 ₽)",
+            callback_data=f"buy_coins_pack:{target_user_id}:500:4500",
+        ),
+        InlineKeyboardButton(
+            text="2000 coins (150 ₽)",
+            callback_data=f"buy_coins_pack:{target_user_id}:2000:15000",
+        ),
     )
     await callback.message.answer(
         "Выберите пакет Vondic Coins:", reply_markup=builder.as_markup()
@@ -171,7 +214,9 @@ async def buy_coins_tg(callback: types.CallbackQuery):
 @dp.callback_query(F.data == "buy_coins_email")
 async def buy_coins_email_start(callback: types.CallbackQuery, state: FSMContext):
     await state.set_state(CoinsStates.email)
-    await callback.message.answer("📧 Введите email аккаунта Vondic/Yandex для покупки монет:")
+    await callback.message.answer(
+        "📧 Введите email аккаунта Vondic/Yandex для покупки монет:"
+    )
     await callback.answer()
 
 
@@ -197,7 +242,9 @@ async def buy_coins_pack(callback: types.CallbackQuery):
                         builder = InlineKeyboardBuilder()
                         builder.add(InlineKeyboardButton(
                             text="💳 Оплатить", url=url))
-                        await callback.message.answer("Перейдите к оплате:", reply_markup=builder.as_markup())
+                        await callback.message.answer(
+                            "Перейдите к оплате:", reply_markup=builder.as_markup()
+                        )
                     else:
                         await callback.message.answer("Ошибка получения ссылки.")
                 else:
@@ -215,12 +262,16 @@ async def register_user(callback: types.CallbackQuery):
 
     avatar_url = None
     try:
-        user_profile_photos = await callback.bot.get_user_profile_photos(callback.from_user.id, limit=1)
+        user_profile_photos = await callback.bot.get_user_profile_photos(
+            callback.from_user.id, limit=1
+        )
         if user_profile_photos.total_count > 0:
             file_id = user_profile_photos.photos[0][-1].file_id
             file = await callback.bot.get_file(file_id)
             if file.file_path:
-                avatar_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file.file_path}"
+                avatar_url = (
+                    f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file.file_path}"
+                )
     except Exception as e:
         logger.error(f"Не удалось получить аватарку: {e}")
 
@@ -250,25 +301,35 @@ async def buy_coins_email_entered(message: types.Message, state: FSMContext):
     await state.clear()
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(f"{BACKEND_URL}/api/v1/users/by-email/{email}") as response:
+            async with session.get(
+                f"{BACKEND_URL}/api/v1/users/by-email/{email}"
+            ) as response:
                 if response.status == 200:
                     user = await response.json()
                     user_id = user.get("id")
                     builder = InlineKeyboardBuilder()
                     builder.row(
                         InlineKeyboardButton(
-                            text="100 coins (10 ₽)", callback_data=f"buy_coins_pack:{user_id}:100:1000"),
+                            text="100 coins (10 ₽)",
+                            callback_data=f"buy_coins_pack:{user_id}:100:1000",
+                        ),
                         InlineKeyboardButton(
-                            text="500 coins (45 ₽)", callback_data=f"buy_coins_pack:{user_id}:500:4500"),
+                            text="500 coins (45 ₽)",
+                            callback_data=f"buy_coins_pack:{user_id}:500:4500",
+                        ),
                         InlineKeyboardButton(
-                            text="2000 coins (150 ₽)", callback_data=f"buy_coins_pack:{user_id}:2000:15000"),
+                            text="2000 coins (150 ₽)",
+                            callback_data=f"buy_coins_pack:{user_id}:2000:15000",
+                        ),
                     )
                     await message.answer(
                         f"Аккаунт найден: {user.get('username') or email}\nВыберите пакет монет:",
-                        reply_markup=builder.as_markup()
+                        reply_markup=builder.as_markup(),
                     )
                 else:
-                    await message.answer("Аккаунт не найден. Проверьте email или зарегистрируйтесь на сайте.")
+                    await message.answer(
+                        "Аккаунт не найден. Проверьте email или зарегистрируйтесь на сайте."
+                    )
     except Exception as e:
         await message.answer(f"Ошибка проверки email: {str(e)}")
         return
@@ -280,12 +341,16 @@ async def restore_key(callback: types.CallbackQuery):
 
     avatar_url = None
     try:
-        user_profile_photos = await callback.bot.get_user_profile_photos(callback.from_user.id, limit=1)
+        user_profile_photos = await callback.bot.get_user_profile_photos(
+            callback.from_user.id, limit=1
+        )
         if user_profile_photos.total_count > 0:
             file_id = user_profile_photos.photos[0][-1].file_id
             file = await callback.bot.get_file(file_id)
             if file.file_path:
-                avatar_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file.file_path}"
+                avatar_url = (
+                    f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file.file_path}"
+                )
     except Exception as e:
         logger.error(f"Не удалось получить аватарку: {e}")
 
@@ -309,10 +374,14 @@ async def restore_key(callback: types.CallbackQuery):
 @dp.callback_query(F.data == "no_telegram")
 async def no_telegram_auth(callback: types.CallbackQuery):
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(
-        text="📧 Почта + Пароль", callback_data="auth_email"))
-    builder.row(InlineKeyboardButton(
-        text="🔴 Yandex Provider", callback_data="auth_yandex"))
+    builder.row(
+        InlineKeyboardButton(text="📧 Почта + Пароль",
+                             callback_data="auth_email")
+    )
+    builder.row(
+        InlineKeyboardButton(text="🔴 Yandex Provider",
+                             callback_data="auth_yandex")
+    )
 
     await callback.message.answer(
         "Выберите способ авторизации:", reply_markup=builder.as_markup()
@@ -327,7 +396,7 @@ async def auth_yandex(callback: types.CallbackQuery):
         "🔗 [Перейти на сайт](http://localhost:3000/login)\n\n"
         "После авторизации вы сможете привязать свой Telegram аккаунт в настройках профиля.",
         parse_mode="Markdown",
-        disable_web_page_preview=True
+        disable_web_page_preview=True,
     )
     await callback.answer()
 
@@ -350,7 +419,7 @@ async def process_link_key(message: types.Message, state: FSMContext):
         try:
             async with session.post(
                 f"{BACKEND_URL}/api/v1/auth/telegram/link",
-                json={"link_key": key, "telegram_id": telegram_id}
+                json={"link_key": key, "telegram_id": telegram_id},
             ) as response:
                 if response.status == 200:
                     data = await response.json()
@@ -358,18 +427,24 @@ async def process_link_key(message: types.Message, state: FSMContext):
                     username = user.get("username") if user else "Unknown"
 
                     builder = InlineKeyboardBuilder()
-                    builder.add(InlineKeyboardButton(
-                        text="💎 Купить Vondic Premium", callback_data=f"buy_premium:{user['id']}"))
+                    builder.add(
+                        InlineKeyboardButton(
+                            text="💎 Купить Vondic Premium",
+                            callback_data=f"buy_premium:{user['id']}",
+                        )
+                    )
 
                     await message.answer(
                         f"✅ Аккаунт успешно привязан!\nТеперь вы можете использовать Premium функции.\nПользователь: {username}",
-                        reply_markup=builder.as_markup()
+                        reply_markup=builder.as_markup(),
                     )
                     await state.clear()
                 else:
                     error_data = await response.json()
                     error_msg = error_data.get("error", "Unknown error")
-                    await message.answer(f"❌ Ошибка привязки: {error_msg}\nПопробуйте еще раз.")
+                    await message.answer(
+                        f"❌ Ошибка привязки: {error_msg}\nПопробуйте еще раз."
+                    )
         except Exception as e:
             await message.answer(f"❌ Ошибка соединения: {str(e)}")
 
@@ -401,20 +476,24 @@ async def auth_password_entered(message: types.Message, state: FSMContext):
 
     if user:
         builder = InlineKeyboardBuilder()
-        builder.add(InlineKeyboardButton(
-            text="Купить Vondic Premium", callback_data=f"buy_premium:{user['id']}"))
+        builder.add(
+            InlineKeyboardButton(
+                text="Купить Vondic Premium", callback_data=f"buy_premium:{user['id']}"
+            )
+        )
 
         await message.answer(
             f"✅ Успешная авторизация!\nВы вошли как: {user['username']}",
-            reply_markup=builder.as_markup()
+            reply_markup=builder.as_markup(),
         )
     else:
         builder = InlineKeyboardBuilder()
-        builder.add(InlineKeyboardButton(
-            text="Попробовать снова", callback_data="auth_email"))
+        builder.add(
+            InlineKeyboardButton(text="Попробовать снова",
+                                 callback_data="auth_email")
+        )
         await message.answer(
-            "❌ Неверный email или пароль.",
-            reply_markup=builder.as_markup()
+            "❌ Неверный email или пароль.", reply_markup=builder.as_markup()
         )
 
 
@@ -426,21 +505,26 @@ async def buy_premium(callback: types.CallbackQuery):
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 f"{BACKEND_URL}/api/v1/payments/create-checkout-session",
-                json={"user_id": user_id}
+                json={"user_id": user_id},
             ) as response:
                 if response.status == 200:
                     data = await response.json()
                     payment_url = data.get("url")
                     if payment_url:
                         builder = InlineKeyboardBuilder()
-                        builder.add(InlineKeyboardButton(
-                            text="💳 Перейти к оплате", url=payment_url))
+                        builder.add(
+                            InlineKeyboardButton(
+                                text="💳 Перейти к оплате", url=payment_url
+                            )
+                        )
                         await callback.message.answer(
                             "Для оплаты Vondic Premium нажмите на кнопку ниже:",
-                            reply_markup=builder.as_markup()
+                            reply_markup=builder.as_markup(),
                         )
                     else:
-                        await callback.message.answer("❌ Ошибка получения ссылки на оплату.")
+                        await callback.message.answer(
+                            "❌ Ошибка получения ссылки на оплату."
+                        )
                 else:
                     error_text = await response.text()
                     logger.error(f"Backend error: {error_text}")

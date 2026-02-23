@@ -447,8 +447,9 @@ async def run_server(config: ProxyConfig, stats: ProxyStats) -> None:
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO,
-                        format="%(asctime)s %(levelname)s %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
+    )
     config = build_config()
     stats = ProxyStats()
     asyncio.run(run_server(config, stats))

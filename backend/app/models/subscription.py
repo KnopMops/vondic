@@ -14,14 +14,16 @@ class Subscription(db.Model):
     created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
 
     __table_args__ = (
-        db.UniqueConstraint('subscriber_id', 'target_id',
-                            name='uq_subscription'),
+        db.UniqueConstraint("subscriber_id", "target_id",
+                            name="uq_subscription"),
     )
 
     subscriber = db.relationship(
-        "User", foreign_keys=[subscriber_id], backref="following_subscriptions")
+        "User", foreign_keys=[subscriber_id], backref="following_subscriptions"
+    )
     target = db.relationship(
-        "User", foreign_keys=[target_id], backref="follower_subscriptions")
+        "User", foreign_keys=[target_id], backref="follower_subscriptions"
+    )
 
     def to_dict(self):
         return {

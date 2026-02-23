@@ -22,8 +22,9 @@ class Comment(db.Model):
         TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
     likes = db.Column(INTEGER, default=0)
 
-    replies = db.relationship("Comment", backref=db.backref(
-        "parent", remote_side=[id]), lazy=True)
+    replies = db.relationship(
+        "Comment", backref=db.backref("parent", remote_side=[id]), lazy=True
+    )
 
     def to_dict(self):
         return {

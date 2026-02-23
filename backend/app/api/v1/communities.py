@@ -35,7 +35,9 @@ def community_info(current_user, community_id):
     community = CommunityService.get_by_id(community_id)
     if not community:
         return jsonify({"error": "Community not found"}), 404
-    if current_user not in community.members and str(community.owner_id) != str(current_user.id):
+    if current_user not in community.members and str(community.owner_id) != str(
+        current_user.id
+    ):
         return jsonify({"error": "Forbidden"}), 403
     return jsonify(community_schema.dump(community)), 200
 

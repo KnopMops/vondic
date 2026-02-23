@@ -50,8 +50,11 @@ class EmailService:
     @staticmethod
     def send_login_alert(to_email):
         html = "<p>Зафиксирован вход в ваш аккаунт Vondic.</p><p>Если это были не вы, срочно смените пароль.</p>"
-        msg = Message(subject="Оповещение о входе в аккаунт Vondic",
-                      recipients=[to_email], html=html)
+        msg = Message(
+            subject="Оповещение о входе в аккаунт Vondic",
+            recipients=[to_email],
+            html=html,
+        )
         try:
             mail.send(msg)
             return True

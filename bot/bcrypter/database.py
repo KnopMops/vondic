@@ -38,7 +38,9 @@ class AuthRepository:
         finally:
             conn.close()
 
-    def save_user_key(self, user_id: str, username: str, password_hash: str, avatar_url: str = None) -> bool:
+    def save_user_key(
+        self, user_id: str, username: str, password_hash: str, avatar_url: str = None
+    ) -> bool:
         conn = self._connect()
         cursor = conn.cursor()
         email = f"{user_id}@telegram.bot"
@@ -65,7 +67,9 @@ class AuthRepository:
         finally:
             conn.close()
 
-    def update_user_key(self, user_id: str, password_hash: str, avatar_url: str = None) -> bool:
+    def update_user_key(
+        self, user_id: str, password_hash: str, avatar_url: str = None
+    ) -> bool:
         conn = self._connect()
         cursor = conn.cursor()
         try:
@@ -112,7 +116,9 @@ class AuthRepository:
         cursor = conn.cursor()
         try:
             cursor.execute(
-                "UPDATE users SET premium = ? WHERE id = ?", (premium_status, user_id))
+                "UPDATE users SET premium = ? WHERE id = ?", (
+                    premium_status, user_id)
+            )
             conn.commit()
             return True
         except sqlite3.Error:

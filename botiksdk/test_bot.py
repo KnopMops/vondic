@@ -11,8 +11,7 @@ async def main():
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
     bot_id = os.environ.get(
-        "BOTIK_BOT_ID", "eee845bc-8bf7-49da-9ec9-304832e9189b"
-    )
+        "BOTIK_BOT_ID", "eee845bc-8bf7-49da-9ec9-304832e9189b")
     bot_token = os.environ.get(
         "BOTIK_BOT_TOKEN", "ktybQlSZb6xX5FH3j9FoeUKa79xCTUx3Gsio9_5dW3Y"
     )

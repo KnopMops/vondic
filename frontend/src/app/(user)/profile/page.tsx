@@ -17,13 +17,12 @@ export default function ProfilePage() {
 		)
 	}
 
-	const registeredDate = new Date(user.registeredAt).toLocaleDateString(
-		'ru-RU',
-		{
-			year: 'numeric',
-			month: 'long',
-		},
-	)
+	const registeredDate = user.registeredAt
+		? new Date(user.registeredAt).toLocaleDateString('ru-RU', {
+				year: 'numeric',
+				month: 'long',
+			})
+		: '—'
 
 	return (
 		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white overflow-x-hidden relative'>

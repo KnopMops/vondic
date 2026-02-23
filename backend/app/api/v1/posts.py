@@ -50,13 +50,15 @@ def get_posts():
     pagination = PostService.get_posts_paginated(
         page=page, per_page=per_page, user_id=user_id, is_blog=is_blog
     )
-    return jsonify({
-        "items": posts_schema.dump(pagination.items),
-        "total": pagination.total,
-        "pages": pagination.pages,
-        "page": pagination.page,
-        "per_page": pagination.per_page,
-    }), 200
+    return jsonify(
+        {
+            "items": posts_schema.dump(pagination.items),
+            "total": pagination.total,
+            "pages": pagination.pages,
+            "page": pagination.page,
+            "per_page": pagination.per_page,
+        }
+    ), 200
 
 
 @posts_bp.route("/<post_id>", methods=["GET"])

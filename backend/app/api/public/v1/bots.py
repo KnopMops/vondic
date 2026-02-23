@@ -8,9 +8,8 @@ from app.services.bot_service import BotService
 from app.utils.decorators import api_key_required
 from flask import Blueprint, jsonify, request
 
-public_bots_bp = Blueprint(
-    "public_bots", __name__, url_prefix="/api/public/v1/bots"
-)
+public_bots_bp = Blueprint("public_bots", __name__,
+                           url_prefix="/api/public/v1/bots")
 
 logger = logging.getLogger(__name__)
 

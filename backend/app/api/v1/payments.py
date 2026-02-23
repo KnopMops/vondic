@@ -186,8 +186,7 @@ def stripe_webhook():
 
     try:
         event = stripe.Webhook.construct_event(
-            payload, sig_header, endpoint_secret
-        )
+            payload, sig_header, endpoint_secret)
     except ValueError:
         return "Invalid payload", 400
     except stripe.error.SignatureVerificationError:
@@ -211,7 +210,7 @@ def handle_checkout_session(session):
 
     mode = session.get("mode")
     if mode == "subscription":
-        moscow_tz = pytz.timezone('Europe/Moscow')
+        moscow_tz = pytz.timezone("Europe/Moscow")
         now = datetime.now(moscow_tz)
         user.premium = 1
         user.premium_started_at = now

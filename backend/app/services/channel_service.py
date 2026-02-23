@@ -1,4 +1,3 @@
-
 from app.core.extensions import db
 from app.models.channel import Channel
 from app.models.user import User
@@ -14,10 +13,7 @@ class ChannelService:
             return None, "Channel name is required"
 
         new_channel = Channel(
-            name=name,
-            description=description,
-            owner_id=user_id
-        )
+            name=name, description=description, owner_id=user_id)
         owner = User.query.get(user_id)
         if owner:
             new_channel.participants.append(owner)

@@ -96,7 +96,8 @@ class SignalingService:
         if not self._allow_connect():
             logger.warning("Отклонено: превышен лимит подключений")
             raise ConnectionRefusedError(
-                "429 Too Many Requests: Превышен лимит подключений")
+                "429 Too Many Requests: Превышен лимит подключений"
+            )
         token_value = None
         if auth and isinstance(auth, dict):
             token_value = auth.get("token")
@@ -158,14 +159,20 @@ class SignalingService:
                 continue
             emit(
                 "voice_channel_participant_joined",
-                {"channel_id": channel_id, "user_id": sender_id,
-                    "socket_id": request.sid},
+                {
+                    "channel_id": channel_id,
+                    "user_id": sender_id,
+                    "socket_id": request.sid,
+                },
                 room=existing_sid,
             )
             emit(
                 "voice_channel_participant_joined",
-                {"channel_id": channel_id, "user_id": self.broker.resolve_recipient(
-                    existing_sid).get("id"), "socket_id": existing_sid},
+                {
+                    "channel_id": channel_id,
+                    "user_id": self.broker.resolve_recipient(existing_sid).get("id"),
+                    "socket_id": existing_sid,
+                },
             )
         channel_set.add(request.sid)
 
@@ -273,8 +280,7 @@ class SignalingService:
             pid_socket = self.broker.get_user_socket(pid)
             if pid_socket and self.broker.resolve_recipient(pid_socket):
                 online_participants.append(
-                    {"user_id": pid, "socket_id": pid_socket}
-                )
+                    {"user_id": pid, "socket_id": pid_socket})
 
         call_id = str(uuid.uuid4())
         self.group_calls[call_id] = {
@@ -455,10 +461,7 @@ class SignalingService:
             return
 
         messages = self.broker.repo.get_group_history(group_id, limit, offset)
-        emit("group_history", {
-            "group_id": group_id,
-            "messages": messages
-        })
+        emit("group_history", {"group_id": group_id, "messages": messages})
 
     def on_get_history(self, payload):
         target_id = payload.get("target_id")
@@ -480,11 +483,9 @@ class SignalingService:
             return
 
         messages = self.broker.repo.get_messages_history(
-            sender_id, target_id, limit, offset)
-        emit("history", {
-            "target_id": target_id,
-            "messages": messages
-        })
+            sender_id, target_id, limit, offset
+        )
+        emit("history", {"target_id": target_id, "messages": messages})
 
     def on_call_reject(self, payload):
         caller_socket_id = payload.get("caller_socket_id")
@@ -561,10 +562,15 @@ class SignalingService:
         msg_type = payload.get("type", "text")
 
         logger.info(
-            f"Получен запрос send_message от {request.sid}. Target: {target_user_id}, Channel: {channel_id}, Group: {group_id}, Content: {content[:50] if content else 'None'}..., Type: {msg_type}")
+            f"Получен запрос send_message от {request.sid}. Target: {target_user_id}, Channel: {channel_id}, Group: {group_id}, Content: {content[:50] if content else 'None'}..., Type: {msg_type}"
+        )
         logger.info(f"Full payload keys: {list(payload.keys())}")
 
-        if attachments is not None and not isinstance(attachments, list) and not isinstance(attachments, str):
+        if (
+            attachments is not None
+            and not isinstance(attachments, list)
+            and not isinstance(attachments, str)
+        ):
             logger.error(f"Invalid attachments format: {type(attachments)}")
             emit("error", {"message": "attachments must be a list"})
             return
@@ -593,11 +599,13 @@ class SignalingService:
                 logger.info(f"Resolved sender from broker: {sender_id}")
             else:
                 logger.warning(
-                    f"Failed to resolve sender from broker for SID {request.sid}")
+                    f"Failed to resolve sender from broker for SID {request.sid}"
+                )
 
         if not sender_id:
             logger.warning(
-                f"send_message: Unauthorized. Sender not found for SID {request.sid}")
+                f"send_message: Unauthorized. Sender not found for SID {request.sid}"
+            )
             emit("error", {"message": "Unauthorized"})
             return
 
@@ -629,18 +637,20 @@ class SignalingService:
                 "content": content,
                 "attachments": attachments,
                 "type": msg_type,
-                "timestamp": timestamp
+                "timestamp": timestamp,
             }
 
             saved, error = self.broker.repo.save_message(msg_data)
             if not saved:
                 logger.error(
-                    f"Не удалось сохранить сообщение канала {message_id}: {error}")
+                    f"Не удалось сохранить сообщение канала {message_id}: {error}"
+                )
                 emit("error", {"message": f"Failed to save message: {error}"})
                 return
 
             logger.info(
-                f"Сообщение канала {message_id} сохранено (channel={channel_id})")
+                f"Сообщение канала {message_id} сохранено (channel={channel_id})"
+            )
 
             participants = self.broker.repo.get_channel_participants(
                 channel_id)
@@ -653,13 +663,13 @@ class SignalingService:
                 "attachments": attachments,
                 "type": msg_type,
                 "timestamp": timestamp,
-                "is_read": 0
+                "is_read": 0,
             }
 
-            emit("message_sent", {
-                "status": "delivered",
-                "message": full_message_payload
-            })
+            emit(
+                "message_sent", {"status": "delivered",
+                                 "message": full_message_payload}
+            )
 
             for pid in participants:
                 if str(pid) == str(sender_id):
@@ -684,13 +694,14 @@ class SignalingService:
                 "content": content,
                 "attachments": attachments,
                 "type": msg_type,
-                "timestamp": timestamp
+                "timestamp": timestamp,
             }
 
             saved, error = self.broker.repo.save_message(msg_data)
             if not saved:
                 logger.error(
-                    f"Не удалось сохранить сообщение группы {message_id}: {error}")
+                    f"Не удалось сохранить сообщение группы {message_id}: {error}"
+                )
                 emit("error", {"message": f"Failed to save message: {error}"})
                 return
 
@@ -706,13 +717,13 @@ class SignalingService:
                 "attachments": attachments,
                 "type": msg_type,
                 "timestamp": timestamp,
-                "is_read": 0
+                "is_read": 0,
             }
 
-            emit("message_sent", {
-                "status": "delivered",
-                "message": full_message_payload
-            })
+            emit(
+                "message_sent", {"status": "delivered",
+                                 "message": full_message_payload}
+            )
 
             for pid in participants:
                 if str(pid) == str(sender_id):
@@ -730,7 +741,7 @@ class SignalingService:
                 "content": content,
                 "attachments": attachments,
                 "type": msg_type,
-                "timestamp": timestamp
+                "timestamp": timestamp,
             }
 
             saved, error = self.broker.repo.save_message(msg_data)
@@ -741,7 +752,8 @@ class SignalingService:
                 return
 
             logger.info(
-                f"Сообщение {message_id} сохранено в БД (sender={sender_id}, target={target_user_id})")
+                f"Сообщение {message_id} сохранено в БД (sender={sender_id}, target={target_user_id})"
+            )
 
             target_socket = self.broker.get_user_socket(target_user_id)
 
@@ -754,28 +766,30 @@ class SignalingService:
                 "attachments": attachments,
                 "type": msg_type,
                 "timestamp": timestamp,
-                "is_read": 0
+                "is_read": 0,
             }
 
             if target_socket:
                 logger.info(
-                    f"Доставка сообщения {message_id} пользователю {target_user_id} (socket={target_socket})")
+                    f"Доставка сообщения {message_id} пользователю {target_user_id} (socket={target_socket})"
+                )
                 emit(
                     "receive_message",
                     full_message_payload,
                     room=target_socket,
                 )
-                emit("message_sent", {
-                    "status": "delivered",
-                    "message": full_message_payload
-                })
+                emit(
+                    "message_sent",
+                    {"status": "delivered", "message": full_message_payload},
+                )
             else:
                 logger.info(
-                    f"Пользователь {target_user_id} офлайн. Сообщение {message_id} сохранено.")
-                emit("message_sent", {
-                    "status": "saved",
-                    "message": full_message_payload
-                })
+                    f"Пользователь {target_user_id} офлайн. Сообщение {message_id} сохранено."
+                )
+                emit(
+                    "message_sent", {"status": "saved",
+                                     "message": full_message_payload}
+                )
 
             try:
                 import requests
@@ -787,13 +801,17 @@ class SignalingService:
                     message_id,
                     target_user_id,
                 )
-                requests.post(backend_url, json={
-                    "message_id": message_id,
-                    "sender_id": sender_id,
-                    "target_id": target_user_id,
-                    "content": content,
-                    "type": msg_type
-                }, timeout=1)
+                requests.post(
+                    backend_url,
+                    json={
+                        "message_id": message_id,
+                        "sender_id": sender_id,
+                        "target_id": target_user_id,
+                        "content": content,
+                        "type": msg_type,
+                    },
+                    timeout=1,
+                )
             except Exception as e:
                 logger.error(f"Error notifying backend about AI DM: {e}")
 
@@ -934,13 +952,11 @@ class SignalingService:
             return []
         if meta.get("channel_id"):
             participants = self.broker.repo.get_channel_participants(
-                meta["channel_id"]
-            )
+                meta["channel_id"])
             return participants or []
         if meta.get("group_id"):
             participants = self.broker.repo.get_group_participants(
-                meta["group_id"]
-            )
+                meta["group_id"])
             return participants or []
         sender_id = meta.get("sender_id")
         target_id = meta.get("target_id")
@@ -976,9 +992,7 @@ class SignalingService:
             return
 
         participants = self._get_message_participants(meta)
-        if not participants or str(sender_id) not in [
-            str(p) for p in participants
-        ]:
+        if not participants or str(sender_id) not in [str(p) for p in participants]:
             emit("error", {"message": "Forbidden"})
             return
 
@@ -1027,9 +1041,7 @@ class SignalingService:
             return
 
         participants = self._get_message_participants(meta)
-        if not participants or str(sender_id) not in [
-            str(p) for p in participants
-        ]:
+        if not participants or str(sender_id) not in [str(p) for p in participants]:
             emit("error", {"message": "Forbidden"})
             return
 
@@ -1105,7 +1117,8 @@ class SignalingService:
         if target_sender_id:
             sender_socket = self.broker.get_user_socket(target_sender_id)
             if sender_socket:
-                emit("messages_read_update", {
-                    "message_ids": message_ids,
-                    "reader_id": reader_id
-                }, room=sender_socket)
+                emit(
+                    "messages_read_update",
+                    {"message_ids": message_ids, "reader_id": reader_id},
+                    room=sender_socket,
+                )

@@ -129,43 +129,60 @@ class UserRepository:
                 )
             """)
             await conn.execute(
-                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS channel_id TEXT")
+                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS channel_id TEXT"
+            )
             await conn.execute(
-                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS group_id TEXT")
+                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS group_id TEXT"
+            )
             await conn.execute(
-                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to TEXT")
+                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to TEXT"
+            )
             await conn.execute(
-                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS target_id TEXT")
+                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS target_id TEXT"
+            )
             await conn.execute(
-                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'text'")
+                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'text'"
+            )
             await conn.execute(
-                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_read INTEGER DEFAULT 0")
+                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_read INTEGER DEFAULT 0"
+            )
             await conn.execute(
-                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachments TEXT")
+                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachments TEXT"
+            )
             await conn.execute(
-                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_deleted INTEGER DEFAULT 0")
+                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_deleted INTEGER DEFAULT 0"
+            )
             await conn.execute(
-                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS created_at TEXT")
+                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS created_at TEXT"
+            )
             await conn.execute(
-                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS updated_at TEXT")
+                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS updated_at TEXT"
+            )
             await conn.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS socket_id TEXT")
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS socket_id TEXT"
+            )
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT")
             await conn.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT")
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS premium INTEGER DEFAULT 0"
+            )
             await conn.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS premium INTEGER DEFAULT 0")
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS video_channel_id TEXT"
+            )
             await conn.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS video_channel_id TEXT")
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS video_subscribers INTEGER DEFAULT 0"
+            )
             await conn.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS video_subscribers INTEGER DEFAULT 0")
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS video_count INTEGER DEFAULT 0"
+            )
             await conn.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS video_count INTEGER DEFAULT 0")
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS video_likes TEXT"
+            )
             await conn.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS video_likes TEXT")
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS video_watch_later TEXT"
+            )
             await conn.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS video_watch_later TEXT")
-            await conn.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS video_history TEXT")
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS video_history TEXT"
+            )
         finally:
             await conn.close()
 
@@ -251,7 +268,7 @@ class UserRepository:
         prev_p = iv2
         out = bytearray()
         for i in range(0, len(payload), 16):
-            block = payload[i:i + 16]
+            block = payload[i: i + 16]
             xored = bytes(a ^ b for a, b in zip(block, prev_c))
             enc = encryptor.update(xored)
             c_block = bytes(a ^ b for a, b in zip(enc, prev_p))
@@ -277,7 +294,7 @@ class UserRepository:
         prev_p = iv2
         out = bytearray()
         for i in range(0, len(raw), 16):
-            c_block = raw[i:i + 16]
+            c_block = raw[i: i + 16]
             xored = bytes(a ^ b for a, b in zip(c_block, prev_p))
             dec = decryptor.update(xored)
             p_block = bytes(a ^ b for a, b in zip(dec, prev_c))
@@ -287,7 +304,7 @@ class UserRepository:
         if len(out) < 4:
             return None
         msg_len = int.from_bytes(out[:4], "big")
-        body = out[4:4 + msg_len]
+        body = out[4: 4 + msg_len]
         return bytes(body)
 
     def _encrypt_payload(self, value):
@@ -383,13 +400,16 @@ class UserRepository:
             encrypted_content = self._encrypt_payload(msg_data["content"])
             encrypted_attachments = None
             if msg_data.get("attachments") is not None:
-                if isinstance(msg_data["attachments"], str) and msg_data["attachments"].startswith("e2e:"):
+                if isinstance(msg_data["attachments"], str) and msg_data[
+                    "attachments"
+                ].startswith("e2e:"):
                     # For PostgreSQL JSON column, we must store valid JSON.
                     # Wrap the E2E string in quotes (JSON string).
                     encrypted_attachments = json.dumps(msg_data["attachments"])
                 else:
                     attachments_json = json.dumps(
-                        msg_data["attachments"], ensure_ascii=False)
+                        msg_data["attachments"], ensure_ascii=False
+                    )
                     # _encrypt_payload returns a base64 string, which is not valid JSON on its own.
                     # It must be wrapped in quotes too.
                     encrypted_payload = self._encrypt_payload(attachments_json)
@@ -536,8 +556,11 @@ class UserRepository:
             params = []
             for key, value in updates.items():
                 if key == "tags":
-                    value = json.dumps(
-                        value, ensure_ascii=False) if value is not None else None
+                    value = (
+                        json.dumps(value, ensure_ascii=False)
+                        if value is not None
+                        else None
+                    )
                 set_parts.append(f"{key} = ?")
                 params.append(value)
             params.append(video_id)
@@ -734,7 +757,11 @@ class UserRepository:
                     msg["content"] = self._decrypt_payload(msg["content"])
                 except Exception as e:
                     content_value = msg.get("content")
-                    if isinstance(content_value, str) and not content_value.startswith("mt:") and not content_value.startswith("gAAAA"):
+                    if (
+                        isinstance(content_value, str)
+                        and not content_value.startswith("mt:")
+                        and not content_value.startswith("gAAAA")
+                    ):
                         msg["content"] = content_value
                     else:
                         msg["content"] = "[Не удалось расшифровать]"
@@ -825,7 +852,11 @@ class UserRepository:
                     msg["content"] = self._decrypt_payload(msg["content"])
                 except Exception as e:
                     content_value = msg.get("content")
-                    if isinstance(content_value, str) and not content_value.startswith("mt:") and not content_value.startswith("gAAAA"):
+                    if (
+                        isinstance(content_value, str)
+                        and not content_value.startswith("mt:")
+                        and not content_value.startswith("gAAAA")
+                    ):
                         msg["content"] = content_value
                     else:
                         msg["content"] = "[Не удалось расшифровать]"
@@ -913,7 +944,11 @@ class UserRepository:
                     msg["content"] = self._decrypt_payload(msg["content"])
                 except Exception as e:
                     content_value = msg.get("content")
-                    if isinstance(content_value, str) and not content_value.startswith("mt:") and not content_value.startswith("gAAAA"):
+                    if (
+                        isinstance(content_value, str)
+                        and not content_value.startswith("mt:")
+                        and not content_value.startswith("gAAAA")
+                    ):
                         msg["content"] = content_value
                     else:
                         msg["content"] = "[Не удалось расшифровать]"

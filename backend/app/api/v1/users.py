@@ -78,13 +78,15 @@ def internal_process_message():
         return jsonify({"error": "Missing data"}), 400
 
     from app.services.ollama_service import OllamaService
+
     ai_user = OllamaService.get_ai_user()
 
     if str(target_id) == str(ai_user.id):
         content = data.get("content")
         sender_id = data.get("sender_id")
         OllamaService.process_message_async(
-            message_id, is_dm=True, content=content, sender_id=sender_id)
+            message_id, is_dm=True, content=content, sender_id=sender_id
+        )
         return jsonify({"status": "processing"}), 200
 
     return jsonify({"status": "ignored"}), 200
@@ -139,7 +141,10 @@ def block_user(current_user):
     if error:
         status_code = 404 if error == "User not found" else 403
         return jsonify({"error": error}), status_code
-    return jsonify({"message": "User blocked successfully", "user": user_schema.dump(user)}), 200
+    return jsonify(
+        {"message": "User blocked successfully",
+            "user": user_schema.dump(user)}
+    ), 200
 
 
 @users_bp.route("/unblock", methods=["POST"])
@@ -159,7 +164,10 @@ def unblock_user(current_user):
     if error:
         status_code = 404 if error == "User not found" else 403
         return jsonify({"error": error}), status_code
-    return jsonify({"message": "User unblocked successfully", "user": user_schema.dump(user)}), 200
+    return jsonify(
+        {"message": "User unblocked successfully",
+            "user": user_schema.dump(user)}
+    ), 200
 
 
 @users_bp.route("/delete", methods=["DELETE"])
@@ -186,6 +194,8 @@ GIFT_PRICING = {
     "partner_badge": 1999,
     "gold_star": 1999,
 }
+STORAGE_TB_PRICE = 6500
+STORAGE_TB_BYTES = 1024 * 1024 * 1024 * 1024
 
 
 @users_bp.route("/purchase-gift", methods=["POST"])
@@ -201,6 +211,7 @@ def purchase_gift(current_user):
     if not gift_id or quantity <= 0:
         return jsonify({"error": "Invalid parameters"}), 400
     from app.models.gift_catalog import GiftCatalog
+
     catalog_item = GiftCatalog.query.get(gift_id)
     if catalog_item is not None:
         price = catalog_item.coin_price
@@ -217,19 +228,60 @@ def purchase_gift(current_user):
     try:
         current_user.balance = (current_user.balance or 0) - total
         gifts = list(current_user.gifts or [])
-        gifts.append({
-            "gift_id": gift_id,
-            "quantity": quantity,
-            "from_user_id": current_user.id,
-            "created_at": datetime.utcnow().isoformat(),
-            "is_displayed": False
-        })
+        gifts.append(
+            {
+                "gift_id": gift_id,
+                "quantity": quantity,
+                "from_user_id": current_user.id,
+                "created_at": datetime.utcnow().isoformat(),
+                "is_displayed": False,
+            }
+        )
         current_user.gifts = gifts
         if catalog_item is not None and catalog_item.total_supply is not None:
             catalog_item.minted_count = (
                 catalog_item.minted_count or 0) + quantity
         db.session.commit()
-        return jsonify({"success": True, "balance": current_user.balance, "gifts": current_user.gifts}), 200
+        return jsonify(
+            {
+                "success": True,
+                "balance": current_user.balance,
+                "gifts": current_user.gifts,
+            }
+        ), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
+@users_bp.route("/purchase-storage", methods=["POST"])
+@token_required
+def purchase_storage(current_user):
+    data = request.get_json() or {}
+    qty_raw = data.get("quantity", 1)
+    try:
+        quantity = int(qty_raw) if qty_raw is not None else 1
+    except Exception:
+        quantity = 1
+    if quantity < 1:
+        return jsonify({"error": "Invalid parameters"}), 400
+    total_price = STORAGE_TB_PRICE * quantity
+    if (current_user.balance or 0) < total_price:
+        return jsonify({"error": "Insufficient balance"}), 400
+    try:
+        current_user.balance = (current_user.balance or 0) - total_price
+        current_user.storage_bonus = (current_user.storage_bonus or 0) + (
+            STORAGE_TB_BYTES * quantity
+        )
+        db.session.commit()
+        return jsonify(
+            {
+                "success": True,
+                "balance": current_user.balance,
+                "storage_bonus": current_user.storage_bonus,
+                "disk_limit": current_user.disk_limit,
+            }
+        ), 200
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
@@ -250,6 +302,7 @@ def send_gift(current_user):
     if not gift_id or quantity <= 0 or not target_user_id:
         return jsonify({"error": "Invalid parameters"}), 400
     from app.models.gift_catalog import GiftCatalog
+
     catalog_item = GiftCatalog.query.get(gift_id)
     if catalog_item is not None:
         price = catalog_item.coin_price
@@ -269,20 +322,28 @@ def send_gift(current_user):
     try:
         current_user.balance = (current_user.balance or 0) - total
         gifts = list(recipient.gifts or [])
-        gifts.append({
-            "gift_id": gift_id,
-            "quantity": quantity,
-            "from_user_id": current_user.id,
-            "created_at": datetime.utcnow().isoformat(),
-            "is_displayed": True,
-            "comment": comment or None,
-        })
+        gifts.append(
+            {
+                "gift_id": gift_id,
+                "quantity": quantity,
+                "from_user_id": current_user.id,
+                "created_at": datetime.utcnow().isoformat(),
+                "is_displayed": True,
+                "comment": comment or None,
+            }
+        )
         recipient.gifts = gifts
         if catalog_item is not None and catalog_item.total_supply is not None:
             catalog_item.minted_count = (
                 catalog_item.minted_count or 0) + quantity
         db.session.commit()
-        return jsonify({"success": True, "balance": current_user.balance, "recipient_gifts": recipient.gifts}), 200
+        return jsonify(
+            {
+                "success": True,
+                "balance": current_user.balance,
+                "recipient_gifts": recipient.gifts,
+            }
+        ), 200
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500

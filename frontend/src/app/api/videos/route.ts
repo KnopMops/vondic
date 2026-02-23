@@ -11,12 +11,14 @@ export async function GET(req: NextRequest) {
   const limit = searchParams.get('limit') || '24'
   const offset = searchParams.get('offset') || '0'
   const userId = searchParams.get('user_id')
+  const shorts = searchParams.get('shorts')
   const url = new URL(`${BACKEND_URL}/api/v1/videos/`)
   url.searchParams.set('sort', sort)
   url.searchParams.set('order', order)
   url.searchParams.set('limit', limit)
   url.searchParams.set('offset', offset)
   if (userId) url.searchParams.set('user_id', userId)
+  if (shorts) url.searchParams.set('shorts', shorts)
   const res = await fetch(url.toString(), { method: 'GET', cache: 'no-store' })
   const text = await res.text()
   try {

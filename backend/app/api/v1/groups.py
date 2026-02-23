@@ -63,6 +63,7 @@ def participants(current_user, group_id):
         if not group:
             return jsonify({"error": "Group not found"}), 404
         from app.schemas.user_schema import users_schema
+
         return jsonify(users_schema.dump(group.participants)), 200
 
     data = request.get_json() or {}
@@ -72,7 +73,8 @@ def participants(current_user, group_id):
         return jsonify({"error": "user_id is required"}), 400
 
     group, error = GroupService.add_participant(
-        group_id, target_user_id, current_user.id)
+        group_id, target_user_id, current_user.id
+    )
     if error:
         status_code = 403 if "Only owner" in error else 400
         return jsonify({"error": error}), status_code
@@ -112,10 +114,12 @@ def get_messages(current_user, group_id):
         last_item = items[-1]
         next_cursor = last_item.get("created_at")
 
-    return jsonify({
-        "items": items,
-        "total": messages_pagination.total,
-        "pages": messages_pagination.pages,
-        "page": messages_pagination.page,
-        "next_cursor": next_cursor
-    }), 200
+    return jsonify(
+        {
+            "items": items,
+            "total": messages_pagination.total,
+            "pages": messages_pagination.pages,
+            "page": messages_pagination.page,
+            "next_cursor": next_cursor,
+        }
+    ), 200

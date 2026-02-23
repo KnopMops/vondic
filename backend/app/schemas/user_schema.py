@@ -8,8 +8,14 @@ class UserSchema(ma.SQLAlchemyAutoSchema):
     class Meta:
         model = User
         load_instance = True
-        exclude = ("password_hash", "access_token", "refresh_token",
-                   "link_key", "api_key_hash", "api_key")
+        exclude = (
+            "password_hash",
+            "access_token",
+            "refresh_token",
+            "link_key",
+            "api_key_hash",
+            "api_key",
+        )
 
     def get_avatar_url(self, obj):
         return None if obj.is_blocked else obj.avatar_url

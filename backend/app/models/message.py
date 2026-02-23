@@ -21,12 +21,17 @@ class Message(db.Model):
     updated_at = db.Column(
         TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    sender = db.relationship("User", foreign_keys=[
-                             sender_id], backref=db.backref("sent_messages", lazy=True))
-    target = db.relationship("User", foreign_keys=[
-                             target_id], backref=db.backref("received_messages", lazy=True))
-    group = db.relationship("Group", backref=db.backref(
-        "messages", lazy=True, cascade="all, delete-orphan"))
+    sender = db.relationship(
+        "User", foreign_keys=[sender_id], backref=db.backref("sent_messages", lazy=True)
+    )
+    target = db.relationship(
+        "User",
+        foreign_keys=[target_id],
+        backref=db.backref("received_messages", lazy=True),
+    )
+    group = db.relationship(
+        "Group", backref=db.backref("messages", lazy=True, cascade="all, delete-orphan")
+    )
 
     def to_dict(self):
         return {

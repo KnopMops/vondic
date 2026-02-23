@@ -25,6 +25,7 @@ export interface User {
 	gifts?: GiftItem[]
 	disk_usage?: number
 	disk_limit?: number
+	storage_bonus?: number
 	telegram_id?: string | null
 	profile_bg_theme?: string | null
 	profile_bg_gradient?: string | null

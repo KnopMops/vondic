@@ -21,16 +21,20 @@ class PostService:
     @staticmethod
     def get_all_posts(is_blog: bool | None = False):
         return (
-            Post.query.join(User, Post.posted_by == User.id).filter(
+            Post.query.join(User, Post.posted_by == User.id)
+            .filter(
                 Post.deleted.is_(False),
                 User.is_blocked == 0,
                 Post.is_blog.is_(True) if is_blog else Post.is_blog.is_(False),
-            ).order_by(
-                Post.created_at.desc()).all()
+            )
+            .order_by(Post.created_at.desc())
+            .all()
         )
 
     @staticmethod
-    def get_posts_paginated(page=1, per_page=5, user_id=None, is_blog: bool | None = False):
+    def get_posts_paginated(
+        page=1, per_page=5, user_id=None, is_blog: bool | None = False
+    ):
         query = Post.query.join(User, Post.posted_by == User.id).filter(
             Post.deleted.is_(False),
             User.is_blocked == 0,
@@ -44,21 +48,30 @@ class PostService:
 
     @staticmethod
     def get_post_by_id(post_id):
-        return Post.query.join(User, Post.posted_by == User.id).filter(
-            Post.id == post_id,
-            Post.deleted.is_(False),
-            User.is_blocked == 0,
-        ).first()
+        return (
+            Post.query.join(User, Post.posted_by == User.id)
+            .filter(
+                Post.id == post_id,
+                Post.deleted.is_(False),
+                User.is_blocked == 0,
+            )
+            .first()
+        )
 
     @staticmethod
     def search_posts(query_str, is_blog: bool | None = False):
         search = f"%{query_str}%"
-        return Post.query.join(User, Post.posted_by == User.id).filter(
-            Post.content.ilike(search),
-            Post.deleted.is_(False),
-            User.is_blocked == 0,
-            Post.is_blog.is_(True) if is_blog else Post.is_blog.is_(False),
-        ).order_by(Post.created_at.desc()).all()
+        return (
+            Post.query.join(User, Post.posted_by == User.id)
+            .filter(
+                Post.content.ilike(search),
+                Post.deleted.is_(False),
+                User.is_blocked == 0,
+                Post.is_blog.is_(True) if is_blog else Post.is_blog.is_(False),
+            )
+            .order_by(Post.created_at.desc())
+            .all()
+        )
 
     @staticmethod
     def create_post(data, user_id, is_blog: bool = False):

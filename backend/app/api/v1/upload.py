@@ -78,9 +78,11 @@ def upload_voice(current_user):
         file_size = len(file_bytes)
 
         if current_user.disk_usage + file_size > current_user.disk_limit:
-            return jsonify({
-                "message": "Disk space limit exceeded. Upgrade to Premium for more space."
-            }), 403
+            return jsonify(
+                {
+                    "message": "Disk space limit exceeded. Upgrade to Premium for more space."
+                }
+            ), 403
 
         if not current_user.premium:
             delay = file_size / THROTTLE_SPEED_BPS
@@ -90,13 +92,16 @@ def upload_voice(current_user):
 
         current_user.disk_usage += file_size
         from app.core.extensions import db
+
         db.session.commit()
 
-        return jsonify({
-            "url": file_url,
-            "size": file_size,
-            "message": "Voice uploaded successfully"
-        }), 201
+        return jsonify(
+            {
+                "url": file_url,
+                "size": file_size,
+                "message": "Voice uploaded successfully",
+            }
+        ), 201
 
     except Exception as e:
         return jsonify({"message": f"Upload failed: {str(e)}"}), 500
@@ -163,9 +168,11 @@ def upload_file(current_user):
         file_size = len(file_bytes)
 
         if current_user.disk_usage + file_size > current_user.disk_limit:
-            return jsonify({
-                "error": "Disk space limit exceeded. Upgrade to Premium for more space."
-            }), 403
+            return jsonify(
+                {
+                    "error": "Disk space limit exceeded. Upgrade to Premium for more space."
+                }
+            ), 403
 
         if not current_user.premium:
             delay = file_size / THROTTLE_SPEED_BPS
@@ -175,14 +182,17 @@ def upload_file(current_user):
 
         current_user.disk_usage += file_size
         from app.core.extensions import db
+
         db.session.commit()
 
-        return jsonify({
-            "url": file_url,
-            "original_filename": filename,
-            "size_bytes": file_size,
-            "ext": ext
-        }), 201
+        return jsonify(
+            {
+                "url": file_url,
+                "original_filename": filename,
+                "size_bytes": file_size,
+                "ext": ext,
+            }
+        ), 201
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:
@@ -206,16 +216,9 @@ def upload_video(current_user):
     if not ext or ext.lower() not in VIDEO_EXTENSIONS:
         return jsonify({"error": "Invalid video extension"}), 400
 
-    max_size = LIMIT_PREMIUM if current_user.premium else LIMIT_FREE
-
     try:
-        file_bytes = _decode_base64(file_data, max_size)
+        file_bytes = _decode_base64(file_data, None)
         file_size = len(file_bytes)
-
-        if current_user.disk_usage + file_size > current_user.disk_limit:
-            return jsonify({
-                "error": "Disk space limit exceeded. Upgrade to Premium for more space."
-            }), 403
 
         if not current_user.premium:
             delay = file_size / THROTTLE_SPEED_BPS
@@ -225,14 +228,17 @@ def upload_video(current_user):
 
         current_user.disk_usage += file_size
         from app.core.extensions import db
+
         db.session.commit()
 
-        return jsonify({
-            "url": file_url,
-            "original_filename": filename,
-            "size_bytes": file_size,
-            "ext": ext
-        }), 201
+        return jsonify(
+            {
+                "url": file_url,
+                "original_filename": filename,
+                "size_bytes": file_size,
+                "ext": ext,
+            }
+        ), 201
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:

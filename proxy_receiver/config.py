@@ -103,9 +103,8 @@ def build_config() -> ProxyConfig:
     parser.add_argument(
         "--max-frame",
         type=int,
-        default=int(
-            os.getenv("PROXY_RECEIVER_MAX_FRAME", DEFAULT_MAX_FRAME_SIZE)
-        ),
+        default=int(os.getenv("PROXY_RECEIVER_MAX_FRAME",
+                    DEFAULT_MAX_FRAME_SIZE)),
     )
     parser.add_argument(
         "--standalone-mode",
@@ -115,8 +114,8 @@ def build_config() -> ProxyConfig:
     parser.add_argument(
         "--tui",
         action="store_true",
-        default=os.getenv("PROXY_RECEIVER_TUI", "false").lower()
-        in ("true", "1", "t"),
+        default=os.getenv("PROXY_RECEIVER_TUI",
+                          "false").lower() in ("true", "1", "t"),
     )
     parser.add_argument(
         "--gen-key",

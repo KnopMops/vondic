@@ -16,6 +16,18 @@ type Props = {
 	currentUser: User | null
 }
 
+type VideoItem = {
+	id: string
+	title: string
+	description?: string | null
+	url: string
+	poster?: string | null
+	views?: number
+	likes?: number
+	duration?: number | null
+	created_at?: string
+}
+
 export default function UserProfile({ user, currentUser }: Props) {
 	const { user: authUser } = useAuth()
 	const [isFriend, setIsFriend] = useState(false)
@@ -26,15 +38,19 @@ export default function UserProfile({ user, currentUser }: Props) {
 	)
 	const [loading, setLoading] = useState(false)
 	const [checkingStatus, setCheckingStatus] = useState(true)
-	const [activeTab, setActiveTab] = useState<'posts' | 'friends' | 'gifts'>(
-		'posts',
-	)
+	const [activeTab, setActiveTab] = useState<
+		'posts' | 'friends' | 'gifts' | 'videos' | 'shorts' | 'video_info'
+	>('posts')
 	const [friends, setFriends] = useState<User[]>([])
 	const [loadingFriends, setLoadingFriends] = useState(false)
 	const [profilePosts, setProfilePosts] = useState<any[]>([])
 	const [loadingPosts, setLoadingPosts] = useState(false)
 	const [postsPage, setPostsPage] = useState(1)
 	const [hasMorePosts, setHasMorePosts] = useState(true)
+	const [profileVideos, setProfileVideos] = useState<VideoItem[]>([])
+	const [profileShorts, setProfileShorts] = useState<VideoItem[]>([])
+	const [loadingVideos, setLoadingVideos] = useState(false)
+	const [loadingShorts, setLoadingShorts] = useState(false)
 	const [giftSenders, setGiftSenders] = useState<Record<string, any>>({})
 	const [giftCatalogMap, setGiftCatalogMap] = useState<Record<string, any>>({})
 	const backendUrl =
@@ -177,6 +193,17 @@ export default function UserProfile({ user, currentUser }: Props) {
 	const activeGradient = user.premium
 		? `linear-gradient(${gradAngle}deg, ${gradColor1}, ${gradColor2})`
 		: undefined
+	const registeredDate = (() => {
+		const dt = (user as any).registeredAt || (user as any).created_at
+		if (!dt) return '—'
+		const value = new Date(dt)
+		if (Number.isNaN(value.getTime())) return '—'
+		return value.toLocaleDateString('ru-RU', {
+			year: 'numeric',
+			month: 'long',
+			day: 'numeric',
+		})
+	})()
 
 	useEffect(() => {
 		if (user.profile_bg_theme) {
@@ -331,6 +358,54 @@ export default function UserProfile({ user, currentUser }: Props) {
 		}
 	}
 
+	const fetchProfileVideos = async (shorts: boolean) => {
+		if (isBlocked && !isAdmin) {
+			if (shorts) {
+				setProfileShorts([])
+			} else {
+				setProfileVideos([])
+			}
+			return
+		}
+		if (shorts) {
+			setLoadingShorts(true)
+		} else {
+			setLoadingVideos(true)
+		}
+		try {
+			const params = new URLSearchParams({
+				user_id: String(user.id),
+				sort: 'created_at',
+				order: 'desc',
+				limit: '24',
+				offset: '0',
+			})
+			if (shorts) params.set('shorts', 'true')
+			const res = await fetch(`/api/videos?${params.toString()}`, {
+				cache: 'no-store',
+			})
+			const data = res.ok ? await res.json() : []
+			const items = Array.isArray(data) ? data : []
+			if (shorts) {
+				setProfileShorts(items)
+			} else {
+				setProfileVideos(items)
+			}
+		} catch {
+			if (shorts) {
+				setProfileShorts([])
+			} else {
+				setProfileVideos([])
+			}
+		} finally {
+			if (shorts) {
+				setLoadingShorts(false)
+			} else {
+				setLoadingVideos(false)
+			}
+		}
+	}
+
 	useEffect(() => {
 		if (activeTab !== 'posts') return
 		setProfilePosts([])
@@ -341,6 +416,19 @@ export default function UserProfile({ user, currentUser }: Props) {
 			return
 		}
 		fetchProfilePosts(1, true)
+	}, [activeTab, user.id, isBlocked, isAdmin])
+
+	useEffect(() => {
+		if (activeTab === 'videos') {
+			fetchProfileVideos(false)
+		}
+		if (activeTab === 'shorts') {
+			fetchProfileVideos(true)
+		}
+		if (activeTab === 'video_info') {
+			fetchProfileVideos(false)
+			fetchProfileVideos(true)
+		}
 	}, [activeTab, user.id, isBlocked, isAdmin])
 
 	useEffect(() => {
@@ -1188,10 +1276,10 @@ export default function UserProfile({ user, currentUser }: Props) {
 
 			{/* Content Tabs */}
 			<div className='rounded-3xl bg-white/5 border border-white/10 backdrop-blur-md p-1'>
-				<div className='flex'>
+				<div className='flex flex-wrap'>
 					<button
 						onClick={() => setActiveTab('posts')}
-						className={`flex-1 rounded-2xl py-3 text-sm font-medium transition-all ${
+						className={`flex-1 min-w-[120px] rounded-2xl py-3 text-sm font-medium transition-all ${
 							activeTab === 'posts'
 								? 'bg-white/10 text-white shadow-sm'
 								: 'text-gray-400 hover:text-white hover:bg-white/5'
@@ -1201,7 +1289,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 					</button>
 					<button
 						onClick={() => setActiveTab('friends')}
-						className={`flex-1 rounded-2xl py-3 text-sm font-medium transition-all ${
+						className={`flex-1 min-w-[120px] rounded-2xl py-3 text-sm font-medium transition-all ${
 							activeTab === 'friends'
 								? 'bg-white/10 text-white shadow-sm'
 								: 'text-gray-400 hover:text-white hover:bg-white/5'
@@ -1210,8 +1298,38 @@ export default function UserProfile({ user, currentUser }: Props) {
 						Друзья
 					</button>
 					<button
+						onClick={() => setActiveTab('videos')}
+						className={`flex-1 min-w-[120px] rounded-2xl py-3 text-sm font-medium transition-all ${
+							activeTab === 'videos'
+								? 'bg-white/10 text-white shadow-sm'
+								: 'text-gray-400 hover:text-white hover:bg-white/5'
+						}`}
+					>
+						Видео
+					</button>
+					<button
+						onClick={() => setActiveTab('shorts')}
+						className={`flex-1 min-w-[120px] rounded-2xl py-3 text-sm font-medium transition-all ${
+							activeTab === 'shorts'
+								? 'bg-white/10 text-white shadow-sm'
+								: 'text-gray-400 hover:text-white hover:bg-white/5'
+						}`}
+					>
+						VShorts
+					</button>
+					<button
+						onClick={() => setActiveTab('video_info')}
+						className={`flex-1 min-w-[120px] rounded-2xl py-3 text-sm font-medium transition-all ${
+							activeTab === 'video_info'
+								? 'bg-white/10 text-white shadow-sm'
+								: 'text-gray-400 hover:text-white hover:bg-white/5'
+						}`}
+					>
+						Инфо
+					</button>
+					<button
 						onClick={() => setActiveTab('gifts')}
-						className={`flex-1 rounded-2xl py-3 text-sm font-medium transition-all ${
+						className={`flex-1 min-w-[120px] rounded-2xl py-3 text-sm font-medium transition-all ${
 							activeTab === 'gifts'
 								? 'bg-white/10 text-white shadow-sm'
 								: 'text-gray-400 hover:text-white hover:bg-white/5'
@@ -1293,6 +1411,173 @@ export default function UserProfile({ user, currentUser }: Props) {
 								</div>
 							)}
 						</>
+					) : activeTab === 'videos' ? (
+						<>
+							{loadingVideos ? (
+								<div className='flex justify-center py-12'>
+									<div className='h-8 w-8 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent' />
+								</div>
+							) : isBlocked && !isAdmin ? (
+								<div className='flex flex-col items-center justify-center py-12 text-center text-gray-400'>
+									<motion.div
+										initial={{ scale: 0.8, opacity: 0 }}
+										animate={{ scale: 1, opacity: 1 }}
+										transition={{ delay: 0.4 }}
+										className='mb-4 text-6xl opacity-50'
+									>
+										🚫
+									</motion.div>
+									<p className='text-lg font-medium'>Видео скрыты</p>
+									<p className='text-sm text-gray-500'>
+										Контент пользователя недоступен из-за блокировки
+									</p>
+								</div>
+							) : profileVideos.length > 0 ? (
+								<div className='grid grid-cols-1 gap-4 sm:grid-cols-2'>
+									{profileVideos.map(v => {
+										const poster =
+											getAttachmentUrl(v.poster || '') || v.poster || ''
+										return (
+											<Link
+												key={v.id}
+												href={`/video/watch/${v.id}`}
+												className='overflow-hidden rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition'
+											>
+												<div className='relative aspect-video w-full overflow-hidden'>
+													{poster ? (
+														<img
+															src={poster}
+															alt={v.title}
+															className='h-full w-full object-cover'
+														/>
+													) : (
+														<div className='h-full w-full bg-gray-800' />
+													)}
+												</div>
+												<div className='p-3'>
+													<div className='text-sm font-semibold text-white line-clamp-2'>
+														{v.title}
+													</div>
+													<div className='text-[11px] text-gray-400'>
+														{v.views || 0} просмотров · {v.likes || 0} лайков
+													</div>
+												</div>
+											</Link>
+										)
+									})}
+								</div>
+							) : (
+								<div className='flex flex-col items-center justify-center py-12 text-center text-gray-400'>
+									<motion.div
+										initial={{ scale: 0.8, opacity: 0 }}
+										animate={{ scale: 1, opacity: 1 }}
+										transition={{ delay: 0.4 }}
+										className='mb-4 text-6xl opacity-50'
+									>
+										🎬
+									</motion.div>
+									<p className='text-lg font-medium'>Пока нет видео</p>
+								</div>
+							)}
+						</>
+					) : activeTab === 'shorts' ? (
+						<>
+							{loadingShorts ? (
+								<div className='flex justify-center py-12'>
+									<div className='h-8 w-8 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent' />
+								</div>
+							) : isBlocked && !isAdmin ? (
+								<div className='flex flex-col items-center justify-center py-12 text-center text-gray-400'>
+									<motion.div
+										initial={{ scale: 0.8, opacity: 0 }}
+										animate={{ scale: 1, opacity: 1 }}
+										transition={{ delay: 0.4 }}
+										className='mb-4 text-6xl opacity-50'
+									>
+										🚫
+									</motion.div>
+									<p className='text-lg font-medium'>Shorts скрыты</p>
+									<p className='text-sm text-gray-500'>
+										Контент пользователя недоступен из-за блокировки
+									</p>
+								</div>
+							) : profileShorts.length > 0 ? (
+								<div className='grid grid-cols-2 gap-4 sm:grid-cols-3'>
+									{profileShorts.map(v => {
+										const poster =
+											getAttachmentUrl(v.poster || '') || v.poster || ''
+										return (
+											<Link
+												key={v.id}
+												href={`/video/watch/${v.id}`}
+												className='overflow-hidden rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition'
+											>
+												<div className='relative aspect-[9/16] w-full overflow-hidden'>
+													{poster ? (
+														<img
+															src={poster}
+															alt={v.title}
+															className='h-full w-full object-cover'
+														/>
+													) : (
+														<div className='h-full w-full bg-gray-800' />
+													)}
+												</div>
+												<div className='p-3'>
+													<div className='text-xs font-semibold text-white line-clamp-2'>
+														{v.title}
+													</div>
+													<div className='text-[10px] text-gray-400'>
+														{v.views || 0} просмотров
+													</div>
+												</div>
+											</Link>
+										)
+									})}
+								</div>
+							) : (
+								<div className='flex flex-col items-center justify-center py-12 text-center text-gray-400'>
+									<motion.div
+										initial={{ scale: 0.8, opacity: 0 }}
+										animate={{ scale: 1, opacity: 1 }}
+										transition={{ delay: 0.4 }}
+										className='mb-4 text-6xl opacity-50'
+									>
+										📱
+									</motion.div>
+									<p className='text-lg font-medium'>Пока нет VShorts</p>
+								</div>
+							)}
+						</>
+					) : activeTab === 'video_info' ? (
+						<div className='space-y-4 text-sm text-gray-300'>
+							<div className='rounded-2xl border border-white/10 bg-white/5 p-4'>
+								<div className='text-xs text-gray-400'>Описание</div>
+								<div className='mt-2 text-white'>
+									{user.description || 'Описание не указано'}
+								</div>
+							</div>
+							<div className='grid grid-cols-1 gap-3 sm:grid-cols-3'>
+								<div className='rounded-2xl border border-white/10 bg-white/5 p-4'>
+									<div className='text-xs text-gray-400'>Видео</div>
+									<div className='mt-1 text-lg font-semibold text-white'>
+										{profileVideos.length}
+									</div>
+								</div>
+								<div className='rounded-2xl border border-white/10 bg-white/5 p-4'>
+									<div className='text-xs text-gray-400'>VShorts</div>
+									<div className='mt-1 text-lg font-semibold text-white'>
+										{profileShorts.length}
+									</div>
+								</div>
+								<div className='rounded-2xl border border-white/10 bg-white/5 p-4'>
+									<div className='text-xs text-gray-400'>Регистрация</div>
+									<div className='mt-1 text-sm font-semibold text-white'>
+										{registeredDate}
+									</div>
+								</div>
+							</div>
+						</div>
 					) : activeTab === 'friends' ? (
 						<div className='grid grid-cols-1 gap-4 sm:grid-cols-2'>
 							{loadingFriends ? (

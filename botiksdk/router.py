@@ -19,8 +19,7 @@ class Router:
     def message(self, *filters: BaseFilter):
         def decorator(func: HandlerCallable):
             self.message_handlers.append(
-                Handler(filters=list(filters), callback=func)
-            )
+                Handler(filters=list(filters), callback=func))
             return func
 
         return decorator

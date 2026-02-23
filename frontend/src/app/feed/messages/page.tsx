@@ -566,6 +566,9 @@ export default function MessengerPage() {
 	const botMessageIdsRef = useRef<Set<string>>(new Set())
 	const botStorageLoadedRef = useRef(false)
 	const botStorageKeyRef = useRef<string | null>(null)
+	const [botStorageReadyKey, setBotStorageReadyKey] = useState<string | null>(
+		null,
+	)
 	const botikStorageKey = user?.id
 		? `bot_history_${user.id}_${botUser.id}`
 		: `bot_history_${botUser.id}`
@@ -772,6 +775,7 @@ export default function MessengerPage() {
 	}, [aiMessages, aiStorageKey])
 	useEffect(() => {
 		botStorageLoadedRef.current = false
+		setBotStorageReadyKey(null)
 		try {
 			const raw = localStorage.getItem(botStorageKey)
 			if (raw) {
@@ -783,6 +787,7 @@ export default function MessengerPage() {
 					)
 					botStorageLoadedRef.current = true
 					botStorageKeyRef.current = botStorageKey
+					setBotStorageReadyKey(botStorageKey)
 					return
 				}
 			}
@@ -801,6 +806,7 @@ export default function MessengerPage() {
 							)
 							botStorageLoadedRef.current = true
 							botStorageKeyRef.current = botStorageKey
+							setBotStorageReadyKey(botStorageKey)
 							return
 						}
 					}
@@ -811,12 +817,14 @@ export default function MessengerPage() {
 		botMessageIdsRef.current = new Set()
 		botStorageLoadedRef.current = true
 		botStorageKeyRef.current = botStorageKey
+		setBotStorageReadyKey(botStorageKey)
 	}, [botStorageKey, activeBotId, user?.id])
 
 	useEffect(() => {
 		if (
 			!botStorageLoadedRef.current ||
-			botStorageKeyRef.current !== botStorageKey
+			botStorageKeyRef.current !== botStorageKey ||
+			botStorageReadyKey !== botStorageKey
 		) {
 			return
 		}
@@ -827,7 +835,7 @@ export default function MessengerPage() {
 		if (botStorageKey === botikStorageKey) {
 			setHasBotHistory(botMessages.length > 0)
 		}
-	}, [botMessages, botStorageKey, botikStorageKey])
+	}, [botMessages, botStorageKey, botikStorageKey, botStorageReadyKey])
 
 	useEffect(() => {
 		try {
@@ -950,6 +958,7 @@ export default function MessengerPage() {
 	const messageRefs = useRef<Record<string, HTMLDivElement | null>>({})
 	const containerRef = useRef<HTMLDivElement>(null)
 	const forceScrollToBottomRef = useRef(false)
+	const scrollToBottomOnOpenRef = useRef(false)
 	const [prevScrollHeight, setPrevScrollHeight] = useState(0)
 	const [isRestoringScroll, setIsRestoringScroll] = useState(false)
 	const [replyToMessage, setReplyToMessage] = useState<Message | null>(null)
@@ -1024,6 +1033,35 @@ export default function MessengerPage() {
 	const [selectedCommunityId, setSelectedCommunityId] = useState<string>('')
 	const [communityChannels, setCommunityChannels] = useState<any[]>([])
 	const [selectedCommunity, setSelectedCommunity] = useState<any | null>(null)
+	const updateChatUrl = useCallback(
+		(next: {
+			botId?: string
+			directId?: string
+			groupId?: string
+			channelId?: string
+			serverId?: string
+		} | null) => {
+			if (typeof window === 'undefined') return
+			const params = new URLSearchParams(window.location.search)
+			params.delete('bot_id')
+			params.delete('direct_id')
+			params.delete('user_id')
+			params.delete('group_id')
+			params.delete('channel_id')
+			params.delete('server_id')
+			if (next?.botId) params.set('bot_id', next.botId)
+			if (next?.directId) params.set('direct_id', next.directId)
+			if (next?.groupId) params.set('group_id', next.groupId)
+			if (next?.channelId) params.set('channel_id', next.channelId)
+			if (next?.serverId) params.set('server_id', next.serverId)
+			const query = params.toString()
+			const nextUrl = query
+				? `${window.location.pathname}?${query}`
+				: window.location.pathname
+			window.history.replaceState(null, '', nextUrl)
+		},
+		[],
+	)
 
 	// Sidebar Search State
 	const [searchQuery, setSearchQuery] = useState('')
@@ -1699,9 +1737,9 @@ export default function MessengerPage() {
 					const id = item?.id
 					if (!id) return false
 					if (user?.id && String(id) === String(user.id)) return false
-					// if (aiUser?.id && String(id) === String(aiUser.id)) return false
+					if (aiUser?.id && String(id) === String(aiUser.id)) return false
 					const username = String(item?.username || '')
-					// if (username === 'Vondic AI' || username === 'vondic_ai') return false
+					if (username === 'Vondic AI' || username === 'vondic_ai') return false
 					return true
 				})
 				.map((item: any) => ({
@@ -1735,36 +1773,212 @@ export default function MessengerPage() {
 	}, [socket, fetchRecent])
 
 	useEffect(() => {
-		const botId =
-			typeof window !== 'undefined'
-				? new URLSearchParams(window.location.search).get('bot_id')
-				: null
-		if (!botId) return
-		const loadBot = async () => {
+		if (typeof window === 'undefined') return
+		const params = new URLSearchParams(window.location.search)
+		const botId = params.get('bot_id')
+		const groupId = params.get('group_id')
+		const directId = params.get('direct_id') || params.get('user_id')
+		const channelId = params.get('channel_id')
+		const serverId = params.get('server_id')
+		if (botId) {
+			const loadBot = async () => {
+				try {
+					const res = await fetch(`/api/v1/bots?bot_id=${botId}`)
+					if (!res.ok) return
+					const data: any = await res.json().catch(() => ({}))
+					if (!data?.id || !data?.name) return
+					setSelectedFriend({
+						id: data.id,
+						email: `${data.name}@bot.local`,
+						username: data.name,
+						role: 'Bot',
+						avatar_url: data.avatar_url ?? null,
+						status: data.is_active === 0 ? 'Offline' : 'Online',
+						premium: false,
+						is_bot: true,
+					})
+					setSelectedGroup(null)
+					setSelectedChannel(null)
+					setIsChatSearchOpen(false)
+					setChatSearchQuery('')
+					setFoundMessages([])
+				} catch (error) {
+					console.error('Failed to load bot by id:', error)
+				}
+			}
+			loadBot()
+			return
+		}
+		if (groupId) {
+			const loadGroup = async () => {
+				try {
+					const group = await getGroupDetails(groupId)
+					if (!group?.id) return
+					setSelectedGroup(group)
+					setSelectedFriend(null)
+					setSelectedChannel(null)
+					setSelectedCommunity(null)
+					setSelectedCommunityId('')
+					setActiveTab('direct')
+					setIsChatSearchOpen(false)
+					setChatSearchQuery('')
+					setFoundMessages([])
+				} catch (error) {
+					console.error('Failed to load group by id:', error)
+				}
+			}
+			loadGroup()
+			return
+		}
+		if (serverId) {
+			const loadServer = async () => {
+				try {
+					const res = await fetch('/api/v1/communities/my', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+					})
+					if (!res.ok) return
+					const data = await res.json().catch(() => [])
+					const communities = Array.isArray(data) ? data : []
+					const community = communities.find(
+						(item: any) => String(item?.id) === String(serverId),
+					)
+					if (!community?.id) return
+					setMyCommunities(communities)
+					setSelectedCommunity(community)
+					setSelectedCommunityId(community.id)
+					setActiveTab('community')
+					setSelectedFriend(null)
+					setSelectedGroup(null)
+					setSelectedChannel(null)
+					setIsChatSearchOpen(false)
+					setChatSearchQuery('')
+					setFoundMessages([])
+					const channelsRes = await fetch(
+						`/api/v1/communities/${community.id}/channels/list`,
+						{
+							method: 'GET',
+							headers: { 'Content-Type': 'application/json' },
+						},
+					)
+					if (channelsRes.ok) {
+						const channelsData = await channelsRes.json()
+						const list = Array.isArray(channelsData) ? channelsData : []
+						setCommunityChannels(list)
+						if (channelId) {
+							const selected = list.find(
+								(ch: any) => String(ch?.id) === String(channelId),
+							)
+							if (selected?.id) {
+								setSelectedChannel({
+									id: selected.id,
+									name: selected.name,
+									description: selected.description || '',
+									invite_code: '',
+									owner_id: '',
+									participants_count: 0,
+								})
+							}
+						}
+					}
+				} catch (error) {
+					console.error('Failed to load server by id:', error)
+				}
+			}
+			loadServer()
+			return
+		}
+		if (channelId) {
+			const loadChannel = async () => {
+				try {
+					const channel = await getChannelInfo(channelId)
+					if (!channel?.id) return
+					setSelectedChannel(channel)
+					setSelectedFriend(null)
+					setSelectedGroup(null)
+					setSelectedCommunity(null)
+					setSelectedCommunityId('')
+					setActiveTab('community')
+					setIsChatSearchOpen(false)
+					setChatSearchQuery('')
+					setFoundMessages([])
+				} catch (error) {
+					console.error('Failed to load channel by id:', error)
+				}
+			}
+			loadChannel()
+			return
+		}
+		if (!directId) return
+		const loadUser = async () => {
 			try {
-				const res = await fetch(`/api/v1/bots?bot_id=${botId}`)
+				const res = await fetch(`/api/users/${directId}`)
 				if (!res.ok) return
-				const data: any = await res.json().catch(() => ({}))
-				if (!data?.id || !data?.name) return
+				const payload = await res.json().catch(() => ({}))
+				const data = payload?.user || payload
+				if (!data?.id || !data?.username) return
 				setSelectedFriend({
 					id: data.id,
-					email: `${data.name}@bot.local`,
-					username: data.name,
-					role: 'Bot',
+					email: data.email || `${data.username}@user.local`,
+					username: data.username,
+					role: data.role || 'User',
 					avatar_url: data.avatar_url ?? null,
-					status: data.is_active === 0 ? 'Offline' : 'Online',
-					premium: false,
+					status: data.status || 'Offline',
+					premium: !!data.premium,
+					is_bot: data.is_bot === true,
 				})
 				setSelectedGroup(null)
+				setSelectedChannel(null)
+				setSelectedCommunity(null)
+				setSelectedCommunityId('')
+				setActiveTab('direct')
 				setIsChatSearchOpen(false)
 				setChatSearchQuery('')
 				setFoundMessages([])
 			} catch (error) {
-				console.error('Failed to load bot by id:', error)
+				console.error('Failed to load user by id:', error)
 			}
 		}
-		loadBot()
-	}, [])
+		loadUser()
+	}, [getGroupDetails, getChannelInfo])
+
+	useEffect(() => {
+		if (selectedFriend?.id) {
+			if (selectedFriend.is_bot) {
+				updateChatUrl({ botId: selectedFriend.id })
+				return
+			}
+			updateChatUrl({ directId: selectedFriend.id })
+			return
+		}
+		if (selectedGroup?.id) {
+			updateChatUrl({ groupId: selectedGroup.id })
+			return
+		}
+		if (selectedCommunity?.id && selectedChannel?.id) {
+			updateChatUrl({
+				serverId: selectedCommunity.id,
+				channelId: selectedChannel.id,
+			})
+			return
+		}
+		if (selectedChannel?.id) {
+			updateChatUrl({ channelId: selectedChannel.id })
+			return
+		}
+		if (selectedCommunity?.id) {
+			updateChatUrl({ serverId: selectedCommunity.id })
+			return
+		}
+		updateChatUrl(null)
+	}, [
+		selectedFriend?.id,
+		selectedFriend?.is_bot,
+		selectedGroup?.id,
+		selectedChannel?.id,
+		selectedCommunity?.id,
+		updateChatUrl,
+	])
 
 	// Sidebar Search Effect
 	useEffect(() => {
@@ -1794,7 +2008,17 @@ export default function MessengerPage() {
 
 				if (usersRes.ok) {
 					const data = await usersRes.json()
-					setUserSearchResults(Array.isArray(data) ? data : [])
+					const raw = Array.isArray(data) ? data : []
+					const cleaned = raw.filter((item: any) => {
+						if (!item?.id) return false
+						if (String(item.id) === String(aiUser.id)) return false
+						const username = String(item?.username || '').toLowerCase()
+						if (username === 'vondic ai' || username === 'vondic_ai')
+							return false
+						if (item.is_bot === true) return false
+						return true
+					})
+					setUserSearchResults(cleaned)
 				} else {
 					setUserSearchResults([])
 				}
@@ -1827,7 +2051,7 @@ export default function MessengerPage() {
 		}
 
 		searchUsers()
-	}, [debouncedSearchQuery])
+	}, [debouncedSearchQuery, aiUser.id])
 
 	// Close emoji picker when clicking outside
 	useEffect(() => {
@@ -2763,6 +2987,21 @@ export default function MessengerPage() {
 	useLayoutEffect(() => {
 		if (isChatSearchOpen && chatSearchQuery) return // Don't handle scroll for search results
 
+		if (scrollToBottomOnOpenRef.current) {
+			scrollToBottomOnOpenRef.current = false
+			setIsRestoringScroll(false)
+			requestAnimationFrame(() => {
+				messagesEndRef.current?.scrollIntoView({
+					behavior: 'auto',
+					block: 'end',
+				})
+			})
+			if (containerRef.current) {
+				resolvePinnedForScroll(containerRef.current.scrollTop)
+			}
+			return
+		}
+
 		if (forceScrollToBottomRef.current) {
 			forceScrollToBottomRef.current = false
 			setIsRestoringScroll(false)
@@ -2793,6 +3032,11 @@ export default function MessengerPage() {
 			resolvePinnedForScroll(containerRef.current.scrollTop)
 		}
 	}, [messages, isChatSearchOpen, chatSearchQuery])
+
+	useEffect(() => {
+		scrollToBottomOnOpenRef.current = true
+		setIsRestoringScroll(false)
+	}, [selectedFriend?.id, selectedChannel?.id, selectedGroup?.id])
 
 	useEffect(() => {
 		setPinnedMessageIds([])
