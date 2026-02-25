@@ -1,3 +1,4 @@
+import json
 import logging
 import time
 import uuid
@@ -27,6 +28,39 @@ class SignalingService:
         self._message_reactions = defaultdict(lambda: defaultdict(set))
         self._pinned_messages = set()
         self._bind_events()
+
+    def _load_existing_interactions(self):
+        """Load existing pinned messages and reactions from database"""
+        try:
+            # Load pinned messages
+            rows = self.broker.repo._run(
+                self.broker.repo._fetch(
+                    "SELECT id FROM messages WHERE pinned_by IS NOT NULL"
+                )
+            )
+            for row in rows:
+                self._pinned_messages.add(row['id'])
+
+            # Load reactions
+            reaction_rows = self.broker.repo._run(
+                self.broker.repo._fetch(
+                    "SELECT id, reactions FROM messages WHERE reactions IS NOT NULL"
+                )
+            )
+            for row in reaction_rows:
+                message_id = row['id']
+                reactions_str = row['reactions']
+                if reactions_str:
+                    try:
+                        reactions_dict = json.loads(reactions_str)
+                        for emoji, user_list in reactions_dict.items():
+                            if isinstance(user_list, list):
+                                self._message_reactions[message_id][emoji] = set(
+                                    user_list)
+                    except:
+                        pass  # Skip invalid reactions data
+        except Exception as e:
+            logger.error(f"Error loading existing interactions: {e}")
 
     def _bind_events(self):
         self.io.on_event("connect", self.on_connect)
@@ -288,7 +322,9 @@ class SignalingService:
             "caller_socket_id": request.sid,
             "caller_user_id": sender_id,
             "participants": [p["user_id"] for p in online_participants],
-            "joined": set(),
+            "joined": {str(sender_id)},  # Caller is already in the call
+            "caller_username": sender.get("username") if sender else None,
+            "caller_avatar_url": sender.get("avatar_url") if sender else None,
         }
 
         incoming_payload = {
@@ -309,13 +345,21 @@ class SignalingService:
         for p in online_participants:
             emit("incoming_group_call", incoming_payload, room=p["socket_id"])
 
+        # Notify caller with their own info and other participants
         emit(
             "group_call_started",
             {
                 "call_id": call_id,
                 "group_id": group_id,
                 "participants": online_participants,
+                "caller_participant": {
+                    "user_id": sender_id,
+                    "socket_id": request.sid,
+                    "username": sender.get("username") if sender else None,
+                    "avatar_url": sender.get("avatar_url") if sender else None,
+                },
             },
+            room=request.sid,
         )
 
     def on_group_call_answer(self, payload):
@@ -329,7 +373,7 @@ class SignalingService:
             emit("error", {"message": "Call not found"})
             return
 
-        sender_id, _sender = self._get_sender()
+        sender_id, sender = self._get_sender()
         if not sender_id:
             emit("error", {"message": "Unauthorized"})
             return
@@ -347,6 +391,10 @@ class SignalingService:
             call["participants"] = participants_list
 
         caller_socket_id = call.get("caller_socket_id")
+        caller_user_id = call.get("caller_user_id")
+        caller_username = call.get("caller_username")
+        caller_avatar_url = call.get("caller_avatar_url")
+
         if caller_socket_id and self.broker.resolve_recipient(caller_socket_id):
             emit(
                 "group_call_accepted",
@@ -358,10 +406,13 @@ class SignalingService:
                 room=caller_socket_id,
             )
 
+        # Notify others about new participant with user info
         notify_payload = {
             "call_id": call_id,
             "user_id": sender_id,
             "socket_id": request.sid,
+            "username": sender.get("username") if sender else None,
+            "avatar_url": sender.get("avatar_url") if sender else None,
         }
         if caller_socket_id and self.broker.resolve_recipient(caller_socket_id):
             emit("group_call_participant_joined",
@@ -374,20 +425,53 @@ class SignalingService:
                 emit("group_call_participant_joined",
                      notify_payload, room=pid_socket)
 
+        # Send info about existing participants (including caller) to new participant
+        # First, send the caller
+        if caller_socket_id and caller_socket_id != request.sid:
+            emit(
+                "group_call_participant_joined",
+                {
+                    "call_id": call_id,
+                    "user_id": caller_user_id,
+                    "socket_id": caller_socket_id,
+                    "username": caller_username,
+                    "avatar_url": caller_avatar_url,
+                },
+                room=request.sid,
+            )
+
+        # Then send other already-joined participants
         for pid in call.get("participants", []):
             if str(pid) == str(sender_id):
                 continue
             pid_socket = self.broker.get_user_socket(pid)
             if pid_socket and self.broker.resolve_recipient(pid_socket):
+                # Get user info for this participant
+                participant_info = self.broker.resolve_recipient(pid_socket)
                 emit(
                     "group_call_participant_joined",
                     {
                         "call_id": call_id,
                         "user_id": pid,
                         "socket_id": pid_socket,
+                        "username": participant_info.get("username") if participant_info else None,
+                        "avatar_url": participant_info.get("avatar_url") if participant_info else None,
                     },
                     room=request.sid,
                 )
+
+        # Additionally, send the new participant's info to themselves to ensure they're aware of their participation
+        emit(
+            "group_call_participant_joined",
+            {
+                "call_id": call_id,
+                "user_id": sender_id,
+                "socket_id": request.sid,
+                "username": sender.get("username") if sender else None,
+                "avatar_url": sender.get("avatar_url") if sender else None,
+            },
+            room=request.sid,
+        )
 
     def on_group_call_reject(self, payload):
         call_id = payload.get("call_id")
@@ -996,20 +1080,49 @@ class SignalingService:
             emit("error", {"message": "Forbidden"})
             return
 
-        reactions_for_msg = self._message_reactions[message_id]
-        users_for_emoji = reactions_for_msg[emoji]
-
-        if sender_id in users_for_emoji:
-            users_for_emoji.remove(sender_id)
+        # Load current reactions from database
+        current_reactions = meta.get('reactions')
+        if current_reactions:
+            try:
+                reactions_dict = json.loads(current_reactions)
+            except:
+                reactions_dict = {}
         else:
-            users_for_emoji.add(sender_id)
+            reactions_dict = {}
 
-        if not users_for_emoji:
-            reactions_for_msg.pop(emoji, None)
-        if not reactions_for_msg:
-            self._message_reactions.pop(message_id, None)
+        # Update reactions for this emoji
+        if emoji in reactions_dict:
+            users_for_emoji = set(reactions_dict[emoji])
+            if sender_id in users_for_emoji:
+                users_for_emoji.remove(sender_id)
+                if not users_for_emoji:
+                    del reactions_dict[emoji]
+                else:
+                    reactions_dict[emoji] = list(users_for_emoji)
+            else:
+                users_for_emoji.add(sender_id)
+                reactions_dict[emoji] = list(users_for_emoji)
+        else:
+            reactions_dict[emoji] = [sender_id]
 
-        count = len(users_for_emoji)
+        # Save updated reactions to database
+        try:
+            import json
+            updated_reactions = json.dumps(
+                reactions_dict) if reactions_dict else None
+            query = "UPDATE messages SET reactions = ? WHERE id = ?"
+            self.broker.repo._run(
+                self.broker.repo._execute(
+                    query, (updated_reactions, message_id))
+            )
+        except Exception as e:
+            logger.error(f"DB Error updating reactions: {e}")
+            emit("error", {"message": "Failed to update reactions"})
+            return
+
+        # Calculate count for this emoji
+        count = len(reactions_dict.get(emoji, []))
+
         event_payload = {
             "id": message_id,
             "emoji": emoji,
@@ -1045,16 +1158,33 @@ class SignalingService:
             emit("error", {"message": "Forbidden"})
             return
 
-        if message_id in self._pinned_messages:
-            self._pinned_messages.remove(message_id)
+        # Get current pinned status from database
+        current_pinned_by = meta.get('pinned_by')
+        if current_pinned_by:
+            # Message is currently pinned, unpin it
             pinned = False
+            new_pinned_by = None
         else:
-            self._pinned_messages.add(message_id)
+            # Message is not pinned, pin it
             pinned = True
+            new_pinned_by = str(sender_id)
+
+        # Update the database with new pinned status
+        try:
+            import json
+            query = "UPDATE messages SET pinned_by = ? WHERE id = ?"
+            self.broker.repo._run(
+                self.broker.repo._execute(query, (new_pinned_by, message_id))
+            )
+        except Exception as e:
+            logger.error(f"DB Error updating pinned status: {e}")
+            emit("error", {"message": "Failed to update pinned status"})
+            return
 
         event_payload = {
             "id": message_id,
             "pinned": pinned,
+            "pinned_by": new_pinned_by
         }
 
         for pid in participants:

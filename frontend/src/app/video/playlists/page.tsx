@@ -5,6 +5,18 @@ import { useAuth } from '@/lib/AuthContext'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 
+// Generate UUID fallback for non-secure contexts
+function generateUUID(): string {
+	if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+		return crypto.randomUUID()
+	}
+	return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+		const r = (Math.random() * 16) | 0
+		const v = c === 'x' ? r : (r & 0x3) | 0x8
+		return v.toString(16)
+	})
+}
+
 type Playlist = { id: string; name: string; videos: string[] }
 
 function loadPlaylists(): Playlist[] {
@@ -31,7 +43,7 @@ export default function PlaylistsPage() {
 	const create = () => {
 		const n = name.trim()
 		if (!n) return
-		const p: Playlist = { id: crypto.randomUUID(), name: n, videos: [] }
+		const p: Playlist = { id: generateUUID(), name: n, videos: [] }
 		const next = [p, ...playlists]
 		setPlaylists(next)
 		savePlaylists(next)

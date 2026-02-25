@@ -57,6 +57,26 @@ export const NotificationBell: React.FC = () => {
 			return fallback
 		}
 
+		const getActiveChat = () => {
+			if (typeof window === 'undefined') return null
+			try {
+				const raw = localStorage.getItem('active_chat')
+				if (!raw) return null
+				const parsed = JSON.parse(raw)
+				if (!parsed?.id || !parsed?.kind) return null
+				return parsed as { id: string; kind: 'dm' | 'group' | 'channel' }
+			} catch {
+				return null
+			}
+		}
+
+		const isActiveDm = (senderId?: string) => {
+			if (!senderId) return false
+			const activeChat = getActiveChat()
+			if (!activeChat || activeChat.kind !== 'dm') return false
+			return String(activeChat.id) === String(senderId)
+		}
+
 		const onAny = (event: string, ...args: any[]) => {
 			try {
 				if (event === 'error') {
@@ -97,6 +117,9 @@ export const NotificationBell: React.FC = () => {
 			showToast(message || title, toastType)
 		}
 		const onMessage = (data: any) => {
+			const senderId =
+				data?.sender_id || data?.from_user_id || data?.from_id || data?.user_id
+			if (isActiveDm(senderId)) return
 			const from = data?.from_username || data?.from_name || 'Сообщение'
 			const text = data?.text || ''
 			playNotificationSound()
@@ -105,6 +128,7 @@ export const NotificationBell: React.FC = () => {
 		}
 		const onReceiveMessage = (data: any) => {
 			const senderId = data?.sender_id
+			if (isActiveDm(senderId)) return
 			resolveUsername(senderId).then(username => {
 				if (!active) return
 				playNotificationSound()

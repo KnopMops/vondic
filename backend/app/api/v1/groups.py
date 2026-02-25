@@ -123,3 +123,56 @@ def get_messages(current_user, group_id):
             "next_cursor": next_cursor,
         }
     ), 200
+
+
+@groups_bp.route("/<group_id>/messages/<message_id>", methods=["DELETE"])
+@token_required
+def delete_group_message(current_user, group_id, message_id):
+    from app.models.message import Message
+    from app.models.group import Group
+
+    # Check if user is in the group
+    group = Group.query.get(group_id)
+    if not group or current_user not in group.participants:
+        return jsonify({"error": "Group not found or access denied"}), 403
+
+    # Check if message belongs to this group
+    message = Message.query.filter(
+        Message.id == message_id,
+        Message.group_id == group_id
+    ).first()
+
+    if not message:
+        return jsonify({"error": "Message not found"}), 404
+
+    if str(message.sender_id) != str(current_user.id):
+        return jsonify({"error": "Forbidden"}), 403
+
+    # Mark message as deleted
+    message.content = "Сообщение удалено"
+    message.attachments = []
+    if hasattr(message, 'is_deleted'):
+        message.is_deleted = True
+    else:
+        # If the field doesn't exist yet, add it
+        from sqlalchemy import text
+        from app.core.extensions import db
+        try:
+            db.session.execute(
+                text("ALTER TABLE messages ADD COLUMN is_deleted INTEGER DEFAULT 0"))
+            db.session.commit()
+        except:
+            # Column might already exist
+            pass
+        message.is_deleted = True
+
+    db.session.commit()
+
+    # Notify WebSocket server about the deletion
+    try:
+        print(
+            f"Need to notify WebSocket server about deletion of message {message_id}")
+    except Exception as e:
+        print(f"Error notifying WebSocket server: {e}")
+
+    return jsonify({"message": "Message deleted successfully"}), 200

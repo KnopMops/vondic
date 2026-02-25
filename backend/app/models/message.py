@@ -17,6 +17,15 @@ class Message(db.Model):
     target_id = db.Column(TEXT, db.ForeignKey("users.id"), nullable=True)
     group_id = db.Column(TEXT, db.ForeignKey("groups.id"), nullable=True)
 
+    # Fields for message state
+    is_deleted = db.Column(db.Boolean, default=False)
+
+    # Additional fields for message interactions
+    # Store user ID who pinned the message
+    pinned_by = db.Column(TEXT, nullable=True)
+    # Store reactions as JSON object
+    reactions = db.Column(JSON, nullable=True)
+
     created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
     updated_at = db.Column(
         TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -36,12 +45,15 @@ class Message(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
-            "content": self.content,
-            "attachments": self.attachments,
+            "content": self.content if not getattr(self, 'is_deleted', False) else "Сообщение удалено",
+            "attachments": self.attachments if not getattr(self, 'is_deleted', False) else [],
             "sender_id": self.sender_id,
             "sender_username": self.sender.username if self.sender else None,
             "sender_avatar": self.sender.avatar_url if self.sender else None,
             "target_id": self.target_id,
             "group_id": self.group_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "pinned_by": self.pinned_by,
+            "reactions": self.reactions,
+            "is_deleted": getattr(self, 'is_deleted', False),
         }

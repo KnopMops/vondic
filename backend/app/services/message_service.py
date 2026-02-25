@@ -49,6 +49,7 @@ class MessageService:
                 type=msg_type,
                 sender_id=user_id,
                 group_id=group_id,
+                is_deleted=False
             )
         elif target_id:
             target_user = User.query.get(target_id)

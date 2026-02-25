@@ -195,25 +195,51 @@ export class WebRTCService {
 		const tasks: Promise<void>[] = []
 		for (const [socketId, pc] of this.peerConnections.entries()) {
 			if (!this.isSocketKey(socketId)) continue
+						
+			// Check if we can renegotiate - must be in stable state
+			if (pc.signalingState !== 'stable') {
+				console.log(`[WebRTC] Cannot start screen share: PC for ${socketId} is in ${pc.signalingState}, waiting for stable state`)
+				// If in have-local-offer or have-remote-offer, we need to wait or handle the current negotiation first
+				continue
+			}
+						
 			const sender = pc.getSenders().find(s => s.track?.kind === 'video')
 			if (sender) {
 				try {
-					tasks.push(sender.replaceTrack(track))
-				} catch {}
+					await sender.replaceTrack(track)
+				} catch (e) {
+					console.error(`[WebRTC] Failed to replace video track for ${socketId}:`, e)
+				}
 			} else {
 				try {
 					pc.addTrack(track, stream)
-				} catch {}
+				} catch (e) {
+					console.error(`[WebRTC] Failed to add video track for ${socketId}:`, e)
+				}
 			}
 			tasks.push(
 				(async () => {
-					const offer = await pc.createOffer()
-					await pc.setLocalDescription(offer)
-					this.socket.emit('offer', {
-						target_socket_id: socketId,
-						offer,
-						caller_user_id: this.userId,
-					})
+					try {
+						// Check state again before creating offer
+						if (pc.signalingState !== 'stable') {
+							console.log(`[WebRTC] State changed, skipping screen share offer for ${socketId}`)
+							return
+						}
+						const offer = await pc.createOffer()
+						// Double-check state before setting local description
+						if (pc.signalingState !== 'stable') {
+							console.log(`[WebRTC] State changed during offer creation, skipping screen share offer for ${socketId}`)
+							return
+						}
+						await pc.setLocalDescription(offer)
+						this.socket.emit('offer', {
+							target_socket_id: socketId,
+							offer,
+							caller_user_id: this.userId,
+						})
+					} catch (e) {
+						console.error(`[WebRTC] Screen share offer failed for ${socketId}:`, e)
+					}
 				})(),
 			)
 		}
@@ -234,24 +260,49 @@ export class WebRTCService {
 		const tasks: Promise<void>[] = []
 		for (const [socketId, pc] of this.peerConnections.entries()) {
 			if (!this.isSocketKey(socketId)) continue
+						
+			// Check if we can renegotiate - must be in stable state
+			if (pc.signalingState !== 'stable') {
+				console.log(`[WebRTC] Cannot stop screen share: PC for ${socketId} is in ${pc.signalingState}, waiting for stable state`)
+				continue
+			}
+						
 			const sender = pc.getSenders().find(s => s.track?.kind === 'video')
 			if (sender) {
 				try {
 					pc.removeTrack(sender)
-				} catch {}
+				} catch (e) {
+					console.error(`[WebRTC] Failed to remove video sender for ${socketId}:`, e)
+				}
 				try {
 					await sender.replaceTrack(null)
-				} catch {}
+				} catch (e) {
+					console.error(`[WebRTC] Failed to replace video track with null for ${socketId}:`, e)
+				}
 			}
 			tasks.push(
 				(async () => {
-					const offer = await pc.createOffer()
-					await pc.setLocalDescription(offer)
-					this.socket.emit('offer', {
-						target_socket_id: socketId,
-						offer,
-						caller_user_id: this.userId,
-					})
+					try {
+						// Check state again before creating offer
+						if (pc.signalingState !== 'stable') {
+							console.log(`[WebRTC] State changed, skipping stop screen share offer for ${socketId}`)
+							return
+						}
+						const offer = await pc.createOffer()
+						// Double-check state before setting local description
+						if (pc.signalingState !== 'stable') {
+							console.log(`[WebRTC] State changed during offer creation, skipping stop screen share offer for ${socketId}`)
+							return
+						}
+						await pc.setLocalDescription(offer)
+						this.socket.emit('offer', {
+							target_socket_id: socketId,
+							offer,
+							caller_user_id: this.userId,
+						})
+					} catch (e) {
+						console.error(`[WebRTC] Stop screen share offer failed for ${socketId}:`, e)
+					}
 				})(),
 			)
 		}
@@ -289,20 +340,56 @@ export class WebRTCService {
 
 		// Обработка входящих стримов
 		pc.ontrack = event => {
-			const stream =
-				(event.streams && event.streams[0]) || new MediaStream([event.track])
-			const assign = () => {
+			console.log(`[WebRTC] ontrack for ${targetSocketId}: kind=${event.track.kind}, state=${event.track.readyState}, muted=${event.track.muted}`)
+			
+			// Get or create stream for this peer
+			let stream = this.remoteStreams.get(targetSocketId)
+			if (!stream) {
+				stream = new MediaStream()
 				this.remoteStreams.set(targetSocketId, stream)
+			}
+			
+		// Add track to stream if not already present
+			// For audio tracks, ensure we only have one active audio track per peer to prevent interference
+			if (event.track.kind === 'audio') {
+				// Remove any existing audio tracks of the same kind to prevent audio mixing issues
+				const existingAudioTracks = stream.getTracks().filter(t => t.kind === 'audio')
+				existingAudioTracks.forEach(track => {
+					try {
+						stream!.removeTrack(track)
+					} catch (e) {
+						console.error(`[WebRTC] Could not remove audio track:`, e)
+					}
+				})
+			}
+						
+			// Add the new track if not already present
+			if (!stream.getTracks().includes(event.track)) {
+				try {
+					stream.addTrack(event.track)
+					console.log(`[WebRTC] Added ${event.track.kind} track to stream for ${targetSocketId}`)
+				} catch (e) {
+					console.error(`[WebRTC] Could not add track to stream:`, e)
+				}
+			} else {
+				console.log(`[WebRTC] Track already exists in stream for ${targetSocketId}`)
+			}
+			
+			const assign = () => {
+				console.log(`[WebRTC] Assigning remote stream for ${targetSocketId}, tracks: ${stream?.getTracks().length}`)
 				if (this.onRemoteStream) {
-					this.onRemoteStream(targetSocketId, stream)
+					this.onRemoteStream(targetSocketId, stream!)
 				}
 			}
 			try {
 				const track = event.track
 				if (track && typeof (track as any).onunmute !== 'undefined') {
 					;(track as any).onunmute = () => {
-						console.log('[WebRTC] Remote track unmuted, assigning stream')
+						console.log(`[WebRTC] Remote ${track.kind} track unmuted for ${targetSocketId}`)
 						assign()
+					}
+					;(track as any).onmute = () => {
+						console.log(`[WebRTC] Remote ${track.kind} track muted for ${targetSocketId}`)
 					}
 				}
 			} catch {}
@@ -311,30 +398,59 @@ export class WebRTCService {
 
 		// Обработка изменения состояния соединения
 		pc.onconnectionstatechange = () => {
+			console.log(`[WebRTC] Connection state changed for ${targetSocketId}: ${pc.connectionState}`)
 			if (this.onConnectionStateChange) {
 				this.onConnectionStateChange(targetSocketId, pc.connectionState)
 			}
-			if (
-				pc.connectionState === 'connected' ||
-				pc.connectionState === 'completed'
-			) {
+			if (pc.connectionState === 'connected') {
+				// Ensure stream has all tracks - don't create new stream if one exists
 				try {
-					const receivers = pc.getReceivers() || []
-					const tracks = receivers
-						.map(r => r.track)
-						.filter((t): t is MediaStreamTrack => !!t)
-					if (tracks.length > 0) {
-						const stream = new MediaStream(tracks)
+					let stream = this.remoteStreams.get(targetSocketId)
+					if (!stream) {
+						stream = new MediaStream()
 						this.remoteStreams.set(targetSocketId, stream)
-						if (this.onRemoteStream) this.onRemoteStream(targetSocketId, stream)
 					}
-				} catch {}
+					
+					// Add any missing tracks from receivers
+					const receivers = pc.getReceivers() || []
+					const existingTracks = stream.getTracks()
+					receivers.forEach(r => {
+						if (r.track && !existingTracks.includes(r.track)) {
+							console.log(`[WebRTC] Adding missing ${r.track.kind} track to stream on connection`)
+							stream!.addTrack(r.track)
+						}
+					})
+					
+					// Update UI with the updated stream
+					if (stream.getTracks().length > 0 && this.onRemoteStream) {
+						this.onRemoteStream(targetSocketId, stream)
+					}
+				} catch (e) {
+					console.error('[WebRTC] Error updating stream on connection:', e)
+				}
+			} else if (pc.connectionState === 'failed') {
+				console.log(`[WebRTC] Connection failed for ${targetSocketId}, attempting ICE restart`)
+				this.attemptIceRestart(targetSocketId).catch(e => 
+					console.error('ICE restart failed:', e)
+				)
 			}
 		}
 		try {
 			;(pc as any).oniceconnectionstatechange = () => {
+				console.log(`[WebRTC] ICE connection state changed for ${targetSocketId}: ${pc.iceConnectionState}`)
 				if (this.onConnectionStateChange) {
 					this.onConnectionStateChange(targetSocketId, pc.connectionState)
+				}
+				// Handle ICE failures with restart
+				if (pc.iceConnectionState === 'failed') {
+					console.log(`[WebRTC] ICE failed for ${targetSocketId}, attempting ICE restart`)
+					this.attemptIceRestart(targetSocketId).catch(e => 
+						console.error('ICE restart failed:', e)
+					)
+				}
+				// Log when ICE becomes disconnected - might be temporary
+				if (pc.iceConnectionState === 'disconnected') {
+					console.log(`[WebRTC] ICE disconnected for ${targetSocketId}, waiting for reconnection...`)
 				}
 			}
 		} catch {}
@@ -384,6 +500,7 @@ export class WebRTCService {
 		const pc = this.ensurePeerConnection(targetSocketId)
 		if (this.localStream) {
 			const audioTrack = this.localStream.getAudioTracks()[0]
+			console.log(`[WebRTC] ensureLocalAudioSender for ${targetSocketId}: audioTrack=${!!audioTrack}, enabled=${audioTrack?.enabled}`)
 			if (audioTrack) {
 				try {
 					audioTrack.enabled = true
@@ -393,8 +510,10 @@ export class WebRTCService {
 					s => s.track && s.track.kind === 'audio',
 				)
 				if (!audioSender) {
+					console.log(`[WebRTC] Adding audio track to PC for ${targetSocketId}`)
 					pc.addTrack(audioTrack, this.localStream)
 				} else if (audioSender.track !== audioTrack) {
+					console.log(`[WebRTC] Replacing audio track for ${targetSocketId}`)
 					try {
 						await audioSender.replaceTrack(audioTrack)
 					} catch {}
@@ -410,7 +529,9 @@ export class WebRTCService {
 					)
 					if (audioTransceiver) {
 						const dir: any = (audioTransceiver as any).direction
+						console.log(`[WebRTC] Audio transceiver direction for ${targetSocketId}: ${dir}`)
 						if (dir !== 'sendrecv') {
+							console.log(`[WebRTC] Setting transceiver direction to sendrecv for ${targetSocketId}`)
 							try {
 								;(audioTransceiver as any).direction = 'sendrecv'
 							} catch {}
@@ -429,23 +550,7 @@ export class WebRTCService {
 		return pc
 	}
 
-	migrateCall(oldKey: string, newKey: string): void {
-		const pc = this.peerConnections.get(oldKey)
-		if (pc) {
-			this.peerConnections.delete(oldKey)
-			this.peerConnections.set(newKey, pc)
 
-			const stream = this.remoteStreams.get(oldKey)
-			if (stream) {
-				this.remoteStreams.delete(oldKey)
-				this.remoteStreams.set(newKey, stream)
-			}
-
-			// Note: Handlers attached to this PC still use the oldKey in their closures.
-			// This might be an issue if the server expects the newKey for ICE candidates.
-			// However, for group calls we use socketIds directly.
-		}
-	}
 
 	async initiateCall(targetUserId: string): Promise<void> {
 		try {
@@ -510,8 +615,45 @@ export class WebRTCService {
 		offer: RTCSessionDescriptionInit,
 	): Promise<void> {
 		console.log('Handling incoming call from:', callerSocketId)
+		// Check if we already have a PC for this caller
+		const existingPc = this.peerConnections.get(callerSocketId)
+		if (existingPc) {
+			console.log(`PC already exists for ${callerSocketId}, state: ${existingPc.signalingState}`)
+			// If already connected, skip
+			if (existingPc.signalingState === 'stable') {
+				console.log(`Already connected to ${callerSocketId}, skipping incoming call`)
+				return
+			}
+		}
+		
 		// Создаем peer connection для входящего звонка
-		const pc = this.createPeerConnection(callerSocketId)
+		const pc = existingPc || this.createPeerConnection(callerSocketId)
+
+		// Check state before setting remote description
+		if (pc.signalingState !== 'stable') {
+			console.log(`Cannot handle incoming call: PC state is ${pc.signalingState}`)
+			return
+		}
+
+		// Ensure local audio track is available and added to the connection
+		if (!this.localStream) {
+			await this.initializeLocalStream();
+		}
+		
+		// Add local audio track if not already present
+		if (this.localStream) {
+			const audioTrack = this.localStream.getAudioTracks()[0];
+			if (audioTrack) {
+				const existingSender = pc.getSenders().find(s => s.track?.kind === 'audio');
+				if (!existingSender) {
+					try {
+						pc.addTrack(audioTrack, this.localStream);
+					} catch (e) {
+						console.error(`[WebRTC] Failed to add audio track to incoming call PC:`, e);
+					}
+				}
+			}
+		}
 
 		// Устанавливаем полученный offer
 		await pc.setRemoteDescription(new RTCSessionDescription(offer))
@@ -527,18 +669,68 @@ export class WebRTCService {
 	): Promise<void> {
 		const pc =
 			this.ensurePeerConnection(socketId) || this.createPeerConnection(socketId)
-		await pc.setRemoteDescription(new RTCSessionDescription(offer))
-		this.processBufferedCandidates(socketId)
-		// Immediately generate answer for renegotiation
-		await this.acceptCall(socketId)
+		
+		// Check if we can accept this offer
+		if (pc.signalingState !== 'stable') {
+			console.log(`Skipping renegotiation offer from ${socketId}: state is ${pc.signalingState}`)
+			return
+		}
+		
+		try {
+			// Check state before setting remote description
+			if (pc.signalingState !== 'stable') {
+				console.log(`Cannot process renegotiation offer from ${socketId}: state is ${pc.signalingState}`)
+				return
+			}
+			await pc.setRemoteDescription(new RTCSessionDescription(offer))
+			this.processBufferedCandidates(socketId)
+			// Create and send answer for the renegotiation offer
+			const answer = await pc.createAnswer()
+			await pc.setLocalDescription(answer)
+			// Send the answer back to the peer
+			this.socket.emit('answer', {
+				target_socket_id: socketId,
+				answer,
+			})
+		} catch (e: any) {
+			if (e.message?.includes('wrong state') || e.message?.includes('stable')) {
+				console.log(`Ignoring renegotiation offer race condition for ${socketId}`)
+			} else {
+				console.error('Error handling renegotiation offer:', e)
+			}
+		}
 	}
 
 	async acceptCall(callerSocketId: string): Promise<void> {
 		try {
 			const pc = await this.ensureLocalAudioSender(callerSocketId)
+			
+			// Double-check state right before creating answer
+			if (pc.signalingState !== 'have-remote-offer') {
+				// If we're in stable state, it means we might have already processed the offer or it was processed elsewhere
+				if (pc.signalingState === 'stable') {
+					console.log(`PC is in stable state, cannot create answer for ${callerSocketId}`)
+					return
+				}
+				// If we're in have-local-offer, it means we already created an offer ourselves
+				else if (pc.signalingState === 'have-local-offer') {
+					console.log(`PC is in have-local-offer state, cannot create answer for ${callerSocketId}`)
+					return
+				}
+				// For other states, log and return
+				else {
+					console.log(`Cannot accept call: PC state is ${pc.signalingState}, expected 'have-remote-offer'`)
+					return
+				}
+			}
 
 			// Создаем answer
 			const answer = await pc.createAnswer()
+			// Double-check state again before setting local description
+			if (pc.signalingState !== 'have-remote-offer') {
+				console.log(`State changed during answer creation, skipping for ${callerSocketId}`)
+				return
+			}
 			await pc.setLocalDescription(answer)
 			console.log('Answer created and set as local description')
 
@@ -558,6 +750,13 @@ export class WebRTCService {
 			this.socket.emit('answer', answerPayload)
 		} catch (error) {
 			console.error('Failed to accept call:', error)
+			// Handle failed ICE negotiation by forcing a renegotiation with TURN
+			if (this.hasTurn) {
+				this.renegotiateWithRelay(callerSocketId).catch(err =>
+					console.error('Relay fallback failed:', err),
+				)
+			}
+
 			throw error
 		}
 	}
@@ -571,14 +770,37 @@ export class WebRTCService {
 
 			// Update handlers to use new key
 			this.setupPeerConnectionHandlers(pc, newKey)
-
+			
 			// Migrate remote stream
 			const stream = this.remoteStreams.get(oldKey)
 			if (stream) {
 				this.remoteStreams.delete(oldKey)
 				this.remoteStreams.set(newKey, stream)
 			}
-
+			
+			// After migration, ensure local audio track is properly added if needed
+			if (this.localStream) {
+				const audioTrack = this.localStream.getAudioTracks()[0];
+				if (audioTrack) {
+					const existingSender = pc.getSenders().find(s => s.track?.kind === 'audio');
+					if (!existingSender) {
+						try {
+							pc.addTrack(audioTrack, this.localStream);
+							console.log(`[WebRTC] Added audio track after migrating connection from ${oldKey} to ${newKey}`);
+						} catch (e) {
+							console.error(`[WebRTC] Failed to add audio track after migration:`, e);
+						}
+					} else if (existingSender.track !== audioTrack) {
+						try {
+							existingSender.replaceTrack(audioTrack);
+							console.log(`[WebRTC] Replaced audio track after migrating connection from ${oldKey} to ${newKey}`);
+						} catch (e) {
+							console.error(`[WebRTC] Failed to replace audio track after migration:`, e);
+						}
+					}
+				}
+			}
+			
 			// Flush buffered ICE candidates
 			if (this.iceCandidateQueue.has(oldKey)) {
 				const queue = this.iceCandidateQueue.get(oldKey)
@@ -636,6 +858,19 @@ export class WebRTCService {
 		}
 
 		if (pc) {
+			// Check if we're in the right state to accept an answer
+			const currentState = pc.signalingState
+			// We should be in 'have-local-offer' state if we sent an offer and are receiving an answer
+			if (currentState !== 'have-local-offer') {
+				console.log(`[WebRTC] Skipping answer from ${data.sender_socket_id}: connection state is ${currentState}, expected 'have-local-offer'`)
+				return
+			}
+						
+			// Double-check state right before setting remote description
+			if (pc.signalingState !== 'have-local-offer') {
+				console.log(`[WebRTC] State changed during answer processing, skipping answer for ${data.sender_socket_id}`)
+				return
+			}
 			try {
 				console.log(
 					`[WebRTC] Setting remote description for answer from ${data.sender_socket_id}`,
@@ -643,7 +878,7 @@ export class WebRTCService {
 				await pc.setRemoteDescription(new RTCSessionDescription(data.answer))
 				console.log('[WebRTC] Remote description set from answer')
 				this.processBufferedCandidates(data.sender_socket_id)
-
+		
 				try {
 					const dirs =
 						(typeof data.answer.sdp === 'string' &&
@@ -715,8 +950,13 @@ export class WebRTCService {
 						}
 					}, 8000)
 				}
-			} catch (err) {
-				console.error('[WebRTC] Error setting remote description:', err)
+			} catch (err: any) {
+				// Check if it's a state error - this can happen in race conditions
+				if (err.message?.includes('wrong state') || err.message?.includes('stable')) {
+					console.log(`[WebRTC] Ignoring answer for ${data.sender_socket_id} - state race condition`)
+				} else {
+					console.error('[WebRTC] Error setting remote description:', err)
+				}
 			}
 		} else {
 			console.error(
@@ -737,7 +977,17 @@ export class WebRTCService {
 		const pc = this.peerConnections.get(data.sender_socket_id)
 		if (pc) {
 			if (pc.remoteDescription && pc.remoteDescription.type) {
-				await pc.addIceCandidate(new RTCIceCandidate(data.candidate))
+				try {
+					await pc.addIceCandidate(new RTCIceCandidate(data.candidate))
+				} catch (e: any) {
+					// Ignore "Unknown ufrag" errors - these happen when ICE candidates
+					// arrive for a previous ICE generation that was replaced
+					if (e.message?.includes('ufrag') || e.message?.includes('Unknown')) {
+						console.log(`Ignoring stale ICE candidate from ${data.sender_socket_id}`)
+					} else {
+						console.error('Error adding ICE candidate:', e)
+					}
+				}
 			} else {
 				console.log(
 					`Buffering incoming ICE candidate from ${data.sender_socket_id} (remote description not set)`,
@@ -800,6 +1050,40 @@ export class WebRTCService {
 			target_socket_id: targetSocketId,
 			offer,
 		})
+	}
+
+	// Attempt ICE restart to recover from connection failures
+	private async attemptIceRestart(targetSocketId: string): Promise<void> {
+		const pc = this.peerConnections.get(targetSocketId)
+		if (!pc) {
+			console.log(`[WebRTC] No PC for ${targetSocketId}, cannot restart ICE`)
+			return
+		}
+
+		// Check if we're the offerer or answerer
+		const isOfferer = pc.localDescription?.type === 'offer'
+		
+		if (isOfferer) {
+			console.log(`[WebRTC] Restarting ICE as offerer for ${targetSocketId}`)
+			try {
+				const offer = await pc.createOffer({ iceRestart: true })
+				await pc.setLocalDescription(offer)
+				this.socket.emit('offer', {
+					target_socket_id: targetSocketId,
+					offer,
+				})
+			} catch (e: any) {
+				console.error('[WebRTC] ICE restart failed:', e)
+				// Fall back to full reconnect with relay
+				if (this.hasTurn) {
+					await this.renegotiateWithRelay(targetSocketId)
+				}
+			}
+		} else {
+			console.log(`[WebRTC] Not the offerer for ${targetSocketId}, requesting ICE restart from peer`)
+			// Request the other side to restart ICE by sending a restart offer
+			// We can't initiate ICE restart as answerer
+		}
 	}
 
 	public cleanupCall(socketId: string) {

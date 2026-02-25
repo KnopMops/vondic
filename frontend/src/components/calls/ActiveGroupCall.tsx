@@ -113,64 +113,79 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 
 	if (isMinimized) {
 		return (
-			<div className='active-call group-call minimized'>
-				<div className='minimized-call-info' onClick={toggleMinimize}>
-					<span className='call-icon'>👥</span>
-					<span className='call-duration'>{formatDuration(duration)}</span>
-					<span className='call-status'>{participants.length + 1} уч.</span>
-				</div>
-				<div className='minimized-controls'>
+			<div className='fixed left-1/2 top-4 z-40 w-[min(92vw,760px)] -translate-x-1/2 rounded-3xl border border-white/10 bg-gradient-to-br from-black/90 via-black/80 to-zinc-900/80 px-4 py-3 text-white shadow-2xl backdrop-blur'>
+				<div className='flex items-center justify-between gap-3'>
 					<button
-						onClick={onMuteToggle}
-						className={`mute-button ${isMuted ? 'muted' : ''}`}
-						title={isMuted ? 'Включить микрофон' : 'Выключить микрофон'}
+						onClick={toggleMinimize}
+						className='flex items-center gap-3 text-left'
+						aria-label='Развернуть'
 					>
-						{isMuted ? '🔇' : '🎤'}
+						<div className='h-9 w-9 overflow-hidden rounded-2xl bg-white/10 flex items-center justify-center text-sm font-semibold'>
+							👥
+						</div>
+						<div>
+							<p className='text-xs font-semibold text-white truncate'>
+								Групповой звонок
+							</p>
+							<p className='text-[10px] text-white/60'>
+								{formatDuration(duration)} · {participants.length + 1} уч.
+							</p>
+						</div>
 					</button>
-					<button
-						onClick={() => onEndCall(callId)}
-						className='end-call-button'
-						title='Покинуть группу'
-					>
-						📞
-					</button>
+					<div className='flex items-center gap-2'>
+						<button
+							onClick={onMuteToggle}
+							className={`rounded-xl border px-2 py-1 text-white transition ${
+								isMuted
+									? 'border-rose-500/40 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20'
+									: 'border-white/10 bg-white/5 hover:bg-white/10'
+							}`}
+							title={isMuted ? 'Включить микрофон' : 'Выключить микрофон'}
+						>
+							{isMuted ? '🔇' : '🎤'}
+						</button>
+						<button
+							onClick={() => onEndCall(callId)}
+							className='rounded-xl border border-rose-500/40 bg-rose-500/10 px-2 py-1 text-rose-200 transition hover:bg-rose-500/20'
+							title='Покинуть группу'
+						>
+							📞
+						</button>
+					</div>
 				</div>
 			</div>
 		)
 	}
 
 	return (
-		<div className='active-call group-call'>
-			<div className='call-header'>
-				<div className='call-info'>
-					<h3 className='call-title'>Групповой звонок</h3>
-					<div className='call-meta'>
-						<span className='call-duration'>{formatDuration(duration)}</span>
-						<span className='call-status connected'>
-							{participants.length + 1} участников
-						</span>
+		<div className='fixed left-1/2 top-4 z-40 w-[min(92vw,900px)] -translate-x-1/2 rounded-3xl border border-white/10 bg-gradient-to-br from-black/90 via-black/80 to-zinc-900/80 p-4 text-white shadow-2xl backdrop-blur'>
+			<div className='flex items-start justify-between gap-3'>
+				<div className='flex items-center gap-3 min-w-0'>
+					<div className='h-10 w-10 overflow-hidden rounded-2xl bg-white/10 flex items-center justify-center text-sm font-semibold'>
+						👥
+					</div>
+					<div className='min-w-0'>
+						<p className='text-sm font-semibold truncate'>Групповой звонок</p>
+						<div className='mt-1 flex items-center gap-2 text-[10px] text-white/60'>
+							<span className='rounded-full bg-white/10 px-2 py-0.5 text-white/70'>
+								{participants.length + 1} участников
+							</span>
+							<span>{formatDuration(duration)}</span>
+						</div>
 					</div>
 				</div>
 				<button
 					onClick={toggleMinimize}
-					className='minimize-button'
+					className='rounded-xl border border-white/10 bg-white/5 px-2 py-1 text-white hover:bg-white/10'
 					title='Свернуть'
 				>
 					➖
 				</button>
 			</div>
 
-			<div
-				className={`call-content group-grid ${isScreenZoomed ? 'zoomed' : ''}`}
-			>
+			<div className={`mt-3 grid gap-3 ${isScreenZoomed ? 'zoomed' : ''}`}>
 				{screenStream?.getVideoTracks().length ? (
-					<div className='participant-card local screen-share'>
-						<div className='participant-avatar'>
-							<div className='avatar-placeholder'>Экран</div>
-						</div>
-						<div className='participant-info'>
-							<span className='participant-name'>Ваш экран</span>
-						</div>
+					<div className='rounded-2xl border border-white/10 bg-white/5 p-2'>
 						<video
 							ref={ref => {
 								if (ref && screenStream) {
@@ -187,19 +202,17 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 							autoPlay
 							playsInline
 							muted
-							className={`participant-video ${isScreenZoomed ? 'zoomed' : ''}`}
+							className={`h-44 w-full rounded-xl bg-black object-cover ${
+								isScreenZoomed ? 'scale-105' : ''
+							}`}
 						/>
+						<span className='mt-2 block text-xs text-white/70'>Ваш экран</span>
 					</div>
 				) : null}
-				{/* Local Participant */}
-				<div className='participant-card local'>
-					<div className='participant-avatar'>
-						<div className='avatar-placeholder'>Вы</div>
-					</div>
-					<div className='participant-info'>
-						<span className='participant-name'>Вы</span>
-						<span className='participant-status'>{isMuted ? '🔇' : '🎤'}</span>
-					</div>
+				<div className='rounded-2xl border border-white/10 bg-white/5 p-4 text-center'>
+					<p className='text-xs text-white/60'>
+						Вы {isMuted ? '🔇' : '🎤'}
+					</p>
 					<audio
 						ref={ref => {
 							if (ref && localStream) ref.srcObject = localStream
@@ -214,26 +227,26 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 					/>
 				</div>
 
-				{/* Remote Participants */}
 				{participants.map(participant => (
-					<div key={participant.socketId} className='participant-card remote'>
-						<div className='participant-avatar'>
+					<div
+						key={participant.socketId}
+						className='rounded-2xl border border-white/10 bg-white/5 p-3 text-center'
+					>
+						<div className='mx-auto mb-2 h-10 w-10 overflow-hidden rounded-2xl bg-white/10 flex items-center justify-center text-sm font-semibold'>
 							{participant.avatarUrl ? (
-								<img src={participant.avatarUrl} alt={participant.userName} />
+								<img
+									src={participant.avatarUrl}
+									alt={participant.userName || 'Участник'}
+									className='h-full w-full object-cover'
+								/>
 							) : (
-								<div className='avatar-placeholder'>
-									{participant.userName?.charAt(0) || '?'}
-								</div>
+								<span>{participant.userName?.charAt(0) || '?'}</span>
 							)}
 						</div>
-						<div className='participant-info'>
-							<span className='participant-name'>
-								{participant.userName || 'Unknown'}
-							</span>
-							<span className='participant-status'>
-								{participant.status === 'connected' ? '🔊' : '...'}
-							</span>
-						</div>
+						<p className='text-xs text-white/80'>
+							{participant.userName || 'Unknown'}{' '}
+							{participant.status === 'connected' ? '🔊' : '...'}
+						</p>
 						<audio
 							ref={ref => {
 								const stream = remoteStreams.get(participant.socketId)
@@ -276,51 +289,63 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 								autoPlay
 								playsInline
 								muted
-								className={`participant-video ${isScreenZoomed ? 'zoomed' : ''}`}
+								className={`mt-2 h-32 w-full rounded-xl bg-black object-cover ${
+									isScreenZoomed ? 'scale-105' : ''
+								}`}
 							/>
 						) : null}
 					</div>
 				))}
 			</div>
 
-			<div className='call-controls'>
+			<div className='mt-3 flex flex-wrap items-center justify-center gap-2'>
 				<button
 					onClick={onMuteToggle}
-					className={`mute-button icon-only ${isMuted ? 'muted' : ''}`}
+					className={`rounded-2xl border px-4 py-2 text-white transition ${
+						isMuted
+							? 'border-rose-500/40 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20'
+							: 'border-white/10 bg-white/5 hover:bg-white/10'
+					}`}
 					title={isMuted ? 'Включить микрофон' : 'Выключить микрофон'}
 				>
-					<span className='button-icon'>{isMuted ? '🔇' : '🎤'}</span>
+					{isMuted ? '🔇' : '🎤'}
 				</button>
 				{hasScreenVideo && (
 					<>
 						<button
 							onClick={togglePictureInPicture}
-							className={`screen-tool-button icon-only ${
-								isScreenPip ? 'active' : ''
+							className={`rounded-2xl border px-4 py-2 text-white transition ${
+								isScreenPip
+									? 'border-indigo-500/40 bg-indigo-500/10 text-indigo-200 hover:bg-indigo-500/20'
+									: 'border-white/10 bg-white/5 hover:bg-white/10'
 							}`}
 							title={isScreenPip ? 'Скрыть окно' : 'Вынести в окно'}
 						>
-							<span className='button-icon'>🗔</span>
+							🗔
 						</button>
 						<button
 							onClick={toggleFullscreen}
-							className={`screen-tool-button icon-only ${
-								isScreenFullscreen ? 'active' : ''
+							className={`rounded-2xl border px-4 py-2 text-white transition ${
+								isScreenFullscreen
+									? 'border-indigo-500/40 bg-indigo-500/10 text-indigo-200 hover:bg-indigo-500/20'
+									: 'border-white/10 bg-white/5 hover:bg-white/10'
 							}`}
 							title={
 								isScreenFullscreen ? 'Выйти из полноэкранного' : 'Во весь экран'
 							}
 						>
-							<span className='button-icon'>⛶</span>
+							⛶
 						</button>
 						<button
 							onClick={() => setIsScreenZoomed(prev => !prev)}
-							className={`screen-tool-button icon-only ${
-								isScreenZoomed ? 'active' : ''
+							className={`rounded-2xl border px-4 py-2 text-white transition ${
+								isScreenZoomed
+									? 'border-indigo-500/40 bg-indigo-500/10 text-indigo-200 hover:bg-indigo-500/20'
+									: 'border-white/10 bg-white/5 hover:bg-white/10'
 							}`}
 							title={isScreenZoomed ? 'Обычный размер' : 'Увеличить'}
 						>
-							<span className='button-icon'>🔍</span>
+							🔍
 						</button>
 					</>
 				)}
@@ -328,8 +353,12 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 				<button
 					onClick={onScreenShareToggle}
 					disabled={screenShareDisabled}
-					className={`screen-share-button icon-only ${
-						isScreenSharing ? 'active' : ''
+					className={`rounded-2xl border px-4 py-2 text-white transition ${
+						screenShareDisabled
+							? 'border-white/10 bg-white/5 opacity-60'
+							: isScreenSharing
+								? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20'
+								: 'border-white/10 bg-white/5 hover:bg-white/10'
 					}`}
 					title={
 						screenShareDisabled
@@ -339,15 +368,15 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 								: 'Демонстрация экрана'
 					}
 				>
-					<span className='button-icon'>🖥️</span>
+					🖥️
 				</button>
 
 				<button
 					onClick={() => onEndCall(callId)}
-					className='end-call-button icon-only'
+					className='rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-rose-200 transition hover:bg-rose-500/20'
 					title='Покинуть звонок'
 				>
-					<span className='button-icon'>📞</span>
+					📞
 				</button>
 			</div>
 		</div>

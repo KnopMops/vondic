@@ -128,6 +128,16 @@ def create_app(config_class=Config):
                         text("ALTER TABLE messages ADD COLUMN attachments TEXT")
                     )
                     db.session.commit()
+                if column_names and "pinned_by" not in column_names:
+                    db.session.execute(
+                        text("ALTER TABLE messages ADD COLUMN pinned_by TEXT")
+                    )
+                    db.session.commit()
+                if column_names and "reactions" not in column_names:
+                    db.session.execute(
+                        text("ALTER TABLE messages ADD COLUMN reactions TEXT")
+                    )
+                    db.session.commit()
                 ucols = db.session.execute(
                     text("PRAGMA table_info(users)")).fetchall()
                 ucolumn_names = [c[1] for c in ucols]

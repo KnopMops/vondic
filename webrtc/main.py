@@ -73,6 +73,7 @@ def _build_swagger_paths(app: Flask):
 def _build_allowed_origins() -> list[str]:
     defaults = [
         "https://responsibly-soothing-springtail.cloudpub.ru",
+        "http://192.168.20.104:3000",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://localhost:5000",

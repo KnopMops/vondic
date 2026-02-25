@@ -57,7 +57,9 @@ class UserRepository:
                     created_at TEXT,
                     updated_at TEXT,
                     is_read INTEGER DEFAULT 0,
-                    is_deleted INTEGER DEFAULT 0
+                    is_deleted INTEGER DEFAULT 0,
+                    pinned_by TEXT,
+                    reactions TEXT
                 )
             """)
             await conn.execute("""
@@ -157,6 +159,12 @@ class UserRepository:
             )
             await conn.execute(
                 "ALTER TABLE messages ADD COLUMN IF NOT EXISTS updated_at TEXT"
+            )
+            await conn.execute(
+                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS pinned_by TEXT"
+            )
+            await conn.execute(
+                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS reactions TEXT"
             )
             await conn.execute(
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS socket_id TEXT"
@@ -648,7 +656,7 @@ class UserRepository:
         try:
             row = self._run(
                 self._fetchrow(
-                    "SELECT id, sender_id, target_id, channel_id, group_id, is_deleted FROM messages WHERE id = ?",
+                    "SELECT id, sender_id, target_id, channel_id, group_id, is_deleted, pinned_by, reactions FROM messages WHERE id = ?",
                     (message_id,),
                 )
             )

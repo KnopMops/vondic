@@ -1,3 +1,4 @@
+from app.core.extensions import db
 from app.schemas.message_schema import message_schema, messages_schema
 from app.services.message_service import MessageService
 from app.utils.decorators import token_required
@@ -67,3 +68,32 @@ def get_dm_history(current_user, target_id):
             "next_cursor": next_cursor,
         }
     ), 200
+
+
+@dm_bp.route("/<target_id>/messages/<message_id>", methods=["DELETE"])
+@token_required
+def delete_message(current_user, target_id, message_id):
+    # Check if message belongs to this conversation
+    from app.models.message import Message
+    message = Message.query.filter(
+        Message.id == message_id,
+        (
+            ((Message.sender_id == current_user.id) & (Message.target_id == target_id)) |
+            ((Message.sender_id == target_id) &
+             (Message.target_id == current_user.id))
+        )
+    ).first()
+
+    if not message:
+        return jsonify({"error": "Message not found"}), 404
+
+    if str(message.sender_id) != str(current_user.id):
+        return jsonify({"error": "Forbidden"}), 403
+
+    # Mark message as deleted
+    message.content = "Сообщение удалено"
+    message.attachments = []
+    message.is_deleted = True
+    db.session.commit()
+
+    return jsonify({"message": "Message deleted successfully"}), 200

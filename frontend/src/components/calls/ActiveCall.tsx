@@ -76,8 +76,22 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 			el.srcObject = remoteStream
 			el.muted = false
 			el.volume = 1
+			
+			// Try to play and handle potential play restrictions
 			const p = el.play()
-			if (p && typeof p.catch === 'function') p.catch(() => setNeedUnmute(true))
+			if (p && typeof p.catch === 'function') {
+				p.catch(() => {
+					setNeedUnmute(true)
+					// If play failed, try to resume after user interaction
+					const handleInteraction = () => {
+						el.play().catch(() => setNeedUnmute(true))
+						document.removeEventListener('click', handleInteraction)
+						document.removeEventListener('touchstart', handleInteraction)
+					}
+					document.addEventListener('click', handleInteraction)
+					document.addEventListener('touchstart', handleInteraction)
+				})
+			}
 		} else {
 			try {
 				el.pause()
@@ -437,6 +451,55 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 		!!screenStream?.getVideoTracks().length ||
 		!!remoteStream?.getVideoTracks().length
 	const screenShareDisabled = !isScreenShareSupported
+	const statusLabel =
+		callInfo.status === 'connected'
+			? 'В сети'
+			: callInfo.status === 'calling'
+				? 'Звонок...'
+				: callInfo.status === 'ringing'
+					? 'Ожидание ответа...'
+					: callInfo.status === 'failed'
+						? 'Ошибка'
+						: callInfo.status === 'ended'
+							? 'Завершено'
+							: callInfo.status === 'rejected'
+								? 'Отклонено'
+								: 'Звонок'
+	const statusLine = (() => {
+		const mapConn: Record<string, string> = {
+			new: 'Инициализация',
+			connecting: 'Подключение',
+			connected: 'Подключено',
+			disconnected: 'Отключено',
+			failed: 'Ошибка',
+			closed: 'Закрыто',
+		}
+		const mapIce: Record<string, string> = {
+			new: 'Инициализация',
+			checking: 'Проверка путей',
+			connected: 'Подключено',
+			completed: 'Завершено',
+			disconnected: 'Отключено',
+			failed: 'Ошибка',
+			closed: 'Закрыто',
+		}
+		const mapType: Record<string, string> = {
+			host: 'Прямой',
+			srflx: 'Через NAT',
+			prflx: 'Peer Reflexive',
+			relay: 'Через TURN',
+		}
+		const connLbl = mapConn[connState] || connState || 'Неизвестно'
+		const iceLbl = mapIce[iceConnState] || iceConnState || ''
+		const pathLbl = mapType[iceType] || (iceType ? iceType : '')
+		const pingLbl = pingMs > 0 ? ` · Пинг: ${pingMs} мс` : ''
+		const pathPart = pathLbl ? ` · Путь: ${pathLbl}` : ''
+		const icePart = iceLbl ? ` · ICE: ${iceLbl}` : ''
+		return `Статус: ${connLbl}${pathPart}${icePart}${pingLbl}`
+	})()
+	const avatarUrl = callInfo.avatarUrl
+		? getAttachmentUrl(callInfo.avatarUrl)
+		: ''
 
 	const handleUnlockAudio = async () => {
 		try {
@@ -464,141 +527,141 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 
 	if (isMinimized) {
 		return (
-			<div className='active-call minimized'>
-				<div className='minimized-call-info' onClick={toggleMinimize}>
-					<span className='call-icon'>📞</span>
-					<span className='call-duration'>{formatDuration(duration)}</span>
-					<span className='call-status'>{callInfo.status}</span>
-				</div>
-				<div className='minimized-controls'>
+			<div className='fixed left-1/2 top-4 z-40 w-[min(92vw,760px)] -translate-x-1/2 rounded-3xl border border-white/10 bg-gradient-to-br from-black/90 via-black/80 to-zinc-900/80 px-4 py-3 text-white shadow-2xl backdrop-blur'>
+				<div className='flex items-center justify-between gap-3'>
 					<button
-						onClick={handleMuteToggle}
-						className={`mute-button ${isMuted ? 'muted' : ''}`}
-						title={isMuted ? 'Включить микрофон' : 'Выключить микрофон'}
+						onClick={toggleMinimize}
+						className='flex items-center gap-3 text-left'
+						aria-label='Развернуть'
 					>
-						{isMuted ? '🔇' : '🎤'}
+						<div className='h-9 w-9 overflow-hidden rounded-2xl bg-white/10 flex items-center justify-center'>
+							{avatarUrl ? (
+								<img
+									src={avatarUrl}
+									alt={callInfo.userName || 'Собеседник'}
+									className='h-full w-full object-cover'
+								/>
+							) : (
+								<span className='text-sm font-semibold'>
+									{(callInfo.userName || 'V').slice(0, 1).toUpperCase()}
+								</span>
+							)}
+						</div>
+						<div>
+							<p className='text-xs font-semibold text-white truncate'>
+								{callInfo.userName || 'Звонок'}
+							</p>
+							<p className='text-[10px] text-white/60'>
+								{formatDuration(duration)} · {statusLabel}
+							</p>
+						</div>
 					</button>
-					<button
-						onClick={handleEndCall}
-						className='end-call-button'
-						title='Завершить звонок'
-					>
-						📞
-					</button>
+					<div className='flex items-center gap-2'>
+						<button
+							onClick={handleMuteToggle}
+							className={`rounded-xl border px-2 py-1 text-white transition ${
+								isMuted
+									? 'border-rose-500/40 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20'
+									: 'border-white/10 bg-white/5 hover:bg-white/10'
+							}`}
+							title={isMuted ? 'Включить микрофон' : 'Выключить микрофон'}
+						>
+							{isMuted ? '🔇' : '🎤'}
+						</button>
+						<button
+							onClick={handleEndCall}
+							className='rounded-xl border border-rose-500/40 bg-rose-500/10 px-2 py-1 text-rose-200 transition hover:bg-rose-500/20'
+							title='Завершить звонок'
+						>
+							📞
+						</button>
+					</div>
 				</div>
 			</div>
 		)
 	}
 
 	return (
-		<div className='active-call' onClick={handleUserInteraction}>
-			<div className='call-header'>
-				<div className='call-info'>
-					<h3 className='call-title'>
-						{callInfo.status === 'connected' ? 'Звонок с' : 'Звоним'}{' '}
-						{callInfo.userName || 'Неизвестный пользователь'}
-					</h3>
-					<div className='call-meta'>
-						<span className='call-duration'>{formatDuration(duration)}</span>
-						<span className={`call-status status-${callInfo.status}`}>
-							{(() => {
-								const mapConn: Record<string, string> = {
-									new: 'Инициализация',
-									connecting: 'Подключение',
-									connected: 'Подключено',
-									disconnected: 'Отключено',
-									failed: 'Ошибка',
-									closed: 'Закрыто',
-								}
-								const mapIce: Record<string, string> = {
-									new: 'Инициализация',
-									checking: 'Проверка путей',
-									connected: 'Подключено',
-									completed: 'Завершено',
-									disconnected: 'Отключено',
-									failed: 'Ошибка',
-									closed: 'Закрыто',
-								}
-								const mapType: Record<string, string> = {
-									host: 'Прямой',
-									srflx: 'Через NAT',
-									prflx: 'Peer Reflexive',
-									relay: 'Через TURN',
-								}
-								const connLbl = mapConn[connState] || connState || 'Неизвестно'
-								const iceLbl = mapIce[iceConnState] || iceConnState || ''
-								const pathLbl = mapType[iceType] || (iceType ? iceType : '')
-								const pingLbl = pingMs > 0 ? ` · Пинг: ${pingMs} мс` : ''
-								const pathPart = pathLbl ? ` · Путь: ${pathLbl}` : ''
-								const icePart = iceLbl ? ` · ICE: ${iceLbl}` : ''
-								return `Статус: ${connLbl}${pathPart}${icePart}${pingLbl}`
-							})()}
-						</span>
-						<span className='call-status'>
+		<div
+			className='fixed left-1/2 top-4 z-40 w-[min(92vw,760px)] -translate-x-1/2 rounded-3xl border border-white/10 bg-gradient-to-br from-black/90 via-black/80 to-zinc-900/80 p-4 text-white shadow-2xl backdrop-blur'
+			onClick={handleUserInteraction}
+		>
+			<div className='flex items-start justify-between gap-3'>
+				<div className='flex items-center gap-3 min-w-0'>
+					<div className='h-10 w-10 overflow-hidden rounded-2xl bg-white/10 flex items-center justify-center'>
+						{avatarUrl ? (
+							<img
+								src={avatarUrl}
+								alt={callInfo.userName || 'Собеседник'}
+								className='h-full w-full object-cover'
+							/>
+						) : (
+							<span className='text-sm font-semibold'>
+								{(callInfo.userName || 'V').slice(0, 1).toUpperCase()}
+							</span>
+						)}
+					</div>
+					<div className='min-w-0'>
+						<p className='text-sm font-semibold truncate'>
+							{callInfo.userName || 'Звонок'}
+						</p>
+						<div className='mt-1 flex items-center gap-2 text-[10px] text-white/60'>
+							<span className='rounded-full bg-white/10 px-2 py-0.5 text-white/70'>
+								{statusLabel}
+							</span>
+							<span>{formatDuration(duration)}</span>
+						</div>
+						<p className='mt-1 text-[10px] text-white/50'>{statusLine}</p>
+						<p className='text-[10px] text-white/50'>
 							{`Треки собеседника: ${remoteTrackCount}`}
-						</span>
+						</p>
 					</div>
 				</div>
 				<button
 					onClick={toggleMinimize}
-					className='minimize-button'
+					className='rounded-xl border border-white/10 bg-white/5 px-2 py-1 text-white hover:bg-white/10'
 					title='Свернуть'
 				>
 					➖
 				</button>
 			</div>
 
-			<div className='call-content'>
-				{hasScreenVideo && (
-					<div
-						className={`screen-share-panel ${isScreenZoomed ? 'zoomed' : ''}`}
-					>
-						{screenStream?.getVideoTracks().length ? (
-							<div
-								className={`screen-share-tile local ${
-									isScreenZoomed ? 'zoomed' : ''
-								}`}
-							>
-								<video ref={localScreenRef} autoPlay playsInline muted />
-								<span className='screen-share-label'>Ваш экран</span>
-							</div>
-						) : null}
-						{remoteStream?.getVideoTracks().length ? (
-							<div
-								className={`screen-share-tile remote ${
-									isScreenZoomed ? 'zoomed' : ''
-								}`}
-							>
-								<video ref={remoteVideoRef} autoPlay playsInline muted />
-								<span className='screen-share-label'>
-									{callInfo.userName || 'Экран собеседника'}
-								</span>
-							</div>
-						) : null}
-					</div>
-				)}
-				<div className='audio-visualization'>
-					<div className='local-audio-indicator'>
-						<div className={`audio-level ${isMuted ? 'muted' : 'active'}`}>
-							<span className='audio-icon'>{isMuted ? '🔇' : '🎤'}</span>
-							<span className='audio-label'>Вы</span>
-						</div>
-					</div>
-
-					<div className='remote-audio-indicator'>
-						<div
-							className={`audio-level ${remoteStream ? 'active' : 'inactive'}`}
-						>
-							<span className='audio-icon'>🔊</span>
-							<span className='audio-label'>
-								{callInfo.userName || 'Собеседник'}
+			{hasScreenVideo && (
+				<div className='mt-3 grid gap-3'>
+					{screenStream?.getVideoTracks().length ? (
+						<div className='rounded-2xl border border-white/10 bg-white/5 p-2'>
+							<video
+								ref={localScreenRef}
+								autoPlay
+								playsInline
+								muted
+								className='h-44 w-full rounded-xl bg-black object-cover'
+							/>
+							<span className='mt-2 block text-xs text-white/70'>
+								Ваш экран
 							</span>
 						</div>
-					</div>
+					) : null}
+					{remoteStream?.getVideoTracks().length ? (
+						<div className='rounded-2xl border border-white/10 bg-white/5 p-2'>
+							<video
+								ref={remoteVideoRef}
+								autoPlay
+								playsInline
+								muted
+								className={`h-44 w-full rounded-xl bg-black object-cover ${
+									isScreenZoomed ? 'scale-105' : ''
+								}`}
+							/>
+							<span className='mt-2 block text-xs text-white/70'>
+								{callInfo.userName || 'Экран собеседника'}
+							</span>
+						</div>
+					) : null}
 				</div>
-			</div>
+			)}
 
-			<div className='call-controls'>
+			<div className='mt-3 flex flex-wrap items-center justify-center gap-2'>
 				{needUnmute && (
 					<button
 						onClick={() => {
@@ -611,75 +674,82 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 								setNeedUnmute(false)
 							}
 						}}
-						className='unmute-button'
+						className='rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-emerald-200 transition hover:bg-emerald-500/20'
 						title='Включить звук собеседника'
 					>
-						<span className='button-icon'>🔊</span>
-						<span className='button-text'>Включить звук</span>
+						🔊 Включить звук
 					</button>
-				)}
-				{needUnmute && (
-					<span className='unmute-hint'>
-						Нажмите, чтобы разблокировать звук
-					</span>
 				)}
 				{webAudioEnabled &&
 					audioCtxRef.current &&
 					audioCtxRef.current.state === 'suspended' && (
 						<button
 							onClick={handleUnlockAudio}
-							className='unlock-audio-button'
+							className='rounded-2xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-amber-200 transition hover:bg-amber-500/20'
 							title='Разблокировать аудио'
 						>
-							<span className='button-icon'>🔓</span>
-							<span className='button-text'>Разблокировать звук</span>
+							🔓 Разблокировать звук
 						</button>
 					)}
 				<button
 					onClick={handleMuteToggle}
-					className={`mute-button icon-only ${isMuted ? 'muted' : ''}`}
+					className={`rounded-2xl border px-4 py-2 text-white transition ${
+						isMuted
+							? 'border-rose-500/40 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20'
+							: 'border-white/10 bg-white/5 hover:bg-white/10'
+					}`}
 					title={isMuted ? 'Включить микрофон' : 'Выключить микрофон'}
 				>
-					<span className='button-icon'>{isMuted ? '🔇' : '🎤'}</span>
+					{isMuted ? '🔇' : '🎤'}
 				</button>
 				{hasScreenVideo && (
 					<>
 						<button
 							onClick={togglePictureInPicture}
-							className={`screen-tool-button icon-only ${
-								isScreenPip ? 'active' : ''
+							className={`rounded-2xl border px-4 py-2 text-white transition ${
+								isScreenPip
+									? 'border-indigo-500/40 bg-indigo-500/10 text-indigo-200 hover:bg-indigo-500/20'
+									: 'border-white/10 bg-white/5 hover:bg-white/10'
 							}`}
 							title={isScreenPip ? 'Скрыть окно' : 'Вынести в окно'}
 						>
-							<span className='button-icon'>🗔</span>
+							🗔
 						</button>
 						<button
 							onClick={toggleFullscreen}
-							className={`screen-tool-button icon-only ${
-								isScreenFullscreen ? 'active' : ''
+							className={`rounded-2xl border px-4 py-2 text-white transition ${
+								isScreenFullscreen
+									? 'border-indigo-500/40 bg-indigo-500/10 text-indigo-200 hover:bg-indigo-500/20'
+									: 'border-white/10 bg-white/5 hover:bg-white/10'
 							}`}
 							title={
 								isScreenFullscreen ? 'Выйти из полноэкранного' : 'Во весь экран'
 							}
 						>
-							<span className='button-icon'>⛶</span>
+							⛶
 						</button>
 						<button
 							onClick={() => setIsScreenZoomed(prev => !prev)}
-							className={`screen-tool-button icon-only ${
-								isScreenZoomed ? 'active' : ''
+							className={`rounded-2xl border px-4 py-2 text-white transition ${
+								isScreenZoomed
+									? 'border-indigo-500/40 bg-indigo-500/10 text-indigo-200 hover:bg-indigo-500/20'
+									: 'border-white/10 bg-white/5 hover:bg-white/10'
 							}`}
 							title={isScreenZoomed ? 'Обычный размер' : 'Увеличить'}
 						>
-							<span className='button-icon'>🔍</span>
+							🔍
 						</button>
 					</>
 				)}
 				<button
 					onClick={onScreenShareToggle}
 					disabled={screenShareDisabled}
-					className={`screen-share-button icon-only ${
-						isScreenSharing ? 'active' : ''
+					className={`rounded-2xl border px-4 py-2 text-white transition ${
+						screenShareDisabled
+							? 'border-white/10 bg-white/5 opacity-60'
+							: isScreenSharing
+								? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20'
+								: 'border-white/10 bg-white/5 hover:bg-white/10'
 					}`}
 					title={
 						screenShareDisabled
@@ -689,19 +759,17 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 								: 'Демонстрация экрана'
 					}
 				>
-					<span className='button-icon'>🖥️</span>
+					🖥️
 				</button>
-
 				<button
 					onClick={handleEndCall}
-					className='end-call-button icon-only'
+					className='rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-rose-200 transition hover:bg-rose-500/20'
 					title='Завершить звонок'
 				>
-					<span className='button-icon'>📞</span>
+					📞
 				</button>
 			</div>
 
-			{/* Скрытые аудио элементы */}
 			<audio ref={remoteAudioRef} autoPlay playsInline />
 			<audio ref={localAudioRef} autoPlay playsInline muted />
 		</div>

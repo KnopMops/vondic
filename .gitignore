@@ -44,8 +44,16 @@ _billing.tsx
 logs/
 *.log
 
-desktop/
-
 *.rdb
 
 botiksdk.egg-info/
+
+backup.sql
+
+dist/
+
+desktop/
+
+build/
+
+run.py

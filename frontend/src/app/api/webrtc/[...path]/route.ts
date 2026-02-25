@@ -6,7 +6,7 @@ type RouteParams = {
 	}>
 }
 
-async function proxyToWebRTC(req: NextRequest, params: RouteParams['params']) {
+async function proxyToWebRTC(req: NextRequest, params: { path: string[] }) {
 	const webrtcUrl =
 		process.env.NEXT_PUBLIC_WEBRTC_URL || 'http://localhost:5000'
 	const path = Array.isArray(params.path) ? params.path.join('/') : ''
@@ -36,6 +36,9 @@ export async function POST(req: NextRequest, ctx: RouteParams) {
 		const params = await ctx.params
 		return await proxyToWebRTC(req, params)
 	} catch {
-		return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+		return NextResponse.json(
+			{ error: 'Internal Server Error' },
+			{ status: 500 },
+		)
 	}
 }

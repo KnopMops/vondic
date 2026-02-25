@@ -1,7 +1,7 @@
 import { Socket } from 'socket.io-client'
 import { CallState, WebRTCService } from './WebRTCService'
 
-export { CallState } from './WebRTCService'
+export type { CallState } from './WebRTCService'
 
 export interface CallRecord {
 	id: string
@@ -53,6 +53,25 @@ export class CallManager {
 			console.log('Group call started:', data)
 			this.activeGroupCallId = data.call_id
 			if (this.onGroupCallIdChange) this.onGroupCallIdChange(data.call_id)
+
+			// If caller_participant is provided, add it to currentCalls
+			if (data.caller_participant) {
+				const { user_id, socket_id, username, avatar_url } = data.caller_participant
+				if (socket_id !== this.socket.id) {
+					const callState: CallState = {
+						socketId: socket_id,
+						userId: user_id,
+						userName: username,
+						avatarUrl: avatar_url,
+						status: 'connected',
+						startTime: new Date(),
+						isGroupCall: true,
+						callId: data.call_id,
+					}
+					this.currentCalls.set(socket_id, callState)
+					this.updateCallState(socket_id, callState)
+				}
+			}
 		})
 
 		this.socket.on('incoming_group_call', (data: any) => {
@@ -74,7 +93,7 @@ export class CallManager {
 
 		this.socket.on('group_call_participant_joined', async (data: any) => {
 			console.log('Participant joined group call:', data)
-			const { call_id, user_id, socket_id } = data
+			const { call_id, user_id, socket_id, username, avatar_url } = data
 
 			if (!this.activeGroupCallId && call_id) {
 				this.activeGroupCallId = call_id
@@ -83,12 +102,26 @@ export class CallManager {
 			if (this.activeGroupCallId !== call_id) return
 			if (socket_id === this.socket.id) return
 
+			// Check if we already have a connection to this participant
+			const existingPc = this.webRTCService.peerConnections.get(socket_id)
+			if (existingPc && existingPc.signalingState === 'stable') {
+				console.log(`Already connected to ${socket_id}, skipping`)
+				return
+			}
+
 			const mySocketId = this.socket.id
 			const iCreateOffer = mySocketId < socket_id
 
 			if (iCreateOffer) {
 				console.log(`I (${mySocketId}) am creating offer for ${socket_id}`)
 				const pc = await this.webRTCService.ensureLocalAudioSender(socket_id)
+				
+				// Check state before creating offer
+				if (pc.signalingState !== 'stable') {
+					console.log(`Cannot create offer: PC state is ${pc.signalingState}`)
+					return
+				}
+				
 				const offer = await pc.createOffer()
 				await pc.setLocalDescription(offer)
 
@@ -99,21 +132,40 @@ export class CallManager {
 					caller_username: this.currentUser?.name,
 					caller_avatar_url: this.currentUser?.avatar,
 				})
+
+				// Only add call state after successfully sending offer
+				const callState: CallState = {
+					socketId: socket_id,
+					userId: user_id,
+					userName: username,
+					avatarUrl: avatar_url,
+					status: 'calling',
+					startTime: new Date(),
+					isGroupCall: true,
+					callId: call_id,
+				}
+				this.currentCalls.set(socket_id, callState)
+				this.updateCallState(socket_id, callState)
 			} else {
 				console.log(`I (${mySocketId}) am waiting for offer from ${socket_id}`)
-				await this.webRTCService.ensureLocalAudioSender(socket_id)
-			}
+				// Ensure local audio is ready, but don't create an offer
+				const pc = await this.webRTCService.ensureLocalAudioSender(socket_id)
+				// Make sure the audio track is properly added to the connection
 
-			const callState: CallState = {
-				socketId: socket_id,
-				userId: user_id,
-				status: 'connected',
-				startTime: new Date(),
-				isGroupCall: true,
-				callId: call_id,
+				// Add call state while waiting for offer
+				const callState: CallState = {
+					socketId: socket_id,
+					userId: user_id,
+					userName: username,
+					avatarUrl: avatar_url,
+					status: 'calling',
+					startTime: new Date(),
+					isGroupCall: true,
+					callId: call_id,
+				}
+				this.currentCalls.set(socket_id, callState)
+				this.updateCallState(socket_id, callState)
 			}
-			this.currentCalls.set(socket_id, callState)
-			this.updateCallState(socket_id, callState)
 		})
 
 		this.socket.on('group_call_accepted', (data: any) => {
@@ -153,9 +205,16 @@ export class CallManager {
 		// --- Voice Channel Call Listeners (Persistent) ---
 		this.socket.on('voice_channel_participant_joined', async (data: any) => {
 			console.log('Voice channel participant joined:', data)
-			const { channel_id, user_id, socket_id } = data
+			const { channel_id, user_id, socket_id, username, avatar_url } = data
 			if (!channel_id || !socket_id) return
 			if (socket_id === this.socket.id) return
+
+			// Check if we already have a connection to this participant
+			const existingPc = this.webRTCService.peerConnections.get(socket_id)
+			if (existingPc && existingPc.signalingState === 'stable') {
+				console.log(`Already connected to ${socket_id}, skipping`)
+				return
+			}
 
 			// Decide offer side deterministically
 			const mySocketId = this.socket.id
@@ -163,6 +222,13 @@ export class CallManager {
 
 			if (iCreateOffer) {
 				const pc = await this.webRTCService.ensureLocalAudioSender(socket_id)
+				
+				// Check state before creating offer
+				if (pc.signalingState !== 'stable') {
+					console.log(`Cannot create offer: PC state is ${pc.signalingState}`)
+					return
+				}
+				
 				const offer = await pc.createOffer()
 				await pc.setLocalDescription(offer)
 				this.socket.emit('offer', {
@@ -172,20 +238,38 @@ export class CallManager {
 					caller_username: this.currentUser?.name,
 					caller_avatar_url: this.currentUser?.avatar,
 				})
+
+				// Only add call state after successfully sending offer
+				const callState: CallState = {
+					socketId: socket_id,
+					userId: user_id,
+					userName: username,
+					avatarUrl: avatar_url,
+					status: 'calling',
+					startTime: new Date(),
+					isGroupCall: true,
+					callId: channel_id,
+				}
+				this.currentCalls.set(socket_id, callState)
+				this.updateCallState(socket_id, callState)
 			} else {
 				await this.webRTCService.ensureLocalAudioSender(socket_id)
-			}
 
-			const callState: CallState = {
-				socketId: socket_id,
-				userId: user_id,
-				status: 'connected',
-				startTime: new Date(),
-				isGroupCall: true,
-				callId: channel_id,
+				// Add call state while waiting for offer
+				const callState: CallState = {
+					socketId: socket_id,
+					userId: user_id,
+					userName: username,
+					avatarUrl: avatar_url,
+					status: 'calling',
+					startTime: new Date(),
+					isGroupCall: true,
+					callId: channel_id,
+				}
+				this.currentCalls.set(socket_id, callState)
+				this.updateCallState(socket_id, callState)
+			
 			}
-			this.currentCalls.set(socket_id, callState)
-			this.updateCallState(socket_id, callState)
 		})
 
 		this.socket.on('voice_channel_participant_left', (data: any) => {
@@ -350,7 +434,7 @@ export class CallManager {
 		})
 
 		// Дополнительное событие offer для совместимости
-		this.socket.on('offer', (...args: any[]) => {
+		this.socket.on('offer', async (...args: any[]) => {
 			let from_socket_id: string | undefined
 			let offer: RTCSessionDescriptionInit | undefined
 			let caller_user_id: string | undefined
@@ -386,7 +470,40 @@ export class CallManager {
 				if (typeof args[1] === 'object') offer = args[1]
 			}
 			if (from_socket_id && offer) {
-				if (this.currentCalls.has(from_socket_id)) {
+				// Check if we already have a PC for this socket (we were waiting for their offer)
+				const existingPc = this.webRTCService.peerConnections.get(from_socket_id)
+				if (existingPc) {
+					console.log(`Received offer from ${from_socket_id}, we already have a PC (state: ${existingPc.signalingState})`)
+					// We have a PC, check if it's in the right state
+					if (existingPc.signalingState === 'stable') {
+						// Process the offer
+						await this.webRTCService.handleRenegotiationOffer(from_socket_id, offer)
+						// Update call state to connected after accepting
+						const call = this.currentCalls.get(from_socket_id)
+						if (call) {
+							call.status = 'connected'
+							this.updateCallState(from_socket_id, call)
+						}
+					} else if (existingPc.signalingState === 'have-local-offer') {
+						// Glare condition - both sides created offers
+						const mySocketId = this.socket.id
+						if (mySocketId && mySocketId < from_socket_id) {
+							// I win, ignore incoming offer
+							console.log(`Glare: I (${mySocketId}) win, ignoring offer from ${from_socket_id}`)
+						} else {
+							// They win, rollback and accept their offer
+							console.log(`Glare: They (${from_socket_id}) win, rolling back and accepting offer`)
+							try {
+								await existingPc.setLocalDescription({ type: 'rollback' } as any)
+								await this.webRTCService.handleRenegotiationOffer(from_socket_id, offer)
+							} catch (e) {
+								console.error('Glare resolution failed:', e)
+							}
+						}
+					} else {
+						console.log(`Skipping offer: PC state is ${existingPc.signalingState}`)
+					}
+				} else if (this.currentCalls.has(from_socket_id)) {
 					// Renegotiation on existing call: auto-accept without modal
 					this.webRTCService
 						.handleRenegotiationOffer(from_socket_id, offer)

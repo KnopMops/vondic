@@ -879,10 +879,10 @@ export default function MessengerPage() {
 			try {
 				const res = await fetch(
 					`/api/v1/bots?bot_id=${selectedFriend.id}&chat_id=${user.id}&mode=outbox`,
-					user?.access_token
+					accessToken
 						? {
 								headers: {
-									Authorization: `Bearer ${user.access_token}`,
+									Authorization: `Bearer ${accessToken}`,
 								},
 							}
 						: undefined,
@@ -1034,13 +1034,15 @@ export default function MessengerPage() {
 	const [communityChannels, setCommunityChannels] = useState<any[]>([])
 	const [selectedCommunity, setSelectedCommunity] = useState<any | null>(null)
 	const updateChatUrl = useCallback(
-		(next: {
-			botId?: string
-			directId?: string
-			groupId?: string
-			channelId?: string
-			serverId?: string
-		} | null) => {
+		(
+			next: {
+				botId?: string
+				directId?: string
+				groupId?: string
+				channelId?: string
+				serverId?: string
+			} | null,
+		) => {
 			if (typeof window === 'undefined') return
 			const params = new URLSearchParams(window.location.search)
 			params.delete('bot_id')
@@ -1546,6 +1548,7 @@ export default function MessengerPage() {
 	const isBotChat = selectedFriend?.is_bot === true && !isAiChat
 	const targetUserId = selectedFriend?.id
 	const hasActiveChat = !!(selectedFriend || selectedChannel || selectedGroup)
+	const accessToken = (user as any)?.access_token as string | undefined
 	const isSelectedFriendOnline =
 		selectedFriend?.status?.toLowerCase() === 'online'
 	const isSelectedFriendInCall = selectedFriend
@@ -1579,6 +1582,32 @@ export default function MessengerPage() {
 	const messages = isBotChat ? botMessages : chatMessages
 	const isChatLoading = isBotChat ? false : isLoading
 	const isChatTyping = isBotChat ? false : isTyping
+
+	useEffect(() => {
+		if (typeof window === 'undefined') return
+		const setActive = (kind: 'dm' | 'group' | 'channel', id: string) => {
+			localStorage.setItem(
+				'active_chat',
+				JSON.stringify({ kind, id: String(id) }),
+			)
+		}
+		if (selectedFriend?.id) {
+			setActive('dm', selectedFriend.id)
+			return
+		}
+		if (selectedGroup?.id) {
+			setActive('group', selectedGroup.id)
+			return
+		}
+		if (selectedChannel?.id) {
+			setActive('channel', selectedChannel.id)
+			return
+		}
+		localStorage.removeItem('active_chat')
+		return () => {
+			localStorage.removeItem('active_chat')
+		}
+	}, [selectedFriend?.id, selectedGroup?.id, selectedChannel?.id])
 
 	// Typing Indicator Logic
 	const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -1717,7 +1746,7 @@ export default function MessengerPage() {
 	}, [user])
 
 	const fetchRecent = useCallback(async () => {
-		if (!user?.access_token) {
+		if (!accessToken) {
 			setRecentContacts([])
 			return
 		}
@@ -1726,7 +1755,7 @@ export default function MessengerPage() {
 				process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
 			const res = await fetch(`${baseUrl}/api/v1/dm/recent?limit=50`, {
 				headers: {
-					Authorization: `Bearer ${user.access_token}`,
+					Authorization: `Bearer ${accessToken}`,
 				},
 			})
 			if (!res.ok) return
@@ -1748,7 +1777,7 @@ export default function MessengerPage() {
 				}))
 			setRecentContacts(cleaned)
 		} catch {}
-	}, [user?.access_token, user?.id, aiUser?.id])
+	}, [accessToken, user?.id, aiUser?.id])
 
 	useEffect(() => {
 		let active = true
@@ -2268,7 +2297,7 @@ export default function MessengerPage() {
 			selectedFriend?.is_bot === true && selectedFriend.id === botUser.id
 		if (!isBotikChat) {
 			setBotMessages(prev => [...prev, nextMessage])
-			if (!user?.access_token || !user?.id) {
+			if (!accessToken || !user?.id) {
 				setBotMessages(prev => [
 					...prev,
 					buildBotReply('Нужна авторизация для отправки боту.'),
@@ -2286,7 +2315,7 @@ export default function MessengerPage() {
 						method: 'POST',
 						headers: {
 							'Content-Type': 'application/json',
-							Authorization: `Bearer ${user.access_token}`,
+							Authorization: `Bearer ${accessToken}`,
 						},
 						body: JSON.stringify({
 							wait_for_reply: 5,
@@ -2387,7 +2416,7 @@ export default function MessengerPage() {
 					buildBotReply(argText || 'Нечего повторять.'),
 				])
 			} else if (cmd === 'createbot') {
-				if (!user?.access_token) {
+				if (!accessToken) {
 					setBotMessages(prev => [
 						...prev,
 						nextMessage,
@@ -2436,7 +2465,7 @@ export default function MessengerPage() {
 								},
 								body: JSON.stringify({
 									...payload,
-									access_token: user.access_token,
+									access_token: accessToken,
 								}),
 							})
 							const text = await res.text()
@@ -2747,7 +2776,7 @@ export default function MessengerPage() {
 			showToast('В этом чате нельзя удалить историю', 'info')
 			return
 		}
-		if (!user?.access_token) {
+		if (!accessToken) {
 			showToast('Необходима авторизация', 'error')
 			return
 		}
@@ -2774,7 +2803,7 @@ export default function MessengerPage() {
 					method: 'DELETE',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({
-						token: user.access_token,
+						token: accessToken,
 						channel_id: selectedChannel.id,
 					}),
 				})
@@ -2790,7 +2819,7 @@ export default function MessengerPage() {
 					method: 'DELETE',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({
-						token: user.access_token,
+						token: accessToken,
 						group_id: selectedGroup.id,
 					}),
 				})
@@ -2799,7 +2828,7 @@ export default function MessengerPage() {
 					method: 'DELETE',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({
-						token: user.access_token,
+						token: accessToken,
 						target_id: selectedFriend.id,
 					}),
 				})

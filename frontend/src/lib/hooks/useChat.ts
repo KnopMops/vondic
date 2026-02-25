@@ -3,6 +3,9 @@ import { Message } from '@/lib/types'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Socket } from 'socket.io-client'
 
+// Check if Web Crypto API is available (requires secure context)
+const hasCryptoSubtle = typeof crypto !== 'undefined' && typeof crypto.subtle !== 'undefined'
+
 const base64FromBytes = (bytes: Uint8Array) => {
 	let binary = ''
 	for (let i = 0; i < bytes.length; i++) {
@@ -383,6 +386,7 @@ export const useChat = (
 
 	const ensureKeyExchange = useCallback(async () => {
 		if (!socket || !targetUserId || !currentUserId || !e2eKeyId) return
+		if (!hasCryptoSubtle) return // Skip E2E in insecure context
 		loadStoredKey()
 		if (e2eKeysRef.current.has(e2eKeyId)) return
 		let pair = e2ePairsRef.current.get(e2eKeyId)
@@ -444,6 +448,7 @@ export const useChat = (
 
 	useEffect(() => {
 		if (!socket || !e2eKeyId || !currentUserId || !targetUserId) return
+		if (!hasCryptoSubtle) return // Skip E2E in insecure context
 		loadStoredKey()
 		const handleKeyExchange = async (data: any) => {
 			if (!data || data.key_id !== e2eKeyId) return
