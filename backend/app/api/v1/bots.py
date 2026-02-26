@@ -136,7 +136,8 @@ def push_bot_update(current_user, bot_id):
                 update_id,
                 len(items),
             )
-            return jsonify({"ok": True, "update_id": update_id, "outbox": items}), 200
+            return jsonify(
+                {"ok": True, "update_id": update_id, "outbox": items}), 200
         if time.time() - start >= wait_seconds:
             logger.info(
                 "bot_updates_reply_timeout bot_id=%s update_id=%s timeout=%s",
@@ -144,7 +145,8 @@ def push_bot_update(current_user, bot_id):
                 update_id,
                 wait_seconds,
             )
-            return jsonify({"ok": True, "update_id": update_id, "outbox": []}), 200
+            return jsonify(
+                {"ok": True, "update_id": update_id, "outbox": []}), 200
         time.sleep(0.2)
 
 

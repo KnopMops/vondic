@@ -76,8 +76,10 @@ def _trim_text(value: str | None, limit: int = 800):
 
 
 def update_job(
-    job_id: str, status: str, result_json: str | None = None, error: str | None = None
-):
+        job_id: str,
+        status: str,
+        result_json: str | None = None,
+        error: str | None = None):
     ts = time.strftime("%Y-%m-%dT%H:%M:%S")
     db.session.execute(
         text("""
@@ -194,9 +196,15 @@ def _consume(app):
     channel.basic_qos(prefetch_count=1)
     channel.basic_consume(
         queue="video_checks",
-        on_message_callback=lambda ch, method, properties, body: handle_message(
-            ch, method, properties, body, app
-        ),
+        on_message_callback=lambda ch,
+        method,
+        properties,
+        body: handle_message(
+            ch,
+            method,
+            properties,
+            body,
+            app),
     )
     channel.start_consuming()
 

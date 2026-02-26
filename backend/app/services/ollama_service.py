@@ -55,30 +55,30 @@ class OllamaService:
                 return (
                     "На странице входа нажмите «Войти через Yandex» и подтвердите вход. "
                     "После этого вас автоматически перенаправит в ленту (/feed). "
-                    "Если окно авторизации не открылось — обновите страницу и попробуйте ещё раз."
-                )
+                    "Если окно авторизации не открылось — обновите страницу и попробуйте ещё раз.")
         if "двухфактор" in t or "2fa" in t or "two factor" in t or "код" in t:
             if "где" in t and ("код" in t or "2fa" in t or "two factor" in t):
                 return (
                     "После запроса 2FA на странице входа появится поле «Two Factor Code». "
-                    "Введите шестизначный код из письма."
-                )
+                    "Введите шестизначный код из письма.")
             if "почему" in t or "просят" in t or "ввести" in t:
                 return (
                     "Это двухфакторная защита (2FA). Нажмите «Отправить код на почту», "
-                    "откройте письмо и введите шестизначный код."
-                )
+                    "откройте письмо и введите шестизначный код.")
             if "не приходит" in t or "не приш" in t or "письмо" in t or "почт" in t:
                 return (
                     "Проверьте «Спам» и «Промоакции». Убедитесь, что адрес почты указан верно. "
-                    "Нажмите «Отправить код на почту» ещё раз. Если проблема сохраняется — напишите в поддержку."
-                )
+                    "Нажмите «Отправить код на почту» ещё раз. Если проблема сохраняется — напишите в поддержку.")
         return None
 
     @staticmethod
     def _send_reply(
-        reply_content, ai_user, reply_target_id, reply_group_id, is_dm, message_id
-    ):
+            reply_content,
+            ai_user,
+            reply_target_id,
+            reply_group_id,
+            is_dm,
+            message_id):
         reply_msg = Message(
             content=reply_content,
             type="text",
@@ -120,7 +120,11 @@ class OllamaService:
             )
 
     @staticmethod
-    def process_message_async(message_id, is_dm=True, content=None, sender_id=None):
+    def process_message_async(
+            message_id,
+            is_dm=True,
+            content=None,
+            sender_id=None):
         logger.info(
             "ai_start message_id=%s is_dm=%s sender_id=%s",
             message_id,
@@ -176,8 +180,7 @@ class OllamaService:
                 "ответы на сообщения, пересылка, закреп, поиск, профиль, настройки, уведомления, поддержка. "
                 "Давай краткие пошаговые решения, опираясь на интерфейс и функции фронтенда. "
                 "Если вопрос общий, отвечай вежливо и по делу. "
-                "Не упоминай, что ты ИИ, если тебя не спрашивают. Будь кратким."
-            )
+                "Не упоминай, что ты ИИ, если тебя не спрашивают. Будь кратким.")
 
             payload = {
                 "model": Config.OLLAMA_MODEL,

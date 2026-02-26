@@ -19,9 +19,14 @@ class Like(db.Model):
             "(post_id IS NOT NULL AND comment_id IS NULL) OR (post_id IS NULL AND comment_id IS NOT NULL)",
             name="check_post_xor_comment",
         ),
-        db.UniqueConstraint("user_id", "post_id", name="uq_user_post_like"),
-        db.UniqueConstraint("user_id", "comment_id",
-                            name="uq_user_comment_like"),
+        db.UniqueConstraint(
+            "user_id",
+            "post_id",
+            name="uq_user_post_like"),
+        db.UniqueConstraint(
+            "user_id",
+            "comment_id",
+            name="uq_user_comment_like"),
     )
 
     def to_dict(self):

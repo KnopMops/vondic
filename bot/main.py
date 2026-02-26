@@ -115,9 +115,8 @@ async def buy_premium_tg_start(callback: types.CallbackQuery):
     builder = InlineKeyboardBuilder()
     builder.add(
         InlineKeyboardButton(
-            text="💳 Оплатить Premium", callback_data=f"buy_premium:{target_user_id}"
-        )
-    )
+            text="💳 Оплатить Premium",
+            callback_data=f"buy_premium:{target_user_id}"))
 
     await callback.message.answer(
         "💎 **Vondic Premium**\n\n"
@@ -176,9 +175,8 @@ async def buy_coins_tg(callback: types.CallbackQuery):
         builder = InlineKeyboardBuilder()
         builder.add(
             InlineKeyboardButton(
-                text="🔗 Привязать аккаунт (Yandex)", callback_data="link_yandex"
-            )
-        )
+                text="🔗 Привязать аккаунт (Yandex)",
+                callback_data="link_yandex"))
         builder.add(
             InlineKeyboardButton(text="✅ Регистрация",
                                  callback_data="register")
@@ -212,7 +210,9 @@ async def buy_coins_tg(callback: types.CallbackQuery):
 
 
 @dp.callback_query(F.data == "buy_coins_email")
-async def buy_coins_email_start(callback: types.CallbackQuery, state: FSMContext):
+async def buy_coins_email_start(
+        callback: types.CallbackQuery,
+        state: FSMContext):
     await state.set_state(CoinsStates.email)
     await callback.message.answer(
         "📧 Введите email аккаунта Vondic/Yandex для покупки монет:"
@@ -478,9 +478,9 @@ async def auth_password_entered(message: types.Message, state: FSMContext):
         builder = InlineKeyboardBuilder()
         builder.add(
             InlineKeyboardButton(
-                text="Купить Vondic Premium", callback_data=f"buy_premium:{user['id']}"
-            )
-        )
+                text="Купить Vondic Premium",
+                callback_data=f"buy_premium:{
+                    user['id']}"))
 
         await message.answer(
             f"✅ Успешная авторизация!\nВы вошли как: {user['username']}",

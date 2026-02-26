@@ -72,7 +72,8 @@ async def read_http_request(
     return header_block, rest
 
 
-def parse_http_headers(header_block: bytes) -> Tuple[str, list[Tuple[str, str]]]:
+def parse_http_headers(
+        header_block: bytes) -> Tuple[str, list[Tuple[str, str]]]:
     text = header_block.decode("iso-8859-1")
     lines = text.split("\r\n")
     request_line = lines[0] if lines else ""

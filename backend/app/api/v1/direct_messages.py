@@ -77,12 +77,10 @@ def delete_message(current_user, target_id, message_id):
     from app.models.message import Message
     message = Message.query.filter(
         Message.id == message_id,
-        (
-            ((Message.sender_id == current_user.id) & (Message.target_id == target_id)) |
-            ((Message.sender_id == target_id) &
-             (Message.target_id == current_user.id))
-        )
-    ).first()
+        (((Message.sender_id == current_user.id) & (
+            Message.target_id == target_id)) | (
+            (Message.sender_id == target_id) & (
+                Message.target_id == current_user.id)))).first()
 
     if not message:
         return jsonify({"error": "Message not found"}), 404

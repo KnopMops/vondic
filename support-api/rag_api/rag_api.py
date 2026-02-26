@@ -123,8 +123,8 @@ class RAGEngine:
         if pipeline is not None:
             try:
                 self.generator = pipeline(
-                    "text-generation", model="ai-forever/rugpt3small_based_on_gpt2"
-                )
+                    "text-generation",
+                    model="ai-forever/rugpt3small_based_on_gpt2")
             except Exception:
                 self.generator = None
 

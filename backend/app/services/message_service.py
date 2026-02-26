@@ -74,8 +74,7 @@ class MessageService:
 
             if group_id:
                 ai_participant = next(
-                    (p for p in group.participants if p.username == AI_USERNAME), None
-                )
+                    (p for p in group.participants if p.username == AI_USERNAME), None)
                 if ai_participant and str(new_message.sender_id) != str(
                     ai_participant.id
                 ):
@@ -94,11 +93,17 @@ class MessageService:
             return None, str(e)
 
     @staticmethod
-    def get_direct_messages(user_id, target_id, page=1, per_page=50, cursor=None):
+    def get_direct_messages(
+            user_id,
+            target_id,
+            page=1,
+            per_page=50,
+            cursor=None):
         query = Message.query.filter(
-            ((Message.sender_id == user_id) & (Message.target_id == target_id))
-            | ((Message.sender_id == target_id) & (Message.target_id == user_id))
-        )
+            ((Message.sender_id == user_id) & (
+                Message.target_id == target_id)) | (
+                (Message.sender_id == target_id) & (
+                    Message.target_id == user_id)))
 
         if cursor:
             try:
@@ -114,7 +119,12 @@ class MessageService:
         return messages, None
 
     @staticmethod
-    def get_group_messages(group_id, user_id, page=1, per_page=50, cursor=None):
+    def get_group_messages(
+            group_id,
+            user_id,
+            page=1,
+            per_page=50,
+            cursor=None):
         group = Group.query.get(group_id)
         if not group:
             return None, "Group not found"

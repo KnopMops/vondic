@@ -128,8 +128,8 @@ def get_messages(current_user, group_id):
 @groups_bp.route("/<group_id>/messages/<message_id>", methods=["DELETE"])
 @token_required
 def delete_group_message(current_user, group_id, message_id):
-    from app.models.message import Message
     from app.models.group import Group
+    from app.models.message import Message
 
     # Check if user is in the group
     group = Group.query.get(group_id)
@@ -155,14 +155,13 @@ def delete_group_message(current_user, group_id, message_id):
         message.is_deleted = True
     else:
         # If the field doesn't exist yet, add it
-        from sqlalchemy import text
         from app.core.extensions import db
+        from sqlalchemy import text
         try:
             db.session.execute(
                 text("ALTER TABLE messages ADD COLUMN is_deleted INTEGER DEFAULT 0"))
             db.session.commit()
-        except:
-            # Column might already exist
+        except Exception:
             pass
         message.is_deleted = True
 

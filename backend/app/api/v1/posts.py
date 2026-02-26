@@ -15,7 +15,10 @@ from flask import Blueprint, jsonify, request
 posts_bp = Blueprint("posts", __name__, url_prefix="/api/v1/posts")
 
 
-def notify_all_users(title: str, message: str, notification_type: str = "system"):
+def notify_all_users(
+        title: str,
+        message: str,
+        notification_type: str = "system"):
     ts = int(time.time())
     conn = sqlite3.connect(os.path.join(Config.BASE_DIR, "database.db"))
     cur = conn.cursor()
@@ -26,7 +29,13 @@ def notify_all_users(title: str, message: str, notification_type: str = "system"
         ).hexdigest()
         cur.execute(
             "INSERT INTO notifications (user_id, title, type, message, created_at, delivered, notification_hash) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (u.id, title, notification_type, message, ts, 0, content_hash),
+            (u.id,
+             title,
+             notification_type,
+             message,
+             ts,
+             0,
+             content_hash),
         )
     conn.commit()
     conn.close()
@@ -162,7 +171,8 @@ def delete_post_admin(current_user):
     reason = data.get("reason")
 
     if not post_id or not user_id or not reason:
-        return jsonify({"error": "post_id, user_id and reason are required"}), 400
+        return jsonify(
+            {"error": "post_id, user_id and reason are required"}), 400
 
     if str(user_id) != str(current_user.id):
         return jsonify({"error": "User ID mismatch"}), 403

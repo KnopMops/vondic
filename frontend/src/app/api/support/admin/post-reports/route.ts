@@ -9,14 +9,14 @@ export async function GET(req: NextRequest) {
 		}
 		const backendUrl =
 			process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
-		// role guard
 		const meRes = await fetch(`${backendUrl}/api/v1/auth/me`, {
-			method: 'GET',
-			headers: { Authorization: `Bearer ${token}` },
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ access_token: token }),
 		})
 		const me = await meRes.json().catch(() => ({}))
-		const role = me?.user?.role || me?.role
-		if (role !== 'Admin' && role !== 'Support') {
+		const role = String(me?.user?.role || me?.role || '').toLowerCase()
+		if (role !== 'admin' && role !== 'support') {
 			return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 		}
 		const response = await fetch(

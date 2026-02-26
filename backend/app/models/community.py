@@ -45,7 +45,8 @@ class Community(db.Model):
             "description": self.description,
             "invite_code": self.invite_code,
             "owner_id": self.owner_id,
-            "members_count": len(self.members),
+            "members_count": len(
+                self.members),
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

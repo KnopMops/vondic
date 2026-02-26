@@ -43,7 +43,8 @@ class Group(db.Model):
             "description": self.description,
             "invite_code": self.invite_code,
             "owner_id": self.owner_id,
-            "participants_count": len(self.participants),
+            "participants_count": len(
+                self.participants),
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

@@ -278,7 +278,8 @@ class AuthService:
                 totp_code = data.get("totp_code")
                 if not totp_code:
                     return (None, "TwoFactorTotpRequired")
-                if not AuthService.verify_totp(user.two_factor_secret, totp_code):
+                if not AuthService.verify_totp(
+                        user.two_factor_secret, totp_code):
                     return (None, "InvalidTwoFactorCode")
         access_token = secrets.token_hex(32)
         refresh_token = secrets.token_hex(32)

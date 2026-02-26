@@ -98,7 +98,10 @@ def build_config() -> ProxyConfig:
     parser.add_argument(
         "--chunk-size",
         type=int,
-        default=int(os.getenv("PROXY_RECEIVER_CHUNK_SIZE", DEFAULT_CHUNK_SIZE)),
+        default=int(
+            os.getenv(
+                "PROXY_RECEIVER_CHUNK_SIZE",
+                DEFAULT_CHUNK_SIZE)),
     )
     parser.add_argument(
         "--max-frame",

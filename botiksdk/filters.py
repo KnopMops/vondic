@@ -25,7 +25,10 @@ class Command(BaseFilter):
 
 
 class Text(BaseFilter):
-    def __init__(self, equals: Optional[str] = None, contains: Optional[str] = None):
+    def __init__(
+            self,
+            equals: Optional[str] = None,
+            contains: Optional[str] = None):
         self.equals = equals
         self.contains_value = contains
 

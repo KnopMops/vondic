@@ -12,8 +12,8 @@ from .proxy import ConnectionBroker
 from .signaling import SignalingService
 
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -100,9 +100,9 @@ def create_app():
     app.config.from_object(Config)
 
     allowed_origins = _build_allowed_origins()
-    CORS(
-        app, resources={r"/*": {"origins": allowed_origins}}, supports_credentials=True
-    )
+    CORS(app,
+         resources={r"/*": {"origins": allowed_origins}},
+         supports_credentials=True)
 
     socketio = SocketIO(
         app,
@@ -250,7 +250,8 @@ def create_app():
             return jsonify({"error": "Forbidden"}), 403
 
         participants = user_repo.get_channel_participants(channel_id)
-        if not participants or str(user["id"]) not in [str(p) for p in participants]:
+        if not participants or str(user["id"]) not in [
+                str(p) for p in participants]:
             return jsonify({"error": "Access denied"}), 403
 
         deleted = user_repo.delete_channel_history(channel_id)
@@ -276,7 +277,8 @@ def create_app():
             return jsonify({"error": "Invalid token"}), 401
 
         participants = user_repo.get_group_participants(group_id)
-        if not participants or str(user["id"]) not in [str(p) for p in participants]:
+        if not participants or str(user["id"]) not in [
+                str(p) for p in participants]:
             return jsonify({"error": "Access denied"}), 403
 
         owner_id = user_repo.get_group_owner(group_id)
@@ -343,8 +345,9 @@ def create_app():
         payload = data.get("payload")
 
         logger.info(
-            f"broadcast_message: target_id={target_id}, group_id={group_id}, payload_keys={list(payload.keys()) if payload else 'None'}"
-        )
+            f"broadcast_message: target_id={target_id}, group_id={group_id}, payload_keys={
+                list(
+                    payload.keys()) if payload else 'None'}")
 
         if not payload:
             logger.error("broadcast_message: Missing payload")
@@ -353,27 +356,24 @@ def create_app():
         if group_id:
             participants = user_repo.get_group_participants(group_id)
             logger.info(
-                f"broadcast_message: Found {len(participants)} participants for group {group_id}"
-            )
+                f"broadcast_message: Found {
+                    len(participants)} participants for group {group_id}")
             for pid in participants:
                 pid_socket = broker.get_user_socket(pid)
                 if pid_socket:
                     socketio.emit("receive_message", payload, room=pid_socket)
                 else:
                     logger.warning(
-                        f"broadcast_message: No socket found for participant {pid}"
-                    )
+                        f"broadcast_message: No socket found for participant {pid}")
         elif target_id:
             target_socket = broker.get_user_socket(target_id)
             if target_socket:
                 logger.info(
-                    f"broadcast_message: Sending to target {target_id} on socket {target_socket}"
-                )
+                    f"broadcast_message: Sending to target {target_id} on socket {target_socket}")
                 socketio.emit("receive_message", payload, room=target_socket)
             else:
                 logger.warning(
-                    f"broadcast_message: No socket found for target {target_id}"
-                )
+                    f"broadcast_message: No socket found for target {target_id}")
         else:
             logger.error("broadcast_message: Missing group_id or target_id")
             return jsonify({"error": "Missing group_id or target_id"}), 400
@@ -478,5 +478,7 @@ if __name__ == "__main__":
     app, socketio = create_app()
     logger.info(f"Запуск сервера на {app.config['HOST']}:{app.config['PORT']}")
     socketio.run(
-        app, host=app.config["HOST"], port=app.config["PORT"], debug=app.config["DEBUG"]
-    )
+        app,
+        host=app.config["HOST"],
+        port=app.config["PORT"],
+        debug=app.config["DEBUG"])

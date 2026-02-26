@@ -42,11 +42,8 @@ class SignalingService:
                 self._pinned_messages.add(row['id'])
 
             # Load reactions
-            reaction_rows = self.broker.repo._run(
-                self.broker.repo._fetch(
-                    "SELECT id, reactions FROM messages WHERE reactions IS NOT NULL"
-                )
-            )
+            reaction_rows = self.broker.repo._run(self.broker.repo._fetch(
+                "SELECT id, reactions FROM messages WHERE reactions IS NOT NULL"))
             for row in reaction_rows:
                 message_id = row['id']
                 reactions_str = row['reactions']
@@ -57,7 +54,7 @@ class SignalingService:
                             if isinstance(user_list, list):
                                 self._message_reactions[message_id][emoji] = set(
                                     user_list)
-                    except:
+                    except BaseException:
                         pass  # Skip invalid reactions data
         except Exception as e:
             logger.error(f"Error loading existing interactions: {e}")
@@ -152,8 +149,8 @@ class SignalingService:
 
         join_room(user_info["id"])
         logger.info(
-            f"Пользователь {user_info['username']} подключен. SID: {current_socket}"
-        )
+            f"Пользователь {
+                user_info['username']} подключен. SID: {current_socket}")
         emit(
             "connection_success",
             {
@@ -191,23 +188,27 @@ class SignalingService:
             if not self.broker.resolve_recipient(existing_sid):
                 channel_set.discard(existing_sid)
                 continue
-            emit(
-                "voice_channel_participant_joined",
-                {
-                    "channel_id": channel_id,
-                    "user_id": sender_id,
-                    "socket_id": request.sid,
-                },
-                room=existing_sid,
-            )
-            emit(
-                "voice_channel_participant_joined",
-                {
-                    "channel_id": channel_id,
-                    "user_id": self.broker.resolve_recipient(existing_sid).get("id"),
-                    "socket_id": existing_sid,
-                },
-            )
+            # Get sender info for notification to existing participants
+            sender_info = self.broker.resolve_recipient(request.sid)
+            emit("voice_channel_participant_joined",
+                 {"channel_id": channel_id,
+                  "user_id": sender_id,
+                  "socket_id": request.sid,
+                  "username": sender_info.get("username") if sender_info else None,
+                  "avatar_url": sender_info.get("avatar_url") if sender_info else None,
+                  },
+                 room=existing_sid,
+                 )
+            # Get existing participant info for notification to new joiner
+            existing_info = self.broker.resolve_recipient(existing_sid)
+            emit("voice_channel_participant_joined",
+                 {"channel_id": channel_id,
+                  "user_id": existing_info.get("id") if existing_info else None,
+                  "socket_id": existing_sid,
+                  "username": existing_info.get("username") if existing_info else None,
+                  "avatar_url": existing_info.get("avatar_url") if existing_info else None,
+                  },
+                 )
         channel_set.add(request.sid)
 
     def on_leave_voice_channel(self, payload):
@@ -219,13 +220,18 @@ class SignalingService:
             return
         if request.sid in channel_set:
             channel_set.discard(request.sid)
+            # Get leaving user info
+            leaving_info = self.broker.resolve_recipient(request.sid)
             for existing_sid in list(channel_set):
                 if self.broker.resolve_recipient(existing_sid):
-                    emit(
-                        "voice_channel_participant_left",
-                        {"channel_id": channel_id, "socket_id": request.sid},
-                        room=existing_sid,
-                    )
+                    emit("voice_channel_participant_left",
+                         {"channel_id": channel_id,
+                          "socket_id": request.sid,
+                          "user_id": leaving_info.get("id") if leaving_info else None,
+                          "username": leaving_info.get("username") if leaving_info else None,
+                          },
+                         room=existing_sid,
+                         )
             if not channel_set:
                 self.voice_channel_calls.pop(channel_id, None)
 
@@ -238,8 +244,8 @@ class SignalingService:
         target_socket = self.broker.get_user_socket(target_user_id)
         if target_socket and self.broker.resolve_recipient(target_socket):
             logger.info(
-                f"Звонок от {request.sid} к пользователю {target_user_id} (socket: {target_socket})"
-            )
+                f"Звонок от {
+                    request.sid} к пользователю {target_user_id} (socket: {target_socket})")
             caller = self.broker.resolve_recipient(request.sid)
             incoming_payload = {"caller_socket_id": request.sid}
             if caller:
@@ -395,7 +401,8 @@ class SignalingService:
         caller_username = call.get("caller_username")
         caller_avatar_url = call.get("caller_avatar_url")
 
-        if caller_socket_id and self.broker.resolve_recipient(caller_socket_id):
+        if caller_socket_id and self.broker.resolve_recipient(
+                caller_socket_id):
             emit(
                 "group_call_accepted",
                 {
@@ -414,7 +421,8 @@ class SignalingService:
             "username": sender.get("username") if sender else None,
             "avatar_url": sender.get("avatar_url") if sender else None,
         }
-        if caller_socket_id and self.broker.resolve_recipient(caller_socket_id):
+        if caller_socket_id and self.broker.resolve_recipient(
+                caller_socket_id):
             emit("group_call_participant_joined",
                  notify_payload, room=caller_socket_id)
         for pid in call.get("participants", []):
@@ -460,7 +468,8 @@ class SignalingService:
                     room=request.sid,
                 )
 
-        # Additionally, send the new participant's info to themselves to ensure they're aware of their participation
+        # Additionally, send the new participant's info to themselves to ensure
+        # they're aware of their participation
         emit(
             "group_call_participant_joined",
             {
@@ -488,7 +497,8 @@ class SignalingService:
             return
 
         caller_socket_id = call.get("caller_socket_id")
-        if caller_socket_id and self.broker.resolve_recipient(caller_socket_id):
+        if caller_socket_id and self.broker.resolve_recipient(
+                caller_socket_id):
             emit(
                 "group_call_rejected",
                 {
@@ -511,7 +521,8 @@ class SignalingService:
 
         payload_out = {"call_id": call_id, "sender_socket_id": request.sid}
         caller_socket_id = call.get("caller_socket_id")
-        if caller_socket_id and self.broker.resolve_recipient(caller_socket_id):
+        if caller_socket_id and self.broker.resolve_recipient(
+                caller_socket_id):
             emit("group_call_ended", payload_out, room=caller_socket_id)
         for pid in call.get("participants", []):
             pid_socket = self.broker.get_user_socket(pid)
@@ -545,6 +556,13 @@ class SignalingService:
             return
 
         messages = self.broker.repo.get_group_history(group_id, limit, offset)
+
+        # Convert datetime objects to strings for JSON serialization
+        for msg in messages:
+            for key, value in msg.items():
+                if isinstance(value, datetime):
+                    msg[key] = value.isoformat()
+
         emit("group_history", {"group_id": group_id, "messages": messages})
 
     def on_get_history(self, payload):
@@ -569,6 +587,13 @@ class SignalingService:
         messages = self.broker.repo.get_messages_history(
             sender_id, target_id, limit, offset
         )
+
+        # Convert datetime objects to strings for JSON serialization
+        for msg in messages:
+            for key, value in msg.items():
+                if isinstance(value, datetime):
+                    msg[key] = value.isoformat()
+
         emit("history", {"target_id": target_id, "messages": messages})
 
     def on_call_reject(self, payload):
@@ -646,8 +671,10 @@ class SignalingService:
         msg_type = payload.get("type", "text")
 
         logger.info(
-            f"Получен запрос send_message от {request.sid}. Target: {target_user_id}, Channel: {channel_id}, Group: {group_id}, Content: {content[:50] if content else 'None'}..., Type: {msg_type}"
-        )
+            f"Получен запрос send_message от {
+                request.sid}. Target: {target_user_id}, Channel: {channel_id}, Group: {group_id}, Content: {
+                content[
+                    :50] if content else 'None'}..., Type: {msg_type}")
         logger.info(f"Full payload keys: {list(payload.keys())}")
 
         if (
@@ -670,7 +697,8 @@ class SignalingService:
         if not target_user_id and not channel_id and not group_id:
             logger.error("Missing target_user_id, channel_id or group_id")
             emit(
-                "error", {"message": "Missing target_user_id, channel_id or group_id"})
+                "error", {
+                    "message": "Missing target_user_id, channel_id or group_id"})
             return
 
         sender_id = session.get("user_id")
@@ -683,13 +711,13 @@ class SignalingService:
                 logger.info(f"Resolved sender from broker: {sender_id}")
             else:
                 logger.warning(
-                    f"Failed to resolve sender from broker for SID {request.sid}"
-                )
+                    f"Failed to resolve sender from broker for SID {
+                        request.sid}")
 
         if not sender_id:
             logger.warning(
-                f"send_message: Unauthorized. Sender not found for SID {request.sid}"
-            )
+                f"send_message: Unauthorized. Sender not found for SID {
+                    request.sid}")
             emit("error", {"message": "Unauthorized"})
             return
 
@@ -710,7 +738,8 @@ class SignalingService:
 
             if str(sender_id) not in [str(p) for p in participants]:
                 emit(
-                    "error", {"message": "You are not a participant of this channel"})
+                    "error", {
+                        "message": "You are not a participant of this channel"})
                 return
 
             msg_data = {
@@ -727,14 +756,12 @@ class SignalingService:
             saved, error = self.broker.repo.save_message(msg_data)
             if not saved:
                 logger.error(
-                    f"Не удалось сохранить сообщение канала {message_id}: {error}"
-                )
+                    f"Не удалось сохранить сообщение канала {message_id}: {error}")
                 emit("error", {"message": f"Failed to save message: {error}"})
                 return
 
             logger.info(
-                f"Сообщение канала {message_id} сохранено (channel={channel_id})"
-            )
+                f"Сообщение канала {message_id} сохранено (channel={channel_id})")
 
             participants = self.broker.repo.get_channel_participants(
                 channel_id)
@@ -760,14 +787,18 @@ class SignalingService:
                     continue
                 pid_socket = self.broker.get_user_socket(pid)
                 if pid_socket:
-                    emit("receive_message", full_message_payload, room=pid_socket)
+                    emit(
+                        "receive_message",
+                        full_message_payload,
+                        room=pid_socket)
 
         elif group_id:
             participants = self.broker.repo.get_group_participants(group_id)
 
             if str(sender_id) not in [str(p) for p in participants]:
                 emit(
-                    "error", {"message": "You are not a participant of this group"})
+                    "error", {
+                        "message": "You are not a participant of this group"})
                 return
 
             msg_data = {
@@ -784,8 +815,7 @@ class SignalingService:
             saved, error = self.broker.repo.save_message(msg_data)
             if not saved:
                 logger.error(
-                    f"Не удалось сохранить сообщение группы {message_id}: {error}"
-                )
+                    f"Не удалось сохранить сообщение группы {message_id}: {error}")
                 emit("error", {"message": f"Failed to save message: {error}"})
                 return
 
@@ -814,7 +844,10 @@ class SignalingService:
                     continue
                 pid_socket = self.broker.get_user_socket(pid)
                 if pid_socket:
-                    emit("receive_message", full_message_payload, room=pid_socket)
+                    emit(
+                        "receive_message",
+                        full_message_payload,
+                        room=pid_socket)
 
         else:
             msg_data = {
@@ -836,8 +869,7 @@ class SignalingService:
                 return
 
             logger.info(
-                f"Сообщение {message_id} сохранено в БД (sender={sender_id}, target={target_user_id})"
-            )
+                f"Сообщение {message_id} сохранено в БД (sender={sender_id}, target={target_user_id})")
 
             target_socket = self.broker.get_user_socket(target_user_id)
 
@@ -855,8 +887,7 @@ class SignalingService:
 
             if target_socket:
                 logger.info(
-                    f"Доставка сообщения {message_id} пользователю {target_user_id} (socket={target_socket})"
-                )
+                    f"Доставка сообщения {message_id} пользователю {target_user_id} (socket={target_socket})")
                 emit(
                     "receive_message",
                     full_message_payload,
@@ -868,8 +899,7 @@ class SignalingService:
                 )
             else:
                 logger.info(
-                    f"Пользователь {target_user_id} офлайн. Сообщение {message_id} сохранено."
-                )
+                    f"Пользователь {target_user_id} офлайн. Сообщение {message_id} сохранено.")
                 emit(
                     "message_sent", {"status": "saved",
                                      "message": full_message_payload}
@@ -878,7 +908,8 @@ class SignalingService:
             try:
                 import requests
 
-                backend_url = f"{Config.BACKEND_INTERNAL_URL}/api/v1/users/internal/process_message"
+                backend_url = f"{
+                    Config.BACKEND_INTERNAL_URL}/api/v1/users/internal/process_message"
                 logger.info(
                     "AI notify backend_url=%s message_id=%s target_id=%s",
                     backend_url,
@@ -1076,7 +1107,8 @@ class SignalingService:
             return
 
         participants = self._get_message_participants(meta)
-        if not participants or str(sender_id) not in [str(p) for p in participants]:
+        if not participants or str(sender_id) not in [
+                str(p) for p in participants]:
             emit("error", {"message": "Forbidden"})
             return
 
@@ -1085,7 +1117,7 @@ class SignalingService:
         if current_reactions:
             try:
                 reactions_dict = json.loads(current_reactions)
-            except:
+            except BaseException:
                 reactions_dict = {}
         else:
             reactions_dict = {}
@@ -1154,7 +1186,8 @@ class SignalingService:
             return
 
         participants = self._get_message_participants(meta)
-        if not participants or str(sender_id) not in [str(p) for p in participants]:
+        if not participants or str(sender_id) not in [
+                str(p) for p in participants]:
             emit("error", {"message": "Forbidden"})
             return
 
@@ -1171,7 +1204,6 @@ class SignalingService:
 
         # Update the database with new pinned status
         try:
-            import json
             query = "UPDATE messages SET pinned_by = ? WHERE id = ?"
             self.broker.repo._run(
                 self.broker.repo._execute(query, (new_pinned_by, message_id))

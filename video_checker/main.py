@@ -1,10 +1,11 @@
-from safetext import SafeText
-from NudeNetv2 import NudeClassifier
-import whisper
 import json
 import os
 import sys
 import warnings
+
+import whisper
+from NudeNetv2 import NudeClassifier
+from safetext import SafeText
 
 os.environ.setdefault("ORT_LOGGING_LEVEL", "4")
 
@@ -39,10 +40,12 @@ def analyze_video(video_path: str, unsafe_threshold: float = 0.7):
                 {
                     "time": start_time,
                     "type": "MAT",
-                    "details": f"Найдены слова: {', '.join(sorted(set(bad_words_list)))}",
+                    "details": f"Найдены слова: {
+                        ', '.join(
+                            sorted(
+                                set(bad_words_list)))}",
                     "text": text_segment,
-                }
-            )
+                })
     video_predictions = nude_classifier.classify_video(video_path)
     video_issues = []
     preds = (

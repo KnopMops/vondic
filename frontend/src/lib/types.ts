@@ -8,6 +8,7 @@ export interface User {
 	displayName?: string
 	handle?: string
 	registeredAt?: string
+	last_seen?: string | Date
 	storis?: {
 		id: string
 		url: string
@@ -57,6 +58,7 @@ export interface Channel {
 	invite_code: string
 	owner_id: string
 	participants_count: number
+	community_id?: string | null
 }
 
 export interface Group {
@@ -104,7 +106,7 @@ export interface Message {
 	channel_id?: string
 	group_id?: string
 	reply_to?: string
-	type?: 'text' | 'voice'
+	type?: 'text' | 'voice' | 'image' | 'file'
 	attachments?: Attachment[] | string
 	is_deleted?: boolean
 }

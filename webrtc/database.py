@@ -691,7 +691,8 @@ class UserRepository:
                 set_clauses.append("updated_at = ?")
                 params.append(datetime.utcnow().isoformat())
             params.append(message_id)
-            query = f"UPDATE messages SET {', '.join(set_clauses)} WHERE id = ?"
+            query = f"UPDATE messages SET {
+                ', '.join(set_clauses)} WHERE id = ?"
             self._run(self._execute(query, params))
             return True, "ok"
         except Exception as e:
@@ -779,7 +780,8 @@ class UserRepository:
                 if msg.get("attachments"):
                     try:
                         decrypted = self._decrypt_payload(msg["attachments"])
-                        if isinstance(decrypted, str) and decrypted.startswith("e2e:"):
+                        if isinstance(
+                                decrypted, str) and decrypted.startswith("e2e:"):
                             msg["attachments"] = decrypted
                         else:
                             msg["attachments"] = json.loads(decrypted)
@@ -874,7 +876,8 @@ class UserRepository:
                 if msg.get("attachments"):
                     try:
                         decrypted = self._decrypt_payload(msg["attachments"])
-                        if isinstance(decrypted, str) and decrypted.startswith("e2e:"):
+                        if isinstance(
+                                decrypted, str) and decrypted.startswith("e2e:"):
                             msg["attachments"] = decrypted
                         else:
                             msg["attachments"] = json.loads(decrypted)
@@ -930,8 +933,8 @@ class UserRepository:
     def get_messages_history(self, user_id, target_id, limit=50, offset=0):
         try:
             query = """
-                SELECT * FROM messages 
-                WHERE (sender_id = ? AND target_id = ?) 
+                SELECT * FROM messages
+                WHERE (sender_id = ? AND target_id = ?)
                    OR (sender_id = ? AND target_id = ?)
                 ORDER BY created_at DESC
                 LIMIT ? OFFSET ?
@@ -966,7 +969,8 @@ class UserRepository:
                 if msg.get("attachments"):
                     try:
                         decrypted = self._decrypt_payload(msg["attachments"])
-                        if isinstance(decrypted, str) and decrypted.startswith("e2e:"):
+                        if isinstance(
+                                decrypted, str) and decrypted.startswith("e2e:"):
                             msg["attachments"] = decrypted
                         else:
                             msg["attachments"] = json.loads(decrypted)
@@ -1000,8 +1004,8 @@ class UserRepository:
     def search_messages(self, user_id, target_id, query_str):
         try:
             sql = """
-                SELECT * FROM messages 
-                WHERE (sender_id = ? AND target_id = ?) 
+                SELECT * FROM messages
+                WHERE (sender_id = ? AND target_id = ?)
                    OR (sender_id = ? AND target_id = ?)
                 ORDER BY created_at DESC
                 LIMIT 500

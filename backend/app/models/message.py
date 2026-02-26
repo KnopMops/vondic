@@ -31,22 +31,34 @@ class Message(db.Model):
         TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     sender = db.relationship(
-        "User", foreign_keys=[sender_id], backref=db.backref("sent_messages", lazy=True)
-    )
+        "User",
+        foreign_keys=[sender_id],
+        backref=db.backref(
+            "sent_messages",
+            lazy=True))
     target = db.relationship(
         "User",
         foreign_keys=[target_id],
         backref=db.backref("received_messages", lazy=True),
     )
     group = db.relationship(
-        "Group", backref=db.backref("messages", lazy=True, cascade="all, delete-orphan")
-    )
+        "Group",
+        backref=db.backref(
+            "messages",
+            lazy=True,
+            cascade="all, delete-orphan"))
 
     def to_dict(self):
         return {
             "id": self.id,
-            "content": self.content if not getattr(self, 'is_deleted', False) else "Сообщение удалено",
-            "attachments": self.attachments if not getattr(self, 'is_deleted', False) else [],
+            "content": self.content if not getattr(
+                self,
+                'is_deleted',
+                False) else "Сообщение удалено",
+            "attachments": self.attachments if not getattr(
+                self,
+                'is_deleted',
+                False) else [],
             "sender_id": self.sender_id,
             "sender_username": self.sender.username if self.sender else None,
             "sender_avatar": self.sender.avatar_url if self.sender else None,
@@ -55,5 +67,8 @@ class Message(db.Model):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "pinned_by": self.pinned_by,
             "reactions": self.reactions,
-            "is_deleted": getattr(self, 'is_deleted', False),
+            "is_deleted": getattr(
+                self,
+                'is_deleted',
+                False),
         }

@@ -75,7 +75,10 @@ def _extract_access_token():
     return token
 
 
-def _store_login_session(user, access_token: str | None, refresh_token: str | None):
+def _store_login_session(
+        user,
+        access_token: str | None,
+        refresh_token: str | None):
     try:
         if not user or not getattr(user, "id", None):
             return
@@ -122,7 +125,8 @@ def _store_login_session(user, access_token: str | None, refresh_token: str | No
         cache.set(key, existing, timeout=ttl)
         cache.set(f"session:{session_id}", payload, timeout=ttl)
 
-        # Also store JSON strings for easier debugging/external access if needed
+        # Also store JSON strings for easier debugging/external access if
+        # needed
         cache.set(
             f"sessions_json:{user.id}",
             json.dumps(existing, ensure_ascii=False),
@@ -161,8 +165,7 @@ def register():
                 "user": user_schema.dump(user),
                 "access_token": user.access_token,
                 "refresh_token": user.refresh_token,
-            }
-        ),
+            }),
         201,
     )
 
@@ -191,9 +194,11 @@ def login():
                     AuthService.send_2fa_email_code(user)
             except Exception:
                 pass
-            return jsonify({"two_factor_required": True, "method": "email"}), 401
+            return jsonify(
+                {"two_factor_required": True, "method": "email"}), 401
         if error == "TwoFactorTotpRequired":
-            return jsonify({"two_factor_required": True, "method": "totp"}), 401
+            return jsonify(
+                {"two_factor_required": True, "method": "totp"}), 401
         status_code = (
             401
             if error
@@ -462,9 +467,8 @@ def terminate_session(current_user):
         ),
         None,
     )
-    updated = [
-        s for s in sessions if isinstance(s, dict) and s.get("session_id") != session_id
-    ]
+    updated = [s for s in sessions if isinstance(
+        s, dict) and s.get("session_id") != session_id]
     ttl = int(current_app.config.get("SESSION_TTL_SECONDS", 2592000))
     cache.set(key, updated, timeout=ttl)
     cache.set(

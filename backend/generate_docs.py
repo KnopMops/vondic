@@ -21,11 +21,12 @@ def generate_swagger_json():
                 json.dump(data, f, indent=2, ensure_ascii=False)
 
             print(
-                f"Documentation generated successfully at {os.path.abspath(output_file)}"
-            )
+                f"Documentation generated successfully at {
+                    os.path.abspath(output_file)}")
         else:
             print(
-                f"Failed to fetch documentation. Status code: {response.status_code}")
+                f"Failed to fetch documentation. Status code: {
+                    response.status_code}")
             print(response.data.decode("utf-8"))
 
 

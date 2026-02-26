@@ -26,8 +26,9 @@ class EmailService:
         verify_url = url_for("auth.verify_email", token=token, _external=True)
         html = f'\n        <p>Добро пожаловать!</p>\n        <p>Пожалуйста, подтвердите вашу почту, перейдя по ссылке:</p>\n        <p><a href="{verify_url}">{verify_url}</a></p>\n        <br>\n        <p>Если вы не регистрировались, проигнорируйте это письмо.</p>\n        '
         msg = Message(
-            subject="Подтверждение регистрации Vondic", recipients=[to_email], html=html
-        )
+            subject="Подтверждение регистрации Vondic",
+            recipients=[to_email],
+            html=html)
         try:
             mail.send(msg)
             return True

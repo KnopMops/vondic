@@ -5,13 +5,13 @@ import BrandLogo from '@/components/social/BrandLogo'
 import { useAuth } from '@/lib/AuthContext'
 import { motion } from 'framer-motion'
 import {
-	Github,
-	MessageCircle,
-	Monitor,
-	Share2,
-	Shield,
-	Smartphone,
-	Zap,
+    Github,
+    MessageCircle,
+    Monitor,
+    Share2,
+    Shield,
+    Smartphone,
+    Zap,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
@@ -171,6 +171,13 @@ export default function Home() {
 						>
 							<Github className='h-4 w-4' />
 						</a>
+						<Link
+							href='/api-docs'
+							className='w-full sm:w-auto px-6 py-3 text-sm font-semibold text-white transition-all bg-white/10 rounded-full hover:bg-white/20 border border-white/10 hover:border-white/20 flex items-center justify-center gap-2'
+						>
+							<Zap className='h-4 w-4' />
+							<span>API Docs</span>
+						</Link>
 						<Link
 							href='/download/desktop'
 							className='w-full sm:w-auto px-6 py-3 text-sm font-semibold text-white transition-all bg-white/10 rounded-full hover:bg-white/20 border border-white/10 hover:border-white/20 flex items-center justify-center gap-2'

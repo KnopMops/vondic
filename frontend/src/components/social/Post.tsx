@@ -145,29 +145,9 @@ export default function Post({
 			})
 
 			if (!res.ok) {
-				if (res.status === 400 && newIsLiked) {
-					try {
-						const resDislike = await fetch(`/api/posts/${id}/like`, {
-							method: 'POST',
-							headers: { 'Content-Type': 'application/json' },
-							body: JSON.stringify({ action: 'unlike' }),
-						})
-
-						if (resDislike.ok) {
-							setIsLiked(false)
-							setLikeCount(likeCount)
-						} else {
-							setIsLiked(!newIsLiked)
-							setLikeCount(likeCount)
-						}
-					} catch (e) {
-						setIsLiked(!newIsLiked)
-						setLikeCount(likeCount)
-					}
-				} else {
-					setIsLiked(!newIsLiked)
-					setLikeCount(likeCount)
-				}
+				// Если ошибка, возвращаем состояние назад
+				setIsLiked(!newIsLiked)
+				setLikeCount(likeCount)
 			}
 		} catch (e) {
 			console.error(e)
@@ -597,7 +577,7 @@ export default function Post({
 								<button
 									onClick={handleLike}
 									disabled={isLiking}
-									className={`flex items-center gap-2 transition-all ${isLiked ? 'text-red-500 scale-105' : 'text-gray-500 hover:text-indigo-400 hover:scale-105'} ${isLiking ? 'opacity-50 cursor-not-allowed' : ''}`}
+									className={`flex items-center gap-2 transition-all ${isLiked ? 'text-red-500 scale-105' : 'text-gray-500 hover:text-red-400 hover:scale-105'} ${isLiking ? 'opacity-50 cursor-not-allowed' : ''}`}
 								>
 									<svg
 										xmlns='http://www.w3.org/2000/svg'
@@ -610,7 +590,7 @@ export default function Post({
 										<path
 											strokeLinecap='round'
 											strokeLinejoin='round'
-											d='M6.633 10.5c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 012.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 00.322-1.672V3a2.25 2.25 0 012.25 2.25c0 1.152-.26 2.247-.723 3.218-.266.558.107 1.282.725 1.282h3.126c1.026 0 1.945.694 2.054 1.715.045.422.068.85.068 1.285a11.95 11.95 0 01-2.649 7.521c-.388.482-.987.729-1.605.729H13.48c-.483 0-.964-.078-1.423-.23l-3.114-1.04a4.501 4.501 0 00-1.423-.23H5.904M14.25 9h2.25M5.904 18.75c.083.205.173.405.27.602.197.4-.078.898-.523.898h-.908c-.889 0-1.713-.518-1.972-1.368a12 12 0 01-.521-3.507c0-1.553.295-3.036.831-4.398C3.287 9.483 4.122 9 5.01 9h.918c.445 0 .72.498.523.898a8.932 8.932 0 00-.27.602'
+											d='M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z'
 										/>
 									</svg>
 									<span className='text-sm font-medium'>{likeCount}</span>

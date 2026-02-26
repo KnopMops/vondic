@@ -98,15 +98,33 @@ export default function WatchPage({
 
 	const toggleLike = async () => {
 		const action = isLiked ? 'unlike' : 'like'
-		const res = await fetch('/api/videos/like', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ video_id: id, action }),
-		})
-		if (res.ok) {
-			const data = await res.json()
-			setLikes(Number(data?.likes || 0))
-			setIsLiked(!isLiked)
+
+		const newIsLiked = !isLiked
+		const newLikes = newIsLiked ? likes + 1 : likes - 1
+
+		// Optimistic update
+		setIsLiked(newIsLiked)
+		setLikes(newLikes)
+
+		try {
+			const res = await fetch('/api/videos/like', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ video_id: id, action }),
+			})
+
+			if (res.ok) {
+				const data = await res.json()
+				setLikes(Number(data?.likes || 0))
+			} else {
+				// Rollback
+				setIsLiked(!newIsLiked)
+				setLikes(likes)
+			}
+		} catch (e) {
+			// Rollback
+			setIsLiked(!newIsLiked)
+			setLikes(likes)
 		}
 	}
 	const toggleLater = async () => {

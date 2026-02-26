@@ -30,8 +30,7 @@ def list_gifts():
         elif "no such column: gifts_catalog.total_supply" in msg:
             try:
                 db.session.execute(
-                    text("ALTER TABLE gifts_catalog ADD COLUMN total_supply INTEGER")
-                )
+                    text("ALTER TABLE gifts_catalog ADD COLUMN total_supply INTEGER"))
                 db.session.execute(
                     text(
                         "ALTER TABLE gifts_catalog ADD COLUMN minted_count INTEGER NOT NULL DEFAULT 0"

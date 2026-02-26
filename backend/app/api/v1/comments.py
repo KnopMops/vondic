@@ -57,7 +57,8 @@ def delete_comment_admin(current_user):
     reason = data.get("reason")
 
     if not comment_id or not user_id or not reason:
-        return jsonify({"error": "comment_id, user_id and reason are required"}), 400
+        return jsonify(
+            {"error": "comment_id, user_id and reason are required"}), 400
 
     if str(user_id) != str(current_user.id):
         return jsonify({"error": "User ID mismatch"}), 403

@@ -7,3 +7,6 @@ botiksdk/
 extension/
 proxy_receiver/
 *.rdb
+node_modules/
+dist/
+.next/

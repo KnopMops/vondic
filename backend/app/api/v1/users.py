@@ -99,7 +99,8 @@ def create_user():
         return (jsonify({"error": "No data provided"}), 400)
     user = UserService.create_user(data)
     if not user:
-        return (jsonify({"error": "User could not be created (duplicate?)"}), 400)
+        return (
+            jsonify({"error": "User could not be created (duplicate?)"}), 400)
     return (jsonify(user_schema.dump(user)), 201)
 
 
@@ -132,7 +133,8 @@ def block_user(current_user):
     admin_user_id = data.get("admin_user_id")
 
     if not user_id or not admin_user_id:
-        return jsonify({"error": "user_id and admin_user_id are required"}), 400
+        return jsonify(
+            {"error": "user_id and admin_user_id are required"}), 400
 
     if str(admin_user_id) != str(current_user.id):
         return jsonify({"error": "Admin User ID mismatch"}), 403
@@ -155,7 +157,8 @@ def unblock_user(current_user):
     admin_user_id = data.get("admin_user_id")
 
     if not user_id or not admin_user_id:
-        return jsonify({"error": "user_id and admin_user_id are required"}), 400
+        return jsonify(
+            {"error": "user_id and admin_user_id are required"}), 400
 
     if str(admin_user_id) != str(current_user.id):
         return jsonify({"error": "Admin User ID mismatch"}), 403
@@ -216,7 +219,8 @@ def purchase_gift(current_user):
     if catalog_item is not None:
         price = catalog_item.coin_price
         if catalog_item.total_supply is not None:
-            if (catalog_item.minted_count or 0) + quantity > catalog_item.total_supply:
+            if (catalog_item.minted_count or 0) + \
+                    quantity > catalog_item.total_supply:
                 return jsonify({"error": "Gift supply exhausted"}), 400
     else:
         price = GIFT_PRICING.get(gift_id)
@@ -307,7 +311,8 @@ def send_gift(current_user):
     if catalog_item is not None:
         price = catalog_item.coin_price
         if catalog_item.total_supply is not None:
-            if (catalog_item.minted_count or 0) + quantity > catalog_item.total_supply:
+            if (catalog_item.minted_count or 0) + \
+                    quantity > catalog_item.total_supply:
                 return jsonify({"error": "Gift supply exhausted"}), 400
     else:
         price = GIFT_PRICING.get(gift_id)
@@ -356,7 +361,8 @@ def set_gift_display(current_user):
     gift_index = data.get("gift_index")
     is_displayed = data.get("is_displayed")
     if gift_index is None or is_displayed is None:
-        return jsonify({"error": "gift_index and is_displayed are required"}), 400
+        return jsonify(
+            {"error": "gift_index and is_displayed are required"}), 400
     gifts = list(current_user.gifts or [])
     if gift_index < 0 or gift_index >= len(gifts):
         return jsonify({"error": "gift_index out of range"}), 400

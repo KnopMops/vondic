@@ -35,10 +35,26 @@ def community_info(current_user, community_id):
     community = CommunityService.get_by_id(community_id)
     if not community:
         return jsonify({"error": "Community not found"}), 404
-    if current_user not in community.members and str(community.owner_id) != str(
-        current_user.id
-    ):
+    if current_user not in community.members and str(
+            community.owner_id) != str(current_user.id):
         return jsonify({"error": "Forbidden"}), 403
+    return jsonify(community_schema.dump(community)), 200
+
+
+@communities_bp.route("/join", methods=["POST"])
+@token_required
+def join_community(current_user):
+    data = request.get_json(force=True) or {}
+    invite_code = data.get("invite_code")
+
+    if not invite_code:
+        return jsonify({"error": "Invite code is required"}), 400
+
+    community, err = CommunityService.join_community(
+        invite_code, current_user.id)
+    if err:
+        return jsonify({"error": err}), 400
+
     return jsonify(community_schema.dump(community)), 200
 
 

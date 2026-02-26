@@ -15,8 +15,7 @@ class ConnectionBroker:
         user_data = self.repo.fetch_user_by_token(token)
         if not user_data:
             logger.warning(
-                f"Брокер: Ошибка аутентификации для токена {token} (Пользователь не найден)"
-            )
+                f"Брокер: Ошибка аутентификации для токена {token} (Пользователь не найден)")
             raise ConnectionRefusedError(
                 "401 Unauthorized: Пользователь не найден")
         if user_data.get("is_blocked"):
@@ -27,8 +26,8 @@ class ConnectionBroker:
         self.repo.bind_socket(user_data["id"], socket_id)
         role = user_data.get("role", "User")
         logger.info(
-            f"Брокер: Пользователь {user_data['username']} ({role}) зарегистрирован с сокетом {socket_id}"
-        )
+            f"Брокер: Пользователь {
+                user_data['username']} ({role}) зарегистрирован с сокетом {socket_id}")
         return user_data
 
     def close_session(self, socket_id):

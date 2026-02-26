@@ -33,3 +33,27 @@ class CommunityService:
     @staticmethod
     def get_by_id(community_id):
         return Community.query.get(community_id)
+
+    @staticmethod
+    def join_community(invite_code, user_id):
+        # Найти сообщество по коду приглашения
+        community = Community.query.filter_by(invite_code=invite_code).first()
+        if not community:
+            return None, "Invalid invite code"
+
+        user = User.query.get(user_id)
+        if not user:
+            return None, "User not found"
+
+        # Проверить не состоит ли пользователь уже в сообществе
+        if user in community.members:
+            return None, "User already a member"
+
+        try:
+            # Добавить пользователя в сообщество
+            community.members.append(user)
+            db.session.commit()
+            return community, None
+        except Exception as e:
+            db.session.rollback()
+            return None, str(e)

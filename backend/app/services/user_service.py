@@ -190,7 +190,8 @@ class UserService:
             return None
         users = User.query.filter(User.api_key_hash.isnot(None)).all()
         for user in users:
-            if user.api_key_hash and check_password_hash(user.api_key_hash, api_key):
+            if user.api_key_hash and check_password_hash(
+                    user.api_key_hash, api_key):
                 return user
         return None
 
@@ -367,8 +368,8 @@ class UserService:
                 )
             )
             db.session.execute(
-                community_members.delete().where(community_members.c.user_id == user_id)
-            )
+                community_members.delete().where(
+                    community_members.c.user_id == user_id))
             db.session.execute(
                 channel_participants.delete().where(
                     channel_participants.c.user_id == user_id
@@ -489,9 +490,7 @@ class UserService:
                     except Exception:
                         continue
                 webrtc_cur.execute(
-                    f"DELETE FROM messages WHERE channel_id IN ({placeholders})",
-                    channel_ids,
-                )
+                    f"DELETE FROM messages WHERE channel_id IN ({placeholders})", channel_ids, )
                 webrtc_conn.commit()
                 webrtc_conn.close()
 

@@ -18,8 +18,10 @@ class CommunityChannelService:
         if not community:
             return None, "Community not found"
         channel = CommunityChannel(
-            community_id=community_id, name=name, description=description, type=type_
-        )
+            community_id=community_id,
+            name=name,
+            description=description,
+            type=type_)
         try:
             db.session.add(channel)
             db.session.flush()

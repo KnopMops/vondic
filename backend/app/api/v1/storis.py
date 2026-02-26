@@ -160,7 +160,8 @@ def react_storis(current_user):
     story_id = data.get("story_id")
     emoji = data.get("emoji")
     if not owner_id or not story_id or not emoji:
-        return jsonify({"error": "owner_id, story_id and emoji are required"}), 400
+        return jsonify(
+            {"error": "owner_id, story_id and emoji are required"}), 400
     user = User.query.get(owner_id)
     if not user:
         return jsonify({"error": "User not found"}), 404

@@ -109,8 +109,10 @@ def save_escalation(user_id: str, question: str) -> int:
 
 
 def notify_admin(
-    user_id: str, msg: str, title: str | None = None, notification_type: str = "system"
-):
+        user_id: str,
+        msg: str,
+        title: str | None = None,
+        notification_type: str = "system"):
     ts = int(time.time())
     content_hash = hashlib.sha256(
         f"{user_id}|{msg}|{ts}".encode("utf-8")).hexdigest()
@@ -118,15 +120,23 @@ def notify_admin(
     cur = conn.cursor()
     cur.execute(
         "INSERT INTO notifications (user_id, title, type, message, created_at, delivered, notification_hash) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (user_id, title, notification_type, msg, ts, 0, content_hash),
+        (user_id,
+         title,
+         notification_type,
+         msg,
+         ts,
+         0,
+         content_hash),
     )
     conn.commit()
     conn.close()
 
 
 def notify_user(
-    user_id: str, msg: str, title: str | None = None, notification_type: str = "system"
-):
+        user_id: str,
+        msg: str,
+        title: str | None = None,
+        notification_type: str = "system"):
     ts = int(time.time())
     content_hash = hashlib.sha256(
         f"{user_id}|{msg}|{ts}".encode("utf-8")).hexdigest()
@@ -134,7 +144,13 @@ def notify_user(
     cur = conn.cursor()
     cur.execute(
         "INSERT INTO notifications (user_id, title, type, message, created_at, delivered, notification_hash) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (user_id, title, notification_type, msg, ts, 0, content_hash),
+        (user_id,
+         title,
+         notification_type,
+         msg,
+         ts,
+         0,
+         content_hash),
     )
     conn.commit()
     conn.close()
@@ -202,7 +218,12 @@ def chat_send(current_user):
             return jsonify({"ok": False, "error": "Chat is closed"}), 400
         cur.execute(
             "INSERT INTO escalation_messages (escalation_id, content, created_at, delivered_user, sender, delivered_admin) VALUES (?, ?, ?, ?, ?, ?)",
-            (esc_id_val, question, ts, 1, "user", 0),
+            (esc_id_val,
+             question,
+             ts,
+             1,
+             "user",
+             0),
         )
         conn.commit()
         conn.close()
@@ -221,20 +242,36 @@ def chat_send(current_user):
         cnt = int(cur.fetchone()[0])
         if cnt >= 5:
             conn.close()
-            return jsonify({"ok": False, "error": "Chat limit reached (5)"}), 400
+            return jsonify(
+                {"ok": False, "error": "Chat limit reached (5)"}), 400
         esc_id = save_escalation(current_user.id, question)
         notify_admin(current_user.id, f"Новая заявка #{esc_id}: {question}")
         cur.execute(
             "INSERT INTO escalation_messages (escalation_id, content, created_at, delivered_user, sender, delivered_admin) VALUES (?, ?, ?, ?, ?, ?)",
-            (esc_id, question, ts, 1, "user", 0),
+            (esc_id,
+             question,
+             ts,
+             1,
+             "user",
+             0),
         )
         cur.execute(
             "INSERT INTO escalation_messages (escalation_id, content, created_at, delivered_user, sender, delivered_admin) VALUES (?, ?, ?, ?, ?, ?)",
-            (esc_id, "Перевожу на оператора. Ожидайте ответа.", ts, 0, "bot", 0),
+            (esc_id,
+             "Перевожу на оператора. Ожидайте ответа.",
+             ts,
+             0,
+             "bot",
+             0),
         )
         cur.execute(
             "INSERT INTO escalation_messages (escalation_id, content, created_at, delivered_user, sender, delivered_admin) VALUES (?, ?, ?, ?, ?, ?)",
-            (esc_id, f"Новая заявка #{esc_id}: {question}", ts, 0, "bot", 0),
+            (esc_id,
+             f"Новая заявка #{esc_id}: {question}",
+             ts,
+             0,
+             "bot",
+             0),
         )
         conn.commit()
         conn.close()
@@ -255,7 +292,12 @@ def chat_send(current_user):
         esc_id = int(row[0])
         cur.execute(
             "INSERT INTO escalation_messages (escalation_id, content, created_at, delivered_user, sender, delivered_admin) VALUES (?, ?, ?, ?, ?, ?)",
-            (esc_id, question, ts, 1, "user", 0),
+            (esc_id,
+             question,
+             ts,
+             1,
+             "user",
+             0),
         )
         conn.commit()
         conn.close()
@@ -285,22 +327,38 @@ def chat_send(current_user):
         cnt = int(cur2.fetchone()[0])
         if cnt >= 5:
             conn2.close()
-            return jsonify({"ok": False, "error": "Chat limit reached (5)"}), 400
+            return jsonify(
+                {"ok": False, "error": "Chat limit reached (5)"}), 400
         esc_id = save_escalation(current_user.id, question)
         notify_admin(current_user.id, f"Новая заявка #{esc_id}: {question}")
         conn2 = sqlite3.connect(DB_PATH)
         cur2 = conn2.cursor()
         cur2.execute(
             "INSERT INTO escalation_messages (escalation_id, content, created_at, delivered_user, sender, delivered_admin) VALUES (?, ?, ?, ?, ?, ?)",
-            (esc_id, question, ts, 1, "user", 0),
+            (esc_id,
+             question,
+             ts,
+             1,
+             "user",
+             0),
         )
         cur2.execute(
             "INSERT INTO escalation_messages (escalation_id, content, created_at, delivered_user, sender, delivered_admin) VALUES (?, ?, ?, ?, ?, ?)",
-            (esc_id, "Перевожу на оператора. Ожидайте ответа.", ts, 0, "bot", 0),
+            (esc_id,
+             "Перевожу на оператора. Ожидайте ответа.",
+             ts,
+             0,
+             "bot",
+             0),
         )
         cur2.execute(
             "INSERT INTO escalation_messages (escalation_id, content, created_at, delivered_user, sender, delivered_admin) VALUES (?, ?, ?, ?, ?, ?)",
-            (esc_id, f"Новая заявка #{esc_id}: {question}", ts, 0, "bot", 0),
+            (esc_id,
+             f"Новая заявка #{esc_id}: {question}",
+             ts,
+             0,
+             "bot",
+             0),
         )
         conn2.commit()
         conn2.close()
@@ -344,7 +402,9 @@ def chat_updates(current_user):
     if rows:
         ids = [r[0] for r in rows]
         cur.execute(
-            f"UPDATE escalation_messages SET delivered_user = 1 WHERE id IN ({','.join('?' for _ in ids)})",
+            f"UPDATE escalation_messages SET delivered_user = 1 WHERE id IN ({
+                ','.join(
+                    '?' for _ in ids)})",
             ids,
         )
         conn.commit()
@@ -381,7 +441,9 @@ def notifications_updates(current_user):
     if rows:
         ids = [r[0] for r in rows]
         cur.execute(
-            f"UPDATE notifications SET delivered = 1 WHERE id IN ({','.join('?' for _ in ids)})",
+            f"UPDATE notifications SET delivered = 1 WHERE id IN ({
+                ','.join(
+                    '?' for _ in ids)})",
             ids,
         )
         conn.commit()
@@ -453,7 +515,12 @@ def admin_answer(current_user, esc_id: int):
     cur = conn.cursor()
     cur.execute(
         "INSERT INTO escalation_messages (escalation_id, content, created_at, delivered_user, sender, delivered_admin) VALUES (?, ?, ?, ?, ?, ?)",
-        (esc_id, answer, ts, 0, "admin", 0),
+        (esc_id,
+         answer,
+         ts,
+         0,
+         "admin",
+         0),
     )
     cur.execute(
         "UPDATE escalations SET status = COALESCE(NULLIF(status, ''), 'open'), answer = ?, answered_at = ? WHERE id = ?",
@@ -539,7 +606,12 @@ def admin_escalation_close(current_user, esc_id: int):
         )
         cur.execute(
             "INSERT INTO escalation_messages (escalation_id, content, created_at, delivered_user, sender, delivered_admin) VALUES (?, ?, ?, ?, ?, ?)",
-            (esc_id, "Оператор закрыл обращение", ts, 0, "bot", 0),
+            (esc_id,
+             "Оператор закрыл обращение",
+             ts,
+             0,
+             "bot",
+             0),
         )
     conn.commit()
     conn.close()

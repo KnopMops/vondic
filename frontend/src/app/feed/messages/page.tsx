@@ -4,30 +4,84 @@ import { CallButton } from '@/components/calls'
 import { useAuth } from '@/lib/AuthContext'
 import { useChannels } from '@/lib/hooks/useChannels'
 import { useChat } from '@/lib/hooks/useChat'
+import { useCommunities } from '@/lib/hooks/useCommunities'
 import { useDebounce } from '@/lib/hooks/useDebounce'
 import { useGroups } from '@/lib/hooks/useGroups'
 import { useSocket } from '@/lib/SocketContext'
 import {
-	useActiveCalls,
-	useActiveGroupCallId,
-	useCallStore,
-	useIsInitialized,
-	useIsScreenShareSupported,
-	useIsWebRTCSupported,
+    useActiveCalls,
+    useActiveGroupCallId,
+    useCallStore,
+    useIsInitialized,
+    useIsScreenShareSupported,
+    useIsWebRTCSupported,
 } from '@/lib/stores/callStore'
 import { useToast } from '@/lib/ToastContext'
 import { Channel, Group, Message, User } from '@/lib/types'
 import { getAttachmentUrl, getAvatarUrl } from '@/lib/utils'
 import Link from 'next/link'
 import {
-	useCallback,
-	useEffect,
-	useLayoutEffect,
-	useMemo,
-	useRef,
-	useState,
+    useCallback,
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
 } from 'react'
 import MessageBubble from './MessageBubble'
+
+// --- Utility Functions ---
+const formatLastSeen = (lastSeen?: string | Date): string => {
+	if (!lastSeen) return 'Не в сети'
+	
+	const now = new Date()
+	const lastSeenDate = new Date(lastSeen)
+	const diffMs = now.getTime() - lastSeenDate.getTime()
+	const diffMins = Math.floor(diffMs / 60000)
+	const diffHours = Math.floor(diffMins / 60)
+	const diffDays = Math.floor(diffHours / 24)
+
+	if (diffMins < 1) return 'только что'
+	if (diffMins < 60) return `${diffMins} мин. назад`
+	if (diffHours < 24) return `${diffHours} ч. назад`
+	if (diffDays < 7) return `${diffDays} д. назад`
+	
+	return lastSeenDate.toLocaleDateString('ru-RU', {
+		day: 'numeric',
+		month: 'short'
+	})
+}
+
+const getLastMessage = (friendId: string, messages: Message[]): string => {
+	const friendMessages = messages.filter(m => 
+		m.sender_id === friendId || 
+		(m.channel_id === undefined && m.group_id === undefined && !m.isOwn)
+	)
+	if (friendMessages.length === 0) return ''
+	
+	const lastMessage = friendMessages[friendMessages.length - 1]
+	if (lastMessage.type === 'voice') return '🎤 Голосовое сообщение'
+	if (lastMessage.type === 'image') return '🖼️ Фото'
+	if (lastMessage.type === 'file') return '📎 Файл'
+	
+	return lastMessage.content.length > 30 
+		? lastMessage.content.substring(0, 30) + '...'
+		: lastMessage.content
+}
+
+const getLastMessageTime = (friendId: string, messages: Message[]): string => {
+	const friendMessages = messages.filter(m => 
+		m.sender_id === friendId || 
+		(m.channel_id === undefined && m.group_id === undefined && !m.isOwn)
+	)
+	if (friendMessages.length === 0) return ''
+	
+	const lastMessage = friendMessages[friendMessages.length - 1]
+	return new Date(lastMessage.timestamp).toLocaleTimeString('ru-RU', {
+		hour: '2-digit',
+		minute: '2-digit'
+	})
+}
 
 // --- Icons Components ---
 const ArrowLeftIcon = ({ className }: { className?: string }) => (
@@ -516,6 +570,21 @@ const CheckIcon = ({ className }: { className?: string }) => (
 	</svg>
 )
 
+const CopyIcon = ({ className }: { className?: string }) => (
+	<svg
+		viewBox='0 0 24 24'
+		fill='none'
+		stroke='currentColor'
+		strokeWidth='2'
+		strokeLinecap='round'
+		strokeLinejoin='round'
+		className={className}
+	>
+		<rect x='9' y='9' width='13' height='13' rx='2' ry='2'></rect>
+		<path d='M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'></path>
+	</svg>
+)
+
 export default function MessengerPage() {
 	const { user } = useAuth()
 	const { socket, isConnected } = useSocket()
@@ -941,6 +1010,15 @@ export default function MessengerPage() {
 		getGroupDetails,
 		joinGroup,
 	} = useGroups()
+	const communitiesHook = useCommunities()
+	const {
+		communities,
+		fetchMyCommunities,
+		createCommunity,
+		joinCommunity,
+		getCommunityDetails,
+		getCommunityInviteCode,
+	} = communitiesHook
 	const [selectedGroup, setSelectedGroup] = useState<Group | null>(null)
 	const [groupParticipants, setGroupParticipants] = useState<
 		Record<string, User>
@@ -952,6 +1030,12 @@ export default function MessengerPage() {
 
 	const [isJoinGroupOpen, setIsJoinGroupOpen] = useState(false)
 	const [joinGroupInviteCode, setJoinGroupInviteCode] = useState('')
+
+	// Communities State
+	const [isJoinCommunityOpen, setIsJoinCommunityOpen] = useState(false)
+	const [joinCommunityInviteCode, setJoinCommunityInviteCode] = useState('')
+	const [communityInviteCode, setCommunityInviteCode] = useState('')
+	const [showInviteCode, setShowInviteCode] = useState(false)
 	const [input, setInput] = useState('')
 	const [activeTab, setActiveTab] = useState<'direct' | 'community'>('direct')
 	const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -1033,6 +1117,9 @@ export default function MessengerPage() {
 	const [selectedCommunityId, setSelectedCommunityId] = useState<string>('')
 	const [communityChannels, setCommunityChannels] = useState<any[]>([])
 	const [selectedCommunity, setSelectedCommunity] = useState<any | null>(null)
+	// Voice channel participants state (per channel)
+	const [voiceChannelParticipants, setVoiceChannelParticipants] = useState<Record<string, Record<string, { userId: string; username: string; avatarUrl?: string }>>>({});
+	
 	const updateChatUrl = useCallback(
 		(
 			next: {
@@ -1499,6 +1586,40 @@ export default function MessengerPage() {
 		}
 	}
 
+	const handleJoinCommunity = async (e: React.FormEvent) => {
+		e.preventDefault()
+		if (!joinCommunityInviteCode.trim()) return
+
+		try {
+			const community = await joinCommunity(joinCommunityInviteCode.trim())
+			setSelectedCommunity(community)
+			setSelectedCommunityId(community.id)
+			setSelectedFriend(null)
+			setSelectedChannel(null)
+			setSelectedGroup(null)
+			setIsJoinCommunityOpen(false)
+			setJoinCommunityInviteCode('')
+			setActiveTab('community')
+			showToast('Вы вступили в сообщество!', 'success')
+		} catch (e: any) {
+			console.error(e)
+			showToast('Не удалось вступить в сообщество', 'error')
+		}
+	}
+
+	const handleShowInviteCode = async () => {
+		if (!selectedCommunity) return
+		
+		try {
+			const inviteCode = await getCommunityInviteCode(selectedCommunity.id)
+			setCommunityInviteCode(inviteCode)
+			setShowInviteCode(true)
+		} catch (e: any) {
+			console.error(e)
+			showToast('Не удалось получить код приглашения', 'error')
+		}
+	}
+
 	const handleAddMember = async (userId: string) => {
 		if (!selectedGroup) return
 		try {
@@ -1669,13 +1790,21 @@ export default function MessengerPage() {
 			setFriends(prev =>
 				prev.map(friend =>
 					friend.id === data.user_id
-						? { ...friend, status: data.status }
+						? { 
+								...friend, 
+								status: data.status,
+								last_seen: data.status.toLowerCase() === 'offline' ? new Date() : friend.last_seen
+							}
 						: friend,
 				),
 			)
 			setSelectedFriend(prev => {
 				if (prev && prev.id === data.user_id) {
-					return { ...prev, status: data.status }
+					return { 
+						...prev, 
+						status: data.status,
+						last_seen: data.status.toLowerCase() === 'offline' ? new Date() : prev.last_seen
+					}
 				}
 				return prev
 			})
@@ -1690,30 +1819,78 @@ export default function MessengerPage() {
 		}
 
 		const handleOnlineUsers = (data: string[]) => {
-			if (Array.isArray(data)) {
-				setFriends(prev =>
-					prev.map(friend =>
-						data.includes(friend.id)
-							? { ...friend, status: 'Online' }
-							: { ...friend, status: 'Offline' },
-					),
-				)
-			}
+			// Update friends status based on online users list
+			setFriends(prev =>
+				prev.map(friend =>
+					data.includes(friend.id)
+						? { ...friend, status: 'Online' }
+						: { 
+								...friend, 
+								status: 'Offline',
+								last_seen: friend.last_seen || new Date()
+							},
+				),
+			)
 		}
+
+		// Voice channel participant handlers
+		const handleVoiceChannelParticipantJoined = (data: { channel_id: string; user_id: string; socket_id: string; username: string; avatar_url?: string }) => {
+			if (data.channel_id && data.user_id && data.username) {
+				setVoiceChannelParticipants(prev => ({
+					...prev,
+					[data.channel_id]: {
+						...(prev[data.channel_id] || {}),
+						[data.user_id]: {
+							userId: data.user_id,
+							username: data.username,
+							avatarUrl: data.avatar_url
+						}
+					}
+				}));
+			}
+		};
+
+		const handleVoiceChannelParticipantLeft = (data: { channel_id: string; user_id: string; username: string }) => {
+			if (data.channel_id && data.user_id) {
+				setVoiceChannelParticipants(prev => {
+					const channelParticipants = { ...(prev[data.channel_id] || {}) };
+					delete channelParticipants[data.user_id];
+					
+					const next = { ...prev };
+					if (Object.keys(channelParticipants).length > 0) {
+						next[data.channel_id] = channelParticipants;
+					} else {
+						delete next[data.channel_id]; // Remove channel if no participants left
+					}
+					
+					return next;
+				});
+			}
+		};
 
 		socket.on('user_status_change', handleStatusChange)
 		socket.on('user_connected', handleUserConnected)
 		socket.on('user_disconnected', handleUserDisconnected)
 		socket.on('online_users', handleOnlineUsers)
+		socket.on('voice_channel_participant_joined', handleVoiceChannelParticipantJoined)
+		socket.on('voice_channel_participant_left', handleVoiceChannelParticipantLeft)
 
 		// Request initial online users list
 		socket.emit('get_online_users')
+
+		// Set up periodic status updates
+		const statusUpdateInterval = setInterval(() => {
+			socket.emit('get_online_users')
+		}, 30000) // Update every 30 seconds
 
 		return () => {
 			socket.off('user_status_change', handleStatusChange)
 			socket.off('user_connected', handleUserConnected)
 			socket.off('user_disconnected', handleUserDisconnected)
 			socket.off('online_users', handleOnlineUsers)
+			socket.off('voice_channel_participant_joined', handleVoiceChannelParticipantJoined)
+			socket.off('voice_channel_participant_left', handleVoiceChannelParticipantLeft)
+			clearInterval(statusUpdateInterval)
 		}
 	}, [socket])
 
@@ -1735,6 +1912,7 @@ export default function MessengerPage() {
 						cleaned.map((f: any) => ({
 							...f,
 							is_bot: f.is_bot === true ? true : false,
+							last_seen: f.status?.toLowerCase() === 'offline' ? (f.last_seen || new Date()) : f.last_seen,
 						})),
 					)
 				}
@@ -3235,9 +3413,6 @@ export default function MessengerPage() {
 								>
 									Vondic
 								</span>
-								<span className='text-xs font-normal text-gray-500 px-2 py-0.5 border border-gray-700 rounded-full'>
-									Beta
-								</span>
 							</h2>
 						</div>
 						<div
@@ -3249,37 +3424,35 @@ export default function MessengerPage() {
 					</div>
 
 					{/* Segmented control */}
-					{activeTab !== 'community' && (
-						<div className='flex p-1 bg-gray-900 rounded-lg border border-gray-800 relative'>
-							<div
-								className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-gray-700/50 rounded-md transition-all duration-300 ease-out ${
-									activeTab === 'direct' ? 'left-1' : 'left-[calc(50%+4px)]'
-								}`}
-							/>
-							<button
-								onClick={() => setActiveTab('direct')}
-								className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md relative z-10 transition-colors ${
-									activeTab === 'direct'
-										? 'text-white'
-										: 'text-gray-400 hover:text-gray-200'
-								}`}
-							>
-								<MessageSquareIcon className='w-4 h-4' />
-								Директ
-							</button>
-							<button
-								onClick={() => setActiveTab('community')}
-								className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md relative z-10 transition-colors ${
-									activeTab === 'community'
-										? 'text-white'
-										: 'text-gray-400 hover:text-gray-200'
-								}`}
-							>
-								<UsersIcon className='w-4 h-4' />
-								Сообщество
-							</button>
-						</div>
-					)}
+					<div className='flex p-1 bg-gray-900 rounded-lg border border-gray-800 relative'>
+						<div
+							className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-gray-700/50 rounded-md transition-all duration-300 ease-out ${
+								activeTab === 'direct' ? 'left-1' : 'left-[calc(50%+4px)]'
+							}`}
+						/>
+						<button
+							onClick={() => setActiveTab('direct')}
+							className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md relative z-10 transition-colors ${
+								activeTab === 'direct'
+									? 'text-white'
+									: 'text-gray-400 hover:text-gray-200'
+							}`}
+						>
+							<MessageSquareIcon className='w-4 h-4' />
+							Директ
+						</button>
+						<button
+							onClick={() => setActiveTab('community')}
+							className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md relative z-10 transition-colors ${
+								activeTab === 'community'
+									? 'text-white'
+									: 'text-gray-400 hover:text-gray-200'
+							}`}
+						>
+							<UsersIcon className='w-4 h-4' />
+							Сообщество
+						</button>
+					</div>
 				</div>
 
 				{/* Search Bar */}
@@ -3459,15 +3632,17 @@ export default function MessengerPage() {
 											alt={friend.username}
 										/>
 										{/* Status Indicator (Only show for friends list, not search results usually, but API might return status) */}
-										<div className='absolute bottom-0 right-0 w-3.5 h-3.5 bg-gray-950 rounded-full flex items-center justify-center'>
-											<div
-												className={`w-2.5 h-2.5 rounded-full ${
-													friend.status?.toLowerCase() === 'online'
-														? 'bg-emerald-500'
-														: 'bg-gray-500'
-												}`}
-											/>
-										</div>
+										{!friend.is_bot && (
+											<div className='absolute bottom-0 right-0 w-3.5 h-3.5 bg-gray-950 rounded-full flex items-center justify-center'>
+												<div
+													className={`w-2.5 h-2.5 rounded-full ${
+														friend.status?.toLowerCase() === 'online'
+															? 'bg-emerald-500'
+															: 'bg-gray-500'
+													}`}
+												/>
+											</div>
+										)}
 									</div>
 									<div className='flex flex-col flex-1 min-w-0'>
 										<div className='flex justify-between items-baseline'>
@@ -3483,12 +3658,10 @@ export default function MessengerPage() {
 													<span className='ml-1 text-amber-400'>★</span>
 												)}
 											</span>
-											<span className='text-[10px] text-gray-600'>12:30</span>
+											<span className='text-[10px] text-gray-600'>{getLastMessageTime(friend.id, messages)}</span>
 										</div>
 										<span className='text-xs text-gray-500 truncate group-hover:text-gray-400 transition-colors'>
-											{friend.status?.toLowerCase() === 'online'
-												? 'В сети'
-												: 'Не в сети'}
+											{getLastMessage(friend.id, messages)}
 										</span>
 									</div>
 									{/* Call Button */}
@@ -3594,91 +3767,166 @@ export default function MessengerPage() {
 						</>
 					) : (
 						<div className='flex flex-col gap-2'>
-							{/* Actions */}
 							{!selectedCommunity && (
-								<div className='flex gap-2 px-2'>
-									<div className='flex-1 flex gap-2'>
-										<button
-											onClick={() => setIsCreateCommunityOpen(true)}
-											className='flex-1 flex items-center justify-center gap-2 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg transition-colors'
-										>
-											<PlusIcon className='w-4 h-4' />
-											Сообщество
-										</button>
-										<button
-											onClick={() => setIsCreateCommChannelOpen(true)}
-											className='flex-1 flex items-center justify-center gap-2 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition-colors'
-										>
-											<PlusIcon className='w-4 h-4' />
-											Канал
-										</button>
-									</div>
-									<button
-										onClick={() => setIsJoinChannelOpen(true)}
-										className='flex-1 flex items-center justify-center gap-2 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-xs font-medium rounded-lg transition-colors'
-									>
-										<LogInIcon className='w-4 h-4' />
-										Вступить
-									</button>
-								</div>
-							)}
-
-							{/* Communities List */}
-							{!selectedCommunity && (
-								<div className='mt-2'>
-									<div className='flex items-center justify-between mb-2 px-2'>
-										<h3 className='text-xs font-semibold text-gray-500 uppercase tracking-wider'>
-											Мои сообщества
-										</h3>
-									</div>
-									<div className='space-y-1'>
-										{myCommunities.map(comm => (
-											<div
-												key={comm.id}
-												onClick={() => selectCommunity(comm)}
-												className={`group p-3 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-200 border border-transparent ${
-													selectedCommunity?.id === comm.id
-														? `bg-gray-800/50 ${currentBackground.borderColor} shadow-sm`
-														: 'hover:bg-gray-900 border-transparent'
-												}`}
-											>
-												<div className='relative'>
-													<div
-														className={`w-12 h-12 rounded-full flex items-center justify-center bg-gray-800 ring-2 transition-all duration-300 ${
-															selectedCommunity?.id === comm.id
-																? currentBackground.accentColor.replace(
-																		'text-',
-																		'ring-',
-																	)
-																: 'ring-gray-950'
-														}`}
-													>
-														<UsersIcon className='w-6 h-6 text-gray-400' />
-													</div>
-												</div>
-												<div className='flex flex-col flex-1 min-w-0'>
-													<div className='flex justify-between items-baseline'>
-														<span
-															className={`font-semibold truncate transition-colors duration-300 ${
-																selectedCommunity?.id === comm.id
-																	? currentBackground.accentColor
-																	: 'text-gray-200 group-hover:text-white'
+								<div className='mt-2 space-y-4'>
+									<div className='px-2'>
+										<div className='flex items-center justify-between mb-2 px-2'>
+											<h3 className='text-xs font-semibold text-gray-500 uppercase tracking-wider'>
+												Каналы
+											</h3>
+											<div className='flex gap-1'>
+												<button
+													onClick={() => setIsJoinChannelOpen(true)}
+													className='p-1 hover:bg-gray-800 rounded-md transition-colors text-gray-400 hover:text-white'
+													title='Вступить в канал'
+												>
+													<LogInIcon className='w-3 h-3' />
+												</button>
+												<button
+													onClick={() => {
+														setIsCreateChannelOpen(true)
+														setNewChannelName('')
+														setNewChannelDesc('')
+													}}
+													className='p-1 hover:bg-gray-800 rounded-md transition-colors text-gray-400 hover:text-white'
+													title='Создать канал'
+												>
+													<PlusIcon className='w-3 h-3' />
+												</button>
+											</div>
+										</div>
+										{channels.filter(ch => !ch.community_id).length > 0 ? (
+											<div className='space-y-1'>
+												{channels
+													.filter(ch => !ch.community_id)
+													.map(channel => (
+														<div
+															key={channel.id}
+															onClick={() => {
+																setSelectedChannel(channel)
+																setSelectedFriend(null)
+																setSelectedGroup(null)
+																setIsChatSearchOpen(false)
+																setChatSearchQuery('')
+																setFoundMessages([])
+															}}
+															className={`group p-3 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-200 border border-transparent ${
+																selectedChannel?.id === channel.id
+																	? `bg-gray-800/50 ${currentBackground.borderColor} shadow-sm`
+																	: 'hover:bg-gray-900 border-transparent'
 															}`}
 														>
-															{comm.name}
-														</span>
-													</div>
-													<span className='text-xs text-gray-500 truncate group-hover:text-gray-400 transition-colors'>
-														{comm.members_count ?? 0} участников
-													</span>
-												</div>
+															<div className='relative'>
+																<div
+																	className={`w-12 h-12 rounded-full flex items-center justify-center bg-gray-800 ring-2 transition-all duration-300 ${
+																		selectedChannel?.id === channel.id
+																			? currentBackground.accentColor.replace(
+																					'text-',
+																					'ring-',
+																				)
+																			: 'ring-gray-950'
+																	}`}
+																>
+																	<HashIcon className='w-6 h-6 text-gray-400' />
+																</div>
+															</div>
+															<div className='flex flex-col flex-1 min-w-0'>
+																<div className='flex justify-between items-baseline'>
+																	<span
+																		className={`font-semibold truncate transition-colors duration-300 ${
+																			selectedChannel?.id === channel.id
+																				? currentBackground.accentColor
+																				: 'text-gray-200 group-hover:text-white'
+																		}`}
+																	>
+																		{channel.name}
+																	</span>
+																</div>
+																<span className='text-xs text-gray-500 truncate group-hover:text-gray-400 transition-colors'>
+																	{channel.participants_count} участников
+																</span>
+															</div>
+														</div>
+													))}
 											</div>
-										))}
-										{myCommunities.length === 0 && (
+										) : (
 											<div className='p-4 text-center text-gray-500'>
-												Нет сообществ
+												Нет каналов
 											</div>
 										)}
+									</div>
+
+									<div>
+										<div className='flex items-center justify-between mb-2 px-2'>
+											<h3 className='text-xs font-semibold text-gray-500 uppercase tracking-wider'>
+												Сообщества
+											</h3>
+											<div className='flex gap-1'>
+												<button
+													onClick={() => setIsJoinCommunityOpen(true)}
+													className='p-1 hover:bg-gray-800 rounded-md transition-colors text-gray-400 hover:text-white'
+													title='Вступить в сообщество'
+												>
+													<LogInIcon className='w-3 h-3' />
+												</button>
+												<button
+													onClick={() => setIsCreateCommunityOpen(true)}
+													className='p-1 hover:bg-gray-800 rounded-md transition-colors text-gray-400 hover:text-white'
+													title='Создать сообщество'
+												>
+													<PlusIcon className='w-3 h-3' />
+												</button>
+											</div>
+										</div>
+										<div className='space-y-1'>
+											{myCommunities.map(comm => (
+												<div
+													key={comm.id}
+													onClick={() => selectCommunity(comm)}
+													className={`group p-3 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-200 border border-transparent ${
+														selectedCommunity?.id === comm.id
+															? `bg-gray-800/50 ${currentBackground.borderColor} shadow-sm`
+															: 'hover:bg-gray-900 border-transparent'
+													}`}
+												>
+													<div className='relative'>
+														<div
+															className={`w-12 h-12 rounded-full flex items-center justify-center bg-gray-800 ring-2 transition-all duration-300 ${
+																selectedCommunity?.id === comm.id
+																	? currentBackground.accentColor.replace(
+																			'text-',
+																			'ring-',
+																		)
+																	: 'ring-gray-950'
+															}`}
+														>
+															<UsersIcon className='w-6 h-6 text-gray-400' />
+														</div>
+													</div>
+													<div className='flex flex-col flex-1 min-w-0'>
+														<div className='flex justify-between items-baseline'>
+															<span
+																className={`font-semibold truncate transition-colors duration-300 ${
+																	selectedCommunity?.id === comm.id
+																		? currentBackground.accentColor
+																		: 'text-gray-200 group-hover:text-white'
+																}`}
+															>
+																{comm.name}
+															</span>
+														</div>
+														<span className='text-xs text-gray-500 truncate group-hover:text-gray-400 transition-colors'>
+															{comm.members_count ?? 0} участников
+														</span>
+													</div>
+												</div>
+											))}
+											{myCommunities.length === 0 && (
+												<div className='p-4 text-center text-gray-500'>
+													Нет сообществ
+												</div>
+											)}
+										</div>
 									</div>
 								</div>
 							)}
@@ -3687,18 +3935,38 @@ export default function MessengerPage() {
 							{selectedCommunity && (
 								<div className='mt-2 px-2'>
 									<div className='flex items-center justify-between mb-2 px-2'>
-										<h3 className='text-xs font-semibold text-gray-500 uppercase tracking-wider'>
-											{selectedCommunity.name}
-										</h3>
-										<button
-											onClick={() => {
-												setSelectedCommunityId(selectedCommunity?.id || '')
-												setIsCreateCommChannelOpen(true)
-											}}
-											className='px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors'
-										>
-											Создать канал
-										</button>
+										<div className='flex items-center gap-2'>
+											<button
+												onClick={() => {
+													setSelectedCommunity(null)
+													setSelectedCommunityId('')
+												}}
+												className='p-1 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors'
+												title='Назад к сообществам'
+											>
+												<ArrowLeftIcon className='w-4 h-4' />
+											</button>
+											<h3 className='text-xs font-semibold text-gray-500 uppercase tracking-wider'>
+												{selectedCommunity.name}
+											</h3>
+										</div>
+										<div className='flex gap-1'>
+											<button
+												onClick={handleShowInviteCode}
+												className='px-2 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors'
+											>
+												Код
+											</button>
+											<button
+												onClick={() => {
+													setSelectedCommunityId(selectedCommunity?.id || '')
+													setIsCreateCommChannelOpen(true)
+												}}
+												className='px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors'
+											>
+												Создать канал
+											</button>
+										</div>
 									</div>
 									<div className='mb-3'>
 										<h4 className='text-[10px] font-semibold text-gray-500 uppercase tracking-wider px-2 mb-1'>
@@ -3724,7 +3992,6 @@ export default function MessengerPage() {
 															setIsChatSearchOpen(false)
 															setChatSearchQuery('')
 															setFoundMessages([])
-															joinVoiceChannel(ch.id)
 														}}
 														className={`group p-3 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-200 border border-transparent ${
 															selectedChannel?.id === ch.id
@@ -3814,6 +4081,20 @@ export default function MessengerPage() {
 															<span className='text-xs text-gray-500 truncate group-hover:text-gray-400 transition-colors'>
 																Голосовой
 															</span>
+															{/* Display voice channel participants */}
+															{voiceChannelParticipants[ch.id] && Object.keys(voiceChannelParticipants[ch.id]).length > 0 && (
+																<div className='mt-1 flex flex-wrap gap-1'>
+																	{Object.values(voiceChannelParticipants[ch.id]).map((participant, idx) => (
+																		<div 
+																			key={`${participant.userId}-${idx}`} 
+																			className='flex items-center gap-1 text-[8px] bg-gray-700/50 px-1.5 py-0.5 rounded-full'
+																		>
+																			<span className='w-2 h-2 rounded-full bg-green-500'></span>
+																			<span className='truncate max-w-[60px]'>{participant.username}</span>
+																		</div>
+																	))}
+																</div>
+															)}
 														</div>
 													</div>
 												))}
@@ -3912,14 +4193,20 @@ export default function MessengerPage() {
 														)}
 													</span>
 													<span className='text-xs text-emerald-500 font-medium flex items-center gap-1.5'>
-														{selectedFriend.status?.toLowerCase() ===
-														'online' ? (
+														{isChatTyping ? (
+															<>
+																<span className='w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse' />
+																Печатает...
+															</>
+														) : selectedFriend.status?.toLowerCase() === 'online' ? (
 															<>
 																<span className='w-1.5 h-1.5 rounded-full bg-emerald-500' />
 																В сети
 															</>
 														) : (
-															<span className='text-gray-500'>Не в сети</span>
+															<span className='text-gray-500'>
+																{formatLastSeen(selectedFriend.last_seen)}
+															</span>
 														)}
 													</span>
 												</div>
@@ -4925,6 +5212,47 @@ export default function MessengerPage() {
 				</div>
 			)}
 
+			{/* Join Community Modal */}
+			{isJoinCommunityOpen && (
+				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
+					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
+						<div className='flex items-center justify-between mb-6'>
+							<h3 className='text-xl font-bold text-white'>
+								Вступить в сообщество
+							</h3>
+							<button
+								onClick={() => setIsJoinCommunityOpen(false)}
+								className='p-1 text-gray-400 hover:text-white transition-colors'
+							>
+								<XIcon className='w-5 h-5' />
+							</button>
+						</div>
+						<form onSubmit={handleJoinCommunity} className='space-y-4'>
+							<div>
+								<label className='block text-sm font-medium text-gray-400 mb-1'>
+									Код приглашения
+								</label>
+								<input
+									type='text'
+									value={joinCommunityInviteCode}
+									onChange={e => setJoinCommunityInviteCode(e.target.value)}
+									className='w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50'
+									placeholder='Введите код приглашения'
+									autoFocus
+								/>
+							</div>
+							<button
+								type='submit'
+								disabled={!joinCommunityInviteCode.trim()}
+								className='w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+							>
+								Вступить
+							</button>
+						</form>
+					</div>
+				</div>
+			)}
+
 			{/* Add Member Modal */}
 			{isAddMemberOpen && (
 				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
@@ -4976,6 +5304,47 @@ export default function MessengerPage() {
 									))}
 								</div>
 							)}
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Community Invite Code Modal */}
+			{showInviteCode && (
+				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
+					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
+						<div className='flex items-center justify-between mb-6'>
+							<h3 className='text-xl font-bold text-white'>
+								Код приглашения
+							</h3>
+							<button
+								onClick={() => setShowInviteCode(false)}
+								className='p-1 text-gray-400 hover:text-white transition-colors'
+							>
+								<XIcon className='w-5 h-5' />
+							</button>
+						</div>
+						<div className='space-y-4'>
+							<div className='bg-gray-800 border border-gray-700 rounded-xl p-4'>
+								<div className='flex items-center justify-between'>
+									<span className='text-lg font-mono text-white'>
+										{communityInviteCode}
+									</span>
+									<button
+										onClick={() => {
+											navigator.clipboard.writeText(communityInviteCode)
+											showToast('Код скопирован!', 'success')
+										}}
+										className='p-2 hover:bg-gray-700 rounded-lg transition-colors text-gray-400 hover:text-white'
+										title='Скопировать код'
+									>
+										<CopyIcon className='w-4 h-4' />
+									</button>
+								</div>
+							</div>
+							<p className='text-sm text-gray-400 text-center'>
+								Поделитесь этим кодом с другими пользователями, чтобы они могли вступить в сообщество
+							</p>
 						</div>
 					</div>
 				</div>

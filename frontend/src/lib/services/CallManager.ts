@@ -17,7 +17,7 @@ export interface CallRecord {
 }
 
 export class CallManager {
-	private webRTCService: WebRTCService
+	public webRTCService: WebRTCService
 	private socket: Socket
 	private currentCalls: Map<string, CallState> = new Map()
 	private callHistory: CallRecord[] = []
@@ -109,17 +109,40 @@ export class CallManager {
 				return
 			}
 
+			// Initialize local stream only once when first participant joins
+			if (!this.webRTCService.getLocalStream()) {
+				try {
+					await this.webRTCService.initializeLocalStream()
+				} catch (error) {
+					console.error('Failed to initialize local stream:', error)
+					return
+				}
+			}
+
 			const mySocketId = this.socket.id
+			if (!mySocketId) {
+				console.error('Socket ID is not available')
+				return
+			}
 			const iCreateOffer = mySocketId < socket_id
 
 			if (iCreateOffer) {
 				console.log(`I (${mySocketId}) am creating offer for ${socket_id}`)
-				const pc = await this.webRTCService.ensureLocalAudioSender(socket_id)
+				const pc = this.webRTCService.getPeerConnection(socket_id) || this.webRTCService.createPeerConnection(socket_id)
 				
 				// Check state before creating offer
 				if (pc.signalingState !== 'stable') {
 					console.log(`Cannot create offer: PC state is ${pc.signalingState}`)
 					return
+				}
+				
+				// Add audio track if not already present
+				const localStream = this.webRTCService.getLocalStream()
+				if (localStream) {
+					const audioTrack = localStream.getAudioTracks()[0]
+					if (audioTrack && !pc.getSenders().some(s => s.track?.kind === 'audio')) {
+						pc.addTrack(audioTrack, localStream)
+					}
 				}
 				
 				const offer = await pc.createOffer()
@@ -148,9 +171,17 @@ export class CallManager {
 				this.updateCallState(socket_id, callState)
 			} else {
 				console.log(`I (${mySocketId}) am waiting for offer from ${socket_id}`)
-				// Ensure local audio is ready, but don't create an offer
-				const pc = await this.webRTCService.ensureLocalAudioSender(socket_id)
-				// Make sure the audio track is properly added to the connection
+				// Just prepare the peer connection but don't create an offer
+				const pc = this.webRTCService.getPeerConnection(socket_id) || this.webRTCService.createPeerConnection(socket_id)
+				
+				// Add audio track if not already present
+				const localStream = this.webRTCService.getLocalStream()
+				if (localStream) {
+					const audioTrack = localStream.getAudioTracks()[0]
+					if (audioTrack && !pc.getSenders().some(s => s.track?.kind === 'audio')) {
+						pc.addTrack(audioTrack, localStream)
+					}
+				}
 
 				// Add call state while waiting for offer
 				const callState: CallState = {
@@ -218,15 +249,39 @@ export class CallManager {
 
 			// Decide offer side deterministically
 			const mySocketId = this.socket.id
+			if (!mySocketId) {
+				console.error('Socket ID is not available')
+				return
+			}
 			const iCreateOffer = mySocketId < socket_id
 
+			// Initialize local stream only once when first participant joins
+			if (!this.webRTCService.getLocalStream()) {
+				try {
+					await this.webRTCService.initializeLocalStream()
+				} catch (error) {
+					console.error('Failed to initialize local stream:', error)
+					return
+				}
+			}
+
 			if (iCreateOffer) {
-				const pc = await this.webRTCService.ensureLocalAudioSender(socket_id)
+				console.log(`I (${mySocketId}) am creating offer for ${socket_id}`)
+				const pc = this.webRTCService.getPeerConnection(socket_id) || this.webRTCService.createPeerConnection(socket_id)
 				
 				// Check state before creating offer
 				if (pc.signalingState !== 'stable') {
 					console.log(`Cannot create offer: PC state is ${pc.signalingState}`)
 					return
+				}
+				
+				// Add audio track if not already present
+				const localStream = this.webRTCService.getLocalStream()
+				if (localStream) {
+					const audioTrack = localStream.getAudioTracks()[0]
+					if (audioTrack && !pc.getSenders().some(s => s.track?.kind === 'audio')) {
+						pc.addTrack(audioTrack, localStream)
+					}
 				}
 				
 				const offer = await pc.createOffer()
@@ -253,7 +308,18 @@ export class CallManager {
 				this.currentCalls.set(socket_id, callState)
 				this.updateCallState(socket_id, callState)
 			} else {
-				await this.webRTCService.ensureLocalAudioSender(socket_id)
+				console.log(`I (${mySocketId}) am waiting for offer from ${socket_id}`)
+				// Just prepare the peer connection but don't create an offer
+				const pc = this.webRTCService.getPeerConnection(socket_id) || this.webRTCService.createPeerConnection(socket_id)
+				
+				// Add audio track if not already present
+				const localStream = this.webRTCService.getLocalStream()
+				if (localStream) {
+					const audioTrack = localStream.getAudioTracks()[0]
+					if (audioTrack && !pc.getSenders().some(s => s.track?.kind === 'audio')) {
+						pc.addTrack(audioTrack, localStream)
+					}
+				}
 
 				// Add call state while waiting for offer
 				const callState: CallState = {
@@ -666,6 +732,33 @@ export class CallManager {
 				console.error('Invalid ice_candidate data structure:', args)
 			}
 		})
+		
+		// Listen for video state changes from other participants
+		this.socket.on('video_state_changed', (data: any) => {
+			console.log('Received video state change:', data);
+			const from_socket_id = 
+				data.from_socket_id ||
+				data.sender_socket_id ||
+				data.caller_socket_id;
+				
+			const has_video = data.has_video;
+			
+			if (from_socket_id) {
+				// The video state has changed for this participant
+				// We need to update the remote stream accordingly
+				console.log(`Participant ${from_socket_id} video state changed: ${has_video}`);
+				
+				// Get the current remote stream for this participant
+				const currentStream = this.webRTCService.getRemoteStream(from_socket_id);
+				if (currentStream) {
+					// The stream should automatically reflect the current state
+					// as tracks are added/removed by the WebRTC service
+					if (this.onRemoteStream) {
+						this.onRemoteStream(from_socket_id, currentStream);
+					}
+				}
+			}
+		})
 	}
 
 	private setupWebRTCCallbacks(): void {
@@ -699,11 +792,22 @@ export class CallManager {
 				}
 			}
 		}
+
+		this.webRTCService.onVideoStateChange = (
+			stream: MediaStream | null,
+			isEnabled: boolean,
+		) => {
+			// Forward the video state change to any listeners
+			// This is typically handled by the store that uses the CallManager
+		}
 	}
 
 	async initiateGroupCall(groupId: string): Promise<void> {
 		try {
-			await this.webRTCService.initializeLocalStream()
+			// Only initialize local stream if it's not already initialized
+			if (!this.webRTCService.getLocalStream()) {
+				await this.webRTCService.initializeLocalStream()
+			}
 			this.socket.emit('call_group', { group_id: groupId })
 			console.log('Initiated group call for group:', groupId)
 		} catch (error) {
@@ -714,7 +818,10 @@ export class CallManager {
 
 	async joinVoiceChannel(channelId: string): Promise<void> {
 		try {
-			await this.webRTCService.initializeLocalStream()
+			// Only initialize local stream if it's not already initialized
+			if (!this.webRTCService.getLocalStream()) {
+				await this.webRTCService.initializeLocalStream()
+			}
 			this.socket.emit('join_voice_channel', { channel_id: channelId })
 			console.log('Joined voice channel:', channelId)
 
@@ -727,6 +834,13 @@ export class CallManager {
 	}
 
 	leaveVoiceChannel(channelId: string): void {
+		// End all active calls before leaving the channel
+		for (const [socketId, call] of this.currentCalls.entries()) {
+			if (call.callId === channelId) {
+				this.endCall(socketId);
+			}
+		}
+		
 		this.socket.emit('leave_voice_channel', { channel_id: channelId })
 
 		this.activeGroupCallId = null
@@ -739,7 +853,19 @@ export class CallManager {
 	}
 
 	joinGroupCall(callId: string): void {
-		this.webRTCService.initializeLocalStream().then(() => {
+		// Only initialize local stream if it's not already initialized
+		if (!this.webRTCService.getLocalStream()) {
+			this.webRTCService.initializeLocalStream().then(() => {
+				this.socket.emit('group_call_answer', { call_id: callId })
+				this.activeGroupCallId = callId
+				if (this.onGroupCallIdChange) this.onGroupCallIdChange(callId)
+
+				if (this.incomingCall && this.incomingCall.callId === callId) {
+					this.incomingCall = null
+				}
+			})
+		} else {
+			// Stream already exists, just send the answer
 			this.socket.emit('group_call_answer', { call_id: callId })
 			this.activeGroupCallId = callId
 			if (this.onGroupCallIdChange) this.onGroupCallIdChange(callId)
@@ -747,7 +873,7 @@ export class CallManager {
 			if (this.incomingCall && this.incomingCall.callId === callId) {
 				this.incomingCall = null
 			}
-		})
+		}
 	}
 
 	leaveGroupCall(callId: string): void {
@@ -782,7 +908,10 @@ export class CallManager {
 		targetUserName: string,
 	): Promise<void> {
 		try {
-			await this.webRTCService.initializeLocalStream()
+			// Only initialize local stream if it's not already initialized
+			if (!this.webRTCService.getLocalStream()) {
+				await this.webRTCService.initializeLocalStream()
+			}
 			await this.webRTCService.initiateCall(targetUserId)
 
 			// Создаем запись о звонке
@@ -1066,5 +1195,26 @@ export class CallManager {
 		this.socket.off('call_rejected')
 		this.socket.off('error')
 		this.socket.off('ice_candidate')
+	}
+
+	// Video methods
+	async startVideo(): Promise<void> {
+		await this.webRTCService.startVideo();
+	}
+
+	async stopVideo(): Promise<void> {
+		await this.webRTCService.stopVideo();
+	}
+
+	toggleVideo(): Promise<void> {
+		return this.webRTCService.toggleVideo();
+	}
+
+	isVideoEnabled(): boolean {
+		return this.webRTCService.isVideoEnabledState();
+	}
+
+	getVideoStream(): MediaStream | null {
+		return this.webRTCService.getVideoStream();
 	}
 }

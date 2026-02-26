@@ -98,7 +98,11 @@ class PublicAPIClient:
         return self._request("GET", f"/api/public/v1/bots/by-name/{name}")
 
     def search_bots(self, query: str):
-        return self._request("GET", "/api/public/v1/bots/search", params={"q": query})
+        return self._request(
+            "GET",
+            "/api/public/v1/bots/search",
+            params={
+                "q": query})
 
     def generate_bot_token(self, bot_id: str, api_key: str):
         return self._request(
@@ -128,7 +132,8 @@ class PublicAPIClient:
             return []
         return data
 
-    def push_update(self, bot_id: str, bot_token: str, message: Dict[str, Any]):
+    def push_update(self, bot_id: str, bot_token: str,
+                    message: Dict[str, Any]):
         return self._request(
             "POST",
             f"/api/public/v1/bots/{bot_id}/updates/push",
@@ -136,7 +141,12 @@ class PublicAPIClient:
             bot_token=bot_token,
         )
 
-    def send_message(self, bot_id: str, bot_token: str, chat_id: str, text: str):
+    def send_message(
+            self,
+            bot_id: str,
+            bot_token: str,
+            chat_id: str,
+            text: str):
         return self._request(
             "POST",
             f"/api/public/v1/bots/{bot_id}/send",

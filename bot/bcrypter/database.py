@@ -39,8 +39,11 @@ class AuthRepository:
             conn.close()
 
     def save_user_key(
-        self, user_id: str, username: str, password_hash: str, avatar_url: str = None
-    ) -> bool:
+            self,
+            user_id: str,
+            username: str,
+            password_hash: str,
+            avatar_url: str = None) -> bool:
         conn = self._connect()
         cursor = conn.cursor()
         email = f"{user_id}@telegram.bot"
@@ -49,16 +52,15 @@ class AuthRepository:
         try:
             cursor.execute(
                 "\n                INSERT INTO users (\n                    id, username, email, password_hash, is_verified, \n                    access_token, refresh_token, \n                    role, status, is_blocked, is_messaging, created_at, avatar_url\n                )\n                VALUES (?, ?, ?, ?, 1, ?, ?, 'User', 'offline', 0, 0, ?, ?)\n                ",
-                (
-                    user_id,
-                    username,
-                    email,
-                    password_hash,
-                    access_token,
-                    refresh_token,
-                    datetime.now().isoformat(),
-                    avatar_url,
-                ),
+                (user_id,
+                 username,
+                 email,
+                 password_hash,
+                 access_token,
+                 refresh_token,
+                 datetime.now().isoformat(),
+                 avatar_url,
+                 ),
             )
             conn.commit()
             return True
@@ -76,7 +78,10 @@ class AuthRepository:
             if avatar_url:
                 cursor.execute(
                     "\n                UPDATE users\n                SET password_hash = ?, updated_at = ?, avatar_url = ?\n                WHERE id = ?\n            ",
-                    (password_hash, datetime.now().isoformat(), avatar_url, user_id),
+                    (password_hash,
+                     datetime.now().isoformat(),
+                        avatar_url,
+                        user_id),
                 )
             else:
                 cursor.execute(

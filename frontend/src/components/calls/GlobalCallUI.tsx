@@ -7,6 +7,7 @@ import ActiveCall from './ActiveCall'
 import ActiveGroupCall from './ActiveGroupCall'
 import IncomingCallModal from './IncomingCallModal'
 
+
 export const GlobalCallUI: React.FC = () => {
 	const {
 		incomingCall,
@@ -17,6 +18,7 @@ export const GlobalCallUI: React.FC = () => {
 		remoteStreams,
 		isMuted,
 		isScreenSharing,
+		isVideoEnabled,
 		isScreenShareSupported,
 		acceptCall,
 		rejectCall,
@@ -24,6 +26,8 @@ export const GlobalCallUI: React.FC = () => {
 		leaveGroupCall,
 		toggleMute,
 		toggleScreenShare,
+		toggleVideo,
+		webRTCService,
 	} = useCallStore()
 
 	const { showToast } = useToast()
@@ -65,6 +69,10 @@ export const GlobalCallUI: React.FC = () => {
 		toggleMute()
 	}
 
+	const handleVideoToggle = async () => {
+		await toggleVideo()
+	}
+
 	return (
 		<>
 			{/* Incoming Call Modal */}
@@ -85,11 +93,14 @@ export const GlobalCallUI: React.FC = () => {
 						c => c.isGroupCall && c.callId === activeGroupCallId,
 					)}
 					localStream={localStream}
+					videoStream={webRTCService?.getVideoStream() || null}
 					screenStream={screenStream}
 					remoteStreams={remoteStreams}
 					onEndCall={handleLeaveGroupCall}
 					onMuteToggle={handleMuteToggle}
+					onVideoToggle={handleVideoToggle}
 					isMuted={isMuted}
+					isVideoEnabled={isVideoEnabled()}
 					onScreenShareToggle={toggleScreenShare}
 					isScreenSharing={isScreenSharing}
 					isScreenShareSupported={isScreenShareSupported}
@@ -105,9 +116,12 @@ export const GlobalCallUI: React.FC = () => {
 						callInfo={call}
 						onEndCall={handleEndCall}
 						onMuteToggle={handleMuteToggle}
+						onVideoToggle={handleVideoToggle}
 						isMuted={isMuted}
+						isVideoEnabled={isVideoEnabled()}
 						localStream={localStream}
 						screenStream={screenStream}
+						videoStream={webRTCService?.getVideoStream() || null}
 						remoteStream={remoteStreams.get(call.socketId) || null}
 						onScreenShareToggle={toggleScreenShare}
 						isScreenSharing={isScreenSharing}

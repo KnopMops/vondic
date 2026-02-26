@@ -36,7 +36,12 @@ class Bot:
         if not self.token:
             raise ValueError("bot token is required")
 
-    def get_updates(self, *, offset: int = 0, limit: int = 100, timeout: int = 20):
+    def get_updates(
+            self,
+            *,
+            offset: int = 0,
+            limit: int = 100,
+            timeout: int = 20):
         self._ensure_ready()
         return self.public.get_updates(
             self.bot_id,

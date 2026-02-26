@@ -155,7 +155,8 @@ def confirm_coins():
         session = stripe.checkout.Session.retrieve(session_id)
         if not session:
             return jsonify({"error": "Session not found"}), 404
-        if session.get("mode") != "payment" or session.get("payment_status") != "paid":
+        if session.get("mode") != "payment" or session.get(
+                "payment_status") != "paid":
             return jsonify({"error": "Payment not completed"}), 400
         buyer_id = session.get("client_reference_id")
         metadata = session.get("metadata") or {}

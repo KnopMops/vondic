@@ -42,7 +42,10 @@ class Dispatcher:
                     )
                     await handler.callback(message, bot)
 
-    async def _check_filters(self, filters: Iterable[BaseFilter], message: Message):
+    async def _check_filters(
+            self,
+            filters: Iterable[BaseFilter],
+            message: Message):
         for f in filters:
             result = f(message)
             if asyncio.iscoroutine(result):

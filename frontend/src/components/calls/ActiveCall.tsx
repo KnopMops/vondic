@@ -10,12 +10,15 @@ interface ActiveCallProps {
 	onEndCall: (socketId: string) => void
 	onMuteToggle: () => void
 	onScreenShareToggle: () => void
+	onVideoToggle: () => void
 	isMuted: boolean
 	isScreenSharing: boolean
+	isVideoEnabled: boolean
 	isScreenShareSupported: boolean
 	localStream: MediaStream | null
 	screenStream: MediaStream | null
 	remoteStream: MediaStream | null
+	videoStream: MediaStream | null
 }
 
 const ActiveCall: React.FC<ActiveCallProps> = ({
@@ -23,16 +26,20 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 	onEndCall,
 	onMuteToggle,
 	onScreenShareToggle,
+	onVideoToggle,
 	isMuted,
 	isScreenSharing,
+	isVideoEnabled,
 	isScreenShareSupported,
 	localStream,
 	screenStream,
 	remoteStream,
+	videoStream,
 }) => {
 	const remoteAudioRef = useRef<HTMLAudioElement>(null)
 	const localAudioRef = useRef<HTMLAudioElement>(null)
 	const remoteVideoRef = useRef<HTMLVideoElement>(null)
+	const localVideoRef = useRef<HTMLVideoElement>(null)
 	const localScreenRef = useRef<HTMLVideoElement>(null)
 	const [duration, setDuration] = useState(0)
 	const [isMinimized, setIsMinimized] = useState(false)
@@ -138,6 +145,23 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 			if (p && typeof p.catch === 'function') p.catch(() => {})
 		}
 	}, [localStream])
+
+	useEffect(() => {
+		const el = localVideoRef.current
+		if (!el) return
+		const hasVideo = !!videoStream?.getVideoTracks().length
+		if (videoStream && hasVideo) {
+			el.srcObject = videoStream
+			el.muted = true
+			const p = el.play()
+			if (p && typeof p.catch === 'function') p.catch(() => {})
+		} else {
+			try {
+				el.pause()
+			} catch {}
+			el.srcObject = null
+		}
+	}, [videoStream])
 
 	useEffect(() => {
 		const el = remoteVideoRef.current
@@ -449,7 +473,8 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 	}, [])
 	const hasScreenVideo =
 		!!screenStream?.getVideoTracks().length ||
-		!!remoteStream?.getVideoTracks().length
+		!!remoteStream?.getVideoTracks().length ||
+		!!videoStream?.getVideoTracks().length
 	const screenShareDisabled = !isScreenShareSupported
 	const statusLabel =
 		callInfo.status === 'connected'
@@ -626,7 +651,7 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 				</button>
 			</div>
 
-			{hasScreenVideo && (
+			{(hasScreenVideo || videoStream?.getVideoTracks().length) && (
 				<div className='mt-3 grid gap-3'>
 					{screenStream?.getVideoTracks().length ? (
 						<div className='rounded-2xl border border-white/10 bg-white/5 p-2'>
@@ -639,6 +664,20 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 							/>
 							<span className='mt-2 block text-xs text-white/70'>
 								Ваш экран
+							</span>
+						</div>
+					) : null}
+					{videoStream?.getVideoTracks().length ? (
+						<div className='rounded-2xl border border-white/10 bg-white/5 p-2'>
+							<video
+								ref={localVideoRef}
+								autoPlay
+								playsInline
+								muted
+								className='h-44 w-full rounded-xl bg-black object-cover'
+							/>
+							<span className='mt-2 block text-xs text-white/70'>
+								Ваше видео
 							</span>
 						</div>
 					) : null}
@@ -656,6 +695,20 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 							<span className='mt-2 block text-xs text-white/70'>
 								{callInfo.userName || 'Экран собеседника'}
 							</span>
+						</div>
+					) : remoteStream ? (
+						<div className='rounded-2xl border border-white/10 bg-white/5 p-2 flex items-center justify-center'>
+							<div className='text-center'>
+								<div className='mx-auto h-16 w-16 rounded-full bg-gray-700 flex items-center justify-center'>
+									<span className='text-2xl'>👤</span>
+								</div>
+								<p className='mt-2 text-xs text-white/70'>
+									{callInfo.userName || 'Собеседник'}
+								</p>
+								<p className='text-[10px] text-white/50 mt-1'>
+									Камера выключена
+								</p>
+							</div>
 						</div>
 					) : null}
 				</div>
@@ -741,6 +794,17 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 						</button>
 					</>
 				)}
+				<button
+					onClick={onVideoToggle}
+					className={`rounded-2xl border px-4 py-2 text-white transition ${
+						isVideoEnabled
+							? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20'
+							: 'border-white/10 bg-white/5 hover:bg-white/10'
+					}`}
+					title={isVideoEnabled ? 'Выключить камеру' : 'Включить камеру'}
+				>
+					{isVideoEnabled ? '📹' : '📷'}
+				</button>
 				<button
 					onClick={onScreenShareToggle}
 					disabled={screenShareDisabled}

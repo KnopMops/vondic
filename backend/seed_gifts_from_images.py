@@ -116,7 +116,9 @@ def build_entries(gifts_dir: Path):
             stem = file_path.stem
             entry = {
                 "id": slugify(stem),
-                "name": stem.replace("_", " ").strip().capitalize() or "Подарок",
+                "name": stem.replace(
+                    "_",
+                    " ").strip().capitalize() or "Подарок",
                 "coin_price": 0,
                 "icon": "Gift",
                 "description": None,
@@ -136,7 +138,8 @@ def upsert_gifts(entries):
             gift.image_url = entry["image_url"]
             if not gift.name:
                 gift.name = entry["name"]
-            if gift.coin_price in (None, 0) and entry["coin_price"] is not None:
+            if gift.coin_price in (
+                    None, 0) and entry["coin_price"] is not None:
                 gift.coin_price = entry["coin_price"]
             if gift.icon is None and entry["icon"] is not None:
                 gift.icon = entry["icon"]

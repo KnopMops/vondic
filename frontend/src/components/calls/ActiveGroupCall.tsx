@@ -7,12 +7,15 @@ interface ActiveGroupCallProps {
 	callId: string
 	participants: CallState[]
 	localStream: MediaStream | null
+	videoStream: MediaStream | null
 	screenStream: MediaStream | null
 	remoteStreams: Map<string, MediaStream>
 	onEndCall: (callId: string) => void
 	onMuteToggle: () => void
+	onVideoToggle: () => void
 	onScreenShareToggle: () => void
 	isMuted: boolean
+	isVideoEnabled: boolean
 	isScreenSharing: boolean
 	isScreenShareSupported: boolean
 }
@@ -21,12 +24,15 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 	callId,
 	participants,
 	localStream,
+	videoStream,
 	screenStream,
 	remoteStreams,
 	onEndCall,
 	onMuteToggle,
+	onVideoToggle,
 	onScreenShareToggle,
 	isMuted,
+	isVideoEnabled,
 	isScreenSharing,
 	isScreenShareSupported,
 }) => {
@@ -61,6 +67,7 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 	}
 	const hasScreenVideo =
 		!!screenStream?.getVideoTracks().length ||
+		!!videoStream?.getVideoTracks().length ||
 		Array.from(remoteStreams.values()).some(
 			stream => stream.getVideoTracks().length > 0,
 		)
@@ -183,6 +190,38 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 				</button>
 			</div>
 
+			{/* Display participants list */}
+			<div className='mt-3 max-h-32 overflow-y-auto'>
+				<div className='grid grid-cols-6 gap-2'>
+					{/* Current user */}
+					<div className='text-center'>
+						<div className='mx-auto mb-1 h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-semibold'>
+							{localStream ? '🎤' : '🔇'}
+						</div>
+						<p className='text-[8px] truncate'>Вы</p>
+					</div>
+					{/* Other participants */}
+					{participants.map(participant => (
+						<div key={participant.socketId} className='text-center'>
+							<div className='mx-auto mb-1 h-8 w-8 rounded-full bg-gray-700 flex items-center justify-center text-xs font-semibold'>
+								{participant.avatarUrl ? (
+									<img
+										src={participant.avatarUrl}
+										alt={participant.userName || 'Участник'}
+										className='h-full w-full rounded-full object-cover'
+									/>
+								) : (
+									<span>{participant.userName?.charAt(0) || '?'}</span>
+								)}
+							</div>
+							<p className='text-[8px] truncate'>
+								{participant.userName || 'Unknown'}
+							</p>
+						</div>
+					))}
+				</div>
+			</div>
+
 			<div className={`mt-3 grid gap-3 ${isScreenZoomed ? 'zoomed' : ''}`}>
 				{screenStream?.getVideoTracks().length ? (
 					<div className='rounded-2xl border border-white/10 bg-white/5 p-2'>
@@ -207,6 +246,24 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 							}`}
 						/>
 						<span className='mt-2 block text-xs text-white/70'>Ваш экран</span>
+					</div>
+				) : null}
+				{videoStream?.getVideoTracks().length ? (
+					<div className='rounded-2xl border border-white/10 bg-white/5 p-2'>
+						<video
+							autoPlay
+							playsInline
+							muted
+							ref={ref => {
+								if (ref) {
+									ref.srcObject = videoStream
+									const p = ref.play()
+									if (p && typeof p.catch === 'function') p.catch(() => {})
+								}
+							}}
+							className='h-44 w-full rounded-xl bg-black object-cover'
+						/>
+						<span className='mt-2 block text-xs text-white/70'>Ваше видео</span>
 					</div>
 				) : null}
 				<div className='rounded-2xl border border-white/10 bg-white/5 p-4 text-center'>
@@ -293,7 +350,18 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 									isScreenZoomed ? 'scale-105' : ''
 								}`}
 							/>
-						) : null}
+						) : (
+							<div className='mt-2 flex items-center justify-center'>
+								<div className='text-center'>
+									<div className='mx-auto h-12 w-12 rounded-full bg-gray-700 flex items-center justify-center'>
+										<span>👤</span>
+									</div>
+									<p className='text-[10px] text-white/50 mt-1'>
+										Камера выключена
+									</p>
+								</div>
+							</div>
+						)}
 					</div>
 				))}
 			</div>
@@ -350,6 +418,17 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 					</>
 				)}
 
+				<button
+					onClick={onVideoToggle}
+					className={`rounded-2xl border px-4 py-2 text-white transition ${
+						isVideoEnabled
+							? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20'
+							: 'border-white/10 bg-white/5 hover:bg-white/10'
+					}`}
+					title={isVideoEnabled ? 'Выключить камеру' : 'Включить камеру'}
+				>
+					{isVideoEnabled ? '📹' : '📷'}
+				</button>
 				<button
 					onClick={onScreenShareToggle}
 					disabled={screenShareDisabled}

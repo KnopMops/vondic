@@ -10,10 +10,15 @@ class ChannelSchema(ma.SQLAlchemyAutoSchema):
         include_fk = True
 
     participants_count = ma.Method("get_participants_count")
+    community_id = ma.Method("get_community_id")
     owner = ma.Nested(UserSchema, only=("id", "username", "avatar_url"))
 
     def get_participants_count(self, obj):
         return len(obj.participants)
+
+    def get_community_id(self, obj):
+        community_channel = getattr(obj, "community_channel", None)
+        return community_channel.community_id if community_channel else None
 
 
 channel_schema = ChannelSchema()

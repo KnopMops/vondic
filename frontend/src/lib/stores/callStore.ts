@@ -16,6 +16,8 @@ interface CallStore {
 	incomingCall: CallState | null
 	isMuted: boolean
 	isScreenSharing: boolean
+	videoStream: MediaStream | null
+	isVideoActive: boolean
 	callHistory: CallRecord[]
 
 	// Сервисы
@@ -43,6 +45,10 @@ interface CallStore {
 	startScreenShare: () => Promise<void>
 	stopScreenShare: () => Promise<void>
 	toggleScreenShare: () => Promise<void>
+	startVideo: () => Promise<void>
+	stopVideo: () => Promise<void>
+	toggleVideo: () => Promise<void>
+	isVideoEnabled: () => boolean
 
 	// Действия звонков
 	initiateCall: (targetUserId: string, targetUserName: string) => Promise<void>
@@ -78,6 +84,8 @@ export const useCallStore = create<CallStore>((set, get) => ({
 		typeof navigator.mediaDevices.getDisplayMedia === 'function',
 	localStream: null,
 	screenStream: null,
+	videoStream: null,
+	isVideoActive: false,
 	remoteStreams: new Map(),
 	activeCalls: new Map(),
 	activeGroupCallId: null,
@@ -234,6 +242,12 @@ export const useCallStore = create<CallStore>((set, get) => ({
 				set({ activeCalls: newCalls })
 			}
 
+			// Add the video state change callback to the WebRTCService
+			webRTCService.onVideoStateChange = (stream: MediaStream | null, isEnabled: boolean) => {
+				// Update the video stream in the store
+				set({ videoStream: stream, isVideoActive: isEnabled })
+			}
+
 			callManager.onGroupCallIdChange = (groupId: string | null) => {
 				set({ activeGroupCallId: groupId })
 			}
@@ -269,6 +283,8 @@ export const useCallStore = create<CallStore>((set, get) => ({
 			isInitialized: false,
 			localStream: null,
 			screenStream: null,
+			videoStream: null,
+			isVideoActive: false,
 			remoteStreams: new Map(),
 			activeCalls: new Map(),
 			activeGroupCallId: null,
@@ -391,6 +407,30 @@ export const useCallStore = create<CallStore>((set, get) => ({
 			screenStream: webRTCService.getScreenStream(),
 			isScreenSharing: webRTCService.isScreenSharing(),
 		})
+	},
+
+	startVideo: async () => {
+		const { callManager } = get()
+		if (!callManager) return
+		await callManager.startVideo()
+	},
+
+	stopVideo: async () => {
+		const { callManager } = get()
+		if (!callManager) return
+		await callManager.stopVideo()
+	},
+
+	toggleVideo: async () => {
+		const { callManager } = get()
+		if (!callManager) return
+		await callManager.toggleVideo()
+	},
+
+	isVideoEnabled: () => {
+		const { callManager } = get()
+		if (!callManager) return false
+		return callManager.isVideoEnabled()
 	},
 
 	// Действия звонков
@@ -531,3 +571,8 @@ export const useIsWebRTCSupported = () =>
 	useCallStore(state => state.isWebRTCSupported)
 export const useIsScreenShareSupported = () =>
 	useCallStore(state => state.isScreenShareSupported)
+
+export const useStartVideo = () => useCallStore(state => state.startVideo)
+export const useStopVideo = () => useCallStore(state => state.stopVideo)
+export const useToggleVideo = () => useCallStore(state => state.toggleVideo)
+export const useIsVideoEnabled = () => useCallStore(state => state.isVideoEnabled)

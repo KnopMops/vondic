@@ -36,6 +36,14 @@ class Channel(db.Model):
         lazy="subquery",
         backref=db.backref("channels", lazy=True),
     )
+    community_channel = db.relationship(
+        "CommunityChannel",
+        primaryjoin="Channel.id == CommunityChannel.id",
+        foreign_keys="CommunityChannel.id",
+        uselist=False,
+        backref=db.backref("channel_mirror", uselist=False),
+        viewonly=True,
+    )
 
     def to_dict(self):
         return {
@@ -44,7 +52,9 @@ class Channel(db.Model):
             "description": self.description,
             "invite_code": self.invite_code,
             "owner_id": self.owner_id,
-            "participants_count": len(self.participants),
+            "community_id": self.community_channel.community_id if self.community_channel else None,
+            "participants_count": len(
+                self.participants),
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

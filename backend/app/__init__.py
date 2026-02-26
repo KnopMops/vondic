@@ -125,8 +125,7 @@ def create_app(config_class=Config):
                 column_names = [c[1] for c in cols]
                 if column_names and "attachments" not in column_names:
                     db.session.execute(
-                        text("ALTER TABLE messages ADD COLUMN attachments TEXT")
-                    )
+                        text("ALTER TABLE messages ADD COLUMN attachments TEXT"))
                     db.session.commit()
                 if column_names and "pinned_by" not in column_names:
                     db.session.execute(
@@ -151,20 +150,15 @@ def create_app(config_class=Config):
                     db.session.commit()
                 if ucolumn_names and "profile_bg_image" not in ucolumn_names:
                     db.session.execute(
-                        text("ALTER TABLE users ADD COLUMN profile_bg_image TEXT")
-                    )
+                        text("ALTER TABLE users ADD COLUMN profile_bg_image TEXT"))
                     db.session.commit()
                 if ucolumn_names and "blocked_by_admin" not in ucolumn_names:
                     db.session.execute(
-                        text("ALTER TABLE users ADD COLUMN blocked_by_admin TEXT")
-                    )
+                        text("ALTER TABLE users ADD COLUMN blocked_by_admin TEXT"))
                     db.session.commit()
                 if ucolumn_names and "is_developer" not in ucolumn_names:
                     db.session.execute(
-                        text(
-                            "ALTER TABLE users ADD COLUMN is_developer INTEGER DEFAULT 0"
-                        )
-                    )
+                        text("ALTER TABLE users ADD COLUMN is_developer INTEGER DEFAULT 0"))
                     db.session.commit()
                 if ucolumn_names and "api_key_hash" not in ucolumn_names:
                     db.session.execute(
@@ -178,8 +172,7 @@ def create_app(config_class=Config):
                     db.session.commit()
                 if ucolumn_names and "cloud_password_hash" not in ucolumn_names:
                     db.session.execute(
-                        text("ALTER TABLE users ADD COLUMN cloud_password_hash TEXT")
-                    )
+                        text("ALTER TABLE users ADD COLUMN cloud_password_hash TEXT"))
                     db.session.commit()
                 if ucolumn_names and "cloud_password_reset_month" not in ucolumn_names:
                     db.session.execute(
@@ -197,18 +190,14 @@ def create_app(config_class=Config):
                     db.session.commit()
                 if ucolumn_names and "storage_bonus" not in ucolumn_names:
                     db.session.execute(
-                        text(
-                            "ALTER TABLE users ADD COLUMN storage_bonus INTEGER DEFAULT 0"
-                        )
-                    )
+                        text("ALTER TABLE users ADD COLUMN storage_bonus INTEGER DEFAULT 0"))
                     db.session.commit()
                 pcols = db.session.execute(
                     text("PRAGMA table_info(posts)")).fetchall()
                 pcolumn_names = [c[1] for c in pcols]
                 if pcolumn_names and "is_blog" not in pcolumn_names:
                     db.session.execute(
-                        text("ALTER TABLE posts ADD COLUMN is_blog INTEGER DEFAULT 0")
-                    )
+                        text("ALTER TABLE posts ADD COLUMN is_blog INTEGER DEFAULT 0"))
                     db.session.commit()
                 gc_cols = db.session.execute(
                     text("PRAGMA table_info(gifts_catalog)")
@@ -365,24 +354,19 @@ def create_app(config_class=Config):
                     pass
                 try:
                     db.session.execute(
-                        text("ALTER TABLE users ALTER COLUMN disk_usage TYPE BIGINT")
-                    )
+                        text("ALTER TABLE users ALTER COLUMN disk_usage TYPE BIGINT"))
                     db.session.commit()
                 except Exception:
                     pass
                 try:
                     db.session.execute(
-                        text("ALTER TABLE users ALTER COLUMN storage_bonus TYPE BIGINT")
-                    )
+                        text("ALTER TABLE users ALTER COLUMN storage_bonus TYPE BIGINT"))
                     db.session.commit()
                 except Exception:
                     pass
                 try:
                     db.session.execute(
-                        text(
-                            "ALTER TABLE bots ADD COLUMN IF NOT EXISTS bot_token_hash TEXT"
-                        )
-                    )
+                        text("ALTER TABLE bots ADD COLUMN IF NOT EXISTS bot_token_hash TEXT"))
                     db.session.commit()
                 except Exception:
                     pass
@@ -474,9 +458,8 @@ def create_app(config_class=Config):
                     nm = row[2]
                     desc = row[3]
                     owner_row = db.session.execute(
-                        text("SELECT owner_id FROM communities WHERE id = :cid"),
-                        {"cid": com_id},
-                    ).fetchone()
+                        text("SELECT owner_id FROM communities WHERE id = :cid"), {
+                            "cid": com_id}, ).fetchone()
                     if not owner_row:
                         continue
                     owner_id = owner_row[0]
@@ -494,11 +477,8 @@ def create_app(config_class=Config):
                         },
                     )
                     members = db.session.execute(
-                        text(
-                            "SELECT user_id FROM community_members WHERE community_id = :cid"
-                        ),
-                        {"cid": com_id},
-                    ).fetchall()
+                        text("SELECT user_id FROM community_members WHERE community_id = :cid"), {
+                            "cid": com_id}, ).fetchall()
                     for m in members:
                         db.session.execute(
                             text("""
@@ -520,6 +500,10 @@ def create_app(config_class=Config):
 
     from app.api.public.v1.account import public_account_bp
     from app.api.public.v1.bots import public_bots_bp
+    from app.api.public.v1.comments import public_comments_bp
+    from app.api.public.v1.messages import public_messages_bp
+    from app.api.public.v1.posts import public_posts_bp
+    from app.api.public.v1.users import public_users_bp
     from app.api.v1.auth import auth_bp
     from app.api.v1.bots import bots_bp
     from app.api.v1.channels import channels_bp
@@ -559,6 +543,10 @@ def create_app(config_class=Config):
     app.register_blueprint(support_bp)
     app.register_blueprint(public_bots_bp)
     app.register_blueprint(public_account_bp)
+    app.register_blueprint(public_posts_bp)
+    app.register_blueprint(public_users_bp)
+    app.register_blueprint(public_messages_bp)
+    app.register_blueprint(public_comments_bp)
 
     @app.route("/health")
     def health_check():
