@@ -2335,8 +2335,10 @@ export default function MessengerPage() {
 			setIsSearchingMessages(false)
 			return
 		}
-		const results = await searchMessages(chatSearchQuery)
-		setFoundMessages(results)
+		const results = await searchMessages()
+		setFoundMessages(results.filter(m => 
+			m.content?.toLowerCase().includes(chatSearchQuery.toLowerCase())
+		))
 		setIsSearchingMessages(false)
 	}
 
