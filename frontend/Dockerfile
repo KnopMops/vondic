@@ -1,19 +1,14 @@
-# Используем официальный образ Python (slim-версия для меньшего размера)
-FROM node:18-alpine
+FROM node:20-alpine
 
-# Устанавливаем рабочую директорию внутри контейнера
 WORKDIR /app
 
-# Копируем файл с зависимостями и устанавливаем их
 COPY . .
 
-RUN cd frontend && npm i && npm build
+RUN cd frontend && npm i && npm run build
 
-# (Рекомендуется) Создаём непривилегированного пользователя и переключаемся на него
-RUN useradd --create-home appuser
+RUN addgroup --system --gid 1001 appuser && adduser --system --uid 1001 appuser
 USER appuser
 
-# Указываем порт, который будет слушать контейнер
 EXPOSE 3000
 
 CMD ["npm", "start"]
