@@ -6,7 +6,7 @@ WORKDIR /app
 
 # Копируем файл с зависимостями и устанавливаем их
 COPY webrtc.requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r webrtc.requirements.txt
 
 # Копируем остальные файлы приложения
 COPY . .
