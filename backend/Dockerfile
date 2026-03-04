@@ -19,4 +19,4 @@ USER appuser
 EXPOSE 5050
 
 # Запускаем Flask-приложение через Uvicorn с WSGI-интерфейсом
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "5050", "--interface", "wsgi"]
+CMD ["python", "backend/run.py"]
