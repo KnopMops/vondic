@@ -6,4 +6,6 @@ COPY . .
 
 EXPOSE 3000
 
-RUN cd frontend && npm i && npm run build && npm run start
+RUN cd frontend && npm i && npm run build
+
+CMD ["cd frontend", "&&", "npm run start"]
