@@ -2490,7 +2490,7 @@ export default function MessengerPage() {
 				process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
 			try {
 				const res = await fetch(
-					`${baseUrl}/api/v1/bots/${selectedFriend.id}/updates/push`,
+					`${baseUrl}/api/v1/bots/${selectedFriend?.id}/updates/push`,
 					{
 						method: 'POST',
 						headers: {
@@ -2540,7 +2540,7 @@ export default function MessengerPage() {
 							const dateMs = item?.date ? Number(item.date) * 1000 : Date.now()
 							next.push({
 								id: messageId,
-								sender_id: selectedFriend.id,
+								sender_id: selectedFriend?.id || '',
 								content: String(item?.text || ''),
 								timestamp: new Date(dateMs).toISOString(),
 								isOwn: false,
@@ -2838,7 +2838,7 @@ export default function MessengerPage() {
 		if (stickerPayload) return 'Стикер'
 		if (msg.attachments && msg.attachments.length > 0) {
 			const a = msg.attachments[0]
-			const ext = (a.ext || '').toLowerCase()
+			const ext = (typeof a === 'object' && a.ext ? a.ext : '').toLowerCase()
 			const isImage =
 				ext === 'png' ||
 				ext === 'jpg' ||
@@ -2848,7 +2848,7 @@ export default function MessengerPage() {
 				ext === 'bmp' ||
 				ext === 'svg'
 			if (isImage) return 'Изображение'
-			return a.name || 'Файл'
+			return (typeof a === 'object' && a.name ? a.name : 'Файл')
 		}
 		const text = msg.content?.trim()
 		if (!text) return 'Сообщение'
@@ -2974,6 +2974,7 @@ export default function MessengerPage() {
 			if (selectedChannel) {
 				if (
 					selectedChannel.owner_id &&
+					user &&
 					String(selectedChannel.owner_id) !== String(user.id)
 				) {
 					showToast('Недостаточно прав', 'error')
@@ -2990,6 +2991,7 @@ export default function MessengerPage() {
 			} else if (selectedGroup) {
 				if (
 					selectedGroup.owner_id &&
+					user &&
 					String(selectedGroup.owner_id) !== String(user.id)
 				) {
 					showToast('Недостаточно прав', 'error')
@@ -3033,7 +3035,6 @@ export default function MessengerPage() {
 			setChatSearchQuery('')
 			setFoundMessages([])
 			setReplyMap({})
-			setReactionsByMessage({})
 			setIsSettingsOpen(false)
 			showToast('История удалена', 'success')
 		} catch (e) {
@@ -3262,16 +3263,16 @@ export default function MessengerPage() {
 		}) => {
 			if (!data?.id || !data.emoji || typeof data.count !== 'number') return
 			setReactionCounts(prev => {
-				const current = prev[data.id] || {}
+				const current = prev[data.id!] || {}
 				const nextForMsg = { ...current }
-				if (data.count <= 0) {
-					delete nextForMsg[data.emoji]
+				if (data.count! <= 0) {
+					delete nextForMsg[data.emoji!]
 				} else {
-					nextForMsg[data.emoji] = data.count
+					nextForMsg[data.emoji!] = data.count!
 				}
 				return {
 					...prev,
-					[data.id]: nextForMsg,
+					[data.id!]: nextForMsg,
 				}
 			})
 		}
@@ -3280,15 +3281,15 @@ export default function MessengerPage() {
 			if (!data?.id || typeof data.pinned !== 'boolean') return
 			setPinnedMessageIds(prev => {
 				if (data.pinned) {
-					if (prev.includes(data.id)) return prev
-					const next = [...prev, data.id]
-					setPinnedMessageId(data.id)
+					if (prev.includes(data.id!)) return prev
+					const next = [...prev, data.id!]
+					setPinnedMessageId(data.id!)
 					return next
 				}
-				if (!prev.includes(data.id)) return prev
-				const next = prev.filter(id => id !== data.id)
+				if (!prev.includes(data.id!)) return prev
+				const next = prev.filter(id => id !== data.id!)
 				setPinnedMessageId(current =>
-					current === data.id ? next[next.length - 1] || null : current,
+					current === data.id! ? next[next.length - 1] || null : current,
 				)
 				return next
 			})
@@ -4427,7 +4428,7 @@ export default function MessengerPage() {
 											<div className='flex items-center gap-2'>
 												{(() => {
 													const a = pinnedMessage.attachments[0]
-													const ext = (a.ext || '').toLowerCase()
+													const ext = (typeof a === 'object' && a.ext ? a.ext : '').toLowerCase()
 													const isImage =
 														ext === 'png' ||
 														ext === 'jpg' ||
@@ -4439,8 +4440,8 @@ export default function MessengerPage() {
 													if (isImage) {
 														return (
 															<img
-																src={getAttachmentUrl(a.url)}
-																alt={a.name}
+																src={typeof a === 'object' ? getAttachmentUrl(a.url) : ''}
+																alt={typeof a === 'object' ? a.name : ''}
 																className='h-10 w-10 rounded-md object-cover'
 															/>
 														)
