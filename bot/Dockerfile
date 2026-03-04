@@ -5,8 +5,8 @@ FROM python:3.13-slim
 WORKDIR /app
 
 # Копируем файл с зависимостями и устанавливаем их
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY bot.requirements.txt .
+RUN pip install --no-cache-dir -r bot.requirements.txt
 
 # Копируем остальные файлы приложения
 COPY . .
