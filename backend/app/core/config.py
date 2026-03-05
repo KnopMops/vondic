@@ -48,11 +48,27 @@ class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY") or "you-will-never-guess"
     BASE_DIR = os.path.abspath(os.path.join(
         os.path.dirname(__file__), "../../../"))
+    
+    # Только PostgreSQL - без SQLite fallback
     SQLALCHEMY_DATABASE_URI = (
         _build_postgres_url()
         or os.environ.get("DATABASE_URL")
-        or "sqlite:///" + os.path.join(BASE_DIR, "database.db")
     )
+    
+    # Проверяем что PostgreSQL настроен
+    if not SQLALCHEMY_DATABASE_URI:
+        raise ValueError(
+            "PostgreSQL не настроен! Установите POSTGRES_* переменные или DATABASE_URL\n"
+            "Пример:\n"
+            "POSTGRES_HOST=localhost\n"
+            "POSTGRES_PORT=5432\n"
+            "POSTGRES_DB=vondic\n"
+            "POSTGRES_USER=vondic\n"
+            "POSTGRES_PASSWORD=vondic123\n"
+            "Или:\n"
+            "DATABASE_URL=postgresql://vondic:vondic123@localhost:5432/vondic"
+        )
+    
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     MAIL_SERVER = os.environ.get("MAIL_SERVER")
     MAIL_PORT = int(os.environ.get("MAIL_PORT") or 587)
