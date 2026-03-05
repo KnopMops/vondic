@@ -136,37 +136,64 @@ def create_app(config_class=Config):
 
             # Добавляем колонки в messages таблицу
             if _pg_table_exists("messages"):
-                if not _pg_column_exists("messages", "attachments"):
-                    db.session.execute(
-                        text("ALTER TABLE messages ADD COLUMN attachments TEXT"))
-                    db.session.commit()
+                message_columns = [
+                    ("attachments", "JSON"),
+                    ("pinned_by", "TEXT"),
+                    ("reactions", "TEXT"),
+                    ("is_read", "INTEGER DEFAULT 0"),
+                    ("is_deleted", "INTEGER DEFAULT 0"),
+                ]
                 
-                if not _pg_column_exists("messages", "pinned_by"):
-                    db.session.execute(
-                        text("ALTER TABLE messages ADD COLUMN pinned_by TEXT"))
-                    db.session.commit()
-                
-                if not _pg_column_exists("messages", "reactions"):
-                    db.session.execute(
-                        text("ALTER TABLE messages ADD COLUMN reactions TEXT"))
-                    db.session.commit()
+                for column_name, column_def in message_columns:
+                    if not _pg_column_exists("messages", column_name):
+                        db.session.execute(
+                            text(f"ALTER TABLE messages ADD COLUMN {column_name} {column_def}"))
+                        db.session.commit()
 
             # Добавляем колонки в users таблицу
             if _pg_table_exists("users"):
                 user_columns = [
                     ("access_token", "TEXT"),
                     ("refresh_token", "TEXT"),
+                    ("is_verified", "INTEGER DEFAULT 0"),
+                    ("socket_id", "TEXT"),
+                    ("is_blocked", "INTEGER DEFAULT 0"),
+                    ("is_blocked_at", "TIMESTAMP DEFAULT NULL"),
+                    ("blocked_by_admin", "TEXT"),
+                    ("role", "TEXT DEFAULT 'User'"),
+                    ("status", "TEXT DEFAULT 'offline'"),
+                    ("balance", "DOUBLE PRECISION DEFAULT 0.0"),
+                    ("premium", "INTEGER DEFAULT 0"),
+                    ("premium_started_at", "TIMESTAMP DEFAULT NULL"),
+                    ("premium_expired_at", "TIMESTAMP DEFAULT NULL"),
+                    ("disk_usage", "BIGINT DEFAULT 0"),
+                    ("is_messaging", "INTEGER DEFAULT 0"),
+                    ("telegram_id", "TEXT"),
+                    ("link_key", "TEXT"),
+                    ("two_factor_enabled", "INTEGER DEFAULT 0"),
+                    ("two_factor_method", "TEXT"),
+                    ("two_factor_secret", "TEXT"),
+                    ("two_factor_email_code", "TEXT"),
+                    ("two_factor_email_code_expires", "TIMESTAMP DEFAULT NULL"),
+                    ("login_alert_enabled", "INTEGER DEFAULT 0"),
+                    ("profile_bg_theme", "TEXT"),
+                    ("profile_bg_gradient", "TEXT"),
+                    ("profile_bg_image", "TEXT"),
                     ("gifts", "TEXT"),
                     ("storis", "TEXT"),
-                    ("profile_bg_image", "TEXT"),
-                    ("blocked_by_admin", "TEXT"),
                     ("is_developer", "INTEGER DEFAULT 0"),
                     ("api_key_hash", "TEXT"),
                     ("api_key", "TEXT"),
                     ("cloud_password_hash", "TEXT"),
                     ("cloud_password_reset_month", "INTEGER DEFAULT NULL"),
                     ("cloud_password_reset_count", "INTEGER DEFAULT 0"),
-                    ("storage_bonus", "INTEGER DEFAULT 0"),
+                    ("storage_bonus", "BIGINT DEFAULT 0"),
+                    ("video_channel_id", "TEXT"),
+                    ("video_subscribers", "INTEGER DEFAULT 0"),
+                    ("video_count", "INTEGER DEFAULT 0"),
+                    ("video_likes", "TEXT"),
+                    ("video_watch_later", "TEXT"),
+                    ("video_history", "TEXT"),
                 ]
                 
                 for column_name, column_def in user_columns:
@@ -177,10 +204,32 @@ def create_app(config_class=Config):
 
             # Добавляем колонки в posts таблицу
             if _pg_table_exists("posts"):
-                if not _pg_column_exists("posts", "is_blog"):
-                    db.session.execute(
-                        text("ALTER TABLE posts ADD COLUMN is_blog INTEGER DEFAULT 0"))
-                    db.session.commit()
+                post_columns = [
+                    ("is_blog", "BOOLEAN DEFAULT FALSE"),
+                    ("reports", "INTEGER DEFAULT 0"),
+                ]
+                
+                for column_name, column_def in post_columns:
+                    if not _pg_column_exists("posts", column_name):
+                        db.session.execute(
+                            text(f"ALTER TABLE posts ADD COLUMN {column_name} {column_def}"))
+                        db.session.commit()
+
+            # Добавляем колонки в comments таблицу
+            if _pg_table_exists("comments"):
+                comment_columns = [
+                    ("deleted", "BOOLEAN DEFAULT FALSE"),
+                    ("deleted_by", "TEXT"),
+                    ("reason_for_deletion", "TEXT"),
+                    ("deleted_at", "TIMESTAMP DEFAULT NULL"),
+                    ("likes", "INTEGER DEFAULT 0"),
+                ]
+                
+                for column_name, column_def in comment_columns:
+                    if not _pg_column_exists("comments", column_name):
+                        db.session.execute(
+                            text(f"ALTER TABLE comments ADD COLUMN {column_name} {column_def}"))
+                        db.session.commit()
 
             # Создаем gifts_catalog таблицу если не существует
             if not _pg_table_exists("gifts_catalog"):
@@ -190,7 +239,10 @@ def create_app(config_class=Config):
                         name TEXT NOT NULL,
                         coin_price INTEGER NOT NULL DEFAULT 0,
                         icon TEXT,
-                        description TEXT
+                        description TEXT,
+                        image_url TEXT,
+                        total_supply INTEGER,
+                        minted_count INTEGER NOT NULL
                     )
                 """))
                 
