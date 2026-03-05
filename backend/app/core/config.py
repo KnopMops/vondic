@@ -44,6 +44,11 @@ def _build_redis_url() -> str | None:
     return f"redis://{host}:{port}/{db}"
 
 
+def _is_redis_available(redis_url: str | None) -> bool:
+    """Check if Redis URL is configured."""
+    return bool(redis_url)
+
+
 class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY") or "you-will-never-guess"
     BASE_DIR = os.path.abspath(os.path.join(
@@ -89,6 +94,12 @@ class Config:
         "OLLAMA_API_URL") or "http://localhost:11434"
     OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL") or "llama3.1"
     SESSION_TTL_SECONDS = int(os.environ.get("SESSION_TTL_SECONDS", "2592000"))
-    CACHE_TYPE = "RedisCache"
+    
+    # Redis configuration
     CACHE_REDIS_URL = _build_redis_url()
+    # Use Redis only if configured, otherwise fallback to SimpleCache
+    if _is_redis_available(CACHE_REDIS_URL):
+        CACHE_TYPE = os.environ.get("CACHE_TYPE") or "RedisCache"
+    else:
+        CACHE_TYPE = os.environ.get("CACHE_TYPE") or "SimpleCache"
     CACHE_DEFAULT_TIMEOUT = int(os.environ.get("CACHE_DEFAULT_TIMEOUT", "300"))
