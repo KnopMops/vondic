@@ -181,9 +181,31 @@ def verify_email(token):
 @auth_bp.route("/login", methods=["POST"])
 @rate_limit("auth-login", limit=10, window_seconds=60)
 def login():
-    data = request.get_json()
-    if not data:
-        return (jsonify({"error": "No data provided"}), 400)
+    try:
+        # Получаем raw данные и обрабатываем экранирование
+        raw_data = request.get_data(as_text=True)
+        current_app.logger.info(f"Raw login data: {raw_data}")
+        
+        # Если JSON содержит экранированные символы, пытаем их исправить
+        if raw_data and '\\"' in raw_data:
+            # Заменяем двойное экранирование на одинарное
+            raw_data = raw_data.replace('\\"', '"')
+            current_app.logger.info(f"Fixed raw data: {raw_data}")
+        
+        data = request.get_json()
+        current_app.logger.info(f"Parsed login data: {data}")
+        
+        if not data:
+            return (jsonify({"error": "No data provided"}), 400)
+        
+        email = data.get("email")
+        password = data.get("password")
+        current_app.logger.info(f"Email: {email}, Password length: {len(password) if password else 0}")
+        
+    except Exception as e:
+        current_app.logger.error(f"JSON parsing error: {e}")
+        return (jsonify({"error": "Invalid JSON format"}), 400)
+    
     result, error = AuthService.login_user(data)
     if error:
         if error == "TwoFactorEmailRequired":
