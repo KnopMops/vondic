@@ -498,7 +498,6 @@ def create_app(config_class=Config):
     from app.api.v1.users import users_bp
     from app.api.v1.videos import videos_bp
     from app.api.v1.upload import upload_bp
-    from app.api.v1.health import health_bp
 
     app.register_blueprint(public_account_bp)
     app.register_blueprint(public_bots_bp)
@@ -522,13 +521,12 @@ def create_app(config_class=Config):
     app.register_blueprint(users_bp)
     app.register_blueprint(videos_bp)
     app.register_blueprint(upload_bp)
-    app.register_blueprint(health_bp)
 
     swagger_config = {
         "headers": [],
         "specs": [
             {
-                "endpoint": 'apispec.json',
+                "endpoint": 'apispec_json',
                 "route": '/docs.json',
                 "rule_filter": lambda rule: True,
                 "model_filter": lambda tag: True,
