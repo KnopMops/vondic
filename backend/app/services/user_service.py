@@ -1,9 +1,9 @@
 import json
 import os
 import secrets
-import sqlite3
 from datetime import datetime
 
+from sqlalchemy import text
 from app.core.config import Config
 from app.core.extensions import db
 from app.models.channel import Channel, channel_participants
@@ -298,13 +298,10 @@ class UserService:
                             delete_local_file(a.get("url"))
 
             shared_db_path = os.path.join(Config.BASE_DIR, "database.db")
-            support_conn = sqlite3.connect(shared_db_path)
-            support_cur = support_conn.cursor()
-            support_cur.execute(
-                "SELECT attachments FROM post_reports WHERE reporter_id = ?",
-                (user_id,),
-            )
-            report_rows = support_cur.fetchall()
+            result = db.session.execute(text("""
+                SELECT attachments FROM post_reports WHERE reporter_id = :user_id
+            """), {"user_id": user_id})
+            report_rows = result.fetchall()
             for row in report_rows:
                 try:
                     payload = row[0] if row else None
@@ -316,35 +313,24 @@ class UserService:
                 except Exception:
                     continue
 
-            support_cur.execute(
-                "SELECT id FROM escalations WHERE user_id = ?", (user_id,)
-            )
-            esc_rows = support_cur.fetchall()
+            result = db.session.execute(text("SELECT id FROM escalations WHERE user_id = :user_id"), {"user_id": user_id})
+            esc_rows = result.fetchall()
             esc_ids = [r[0] for r in esc_rows if r and r[0] is not None]
             if esc_ids:
-                placeholders = ",".join("?" for _ in esc_ids)
-                support_cur.execute(
-                    f"DELETE FROM escalation_messages WHERE escalation_id IN ({placeholders})",
-                    esc_ids,
-                )
-            support_cur.execute(
-                "DELETE FROM escalations WHERE user_id = ?", (user_id,))
-            support_cur.execute(
-                "DELETE FROM notifications WHERE user_id = ?", (user_id,)
-            )
-            support_cur.execute(
-                "DELETE FROM post_reports WHERE reporter_id = ?", (user_id,)
-            )
-            support_conn.commit()
-            support_conn.close()
-
-            webrtc_conn = sqlite3.connect(shared_db_path)
-            webrtc_cur = webrtc_conn.cursor()
-            webrtc_cur.execute(
-                "SELECT attachments FROM messages WHERE sender_id = ? OR target_id = ?",
-                (user_id, user_id),
-            )
-            webrtc_rows = webrtc_cur.fetchall()
+                placeholders = ",".join(f":id{i}" for i in range(len(esc_ids)))
+                params = {f"id{i}": esc_id for i, esc_id in enumerate(esc_ids)}
+                db.session.execute(text(f"""
+                    DELETE FROM escalation_messages WHERE escalation_id IN ({placeholders})
+                """), params)
+            
+            db.session.execute(text("DELETE FROM escalations WHERE user_id = :user_id"), {"user_id": user_id})
+            db.session.execute(text("DELETE FROM notifications WHERE user_id = :user_id"), {"user_id": user_id})
+            db.session.execute(text("DELETE FROM post_reports WHERE reporter_id = :user_id"), {"user_id": user_id})
+            db.session.commit()
+            webrtc_result = db.session.execute(text("""
+                SELECT attachments FROM messages WHERE sender_id = :user_id OR target_id = :user_id
+            """), {"user_id": user_id})
+            webrtc_rows = webrtc_result.fetchall()
             for row in webrtc_rows:
                 try:
                     payload = row[0] if row else None
@@ -470,15 +456,13 @@ class UserService:
                 db.session.delete(channel)
 
             if channels:
-                webrtc_conn = sqlite3.connect(shared_db_path)
-                webrtc_cur = webrtc_conn.cursor()
                 channel_ids = [c.id for c in channels]
-                placeholders = ",".join("?" for _ in channel_ids)
-                webrtc_cur.execute(
-                    f"SELECT attachments FROM messages WHERE channel_id IN ({placeholders})",
-                    channel_ids,
-                )
-                channel_rows = webrtc_cur.fetchall()
+                placeholders = ",".join(f":id{i}" for i in range(len(channel_ids)))
+                params = {f"id{i}": channel_id for i, channel_id in enumerate(channel_ids)}
+                channel_result = db.session.execute(text(f"""
+                    SELECT attachments FROM messages WHERE channel_id IN ({placeholders})
+                """), params)
+                channel_rows = channel_result.fetchall()
                 for row in channel_rows:
                     try:
                         payload = row[0] if row else None

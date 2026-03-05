@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy.dialects.sqlite import FLOAT, INTEGER, JSON, TEXT, TIMESTAMP
+from sqlalchemy import TEXT, INTEGER, JSON, TIMESTAMP, BigInteger, Float
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app.core.extensions import db
@@ -23,12 +23,12 @@ class User(db.Model):
     blocked_by_admin = db.Column(TEXT, default=None)
     role = db.Column(TEXT, default="User")
     status = db.Column(TEXT, default="offline")
-    balance = db.Column(FLOAT, default=0.0)
+    balance = db.Column(Float, default=0.0)
     premium = db.Column(INTEGER, default=0)
     premium_started_at = db.Column(TIMESTAMP, default=None)
     premium_expired_at = db.Column(TIMESTAMP, default=None)
-    disk_usage = db.Column(db.BigInteger, default=0)
-    storage_bonus = db.Column(db.BigInteger, default=0)
+    disk_usage = db.Column(BigInteger, default=0)
+    storage_bonus = db.Column(BigInteger, default=0)
     is_messaging = db.Column(INTEGER, default=0)
     telegram_id = db.Column(TEXT, unique=True, nullable=True)
     link_key = db.Column(TEXT, unique=True, nullable=True)

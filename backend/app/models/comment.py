@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy.dialects.sqlite import BOOLEAN, INTEGER, TEXT, TIMESTAMP
+from sqlalchemy import BOOLEAN, INTEGER, TEXT, TIMESTAMP
 
 from app.core.extensions import db
 

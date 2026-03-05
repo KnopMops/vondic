@@ -1,4 +1,4 @@
-from sqlalchemy.dialects.sqlite import INTEGER, TEXT
+from sqlalchemy import INTEGER, TEXT
 
 from app.core.extensions import db
 

@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import CheckConstraint
-from sqlalchemy.dialects.sqlite import TEXT, TIMESTAMP
+from sqlalchemy import TEXT, TIMESTAMP
 
 from app.core.extensions import db
 

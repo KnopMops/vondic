@@ -1,12 +1,13 @@
 import hashlib
 import json
 import os
-import sqlite3
 import time
 from typing import Optional, Tuple
 
 import requests
+from sqlalchemy import text
 from app.core.config import Config
+from app.core.extensions import db
 from app.models.post import Post
 from app.services.post_service import PostService
 from app.utils.decorators import token_required
@@ -14,42 +15,42 @@ from flask import Blueprint, jsonify, request
 
 support_bp = Blueprint("support", __name__, url_prefix="/api/v1/support")
 
-DB_PATH = os.path.join(Config.BASE_DIR, "database.db")
 DEFAULT_RAG_API_URL = os.environ.get(
     "RAG_API_URL", "http://127.0.0.1:8001/ask")
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 
 
 def ensure_support_tables():
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute(
-        "CREATE TABLE IF NOT EXISTS escalations (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, question TEXT, created_at INTEGER, status TEXT, answer TEXT, answered_at INTEGER, delivered_user INTEGER DEFAULT 0)"
-    )
-    cur.execute(
-        "CREATE TABLE IF NOT EXISTS escalation_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, escalation_id INTEGER, content TEXT, created_at INTEGER, delivered_user INTEGER DEFAULT 0, sender TEXT DEFAULT 'admin', delivered_admin INTEGER DEFAULT 0)"
-    )
-    cur.execute(
-        "CREATE TABLE IF NOT EXISTS notifications (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, title TEXT, type TEXT, message TEXT, created_at INTEGER, delivered INTEGER DEFAULT 0, notification_hash TEXT)"
-    )
-    cur.execute(
-        "CREATE TABLE IF NOT EXISTS post_reports (id INTEGER PRIMARY KEY AUTOINCREMENT, reporter_id TEXT, reporter_login TEXT, post_id TEXT, post_author_login TEXT, description TEXT, attachments TEXT, created_at INTEGER, status TEXT, verdict_at INTEGER)"
-    )
-    cur.execute("PRAGMA table_info(notifications)")
-    columns = [c[1] for c in cur.fetchall()]
-    if "title" not in columns:
-        cur.execute("ALTER TABLE notifications ADD COLUMN title TEXT")
-    if "type" not in columns:
-        cur.execute("ALTER TABLE notifications ADD COLUMN type TEXT")
-    if "notification_hash" not in columns:
-        cur.execute(
-            "ALTER TABLE notifications ADD COLUMN notification_hash TEXT")
-    cur.execute("PRAGMA table_info(post_reports)")
-    report_columns = [c[1] for c in cur.fetchall()]
-    if "verdict_at" not in report_columns:
-        cur.execute("ALTER TABLE post_reports ADD COLUMN verdict_at INTEGER")
-    conn.commit()
-    conn.close()
+    """Создает таблицы для поддержки в PostgreSQL"""
+    
+    # Создаем таблицу escalations если не существует
+    db.session.execute(text("""
+        CREATE TABLE IF NOT EXISTS escalations (
+            id SERIAL PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            question TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            status TEXT DEFAULT 'pending',
+            answer TEXT,
+            answered_at TIMESTAMP,
+            delivered_user INTEGER DEFAULT 0
+        )
+    """))
+    
+    # Создаем таблицу escalation_messages если не существует
+    db.session.execute(text("""
+        CREATE TABLE IF NOT EXISTS escalation_messages (
+            id SERIAL PRIMARY KEY,
+            escalation_id INTEGER NOT NULL REFERENCES escalations(id),
+            content TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            delivered_user INTEGER DEFAULT 0,
+            sender TEXT DEFAULT 'admin',
+            delivered_admin INTEGER DEFAULT 0
+        )
+    """))
+    
+    db.session.commit()
 
 
 ensure_support_tables()

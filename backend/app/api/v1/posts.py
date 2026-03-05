@@ -1,9 +1,10 @@
 import hashlib
 import os
-import sqlite3
 import time
 
+from sqlalchemy import text
 from app.core.config import Config
+from app.core.extensions import db
 from app.models.user import User
 from app.schemas.comment_schema import comment_schema, comments_schema
 from app.schemas.post_schema import post_schema, posts_schema
@@ -20,25 +21,24 @@ def notify_all_users(
         message: str,
         notification_type: str = "system"):
     ts = int(time.time())
-    conn = sqlite3.connect(os.path.join(Config.BASE_DIR, "database.db"))
-    cur = conn.cursor()
     users = User.query.filter(User.is_blocked == 0).all()
     for u in users:
         content_hash = hashlib.sha256(
             f"{u.id}|{message}|{ts}".encode("utf-8")
         ).hexdigest()
-        cur.execute(
-            "INSERT INTO notifications (user_id, title, type, message, created_at, delivered, notification_hash) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (u.id,
-             title,
-             notification_type,
-             message,
-             ts,
-             0,
-             content_hash),
-        )
-    conn.commit()
-    conn.close()
+        db.session.execute(text("""
+            INSERT INTO notifications (user_id, title, type, message, created_at, delivered, notification_hash) 
+            VALUES (:user_id, :title, :type, :message, :created_at, :delivered, :notification_hash)
+        """), {
+            "user_id": u.id,
+            "title": title,
+            "type": notification_type,
+            "message": message,
+            "created_at": ts,
+            "delivered": 0,
+            "notification_hash": content_hash
+        })
+    db.session.commit()
 
 
 @posts_bp.route("/", methods=["GET"])
