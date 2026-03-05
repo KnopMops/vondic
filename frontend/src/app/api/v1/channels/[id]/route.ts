@@ -1,5 +1,6 @@
 import { getAccessToken } from '@/lib/auth.utils'
 import { NextRequest, NextResponse } from 'next/server'
+import { getBackendUrl } from '@/lib/server-urls'
 
 export async function POST(
 	req: NextRequest,
@@ -14,8 +15,7 @@ export async function POST(
 
 		const { id } = await params
 
-		const backendUrl =
-			process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+		const backendUrl = getBackendUrl()
 
 		let body = {}
 		try {

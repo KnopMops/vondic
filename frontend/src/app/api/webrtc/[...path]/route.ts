@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getWebrtcUrl } from '@/lib/server-urls'
 
 type RouteParams = {
 	params: Promise<{
@@ -7,8 +8,7 @@ type RouteParams = {
 }
 
 async function proxyToWebRTC(req: NextRequest, params: { path: string[] }) {
-	const webrtcUrl =
-		process.env.NEXT_PUBLIC_WEBRTC_URL || 'http://localhost:5000'
+	const webrtcUrl = getWebrtcUrl()
 	const path = Array.isArray(params.path) ? params.path.join('/') : ''
 	const targetUrl = `${webrtcUrl}/${path}`
 	const contentType = req.headers.get('content-type') || 'application/json'

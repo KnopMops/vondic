@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAccessToken } from '@/lib/auth.utils'
+import { getBackendUrl } from '@/lib/server-urls'
 
 export async function DELETE(req: NextRequest) {
 	try {
@@ -9,8 +10,7 @@ export async function DELETE(req: NextRequest) {
 		}
 
 		const body = await req.json().catch(() => ({}))
-		const backendUrl =
-			process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+		const backendUrl = getBackendUrl()
 
 		const payload = { ...body, access_token: token }
 

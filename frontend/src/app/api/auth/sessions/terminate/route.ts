@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAccessToken } from '@/lib/auth.utils'
+import { getBackendUrl } from '@/lib/server-urls'
 
 export async function POST(req: NextRequest) {
 	try {
@@ -8,8 +9,7 @@ export async function POST(req: NextRequest) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 		}
 		const body = await req.json().catch(() => ({}))
-		const backendUrl =
-			process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+		const backendUrl = getBackendUrl()
 		const res = await fetch(`${backendUrl}/api/v1/auth/sessions/terminate`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },

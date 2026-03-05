@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getBackendUrl } from '@/lib/server-urls'
 
 const corsHeaders = {
 	'Access-Control-Allow-Origin': '*',
@@ -15,8 +16,8 @@ export async function POST(req: NextRequest) {
 		const { searchParams } = new URL(req.url)
 		const cid = searchParams.get('cid')
 
-		const backendUrl =
-			process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+		// Use internal URL for server-side requests (Docker network)
+		const backendUrl = getBackendUrl()
 
 		const response = await fetch(`${backendUrl}/api/v1/auth/yandex/login`, {
 			method: 'GET',

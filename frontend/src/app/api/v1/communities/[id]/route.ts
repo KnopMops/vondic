@@ -1,11 +1,11 @@
 import { withAccessTokenRefresh } from '@/lib/auth.utils'
 import { NextRequest, NextResponse } from 'next/server'
+import { getBackendUrl } from '@/lib/server-urls'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const backendUrl =
-      process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+    const backendUrl = getBackendUrl()
 
     console.log(`Fetching community details for: ${id}`)
 

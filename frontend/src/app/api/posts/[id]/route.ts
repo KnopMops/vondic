@@ -1,5 +1,6 @@
 import { getAccessToken } from '@/lib/auth.utils'
 import { NextRequest, NextResponse } from 'next/server'
+import { getBackendUrl } from '@/lib/server-urls'
 
 export async function GET(
 	req: NextRequest,
@@ -12,8 +13,7 @@ export async function GET(
 		// User didn't specify auth requirement for this GET, but usually needed for 'is_liked' status etc.
 
 		const { id } = await params
-		const backendUrl =
-			process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+		const backendUrl = getBackendUrl()
 
 		const headers: Record<string, string> = {
 			'Content-Type': 'application/json',
@@ -105,8 +105,7 @@ export async function DELETE(
 			)
 		}
 
-		const backendUrl =
-			process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+		const backendUrl = getBackendUrl()
 
 		const isAdminDelete = typeof reason === 'string' && reason.trim().length > 0
 		const endpoint = isAdminDelete
@@ -186,8 +185,7 @@ export async function PUT(
 			payload.is_blog = is_blog
 		}
 
-		const backendUrl =
-			process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+		const backendUrl = getBackendUrl()
 
 		const res = await fetch(`${backendUrl}/api/v1/posts/`, {
 			method: 'PUT',

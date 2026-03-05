@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getBackendUrl } from '@/lib/server-urls'
 
 export async function GET(req: NextRequest) {
 	try {
-		const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+		const backendUrl = getBackendUrl()
 		const response = await fetch(`${backendUrl}/api/v1/auth/ai-user`, {
 			method: 'GET',
 			headers: {

@@ -1,5 +1,6 @@
 import { getAccessToken } from '@/lib/auth.utils'
 import { NextRequest, NextResponse } from 'next/server'
+import { getBackendUrl, getWebrtcUrl } from '@/lib/server-urls'
 
 export async function POST(req: NextRequest) {
   try {
@@ -19,10 +20,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'channel_id required' }, { status: 400 })
     }
 
-    const backendUrl =
-      process.env.NEXT_PUBLIC_WEBRTC_URL ||
-      process.env.NEXT_PUBLIC_BACKEND_URL ||
-      'http://localhost:5050'
+    const backendUrl = getWebrtcUrl()
 
     const response = await fetch(`${backendUrl}/channels/history`, {
       method: 'POST',

@@ -6,6 +6,7 @@ import {
 	setTokens,
 } from '@/lib/auth.utils'
 import { NextRequest, NextResponse } from 'next/server'
+import { getBackendUrl } from '@/lib/server-urls'
 
 export async function GET(req: NextRequest) {
 	try {
@@ -13,8 +14,7 @@ export async function GET(req: NextRequest) {
 		const accessToken = await getAccessToken(req)
 		const refreshToken = await getRefreshToken(req)
 
-		const backendUrl =
-			process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+		const backendUrl = getBackendUrl()
 		console.log(`[API] Fetching user from ${backendUrl}/api/v1/auth/me`)
 
 		const callBackend = async (token: string) => {

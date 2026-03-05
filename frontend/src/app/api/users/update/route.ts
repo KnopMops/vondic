@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAccessToken } from "@/lib/auth.utils";
+import { getBackendUrl } from "@/lib/server-urls";
 
 export async function PUT(req: NextRequest) {
   try {
@@ -9,7 +10,7 @@ export async function PUT(req: NextRequest) {
     }
 
     const body = await req.json();
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5050";
+    const backendUrl = getBackendUrl();
 
     // Inject access_token into body as requested by user
     const payload = { ...body, access_token: token };

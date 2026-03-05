@@ -1,6 +1,7 @@
 import { setTokens } from '@/lib/auth.utils'
 import { setDesktopSession } from '@/lib/desktopSessions'
 import { NextRequest, NextResponse } from 'next/server'
+import { getBackendUrl, getWebrtcUrl } from '@/lib/server-urls'
 
 export async function GET(req: NextRequest) {
 	const frontendUrl =
@@ -17,8 +18,7 @@ export async function GET(req: NextRequest) {
 			return NextResponse.json({ error: 'No code provided' }, { status: 400 })
 		}
 
-		const backendUrl =
-			process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+		const backendUrl = getBackendUrl()
 
 		// Формируем URL для запроса к бэкенду
 		const backendCallbackUrl = new URL(

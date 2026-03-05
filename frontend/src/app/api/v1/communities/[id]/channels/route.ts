@@ -1,5 +1,6 @@
 import { getAccessToken } from '@/lib/auth.utils'
 import { NextRequest, NextResponse } from 'next/server'
+import { getBackendUrl } from '@/lib/server-urls'
 
 export async function POST(
   req: NextRequest,
@@ -11,8 +12,7 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     const { id } = await params
-    const backendUrl =
-      process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+    const backendUrl = getBackendUrl()
     const body = await req.json()
     const response = await fetch(`${backendUrl}/api/v1/communities/${id}/channels`, {
       method: 'POST',

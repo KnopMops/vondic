@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAccessToken } from '@/lib/auth.utils'
+import { getBackendUrl } from '@/lib/server-urls'
 
 export async function GET(req: NextRequest) {
   try {
@@ -7,7 +8,7 @@ export async function GET(req: NextRequest) {
     if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+    const backendUrl = getBackendUrl()
     const response = await fetch(`${backendUrl}/api/v1/support/chats`, {
       method: 'GET',
       headers: {

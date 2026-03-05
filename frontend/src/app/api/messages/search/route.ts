@@ -1,5 +1,6 @@
 import { getAccessToken } from '@/lib/auth.utils'
 import { NextRequest, NextResponse } from 'next/server'
+import { getWebrtcUrl } from '@/lib/server-urls'
 
 export async function POST(req: NextRequest) {
 	try {
@@ -10,7 +11,7 @@ export async function POST(req: NextRequest) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 		}
 
-		const socketUrl = process.env.NEXT_PUBLIC_WEBRTC_URL || 'http://localhost:5000'
+		const socketUrl = getWebrtcUrl()
 
 		const response = await fetch(`${socketUrl}/messages/search`, {
 			method: 'POST',

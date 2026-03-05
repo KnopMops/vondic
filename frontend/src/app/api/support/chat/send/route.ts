@@ -1,5 +1,6 @@
 import { withAccessTokenRefresh } from '@/lib/auth.utils'
 import { NextRequest, NextResponse } from 'next/server'
+import { getBackendUrl } from '@/lib/server-urls'
 
 export async function POST(req: NextRequest) {
 	const body = await req.json().catch(() => ({}))
@@ -39,8 +40,7 @@ export async function POST(req: NextRequest) {
 	// 2) Если RAG не дал ответа — эскалируем на бэкенд (с авто-рефрешем токена)
 	return withAccessTokenRefresh(req, async accessToken => {
 		try {
-			const backendUrl =
-				process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+			const backendUrl = getBackendUrl()
 			const response = await fetch(`${backendUrl}/api/v1/support/chat/send`, {
 				method: 'POST',
 				headers: {

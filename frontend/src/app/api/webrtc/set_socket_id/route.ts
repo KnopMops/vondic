@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getWebrtcUrl } from '@/lib/server-urls'
 
 export async function POST(req: NextRequest) {
   try {
@@ -7,7 +8,7 @@ export async function POST(req: NextRequest) {
     if (!user_id || !socket_id) {
       return NextResponse.json({ error: 'Missing user_id or socket_id' }, { status: 400 })
     }
-    const webrtcUrl = process.env.NEXT_PUBLIC_WEBRTC_URL || 'http://localhost:5000'
+    const webrtcUrl = getWebrtcUrl()
     const response = await fetch(`${webrtcUrl}/set_socket_id`, {
       method: 'POST',
       headers: {
