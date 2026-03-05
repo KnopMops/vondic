@@ -154,6 +154,8 @@ def create_app(config_class=Config):
             # Добавляем колонки в users таблицу
             if _pg_table_exists("users"):
                 user_columns = [
+                    ("access_token", "TEXT"),
+                    ("refresh_token", "TEXT"),
                     ("gifts", "TEXT"),
                     ("storis", "TEXT"),
                     ("profile_bg_image", "TEXT"),
@@ -261,6 +263,10 @@ def create_app(config_class=Config):
                     )
                 """))
                 db.session.commit()
+
+            # Инициализируем support таблицы
+            from app.api.v1.support import ensure_support_tables
+            ensure_support_tables()
 
             # PostgreSQL миграции (остальной код)
             try:

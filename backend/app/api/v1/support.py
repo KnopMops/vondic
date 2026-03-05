@@ -53,9 +53,6 @@ def ensure_support_tables():
     db.session.commit()
 
 
-ensure_support_tables()
-
-
 def is_escalation(text: str) -> bool:
     t = (text or "").casefold()
     patterns = [
