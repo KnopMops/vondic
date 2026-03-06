@@ -116,8 +116,6 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 				setSocket(null)
 				setIsConnected(false)
 			}
-		} catch (error) {
-			console.error('Failed to fetch token:', error)
 		}
 
 		connectSocket()
