@@ -15,6 +15,8 @@ COPY . .
 RUN useradd --create-home appuser
 USER appuser
 
+WORKDIR /app/bot
+
 # Указываем порт, который будет слушать контейнер
 #EXPOSE 5050
 
