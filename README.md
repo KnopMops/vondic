@@ -1,6 +1,6 @@
 # Vondic
 <div align="center">
-  <img src="backend/app/static/botik.png" width="96" height="96" alt="Vondic Botik" />
+  <img src="frontend/src/app/favicon.ico" width="96" height="96" alt="Vondic Botik" />
   <h3>Коммуникационная платформа с чатами, сообществами и WebRTC‑звонками</h3>
   <p>
     <img src="https://img.shields.io/badge/Next.js-16.1.6-000000?style=for-the-badge&logo=next.js" />
