@@ -2,8 +2,8 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { io, Socket } from 'socket.io-client'
-import { useAppDispatch, useAppSelector } from './hooks'
 import { setSocketId } from './features/authSlice'
+import { useAppDispatch, useAppSelector } from './hooks'
 
 interface SocketContextType {
 	socket: Socket | null
@@ -44,28 +44,37 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 			// For simplicity, we reconnect if user changes or mounts.
 			
 			try {
-				// Fetch token
 				const res = await fetch('/api/auth/socket-token')
 				if (!res.ok) return
 				const { token } = await res.json()
 
 				if (!token) {
-				// Try once more with a slight delay or just fail
-				// But maybe the token is in cookies and we just need to wait?
-				// For now, return and let the user re-login or refresh if needed.
-				// But wait! If we are here, we have a user in Redux. 
-				// The user might have just logged in and token is in cookie.
-				return
-			}
+					return
+				}
 
-				// Initialize socket
-				// Use NEXT_PUBLIC_WEBRTC_URL from .env as the signaling server URL
-                const socketUrl = process.env.NEXT_PUBLIC_WEBRTC_URL || 'http://localhost:5000'
-                const socketPath = process.env.NEXT_PUBLIC_SOCKET_PATH || '/socket.io'
-				socketInstance = io(socketUrl, {
+				const socketUrl = process.env.NEXT_PUBLIC_WEBRTC_URL || 'http://localhost:5000'
+				const socketPath = process.env.NEXT_PUBLIC_SOCKET_PATH || '/socket.io'
+
+				const isSecure = window.location.protocol === 'https:' || socketUrl.startsWith('https://')
+				const wsProtocol = isSecure ? 'wss' : 'ws'
+				const httpProtocol = isSecure ? 'https' : 'http'
+
+				const finalSocketUrl = socketUrl.startsWith('http') 
+					? socketUrl.replace(/^https?:/, httpProtocol)
+					: socketUrl
+
+				console.log(`Connecting to WebSocket server: ${finalSocketUrl} (${wsProtocol})`)
+
+				socketInstance = io(finalSocketUrl, {
 					auth: { token },
 					transports: ['polling', 'websocket'],
 					path: socketPath,
+					secure: isSecure,
+					timeout: 10000,
+					forceNew: true,
+					reconnection: true,
+					reconnectionAttempts: 5,
+					reconnectionDelay: 1000,
 				})
 
 				socketInstance.on('connect', () => {
@@ -74,9 +83,23 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 					socketInstance?.emit('authenticate', { access_token: token })
 				})
 
-				socketInstance.on('disconnect', () => {
-					console.log('Socket disconnected')
+				socketInstance.on('disconnect', (reason) => {
+					console.log('Socket disconnected:', reason)
 					setIsConnected(false)
+				})
+
+				socketInstance.on('connect_error', (error) => {
+					console.error('Socket connection error:', error)
+					setIsConnected(false)
+				})
+
+				socketInstance.on('reconnect', (attemptNumber) => {
+					console.log('Socket reconnected after', attemptNumber, 'attempts')
+					setIsConnected(true)
+				})
+
+				socketInstance.on('reconnect_error', (error) => {
+					console.error('Socket reconnection error:', error)
 				})
 
 				socketInstance.on('connection_success', (data: any) => {
@@ -86,12 +109,15 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 					}
 				})
 
-                // Listen for other events if needed or expose socket for components to listen
-                
 				setSocket(socketInstance)
 			} catch (error) {
 				console.error('Failed to connect socket:', error)
+				// Не падаем, просто устанавливаем socket в null
+				setSocket(null)
+				setIsConnected(false)
 			}
+		} catch (error) {
+			console.error('Failed to fetch token:', error)
 		}
 
 		connectSocket()

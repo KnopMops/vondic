@@ -476,6 +476,7 @@ const socket = io("http://localhost:5000", {
 if __name__ == "__main__":
     app, socketio = create_app()
     logger.info(f"Запуск сервера на {app.config['HOST']}:{app.config['PORT']}")
+    
     socketio.run(
         app,
         host=app.config["HOST"],

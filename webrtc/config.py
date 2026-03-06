@@ -37,6 +37,7 @@ class Config:
     DEBUG = os.environ.get("DEBUG", "True").lower() in ("true", "1", "t")
     HOST = os.environ.get("HOST", "0.0.0.0")
     PORT = int(os.environ.get("PORT", 5000))
+    
     BACKEND_INTERNAL_URL = (
         os.environ.get("BACKEND_INTERNAL_URL") or "http://127.0.0.1:5050"
     )
