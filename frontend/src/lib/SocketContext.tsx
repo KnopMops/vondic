@@ -55,24 +55,34 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 				const socketUrlRaw =
 					process.env.NEXT_PUBLIC_WEBRTC_URL || 'http://localhost:5000'
 				const socketPath = process.env.NEXT_PUBLIC_SOCKET_PATH || '/socket.io'
-
 				const isSecure =
 					window.location.protocol === 'https:' ||
 					socketUrlRaw.startsWith('https://')
 				const httpProtocol = isSecure ? 'https' : 'http'
 
-				// Clean up double https:// if present (e.g. "https://https://...")
-				let socketUrl = socketUrlRaw.replace(
-					/^https?:\/\/https?:\/\//i,
-					'https://',
-				)
-
-				// Ensure protocol matches the environment (force https if window is https)
-				if (socketUrl.startsWith('http')) {
-					socketUrl = socketUrl.replace(/^https?:/i, httpProtocol)
-				} else if (socketUrl.startsWith('//')) {
-					socketUrl = httpProtocol + ':' + socketUrl
+				let socketUrl = (socketUrlRaw || '').trim()
+				if (
+					!socketUrl ||
+					socketUrl === 'https://' ||
+					socketUrl === 'http://' ||
+					socketUrl.toLowerCase() === 'https' ||
+					socketUrl.toLowerCase() === 'http'
+				) {
+					socketUrl = isSecure
+						? 'https://localhost:5000'
+						: 'http://localhost:5000'
 				}
+				if (socketUrl.startsWith('//')) {
+					socketUrl = `${httpProtocol}:${socketUrl}`
+				}
+				if (!/^https?:\/\//i.test(socketUrl)) {
+					socketUrl = `${httpProtocol}://${socketUrl}`
+				}
+				if (isSecure && socketUrl.startsWith('http://')) {
+					socketUrl = socketUrl.replace(/^http:\/\//i, 'https://')
+				}
+				// Clean malformed 'https://https/...'
+				socketUrl = socketUrl.replace(/^https:\/\/https(\/|$)/i, 'https://')
 
 				console.log(
 					`Connecting to WebSocket server: ${socketUrl} (secure: ${isSecure})`,
@@ -80,7 +90,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
 				socketInstance = io(socketUrl, {
 					auth: { token },
-					transports: ['polling', 'websocket'],
+					transports: ['websocket', 'polling'],
 					path: socketPath,
 					secure: isSecure,
 					timeout: 10000,
