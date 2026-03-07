@@ -11,7 +11,7 @@ import asyncpg
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
-from .config import Config
+from config import Config
 
 logger = logging.getLogger(__name__)
 

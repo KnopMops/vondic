@@ -6,10 +6,10 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_socketio import SocketIO
 
-from .config import Config
-from .database import UserRepository
-from .proxy import ConnectionBroker
-from .signaling import SignalingService
+from config import Config
+from database import UserRepository
+from proxy import ConnectionBroker
+from signaling import SignalingService
 
 logging.basicConfig(
     level=logging.INFO,

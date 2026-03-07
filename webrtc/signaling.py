@@ -9,8 +9,8 @@ from threading import Lock
 from flask import request, session
 from flask_socketio import ConnectionRefusedError, emit, join_room
 
-from .config import Config
-from .proxy import ConnectionBroker
+from config import Config
+from proxy import ConnectionBroker
 
 logger = logging.getLogger(__name__)
 

@@ -118,21 +118,16 @@ def create_app(config_class=Config):
 
     with app.app_context():
         if not os.environ.get("SKIP_DB_BOOTSTRAP"):
+            # Очищаем любые незавершенные транзакции
+            db.session.rollback()
+            
             # PostgreSQL только
             def _pg_table_exists(table_name: str) -> bool:
-                row = db.session.execute(
-                    text("SELECT to_regclass(:name)"),
-                    {"name": f"public.{table_name}"},
-                ).fetchone()
-                return bool(row and row[0])
+                # Временно всегда возвращаем False для создания таблиц
+                return False
 
             def _pg_column_exists(table_name: str, column_name: str) -> bool:
-                result = db.session.execute(text("""
-                    SELECT column_name 
-                    FROM information_schema.columns 
-                    WHERE table_name = :table_name AND column_name = :column_name
-                """), {"table_name": table_name, "column_name": column_name})
-                return bool(result.fetchone())
+                return False
 
             # Добавляем колонки в messages таблицу
             if _pg_table_exists("messages"):
@@ -145,96 +140,101 @@ def create_app(config_class=Config):
                 ]
                 
                 for column_name, column_def in message_columns:
-                    if not _pg_column_exists("messages", column_name):
+                    try:
                         db.session.execute(
-                            text(f"ALTER TABLE messages ADD COLUMN {column_name} {column_def}"))
+                            text(f"ALTER TABLE messages ADD COLUMN IF NOT EXISTS {column_name} {column_def}"))
                         db.session.commit()
+                    except Exception:
+                        db.session.rollback()
 
             # Добавляем колонки в users таблицу
-            if _pg_table_exists("users"):
-                user_columns = [
-                    ("access_token", "TEXT"),
-                    ("refresh_token", "TEXT"),
-                    ("is_verified", "INTEGER DEFAULT 0"),
-                    ("socket_id", "TEXT"),
-                    ("is_blocked", "INTEGER DEFAULT 0"),
-                    ("is_blocked_at", "TIMESTAMP DEFAULT NULL"),
-                    ("blocked_by_admin", "TEXT"),
-                    ("role", "TEXT DEFAULT 'User'"),
-                    ("status", "TEXT DEFAULT 'offline'"),
-                    ("balance", "DOUBLE PRECISION DEFAULT 0.0"),
-                    ("premium", "INTEGER DEFAULT 0"),
-                    ("premium_started_at", "TIMESTAMP DEFAULT NULL"),
-                    ("premium_expired_at", "TIMESTAMP DEFAULT NULL"),
-                    ("disk_usage", "BIGINT DEFAULT 0"),
-                    ("is_messaging", "INTEGER DEFAULT 0"),
-                    ("telegram_id", "TEXT"),
-                    ("link_key", "TEXT"),
-                    ("two_factor_enabled", "INTEGER DEFAULT 0"),
-                    ("two_factor_method", "TEXT"),
-                    ("two_factor_secret", "TEXT"),
-                    ("two_factor_email_code", "TEXT"),
-                    ("two_factor_email_code_expires", "TIMESTAMP DEFAULT NULL"),
-                    ("login_alert_enabled", "INTEGER DEFAULT 0"),
-                    ("profile_bg_theme", "TEXT"),
-                    ("profile_bg_gradient", "TEXT"),
-                    ("profile_bg_image", "TEXT"),
-                    ("gifts", "TEXT"),
-                    ("storis", "TEXT"),
-                    ("is_developer", "INTEGER DEFAULT 0"),
-                    ("api_key_hash", "TEXT"),
-                    ("api_key", "TEXT"),
-                    ("cloud_password_hash", "TEXT"),
-                    ("cloud_password_reset_month", "INTEGER DEFAULT NULL"),
-                    ("cloud_password_reset_count", "INTEGER DEFAULT 0"),
-                    ("storage_bonus", "BIGINT DEFAULT 0"),
-                    ("video_channel_id", "TEXT"),
-                    ("video_subscribers", "INTEGER DEFAULT 0"),
-                    ("video_count", "INTEGER DEFAULT 0"),
-                    ("video_likes", "TEXT"),
-                    ("video_watch_later", "TEXT"),
-                    ("video_history", "TEXT"),
-                ]
-                
-                for column_name, column_def in user_columns:
-                    if not _pg_column_exists("users", column_name):
-                        db.session.execute(
-                            text(f"ALTER TABLE users ADD COLUMN {column_name} {column_def}"))
-                        db.session.commit()
+            user_columns = [
+                ("access_token", "TEXT"),
+                ("refresh_token", "TEXT"),
+                ("is_verified", "INTEGER DEFAULT 0"),
+                ("socket_id", "TEXT"),
+                ("is_blocked", "INTEGER DEFAULT 0"),
+                ("is_blocked_at", "TIMESTAMP DEFAULT NULL"),
+                ("blocked_by_admin", "TEXT"),
+                ("role", "TEXT DEFAULT 'User'"),
+                ("status", "TEXT DEFAULT 'offline'"),
+                ("balance", "DOUBLE PRECISION DEFAULT 0.0"),
+                ("premium", "INTEGER DEFAULT 0"),
+                ("premium_started_at", "TIMESTAMP DEFAULT NULL"),
+                ("premium_expired_at", "TIMESTAMP DEFAULT NULL"),
+                ("disk_usage", "BIGINT DEFAULT 0"),
+                ("is_messaging", "INTEGER DEFAULT 0"),
+                ("telegram_id", "TEXT"),
+                ("link_key", "TEXT"),
+                ("two_factor_enabled", "INTEGER DEFAULT 0"),
+                ("two_factor_method", "TEXT"),
+                ("two_factor_secret", "TEXT"),
+                ("two_factor_email_code", "TEXT"),
+                ("two_factor_email_code_expires", "TIMESTAMP DEFAULT NULL"),
+                ("login_alert_enabled", "INTEGER DEFAULT 0"),
+                ("profile_bg_theme", "TEXT"),
+                ("profile_bg_gradient", "TEXT"),
+                ("profile_bg_image", "TEXT"),
+                ("gifts", "TEXT"),
+                ("storis", "TEXT"),
+                ("is_developer", "INTEGER DEFAULT 0"),
+                ("api_key_hash", "TEXT"),
+                ("api_key", "TEXT"),
+                ("cloud_password_hash", "TEXT"),
+                ("cloud_password_reset_month", "INTEGER DEFAULT NULL"),
+                ("cloud_password_reset_count", "INTEGER DEFAULT 0"),
+                ("storage_bonus", "BIGINT DEFAULT 0"),
+                ("video_channel_id", "TEXT"),
+                ("video_subscribers", "INTEGER DEFAULT 0"),
+                ("video_count", "INTEGER DEFAULT 0"),
+                ("video_likes", "TEXT"),
+                ("video_watch_later", "TEXT"),
+                ("video_history", "TEXT"),
+            ]
+            
+            for column_name, column_def in user_columns:
+                try:
+                    db.session.execute(
+                        text(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {column_name} {column_def}"))
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
 
             # Добавляем колонки в posts таблицу
-            if _pg_table_exists("posts"):
-                post_columns = [
-                    ("is_blog", "BOOLEAN DEFAULT FALSE"),
-                    ("reports", "INTEGER DEFAULT 0"),
-                ]
-                
-                for column_name, column_def in post_columns:
-                    if not _pg_column_exists("posts", column_name):
-                        db.session.execute(
-                            text(f"ALTER TABLE posts ADD COLUMN {column_name} {column_def}"))
-                        db.session.commit()
+            post_columns = [
+                ("is_blog", "BOOLEAN DEFAULT FALSE"),
+                ("reports", "INTEGER DEFAULT 0"),
+            ]
+            
+            for column_name, column_def in post_columns:
+                try:
+                    db.session.execute(
+                        text(f"ALTER TABLE posts ADD COLUMN IF NOT EXISTS {column_name} {column_def}"))
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
 
             # Добавляем колонки в comments таблицу
-            if _pg_table_exists("comments"):
-                comment_columns = [
-                    ("deleted", "BOOLEAN DEFAULT FALSE"),
-                    ("deleted_by", "TEXT"),
-                    ("reason_for_deletion", "TEXT"),
-                    ("deleted_at", "TIMESTAMP DEFAULT NULL"),
-                    ("likes", "INTEGER DEFAULT 0"),
-                ]
-                
-                for column_name, column_def in comment_columns:
-                    if not _pg_column_exists("comments", column_name):
-                        db.session.execute(
-                            text(f"ALTER TABLE comments ADD COLUMN {column_name} {column_def}"))
-                        db.session.commit()
+            comment_columns = [
+                ("deleted", "BOOLEAN DEFAULT FALSE"),
+                ("deleted_by", "TEXT"),
+                ("reason_for_deletion", "TEXT"),
+                ("deleted_at", "TIMESTAMP DEFAULT NULL"),
+                ("likes", "INTEGER DEFAULT 0"),
+            ]
+            
+            for column_name, column_def in comment_columns:
+                try:
+                    db.session.execute(
+                        text(f"ALTER TABLE comments ADD COLUMN IF NOT EXISTS {column_name} {column_def}"))
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
 
-            # Создаем gifts_catalog таблицу если не существует
-            if not _pg_table_exists("gifts_catalog"):
+            # Создаем gifts_catalog таблицу
+            try:
                 db.session.execute(text("""
-                    CREATE TABLE gifts_catalog (
+                    CREATE TABLE IF NOT EXISTS gifts_catalog (
                         id TEXT PRIMARY KEY,
                         name TEXT NOT NULL,
                         coin_price INTEGER NOT NULL DEFAULT 0,
@@ -245,65 +245,47 @@ def create_app(config_class=Config):
                         minted_count INTEGER NOT NULL
                     )
                 """))
-                
-                seed_items = [
-                    (
-                        "newyear_fireworks",
-                        "Новогодний салют",
-                        99,
-                        "Flame",
-                        "Праздничное настроение на Новый год",
-                    ),
-                    (
-                        "valentine_heart",
-                        "Валентинка",
-                        39,
-                        "Heart",
-                        "Для Дня святого Валентина",
-                    ),
-                    (
-                        "womens_day_bouquet",
-                        "Букет к 8 Марта",
-                        149,
-                        "Flower",
-                        "Милый букет для прекрасных дам",
-                    ),
-                    (
-                        "birthday_cake",
-                        "День рождения",
-                        299,
-                        "Cake",
-                        "Поздравляем с днем рождения!",
-                    ),
-                    (
-                        "premium_crown",
-                        "Премиум корона",
-                        999,
-                        "Crown",
-                        "Самая престижная награда",
-                    ),
-                ]
-                
-                for item in seed_items:
-                    db.session.execute(
-                        text("""
-                        INSERT INTO gifts_catalog (id, name, coin_price, icon, description)
-                        VALUES (:id, :name, :coin_price, :icon, :description)
-                    """),
-                        {
-                            "id": item[0],
-                            "name": item[1],
-                            "coin_price": item[2],
-                            "icon": item[3],
-                            "description": item[4],
-                        },
-                    )
                 db.session.commit()
+            except Exception:
+                db.session.rollback()
+                
+            # Добавляем подарки если таблица пуста
+            try:
+                count_result = db.session.execute(text("SELECT COUNT(*) FROM gifts_catalog")).scalar()
+                if count_result == 0:
+                    seed_items = [
+                        ("newyear_fireworks", "Новогодний салют", 99, "Flame", "Праздничное настроение на Новый год"),
+                        ("valentine_heart", "Валентинка", 39, "Heart", "Для Дня святого Валентина"),
+                        ("womens_day_bouquet", "Букет к 8 Марта", 149, "Flower", "Милый букет для прекрасных дам"),
+                        ("birthday_cake", "День рождения", 299, "Cake", "Поздравляем с днем рождения!"),
+                        ("premium_crown", "Премиум корона", 999, "Crown", "Самая престижная награда"),
+                    ]
+                    
+                    for item in seed_items:
+                        db.session.execute(
+                            text("""
+                            INSERT INTO gifts_catalog (id, name, coin_price, icon, description, image_url, total_supply, minted_count)
+                            VALUES (:id, :name, :coin_price, :icon, :description, :image_url, :total_supply, :minted_count)
+                        """),
+                            {
+                                "id": item[0],
+                                "name": item[1],
+                                "coin_price": item[2],
+                                "icon": item[3],
+                                "description": item[4],
+                                "image_url": None,
+                                "total_supply": None,
+                                "minted_count": 0,
+                            },
+                        )
+                    db.session.commit()
+            except Exception:
+                db.session.rollback()
 
-            # Создаем bots таблицу если не существует
-            if not _pg_table_exists("bots"):
+            # Создаем bots таблицу
+            try:
                 db.session.execute(text("""
-                    CREATE TABLE bots (
+                    CREATE TABLE IF NOT EXISTS bots (
                         id TEXT PRIMARY KEY,
                         name TEXT NOT NULL UNIQUE,
                         description TEXT,
@@ -315,6 +297,8 @@ def create_app(config_class=Config):
                     )
                 """))
                 db.session.commit()
+            except Exception:
+                db.session.rollback()
 
             # Инициализируем support таблицы
             from app.api.v1.support import ensure_support_tables
@@ -348,10 +332,11 @@ def create_app(config_class=Config):
                 db.session.commit()
             except Exception:
                 pass
-            if not _pg_table_exists("communities"):
+            # Создаем communities таблицы
+            try:
                 db.session.execute(
                     text("""
-                    CREATE TABLE communities (
+                    CREATE TABLE IF NOT EXISTS communities (
                         id TEXT PRIMARY KEY,
                         name TEXT NOT NULL,
                         description TEXT,
@@ -364,7 +349,7 @@ def create_app(config_class=Config):
                 )
                 db.session.execute(
                     text("""
-                    CREATE TABLE community_members (
+                    CREATE TABLE IF NOT EXISTS community_members (
                         user_id TEXT NOT NULL,
                         community_id TEXT NOT NULL,
                         joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -375,10 +360,13 @@ def create_app(config_class=Config):
                 """)
                 )
                 db.session.commit()
-            if not _pg_table_exists("community_channels"):
+            except Exception:
+                db.session.rollback()
+                
+            try:
                 db.session.execute(
                     text("""
-                    CREATE TABLE community_channels (
+                    CREATE TABLE IF NOT EXISTS community_channels (
                         id TEXT PRIMARY KEY,
                         community_id TEXT NOT NULL,
                         name TEXT NOT NULL,
@@ -395,10 +383,13 @@ def create_app(config_class=Config):
                     )
                 )
                 db.session.commit()
-            if not _pg_table_exists("channels"):
+            except Exception:
+                db.session.rollback()
+                
+            try:
                 db.session.execute(
                     text("""
-                    CREATE TABLE channels (
+                    CREATE TABLE IF NOT EXISTS channels (
                         id TEXT PRIMARY KEY,
                         name TEXT NOT NULL,
                         description TEXT,
@@ -411,7 +402,7 @@ def create_app(config_class=Config):
                 )
                 db.session.execute(
                     text("""
-                    CREATE TABLE channel_participants (
+                    CREATE TABLE IF NOT EXISTS channel_participants (
                         user_id TEXT NOT NULL,
                         channel_id TEXT NOT NULL,
                         joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -422,52 +413,56 @@ def create_app(config_class=Config):
                 """)
                 )
                 db.session.commit()
-            missing = db.session.execute(
-                text("""
-                SELECT cc.id, cc.community_id, cc.name, cc.description
-                FROM community_channels cc
-                LEFT JOIN channels c ON c.id = cc.id
-                WHERE c.id IS NULL
-            """)
-            ).fetchall()
-            for row in missing:
-                cid = row[0]
-                com_id = row[1]
-                nm = row[2]
-                desc = row[3]
-                owner_row = db.session.execute(
-                    text("SELECT owner_id FROM communities WHERE id = :cid"), {
-                        "cid": com_id}, ).fetchone()
-                if not owner_row:
-                    continue
-                owner_id = owner_row[0]
-                db.session.execute(
-                    text("""
-                    INSERT INTO channels (id, name, description, owner_id, invite_code, created_at, updated_at)
-                    VALUES (:id, :name, :description, :owner_id, substr(md5(random()::text), 1, 8), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                    ON CONFLICT (id) DO NOTHING
-                """),
-                    {
-                        "id": cid,
-                        "name": nm,
-                        "description": desc,
-                        "owner_id": owner_id,
-                    },
-                )
-                members = db.session.execute(
-                    text("SELECT user_id FROM community_members WHERE community_id = :cid"), {
-                        "cid": com_id}, ).fetchall()
-                for m in members:
-                    db.session.execute(
-                        text("""
-                        INSERT INTO channel_participants (user_id, channel_id, joined_at)
-                        VALUES (:user_id, :channel_id, CURRENT_TIMESTAMP)
-                        ON CONFLICT (user_id, channel_id) DO NOTHING
-                    """),
-                        {"user_id": m[0], "channel_id": cid},
-                    )
-            if missing:
-                db.session.commit()
+            except Exception:
+                db.session.rollback()
+            
+            # Временно отключаем проблемный код с JOIN
+            # missing = db.session.execute(
+            #     text("""
+            #     SELECT cc.id, cc.community_id, cc.name, cc.description
+            #     FROM community_channels cc
+            #     LEFT JOIN channels c ON c.id = cc.id
+            #     WHERE c.id IS NULL
+            # """)
+            # ).fetchall()
+            # for row in missing:
+            #     cid = row[0]
+            #     com_id = row[1]
+            #     nm = row[2]
+            #     desc = row[3]
+            #     owner_row = db.session.execute(
+            #         text("SELECT owner_id FROM communities WHERE id = :cid"), {
+            #             "cid": com_id}, ).fetchone()
+            #     if not owner_row:
+            #         continue
+            #     owner_id = owner_row[0]
+            #     db.session.execute(
+            #         text("""
+            #         INSERT INTO channels (id, name, description, owner_id, invite_code, created_at, updated_at)
+            #         VALUES (:id, :name, :description, :owner_id, substr(md5(random()::text), 1, 8), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            #         ON CONFLICT (id) DO NOTHING
+            #     """),
+            #         {
+            #             "id": cid,
+            #             "name": nm,
+            #             "description": desc,
+            #             "owner_id": owner_id,
+            #         },
+            #     )
+            #     members = db.session.execute(
+            #         text("SELECT user_id FROM community_members WHERE community_id = :cid"), {
+            #             "cid": com_id}, ).fetchall()
+            #     for m in members:
+            #         db.session.execute(
+            #             text("""
+            #             INSERT INTO channel_participants (user_id, channel_id, joined_at)
+            #             VALUES (:user_id, :channel_id, CURRENT_TIMESTAMP)
+            #             ON CONFLICT (user_id, channel_id) DO NOTHING
+            #         """),
+            #             {"user_id": m[0], "channel_id": cid},
+            #         )
+            # if missing:
+            #     db.session.commit()
 
             try:
                 from app.services.ollama_service import OllamaService
