@@ -676,9 +676,10 @@ export default function AdminSupportPage() {
 	}
 
 	useEffect(() => {
+		if (!roleAllowed) return
 		loadEscalations()
 		loadPostReports()
-	}, [])
+	}, [roleAllowed])
 
 	useEffect(() => {
 		if (user?.role === 'Admin') {

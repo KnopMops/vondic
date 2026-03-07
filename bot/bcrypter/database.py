@@ -1,30 +1,64 @@
 import logging
 import os
 import secrets
-import sqlite3
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
-BASE_DIR = os.path.dirname(os.path.dirname(
-    os.path.dirname(os.path.abspath(__file__))))
-DEFAULT_DB_PATH = os.path.join(BASE_DIR, "database.db")
+def _build_postgres_dsn() -> str:
+    explicit = os.environ.get("POSTGRES_URL") or os.environ.get("DATABASE_URL")
+    if explicit:
+        return explicit.replace("postgresql+psycopg2://", "postgresql://")
+    host = os.environ.get("POSTGRES_HOST")
+    if not host:
+        raise RuntimeError(
+            "PostgreSQL не настроен для bot. Установите POSTGRES_* или DATABASE_URL."
+        )
+    user = os.environ.get("POSTGRES_USER", "postgres")
+    password = os.environ.get("POSTGRES_PASSWORD", "")
+    port = os.environ.get("POSTGRES_PORT", "5432")
+    db = os.environ.get("POSTGRES_DB", "postgres")
+    auth = f"{user}@"
+    if password:
+        auth = f"{user}:{password}@"
+    return f"postgresql://{auth}{host}:{port}/{db}"
 
 
 class AuthRepository:
     def __init__(self, db_path=None):
-        self.db_path = db_path or DEFAULT_DB_PATH
+        self.db_path = db_path or _build_postgres_dsn()
         self._init_db()
 
     def _connect(self):
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
+        conn = psycopg2.connect(self.db_path, cursor_factory=RealDictCursor)
         return conn
 
     def _init_db(self):
         conn = self._connect()
         cursor = conn.cursor()
         cursor.execute(
-            "\n            CREATE TABLE IF NOT EXISTS users (\n                id TEXT PRIMARY KEY,\n                username TEXT UNIQUE NOT NULL,\n                email TEXT UNIQUE NOT NULL,\n                access_token TEXT,\n                refresh_token TEXT,\n                password_hash TEXT NOT NULL,\n                avatar_url TEXT DEFAULT NULL,\n                is_verified INTEGER DEFAULT 0,\n                socket_id TEXT,\n                is_blocked INTEGER DEFAULT 0,\n                is_blocked_at TIMESTAMP DEFAULT NULL,\n                role TEXT DEFAULT 'User',\n                status TEXT DEFAULT 'offline',\n                is_messaging INTEGER DEFAULT 0,\n                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n            );\n            "
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                username TEXT UNIQUE NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                access_token TEXT,
+                refresh_token TEXT,
+                password_hash TEXT NOT NULL,
+                avatar_url TEXT DEFAULT NULL,
+                is_verified INTEGER DEFAULT 0,
+                socket_id TEXT,
+                is_blocked INTEGER DEFAULT 0,
+                is_blocked_at TIMESTAMP DEFAULT NULL,
+                role TEXT DEFAULT 'User',
+                status TEXT DEFAULT 'offline',
+                is_messaging INTEGER DEFAULT 0,
+                premium INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """
         )
         conn.commit()
         conn.close()
@@ -33,7 +67,7 @@ class AuthRepository:
         conn = self._connect()
         cursor = conn.cursor()
         try:
-            cursor.execute("SELECT 1 FROM users WHERE id = ?", (user_id,))
+            cursor.execute("SELECT 1 FROM users WHERE id = %s", (user_id,))
             return cursor.fetchone() is not None
         finally:
             conn.close()
@@ -51,20 +85,28 @@ class AuthRepository:
         refresh_token = secrets.token_hex(32)
         try:
             cursor.execute(
-                "\n                INSERT INTO users (\n                    id, username, email, password_hash, is_verified, \n                    access_token, refresh_token, \n                    role, status, is_blocked, is_messaging, created_at, avatar_url\n                )\n                VALUES (?, ?, ?, ?, 1, ?, ?, 'User', 'offline', 0, 0, ?, ?)\n                ",
-                (user_id,
-                 username,
-                 email,
-                 password_hash,
-                 access_token,
-                 refresh_token,
-                 datetime.now().isoformat(),
-                 avatar_url,
-                 ),
+                """
+                INSERT INTO users (
+                    id, username, email, password_hash, is_verified,
+                    access_token, refresh_token,
+                    role, status, is_blocked, is_messaging, created_at, avatar_url
+                )
+                VALUES (%s, %s, %s, %s, 1, %s, %s, 'User', 'offline', 0, 0, %s, %s)
+                """,
+                (
+                    user_id,
+                    username,
+                    email,
+                    password_hash,
+                    access_token,
+                    refresh_token,
+                    datetime.now().isoformat(),
+                    avatar_url,
+                ),
             )
             conn.commit()
             return True
-        except sqlite3.IntegrityError:
+        except psycopg2.IntegrityError:
             return False
         finally:
             conn.close()
@@ -77,20 +119,30 @@ class AuthRepository:
         try:
             if avatar_url:
                 cursor.execute(
-                    "\n                UPDATE users\n                SET password_hash = ?, updated_at = ?, avatar_url = ?\n                WHERE id = ?\n            ",
-                    (password_hash,
-                     datetime.now().isoformat(),
+                    """
+                UPDATE users
+                SET password_hash = %s, updated_at = %s, avatar_url = %s
+                WHERE id = %s
+            """,
+                    (
+                        password_hash,
+                        datetime.now().isoformat(),
                         avatar_url,
-                        user_id),
+                        user_id,
+                    ),
                 )
             else:
                 cursor.execute(
-                    "\n                UPDATE users\n                SET password_hash = ?, updated_at = ?\n                WHERE id = ?\n            ",
+                    """
+                UPDATE users
+                SET password_hash = %s, updated_at = %s
+                WHERE id = %s
+            """,
                     (password_hash, datetime.now().isoformat(), user_id),
                 )
             conn.commit()
             return True
-        except sqlite3.Error:
+        except psycopg2.Error:
             return False
         finally:
             conn.close()
@@ -100,7 +152,7 @@ class AuthRepository:
         cursor = conn.cursor()
         try:
             cursor.execute(
-                "SELECT password_hash FROM users WHERE id = ?", (user_id,))
+                "SELECT password_hash FROM users WHERE id = %s", (user_id,))
             row = cursor.fetchone()
             return row["password_hash"] if row else None
         finally:
@@ -110,7 +162,7 @@ class AuthRepository:
         conn = self._connect()
         cursor = conn.cursor()
         try:
-            cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
+            cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
             row = cursor.fetchone()
             return dict(row) if row else None
         finally:
@@ -121,12 +173,12 @@ class AuthRepository:
         cursor = conn.cursor()
         try:
             cursor.execute(
-                "UPDATE users SET premium = ? WHERE id = ?", (
+                "UPDATE users SET premium = %s WHERE id = %s", (
                     premium_status, user_id)
             )
             conn.commit()
             return True
-        except sqlite3.Error:
+        except psycopg2.Error:
             return False
         finally:
             conn.close()

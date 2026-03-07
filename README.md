@@ -1,4 +1,5 @@
 # Vondic
+
 <div align="center">
   <img src="frontend/src/app/favicon.ico" width="96" height="96" alt="Vondic Botik" />
   <h3>Коммуникационная платформа с чатами, сообществами и WebRTC‑звонками</h3>
@@ -13,27 +14,29 @@
 ---
 
 ## ✨ О проекте
+
 Vondic — модульная экосистема с веб‑клиентом, бэкендом, WebRTC‑сигналингом, бот‑SDK и вспомогательными сервисами. Поддерживает личные чаты, группы, сообщества, голосовые каналы и расширяемую инфраструктуру.
 
 ---
 
 ## 🧩 Компоненты
 
-| Модуль | Назначение | Путь |
-|---|---|---|
-| Frontend | Next.js веб‑клиент | `frontend/` |
-| Backend | Flask API и доменная логика | `backend/` |
-| WebRTC | Сигналинг и звонки | `webrtc/` |
+| Модуль         | Назначение                     | Путь              |
+| -------------- | ------------------------------ | ----------------- |
+| Frontend       | Next.js веб‑клиент             | `frontend/`       |
+| Backend        | Flask API и доменная логика    | `backend/`        |
+| WebRTC         | Сигналинг и звонки             | `webrtc/`         |
 | Proxy Receiver | TCP‑прокси и защищённые каналы | `proxy_receiver/` |
-| Support API | RAG/поддержка | `support-api/` |
-| Video Checker | Асинхронные проверки | `video_checker/` |
-| Bot | Сервис бота | `bot/` |
-| Botik SDK | SDK для ботов | `botiksdk/` |
-| Extension | Расширение браузера | `extension/` |
+| Support API    | RAG/поддержка                  | `support-api/`    |
+| Video Checker  | Асинхронные проверки           | `video_checker/`  |
+| Bot            | Сервис бота                    | `bot/`            |
+| Botik SDK      | SDK для ботов                  | `botiksdk/`       |
+| Extension      | Расширение браузера            | `extension/`      |
 
 ---
 
 ## 🌈 Основные возможности
+
 - Личные сообщения, группы и сообщества
 - Текстовые и голосовые каналы
 - WebRTC‑звонки и демонстрация экрана
@@ -43,22 +46,10 @@ Vondic — модульная экосистема с веб‑клиентом,
 
 ---
 
-## 🧱 Архитектура
-```mermaid
-flowchart LR
-  FE[Frontend] -->|REST| BE[Backend]
-  FE -->|Socket.IO| RTC[WebRTC]
-  BE --> DB[(Database)]
-  RTC --> DB
-  FE -->|Bot API| SDK[Botik SDK]
-  BE --> PR[Proxy Receiver]
-```
-
----
-
 ## 🚀 Быстрый старт
 
 ### Frontend
+
 ```bash
 cd frontend
 bun install
@@ -66,6 +57,7 @@ bun run dev
 ```
 
 ### Backend
+
 ```bash
 cd backend
 python -m venv .venv
@@ -75,6 +67,7 @@ python -m app
 ```
 
 ### WebRTC
+
 ```bash
 cd webrtc
 python -m venv .venv
@@ -86,8 +79,10 @@ python main.py
 ---
 
 ## 🔐 Конфигурация
+
 Каждый модуль использует собственные `.env` или параметры запуска.
 Рекомендуется начать с:
+
 - `backend/.env.backend.example`
 - `webrtc/.env.webrtc.example`
 - `bot/.env.bot.example`
@@ -96,6 +91,7 @@ python main.py
 ---
 
 ## 🎨 Визуальные материалы
+
 <p>
   <img src="frontend/static/gifts/star.png" width="72" alt="Star" />
   <img src="frontend/static/gifts/crown.png" width="72" alt="Crown" />
@@ -105,6 +101,7 @@ python main.py
 ---
 
 ## 📦 Сборка
+
 ```bash
 cd frontend
 bun run build
@@ -113,9 +110,9 @@ bun run build
 ---
 
 ## 📌 Полезные ссылки
+
 - Web клиент: `frontend/`
 - API: `backend/`
 - WebRTC: `webrtc/`
 - Bot: `bot/`
 - Proxy Receiver: `proxy_receiver/`
-
