@@ -675,6 +675,8 @@ export default function AdminSupportPage() {
 		}
 	}
 
+	const roleAllowed = user?.role === 'Support' || user?.role === 'Admin'
+
 	useEffect(() => {
 		if (!roleAllowed) return
 		loadEscalations()
@@ -686,8 +688,6 @@ export default function AdminSupportPage() {
 			loadGifts()
 		}
 	}, [user?.role])
-
-	const roleAllowed = user?.role === 'Support' || user?.role === 'Admin'
 
 	// Hard guard: redirect away if not allowed
 	useEffect(() => {
