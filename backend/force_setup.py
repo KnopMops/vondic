@@ -1,13 +1,8 @@
-#!/usr/bin/env python3
-"""
-Принудительная настройка PostgreSQL без проверок
-"""
 
 import os
 import sys
 from pathlib import Path
 
-# Добавляем корневую директорию в PYTHONPATH
 BASE_DIR = Path(__file__).parent
 sys.path.insert(0, str(BASE_DIR))
 
@@ -16,23 +11,19 @@ from app.core.extensions import db
 from sqlalchemy import text
 
 def force_setup():
-    """Принудительно настраивает PostgreSQL"""
     print("🔧 Принудительная настройка PostgreSQL...")
-    
-    # Создаем приложение
+
     app = create_app()
-    
+
     with app.app_context():
         try:
-            # Создаем все таблицы через SQLAlchemy
+
             print("📋 Создаю таблицы через SQLAlchemy...")
             db.create_all()
             print("✅ SQLAlchemy таблицы созданы")
-            
-            # Теперь вручную добавляем колонки
+
             print("➕ Добавляю колонки...")
-            
-            # Users колонки
+
             user_columns = [
                 ("access_token", "TEXT"),
                 ("refresh_token", "TEXT"),
@@ -76,7 +67,7 @@ def force_setup():
                 ("video_watch_later", "TEXT"),
                 ("video_history", "TEXT"),
             ]
-            
+
             for column_name, column_def in user_columns:
                 try:
                     db.session.execute(text(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {column_name} {column_def}"))
@@ -84,8 +75,7 @@ def force_setup():
                 except Exception as e:
                     print(f"⚠️ Колонка users.{column_name}: {e}")
                     db.session.rollback()
-            
-            # Gifts таблица
+
             try:
                 db.session.execute(text("""
                     CREATE TABLE IF NOT EXISTS gifts_catalog (
@@ -100,8 +90,7 @@ def force_setup():
                     )
                 """))
                 print("✅ Таблица gifts_catalog создана")
-                
-                # Проверяем есть ли данные
+
                 count = db.session.execute(text("SELECT COUNT(*) FROM gifts_catalog")).scalar()
                 if count == 0:
                     gifts = [
@@ -111,14 +100,14 @@ def force_setup():
                         ("birthday_cake", "День рождения", 299, "Cake", "Поздравляем с днем рождения!"),
                         ("premium_crown", "Премиум корона", 999, "Crown", "Самая престижная награда"),
                     ]
-                    
+
                     for gift in gifts:
                         db.session.execute(text("""
                             INSERT INTO gifts_catalog (id, name, coin_price, icon, description, image_url, total_supply, minted_count)
                             VALUES (:id, :name, :coin_price, :icon, :description, :image_url, :total_supply, :minted_count)
                         """), {
                             "id": gift[0],
-                            "name": gift[1], 
+                            "name": gift[1],
                             "coin_price": gift[2],
                             "icon": gift[3],
                             "description": gift[4],
@@ -127,13 +116,12 @@ def force_setup():
                             "minted_count": 0
                         })
                     print("✅ Подарки добавлены")
-                
+
                 db.session.commit()
             except Exception as e:
                 print(f"⚠️ Gifts каталог: {e}")
                 db.session.rollback()
-            
-            # Communities таблицы
+
             try:
                 db.session.execute(text("""
                     CREATE TABLE IF NOT EXISTS communities (
@@ -189,10 +177,10 @@ def force_setup():
             except Exception as e:
                 print(f"⚠️ Communities: {e}")
                 db.session.rollback()
-            
+
             print("🎉 Настройка PostgreSQL завершена!")
             return True
-            
+
         except Exception as e:
             print(f"❌ Ошибка: {e}")
             db.session.rollback()

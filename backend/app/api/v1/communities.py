@@ -11,7 +11,6 @@ from flask import Blueprint, jsonify, request
 communities_bp = Blueprint("communities", __name__,
                            url_prefix="/api/v1/communities")
 
-
 @communities_bp.route("", methods=["POST"])
 @token_required
 def create_community(current_user):
@@ -21,13 +20,11 @@ def create_community(current_user):
         return jsonify({"error": err}), 400
     return jsonify(community_schema.dump(community)), 200
 
-
 @communities_bp.route("/my", methods=["POST"])
 @token_required
 def my_communities(current_user):
     items = CommunityService.get_user_communities(current_user.id)
     return jsonify(communities_schema.dump(items)), 200
-
 
 @communities_bp.route("/<community_id>", methods=["POST"])
 @token_required
@@ -39,7 +36,6 @@ def community_info(current_user, community_id):
             community.owner_id) != str(current_user.id):
         return jsonify({"error": "Forbidden"}), 403
     return jsonify(community_schema.dump(community)), 200
-
 
 @communities_bp.route("/join", methods=["POST"])
 @token_required
@@ -57,7 +53,6 @@ def join_community(current_user):
 
     return jsonify(community_schema.dump(community)), 200
 
-
 @communities_bp.route("/<community_id>/channels", methods=["POST"])
 @token_required
 def create_community_channel(current_user, community_id):
@@ -66,7 +61,6 @@ def create_community_channel(current_user, community_id):
     if err:
         return jsonify({"error": err}), 400
     return jsonify(community_channel_schema.dump(channel)), 200
-
 
 @communities_bp.route("/<community_id>/channels", methods=["GET"])
 @token_required

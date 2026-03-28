@@ -108,7 +108,7 @@ export default function ProfilePage() {
 						</div>
 
 						<footer className='text-xs text-gray-500 text-center py-4'>
-							© 2025 Vondic • Условия использования • Конфиденциальность •
+							© 2025 Вондик • Условия использования • Конфиденциальность •
 							Cookies
 						</footer>
 					</motion.div>

@@ -9,7 +9,6 @@ from flask import Blueprint, jsonify, request
 
 storis_bp = Blueprint("storis", __name__, url_prefix="/api/v1/storis")
 
-
 def parse_created_at(value):
     if not value:
         return None
@@ -23,7 +22,6 @@ def parse_created_at(value):
         return dt.replace(tzinfo=timezone.utc)
     except Exception:
         return None
-
 
 def normalize_storis(items):
     now = datetime.now(timezone.utc)
@@ -55,7 +53,6 @@ def normalize_storis(items):
         normalized.append(item)
     return normalized, changed
 
-
 @storis_bp.route("/friends", methods=["POST"])
 @token_required
 def friends_with_storis(current_user):
@@ -81,7 +78,6 @@ def friends_with_storis(current_user):
     if changed_any:
         db.session.commit()
     return jsonify(result), 200
-
 
 @storis_bp.route("/create", methods=["POST"])
 @token_required
@@ -113,7 +109,6 @@ def create_storis(current_user):
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
-
 @storis_bp.route("/delete", methods=["POST"])
 @token_required
 def delete_storis(current_user):
@@ -136,7 +131,6 @@ def delete_storis(current_user):
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
-
 @storis_bp.route("/user", methods=["POST"])
 @token_required
 def user_storis(current_user):
@@ -150,7 +144,6 @@ def user_storis(current_user):
         user.storis = items
         db.session.commit()
     return jsonify(items), 200
-
 
 @storis_bp.route("/react", methods=["POST"])
 @token_required

@@ -57,3 +57,11 @@ desktop/
 build/
 
 run.py
+
+*.crt
+*.key
+
+nginx/
+*.yaml
+prometheus.yml
+pgbouncer/

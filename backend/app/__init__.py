@@ -1,13 +1,24 @@
 import importlib
 import os
+import time
 
 from flasgger import Swagger
-from flask import Flask
+from flask import Flask, Response, request
+from prometheus_client import Counter, Gauge, Histogram, generate_latest
 from sqlalchemy import text
 
 from app.core.config import Config
 from app.core.extensions import cache, cors, db, ma, mail, migrate
 
+REQUEST_COUNT = Counter(
+    "http_requests_total", "Total HTTP requests", ["method", "endpoint", "status"]
+)
+REQUEST_LATENCY = Histogram(
+    "http_request_duration_seconds", "HTTP request latency", ["method", "endpoint"]
+)
+REQUEST_IN_PROGRESS = Gauge(
+    "http_requests_in_progress", "HTTP requests in progress", ["method", "endpoint"]
+)
 
 def _tag_for_rule(rule: str) -> str:
     parts = [p for p in rule.split("/") if p]
@@ -37,7 +48,6 @@ def _tag_for_rule(rule: str) -> str:
         "health": "Health",
     }
     return mapping.get(key, key.replace("-", " ").title())
-
 
 def _build_swagger_paths(app: Flask):
     paths = {}
@@ -72,7 +82,6 @@ def _build_swagger_paths(app: Flask):
                 entry[method.lower()]["security"] = [{"Bearer": []}]
     return paths
 
-
 def _build_allowed_origins() -> list[str]:
     defaults = [
         "https://vondic.knopusmedia.ru",
@@ -96,7 +105,6 @@ def _build_allowed_origins() -> list[str]:
             seen.add(origin)
     return merged
 
-
 def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
@@ -108,8 +116,10 @@ def create_app(config_class=Config):
     allowed_origins = _build_allowed_origins()
     cors.init_app(
         app,
-        resources={r"/api/(?!public/).*": {"origins": allowed_origins}},
+        resources={r"/.*": {"origins": allowed_origins}},
         supports_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+        allow_headers=["Content-Type", "Authorization"],
     )
 
     mail.init_app(app)
@@ -118,36 +128,145 @@ def create_app(config_class=Config):
 
     with app.app_context():
         if not os.environ.get("SKIP_DB_BOOTSTRAP"):
-            # Очищаем любые незавершенные транзакции
-            db.session.rollback()
-            
+<<<<<<< Updated upstream
             # PostgreSQL только
             def _pg_table_exists(table_name: str) -> bool:
-                # Временно всегда возвращаем False для создания таблиц
-                return False
+                row = db.session.execute(
+                    text("SELECT to_regclass(:name)"),
+                    {"name": f"public.{table_name}"},
+                ).fetchone()
+                return bool(row and row[0])
 
             def _pg_column_exists(table_name: str, column_name: str) -> bool:
-                return False
+                result = db.session.execute(text("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name = :table_name AND column_name = :column_name
+                """), {"table_name": table_name, "column_name": column_name})
+                return bool(result.fetchone())
+=======
 
-            # Добавляем колонки в messages таблицу
+            db.session.rollback()
+
+            def _pg_table_exists(table_name: str) -> bool:
+                from sqlalchemy import inspect
+                return inspect(db.engine).has_table(table_name)
+
+            def _pg_column_exists(table_name: str, column_name: str) -> bool:
+                from sqlalchemy import inspect
+                if not inspect(db.engine).has_table(table_name):
+                    return False
+                columns = [col['name'] for col in db.engine.dialect.get_columns(db.engine.connect(), table_name)]
+                return column_name in columns
+>>>>>>> Stashed changes
+
             if _pg_table_exists("messages"):
                 message_columns = [
                     ("attachments", "JSON"),
                     ("pinned_by", "TEXT"),
-                    ("reactions", "TEXT"),
+                    ("reactions", "JSON"),
+                    ("read_by", "JSON DEFAULT '[]'::json"),
+                    ("reply_to_id", "TEXT"),
+                    ("forwarded_from_id", "TEXT"),
+                    ("is_edited", "INTEGER DEFAULT 0"),
+                    ("edit_history", "JSON"),
+                    ("channel_id", "TEXT"),
+                    ("updated_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
                     ("is_read", "INTEGER DEFAULT 0"),
                     ("is_deleted", "INTEGER DEFAULT 0"),
                 ]
-                
-                for column_name, column_def in message_columns:
-                    try:
-                        db.session.execute(
-                            text(f"ALTER TABLE messages ADD COLUMN IF NOT EXISTS {column_name} {column_def}"))
-                        db.session.commit()
-                    except Exception:
-                        db.session.rollback()
 
+                for column_name, column_def in message_columns:
+                    if not _pg_column_exists("messages", column_name):
+                        db.session.execute(
+                            text(f"ALTER TABLE messages ADD COLUMN {column_name} {column_def}"))
+                        db.session.commit()
+
+<<<<<<< Updated upstream
             # Добавляем колонки в users таблицу
+            if _pg_table_exists("users"):
+                user_columns = [
+                    ("access_token", "TEXT"),
+                    ("refresh_token", "TEXT"),
+                    ("is_verified", "INTEGER DEFAULT 0"),
+                    ("socket_id", "TEXT"),
+                    ("is_blocked", "INTEGER DEFAULT 0"),
+                    ("is_blocked_at", "TIMESTAMP DEFAULT NULL"),
+                    ("blocked_by_admin", "TEXT"),
+                    ("role", "TEXT DEFAULT 'User'"),
+                    ("status", "TEXT DEFAULT 'offline'"),
+                    ("balance", "DOUBLE PRECISION DEFAULT 0.0"),
+                    ("premium", "INTEGER DEFAULT 0"),
+                    ("premium_started_at", "TIMESTAMP DEFAULT NULL"),
+                    ("premium_expired_at", "TIMESTAMP DEFAULT NULL"),
+                    ("disk_usage", "BIGINT DEFAULT 0"),
+                    ("is_messaging", "INTEGER DEFAULT 0"),
+                    ("telegram_id", "TEXT"),
+                    ("link_key", "TEXT"),
+                    ("two_factor_enabled", "INTEGER DEFAULT 0"),
+                    ("two_factor_method", "TEXT"),
+                    ("two_factor_secret", "TEXT"),
+                    ("two_factor_email_code", "TEXT"),
+                    ("two_factor_email_code_expires", "TIMESTAMP DEFAULT NULL"),
+                    ("login_alert_enabled", "INTEGER DEFAULT 0"),
+                    ("profile_bg_theme", "TEXT"),
+                    ("profile_bg_gradient", "TEXT"),
+                    ("profile_bg_image", "TEXT"),
+                    ("gifts", "TEXT"),
+                    ("storis", "TEXT"),
+                    ("is_developer", "INTEGER DEFAULT 0"),
+                    ("api_key_hash", "TEXT"),
+                    ("api_key", "TEXT"),
+                    ("cloud_password_hash", "TEXT"),
+                    ("cloud_password_reset_month", "INTEGER DEFAULT NULL"),
+                    ("cloud_password_reset_count", "INTEGER DEFAULT 0"),
+                    ("storage_bonus", "BIGINT DEFAULT 0"),
+                    ("video_channel_id", "TEXT"),
+                    ("video_subscribers", "INTEGER DEFAULT 0"),
+                    ("video_count", "INTEGER DEFAULT 0"),
+                    ("video_likes", "TEXT"),
+                    ("video_watch_later", "TEXT"),
+                    ("video_history", "TEXT"),
+                ]
+                
+                for column_name, column_def in user_columns:
+                    if not _pg_column_exists("users", column_name):
+                        db.session.execute(
+                            text(f"ALTER TABLE users ADD COLUMN {column_name} {column_def}"))
+                        db.session.commit()
+
+            # Добавляем колонки в posts таблицу
+            if _pg_table_exists("posts"):
+                post_columns = [
+                    ("is_blog", "BOOLEAN DEFAULT FALSE"),
+                    ("reports", "INTEGER DEFAULT 0"),
+                ]
+                
+                for column_name, column_def in post_columns:
+                    if not _pg_column_exists("posts", column_name):
+                        db.session.execute(
+                            text(f"ALTER TABLE posts ADD COLUMN {column_name} {column_def}"))
+                        db.session.commit()
+
+            # Добавляем колонки в comments таблицу
+            if _pg_table_exists("comments"):
+                comment_columns = [
+                    ("deleted", "BOOLEAN DEFAULT FALSE"),
+                    ("deleted_by", "TEXT"),
+                    ("reason_for_deletion", "TEXT"),
+                    ("deleted_at", "TIMESTAMP DEFAULT NULL"),
+                    ("likes", "INTEGER DEFAULT 0"),
+                ]
+                
+                for column_name, column_def in comment_columns:
+                    if not _pg_column_exists("comments", column_name):
+                        db.session.execute(
+                            text(f"ALTER TABLE comments ADD COLUMN {column_name} {column_def}"))
+                        db.session.commit()
+
+            # Создаем gifts_catalog таблицу если не существует
+            if not _pg_table_exists("gifts_catalog"):
+=======
             user_columns = [
                 ("access_token", "TEXT"),
                 ("refresh_token", "TEXT"),
@@ -177,6 +296,7 @@ def create_app(config_class=Config):
                 ("profile_bg_image", "TEXT"),
                 ("gifts", "TEXT"),
                 ("storis", "TEXT"),
+                ("pinned_chats", "JSON DEFAULT '[]'::json"),
                 ("is_developer", "INTEGER DEFAULT 0"),
                 ("api_key_hash", "TEXT"),
                 ("api_key", "TEXT"),
@@ -191,7 +311,7 @@ def create_app(config_class=Config):
                 ("video_watch_later", "TEXT"),
                 ("video_history", "TEXT"),
             ]
-            
+
             for column_name, column_def in user_columns:
                 try:
                     db.session.execute(
@@ -200,12 +320,11 @@ def create_app(config_class=Config):
                 except Exception:
                     db.session.rollback()
 
-            # Добавляем колонки в posts таблицу
             post_columns = [
                 ("is_blog", "BOOLEAN DEFAULT FALSE"),
                 ("reports", "INTEGER DEFAULT 0"),
             ]
-            
+
             for column_name, column_def in post_columns:
                 try:
                     db.session.execute(
@@ -214,7 +333,6 @@ def create_app(config_class=Config):
                 except Exception:
                     db.session.rollback()
 
-            # Добавляем колонки в comments таблицу
             comment_columns = [
                 ("deleted", "BOOLEAN DEFAULT FALSE"),
                 ("deleted_by", "TEXT"),
@@ -222,7 +340,7 @@ def create_app(config_class=Config):
                 ("deleted_at", "TIMESTAMP DEFAULT NULL"),
                 ("likes", "INTEGER DEFAULT 0"),
             ]
-            
+
             for column_name, column_def in comment_columns:
                 try:
                     db.session.execute(
@@ -231,10 +349,10 @@ def create_app(config_class=Config):
                 except Exception:
                     db.session.rollback()
 
-            # Создаем gifts_catalog таблицу
             try:
+>>>>>>> Stashed changes
                 db.session.execute(text("""
-                    CREATE TABLE IF NOT EXISTS gifts_catalog (
+                    CREATE TABLE gifts_catalog (
                         id TEXT PRIMARY KEY,
                         name TEXT NOT NULL,
                         coin_price INTEGER NOT NULL DEFAULT 0,
@@ -245,11 +363,69 @@ def create_app(config_class=Config):
                         minted_count INTEGER NOT NULL
                     )
                 """))
+<<<<<<< Updated upstream
+                
+                seed_items = [
+                    (
+                        "newyear_fireworks",
+                        "Новогодний салют",
+                        99,
+                        "Flame",
+                        "Праздничное настроение на Новый год",
+                    ),
+                    (
+                        "valentine_heart",
+                        "Валентинка",
+                        39,
+                        "Heart",
+                        "Для Дня святого Валентина",
+                    ),
+                    (
+                        "womens_day_bouquet",
+                        "Букет к 8 Марта",
+                        149,
+                        "Flower",
+                        "Милый букет для прекрасных дам",
+                    ),
+                    (
+                        "birthday_cake",
+                        "День рождения",
+                        299,
+                        "Cake",
+                        "Поздравляем с днем рождения!",
+                    ),
+                    (
+                        "premium_crown",
+                        "Премиум корона",
+                        999,
+                        "Crown",
+                        "Самая престижная награда",
+                    ),
+                ]
+                
+                for item in seed_items:
+                    db.session.execute(
+                        text("""
+                        INSERT INTO gifts_catalog (id, name, coin_price, icon, description)
+                        VALUES (:id, :name, :coin_price, :icon, :description)
+                    """),
+                        {
+                            "id": item[0],
+                            "name": item[1],
+                            "coin_price": item[2],
+                            "icon": item[3],
+                            "description": item[4],
+                        },
+                    )
+                db.session.commit()
+
+            # Создаем bots таблицу если не существует
+            if not _pg_table_exists("bots"):
+=======
                 db.session.commit()
             except Exception:
                 db.session.rollback()
-                
-            # Добавляем подарки если таблица пуста
+
             try:
                 count_result = db.session.execute(text("SELECT COUNT(*) FROM gifts_catalog")).scalar()
                 if count_result == 0:
@@ -260,7 +436,7 @@ def create_app(config_class=Config):
                         ("birthday_cake", "День рождения", 299, "Cake", "Поздравляем с днем рождения!"),
                         ("premium_crown", "Премиум корона", 999, "Crown", "Самая престижная награда"),
                     ]
-                    
+
                     for item in seed_items:
                         db.session.execute(
                             text("""
@@ -282,10 +458,10 @@ def create_app(config_class=Config):
             except Exception:
                 db.session.rollback()
 
-            # Создаем bots таблицу
             try:
+>>>>>>> Stashed changes
                 db.session.execute(text("""
-                    CREATE TABLE IF NOT EXISTS bots (
+                    CREATE TABLE bots (
                         id TEXT PRIMARY KEY,
                         name TEXT NOT NULL UNIQUE,
                         description TEXT,
@@ -297,14 +473,10 @@ def create_app(config_class=Config):
                     )
                 """))
                 db.session.commit()
-            except Exception:
-                db.session.rollback()
 
-            # Инициализируем support таблицы
             from app.api.v1.support import ensure_support_tables
             ensure_support_tables()
 
-            # PostgreSQL миграции (остальной код)
             try:
                 db.session.execute(
                     text(
@@ -332,11 +504,21 @@ def create_app(config_class=Config):
                 db.session.commit()
             except Exception:
                 pass
-            # Создаем communities таблицы
+<<<<<<< Updated upstream
+            if not _pg_table_exists("communities"):
+=======
             try:
                 db.session.execute(
+                    text("ALTER TABLE bots ADD COLUMN IF NOT EXISTS is_verified INTEGER DEFAULT 0"))
+                db.session.commit()
+            except Exception:
+                pass
+
+            try:
+>>>>>>> Stashed changes
+                db.session.execute(
                     text("""
-                    CREATE TABLE IF NOT EXISTS communities (
+                    CREATE TABLE communities (
                         id TEXT PRIMARY KEY,
                         name TEXT NOT NULL,
                         description TEXT,
@@ -349,7 +531,7 @@ def create_app(config_class=Config):
                 )
                 db.session.execute(
                     text("""
-                    CREATE TABLE IF NOT EXISTS community_members (
+                    CREATE TABLE community_members (
                         user_id TEXT NOT NULL,
                         community_id TEXT NOT NULL,
                         joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -360,13 +542,17 @@ def create_app(config_class=Config):
                 """)
                 )
                 db.session.commit()
+<<<<<<< Updated upstream
+            if not _pg_table_exists("community_channels"):
+=======
             except Exception:
                 db.session.rollback()
-                
+
             try:
+>>>>>>> Stashed changes
                 db.session.execute(
                     text("""
-                    CREATE TABLE IF NOT EXISTS community_channels (
+                    CREATE TABLE community_channels (
                         id TEXT PRIMARY KEY,
                         community_id TEXT NOT NULL,
                         name TEXT NOT NULL,
@@ -383,13 +569,17 @@ def create_app(config_class=Config):
                     )
                 )
                 db.session.commit()
+<<<<<<< Updated upstream
+            if not _pg_table_exists("channels"):
+=======
             except Exception:
                 db.session.rollback()
-                
+
             try:
+>>>>>>> Stashed changes
                 db.session.execute(
                     text("""
-                    CREATE TABLE IF NOT EXISTS channels (
+                    CREATE TABLE channels (
                         id TEXT PRIMARY KEY,
                         name TEXT NOT NULL,
                         description TEXT,
@@ -402,7 +592,7 @@ def create_app(config_class=Config):
                 )
                 db.session.execute(
                     text("""
-                    CREATE TABLE IF NOT EXISTS channel_participants (
+                    CREATE TABLE channel_participants (
                         user_id TEXT NOT NULL,
                         channel_id TEXT NOT NULL,
                         joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -413,56 +603,57 @@ def create_app(config_class=Config):
                 """)
                 )
                 db.session.commit()
+<<<<<<< Updated upstream
+            missing = db.session.execute(
+                text("""
+                SELECT cc.id, cc.community_id, cc.name, cc.description
+                FROM community_channels cc
+                LEFT JOIN channels c ON c.id = cc.id
+                WHERE c.id IS NULL
+            """)
+            ).fetchall()
+            for row in missing:
+                cid = row[0]
+                com_id = row[1]
+                nm = row[2]
+                desc = row[3]
+                owner_row = db.session.execute(
+                    text("SELECT owner_id FROM communities WHERE id = :cid"), {
+                        "cid": com_id}, ).fetchone()
+                if not owner_row:
+                    continue
+                owner_id = owner_row[0]
+                db.session.execute(
+                    text("""
+                    INSERT INTO channels (id, name, description, owner_id, invite_code, created_at, updated_at)
+                    VALUES (:id, :name, :description, :owner_id, substr(md5(random()::text), 1, 8), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    ON CONFLICT (id) DO NOTHING
+                """),
+                    {
+                        "id": cid,
+                        "name": nm,
+                        "description": desc,
+                        "owner_id": owner_id,
+                    },
+                )
+                members = db.session.execute(
+                    text("SELECT user_id FROM community_members WHERE community_id = :cid"), {
+                        "cid": com_id}, ).fetchall()
+                for m in members:
+                    db.session.execute(
+                        text("""
+                        INSERT INTO channel_participants (user_id, channel_id, joined_at)
+                        VALUES (:user_id, :channel_id, CURRENT_TIMESTAMP)
+                        ON CONFLICT (user_id, channel_id) DO NOTHING
+                    """),
+                        {"user_id": m[0], "channel_id": cid},
+                    )
+            if missing:
+                db.session.commit()
+=======
             except Exception:
                 db.session.rollback()
-            
-            # Временно отключаем проблемный код с JOIN
-            # missing = db.session.execute(
-            #     text("""
-            #     SELECT cc.id, cc.community_id, cc.name, cc.description
-            #     FROM community_channels cc
-            #     LEFT JOIN channels c ON c.id = cc.id
-            #     WHERE c.id IS NULL
-            # """)
-            # ).fetchall()
-            # for row in missing:
-            #     cid = row[0]
-            #     com_id = row[1]
-            #     nm = row[2]
-            #     desc = row[3]
-            #     owner_row = db.session.execute(
-            #         text("SELECT owner_id FROM communities WHERE id = :cid"), {
-            #             "cid": com_id}, ).fetchone()
-            #     if not owner_row:
-            #         continue
-            #     owner_id = owner_row[0]
-            #     db.session.execute(
-            #         text("""
-            #         INSERT INTO channels (id, name, description, owner_id, invite_code, created_at, updated_at)
-            #         VALUES (:id, :name, :description, :owner_id, substr(md5(random()::text), 1, 8), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-            #         ON CONFLICT (id) DO NOTHING
-            #     """),
-            #         {
-            #             "id": cid,
-            #             "name": nm,
-            #             "description": desc,
-            #             "owner_id": owner_id,
-            #         },
-            #     )
-            #     members = db.session.execute(
-            #         text("SELECT user_id FROM community_members WHERE community_id = :cid"), {
-            #             "cid": com_id}, ).fetchall()
-            #     for m in members:
-            #         db.session.execute(
-            #             text("""
-            #             INSERT INTO channel_participants (user_id, channel_id, joined_at)
-            #             VALUES (:user_id, :channel_id, CURRENT_TIMESTAMP)
-            #             ON CONFLICT (user_id, channel_id) DO NOTHING
-            #         """),
-            #             {"user_id": m[0], "channel_id": cid},
-            #         )
-            # if missing:
-            #     db.session.commit()
+>>>>>>> Stashed changes
 
             try:
                 from app.services.ollama_service import OllamaService
@@ -482,9 +673,10 @@ def create_app(config_class=Config):
     from app.api.v1.channels import channels_bp
     from app.api.v1.comments import comments_bp
     from app.api.v1.communities import communities_bp
+    from app.api.v1.direct_messages import dm_bp
     from app.api.v1.friends import friends_bp
-    from app.api.v1.gifts import gifts_bp
     from app.api.v1.groups import groups_bp
+    from app.api.v1.messages import messages_bp
     from app.api.v1.payments import payments_bp
     from app.api.v1.posts import posts_bp
     from app.api.v1.search import search_bp
@@ -506,9 +698,10 @@ def create_app(config_class=Config):
     app.register_blueprint(channels_bp)
     app.register_blueprint(comments_bp)
     app.register_blueprint(communities_bp)
+    app.register_blueprint(dm_bp)
     app.register_blueprint(friends_bp)
-    app.register_blueprint(gifts_bp)
     app.register_blueprint(groups_bp)
+    app.register_blueprint(messages_bp)
     app.register_blueprint(payments_bp)
     app.register_blueprint(posts_bp)
     app.register_blueprint(search_bp)
@@ -549,5 +742,79 @@ def create_app(config_class=Config):
     def after_request(response):
         response.headers.add('Access-Control-Expose-Headers', 'X-Total-Count')
         return response
+
+    @app.before_request
+    def before_request_metrics():
+        endpoint = request.endpoint or "unknown"
+        REQUEST_IN_PROGRESS.labels(method=request.method, endpoint=endpoint).inc()
+        request.start_time = time.time()
+
+    @app.after_request
+    def after_request_metrics(response):
+        endpoint = request.endpoint or "unknown"
+        status = response.status_code
+        REQUEST_COUNT.labels(method=request.method, endpoint=endpoint, status=status).inc()
+        REQUEST_IN_PROGRESS.labels(method=request.method, endpoint=endpoint).dec()
+        if hasattr(request, 'start_time') and request.start_time:
+            latency = time.time() - request.start_time
+            REQUEST_LATENCY.labels(method=request.method, endpoint=endpoint).observe(latency)
+        return response
+
+    from flask import send_from_directory, request, jsonify
+
+    @app.route('/static/<path:filename>')
+    def serve_static(filename):
+        """
+        Serve static files with optional authentication.
+        
+        Access is allowed if:
+        1. Request comes from internal Docker network (172.x.x.x or 192.168.x.x)
+        2. Request has valid access_token in Authorization header or query param
+        3. Request has valid api_key in X-API-Key header or query param
+        4. Request is from frontend origin (configured in CORS_ALLOWED_ORIGINS)
+        """
+        # Check if request is from internal network
+        remote_addr = request.remote_addr or ""
+        if remote_addr.startswith('172.') or remote_addr.startswith('192.168.') or remote_addr.startswith('10.'):
+            static_folder = os.path.join(os.path.dirname(__file__), 'static')
+            return send_from_directory(static_folder, filename)
+        
+        # Check for access_token
+        token = request.args.get("access_token") or request.headers.get("Authorization", "").replace("Bearer ", "")
+        if token:
+            try:
+                from app.services.auth_service import AuthService
+                user, error = AuthService.get_user_by_token(token)
+                if user:
+                    static_folder = os.path.join(os.path.dirname(__file__), 'static')
+                    return send_from_directory(static_folder, filename)
+            except Exception:
+                pass
+        
+        # Check for api_key
+        api_key = request.args.get("api_key") or request.headers.get("X-API-Key")
+        if api_key:
+            try:
+                from app.services.user_service import UserService
+                user = UserService.get_user_by_api_key(api_key)
+                if user:
+                    static_folder = os.path.join(os.path.dirname(__file__), 'static')
+                    return send_from_directory(static_folder, filename)
+            except Exception:
+                pass
+        
+        # Check for frontend origin
+        origin = request.headers.get("Origin", "")
+        allowed_origins = _build_allowed_origins()
+        if origin in allowed_origins:
+            static_folder = os.path.join(os.path.dirname(__file__), 'static')
+            return send_from_directory(static_folder, filename)
+        
+        # Access denied
+        return jsonify({"error": "Unauthorized access to static resource"}), 401
+
+    @app.route("/metrics")
+    def metrics():
+        return Response(generate_latest(), mimetype="text/plain; charset=utf-8")
 
     return app

@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import requests
 
@@ -10,6 +10,8 @@ from botiksdk.exceptions import (
     NotFoundError,
     UnauthorizedError,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class PublicAPIClient:
@@ -31,7 +33,6 @@ class PublicAPIClient:
         json_body: Optional[Dict[str, Any]] = None,
     ):
         url = f"{self.base_url}{path}"
-        logger = logging.getLogger(__name__)
         headers: Dict[str, str] = {"Content-Type": "application/json"}
         if access_token:
             headers["Authorization"] = f"Bearer {access_token}"
@@ -146,11 +147,72 @@ class PublicAPIClient:
             bot_id: str,
             bot_token: str,
             chat_id: str,
-            text: str):
+            text: str,
+            parse_mode: Optional[str] = None,
+            reply_markup: Optional[Dict[str, Any]] = None,
+    ):
+        body = {"chat_id": chat_id, "text": text}
+        if parse_mode:
+            body["parse_mode"] = parse_mode
+        if reply_markup:
+            body["reply_markup"] = reply_markup
         return self._request(
             "POST",
             f"/api/public/v1/bots/{bot_id}/send",
-            json_body={"chat_id": chat_id, "text": text},
+            json_body=body,
+            bot_token=bot_token,
+        )
+
+    def answer_callback_query(
+        self,
+        bot_id: str,
+        bot_token: str,
+        callback_query_id: str,
+        text: Optional[str] = None,
+        show_alert: bool = False,
+    ):
+        body = {
+            "callback_query_id": callback_query_id,
+            "show_alert": show_alert,
+        }
+        if text:
+            body["text"] = text
+        return self._request(
+            "POST",
+            f"/api/public/v1/bots/{bot_id}/answerCallbackQuery",
+            json_body=body,
+            bot_token=bot_token,
+        )
+
+    def get_user_profile_photos(
+        self,
+        bot_id: str,
+        bot_token: str,
+        user_id: str,
+        offset: int = 0,
+        limit: int = 1,
+    ):
+        return self._request(
+            "GET",
+            f"/api/public/v1/bots/{bot_id}/getUserProfilePhotos",
+            params={
+                "user_id": user_id,
+                "offset": offset,
+                "limit": limit,
+            },
+            bot_token=bot_token,
+        )
+
+    def get_file(
+        self,
+        bot_id: str,
+        bot_token: str,
+        file_id: str,
+    ):
+        return self._request(
+            "GET",
+            f"/api/public/v1/bots/{bot_id}/getFile",
+            params={"file_id": file_id},
             bot_token=bot_token,
         )
 

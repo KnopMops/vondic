@@ -16,7 +16,6 @@ from .crypto import (
 )
 from .tui import tui_loop
 
-
 async def relay_stream(
     reader: asyncio.StreamReader,
     writer: asyncio.StreamWriter,
@@ -36,7 +35,6 @@ async def relay_stream(
         writer.write(data)
         await writer.drain()
 
-
 async def relay_echo(
     reader: asyncio.StreamReader,
     writer: asyncio.StreamWriter,
@@ -52,7 +50,6 @@ async def relay_echo(
             stats.bytes_out += len(data)
         writer.write(data)
         await writer.drain()
-
 
 async def read_http_request(
     reader: asyncio.StreamReader,
@@ -71,7 +68,6 @@ async def read_http_request(
     header_block, rest = data.split(b"\r\n\r\n", 1)
     return header_block, rest
 
-
 def parse_http_headers(
         header_block: bytes) -> Tuple[str, list[Tuple[str, str]]]:
     text = header_block.decode("iso-8859-1")
@@ -87,10 +83,8 @@ def parse_http_headers(
         headers.append((name.strip(), value.lstrip()))
     return request_line, headers
 
-
 def headers_to_dict(headers: list[Tuple[str, str]]) -> dict[str, str]:
     return {name.lower(): value for name, value in headers}
-
 
 def filter_headers(
     headers: list[Tuple[str, str]],
@@ -103,7 +97,6 @@ def filter_headers(
         filtered.append((name, value))
     return filtered
 
-
 def extract_api_key(headers: list[Tuple[str, str]]) -> Optional[str]:
     for name, value in headers:
         if name.lower() == "x-proxy-api-key":
@@ -113,7 +106,6 @@ def extract_api_key(headers: list[Tuple[str, str]]) -> Optional[str]:
             if len(parts) == 2 and parts[0].lower() == "apikey":
                 return parts[1].strip()
     return None
-
 
 async def send_http_response(
     writer: asyncio.StreamWriter,
@@ -130,7 +122,6 @@ async def send_http_response(
     ]
     writer.write("\r\n".join(headers).encode("iso-8859-1") + body)
     await writer.drain()
-
 
 async def handle_http_proxy(
     reader: asyncio.StreamReader,
@@ -248,7 +239,6 @@ async def handle_http_proxy(
                          config.chunk_size, stats, "out"),
         )
 
-
 async def open_channel_connection(
     config: ProxyConfig,
     stats: ProxyStats,
@@ -259,7 +249,6 @@ async def open_channel_connection(
     await send_api_key(writer, config.public_key)
     aesgcm = await perform_client_handshake(reader, writer, config.master_key or b"")
     return reader, writer, aesgcm
-
 
 async def relay_plain_to_channel(
     reader: asyncio.StreamReader,
@@ -274,7 +263,6 @@ async def relay_plain_to_channel(
             break
         await encrypt_and_send(writer, aesgcm, data, stats)
 
-
 async def relay_channel_to_plain(
     reader: asyncio.StreamReader,
     writer: asyncio.StreamWriter,
@@ -288,7 +276,6 @@ async def relay_channel_to_plain(
             break
         writer.write(data)
         await writer.drain()
-
 
 async def handle_active_connection(
     reader: asyncio.StreamReader,
@@ -342,7 +329,6 @@ async def handle_active_connection(
             break
         if config.standalone_mode == "echo":
             await encrypt_and_send(writer, aesgcm, plaintext, stats)
-
 
 async def handle_passive_connection(
     reader: asyncio.StreamReader,
@@ -402,7 +388,6 @@ async def handle_passive_connection(
         async with stats.lock:
             stats.bytes_in += len(data)
 
-
 async def handle_client(
     reader: asyncio.StreamReader,
     writer: asyncio.StreamWriter,
@@ -431,7 +416,6 @@ async def handle_client(
         except Exception:
             pass
 
-
 async def run_server(config: ProxyConfig, stats: ProxyStats) -> None:
     server = await asyncio.start_server(
         lambda r, w: handle_client(r, w, config, stats),
@@ -446,7 +430,6 @@ async def run_server(config: ProxyConfig, stats: ProxyStats) -> None:
         else:
             await server.serve_forever()
 
-
 def main() -> None:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
@@ -454,7 +437,6 @@ def main() -> None:
     config = build_config()
     stats = ProxyStats()
     asyncio.run(run_server(config, stats))
-
 
 if __name__ == "__main__":
     main()

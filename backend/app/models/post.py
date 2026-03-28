@@ -5,7 +5,6 @@ from sqlalchemy import BOOLEAN, INTEGER, JSON, TEXT, TIMESTAMP
 
 from app.core.extensions import db
 
-
 class Post(db.Model):
     __tablename__ = "posts"
     id = db.Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))

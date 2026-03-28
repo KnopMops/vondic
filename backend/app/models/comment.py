@@ -5,7 +5,6 @@ from sqlalchemy import BOOLEAN, INTEGER, TEXT, TIMESTAMP
 
 from app.core.extensions import db
 
-
 class Comment(db.Model):
     __tablename__ = "comments"
     id = db.Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))

@@ -1,6 +1,7 @@
 import { decodeJwt } from 'jose'
 import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
+import { getBackendUrl } from './url-fallback'
 
 const ACCESS_TOKEN_KEY = 'access_token'
 const REFRESH_TOKEN_KEY = 'refresh_token'
@@ -97,9 +98,7 @@ export async function refreshAccessToken(
 	refreshToken: string,
 ): Promise<{ access_token: string; refresh_token: string } | null> {
 	try {
-		const backendUrl =
-			process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
-		const response = await fetch(`${backendUrl}/api/v1/auth/refresh`, {
+		const response = await fetch(`${getBackendUrl()}/api/v1/auth/refresh`, {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',

@@ -9,7 +9,6 @@ from sqlalchemy import text
 
 gifts_bp = Blueprint("gifts", __name__, url_prefix="/api/v1/gifts")
 
-
 @gifts_bp.route("/", methods=["GET"])
 def list_gifts():
     try:
@@ -46,7 +45,6 @@ def list_gifts():
             return jsonify({"error": msg}), 500
     return jsonify([g.to_dict() for g in gifts])
 
-
 def _generate_gift_id(name: str) -> str:
     raw = (name or "").strip().lower()
     base = re.sub(r"\s+", "_", raw)
@@ -57,7 +55,6 @@ def _generate_gift_id(name: str) -> str:
         return base
     suffix = uuid.uuid4().hex[:6]
     return f"{base}_{suffix}"
-
 
 @gifts_bp.route("/admin/create", methods=["POST"])
 @token_required
@@ -106,7 +103,6 @@ def create_gift(current_user):
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
-
 
 @gifts_bp.route("/admin/update", methods=["POST"])
 @token_required
@@ -157,7 +153,6 @@ def update_gift(current_user):
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
-
 
 @gifts_bp.route("/admin/delete", methods=["POST"])
 @token_required

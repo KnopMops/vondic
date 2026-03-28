@@ -3,7 +3,6 @@ from flask import current_app, url_for
 from flask_mail import Message
 from itsdangerous import URLSafeTimedSerializer
 
-
 class EmailService:
     @staticmethod
     def generate_verification_token(email):

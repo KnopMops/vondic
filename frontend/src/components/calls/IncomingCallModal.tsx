@@ -1,8 +1,8 @@
 'use client'
 
-import React, { useEffect, useRef } from 'react'
-import { CallState } from '../../lib/services/WebRTCService'
 import { getAttachmentUrl } from '@/lib/utils'
+import React, { useEffect, useRef, useState } from 'react'
+import { CallState } from '../../lib/services/WebRTCService'
 
 interface IncomingCallModalProps {
 	callerInfo: CallState | null
@@ -17,9 +17,97 @@ const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
 	onReject,
 	isVisible,
 }) => {
+	const [position, setPosition] = useState({ x: 0, y: 0 })
+	const [isDragging, setIsDragging] = useState(false)
+	const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
+	const modalRef = useRef<HTMLDivElement>(null)
+
 	if (!isVisible || !callerInfo) return null
 
 	const ringtoneRef = useRef<HTMLAudioElement | null>(null)
+
+	// Initialize position to center
+	useEffect(() => {
+		if (isVisible && modalRef.current) {
+			const rect = modalRef.current.getBoundingClientRect()
+			setPosition({
+				x: (window.innerWidth - rect.width) / 2,
+				y: (window.innerHeight - rect.height) / 2,
+			})
+		}
+	}, [isVisible])
+
+	// Dragging logic
+	useEffect(() => {
+		const handleMouseMove = (e: MouseEvent) => {
+			if (isDragging && modalRef.current) {
+				const rect = modalRef.current.getBoundingClientRect()
+				let newX = e.clientX - dragOffset.x
+				let newY = e.clientY - dragOffset.y
+
+				// Runtime boundary calculation
+				const maxX = window.innerWidth - rect.width
+				const maxY = window.innerHeight - rect.height
+
+				newX = Math.max(0, Math.min(newX, maxX))
+				newY = Math.max(0, Math.min(newY, maxY))
+
+				setPosition({ x: newX, y: newY })
+			}
+		}
+
+		const handleMouseUp = () => {
+			setIsDragging(false)
+			document.body.style.cursor = 'default'
+		}
+
+		if (isDragging) {
+			window.addEventListener('mousemove', handleMouseMove)
+			window.addEventListener('mouseup', handleMouseUp)
+		}
+
+		return () => {
+			window.removeEventListener('mousemove', handleMouseMove)
+			window.removeEventListener('mouseup', handleMouseUp)
+		}
+	}, [isDragging, dragOffset])
+
+	const handleMouseDown = (e: React.MouseEvent) => {
+		if (modalRef.current) {
+			setIsDragging(true)
+			const rect = modalRef.current.getBoundingClientRect()
+			setDragOffset({
+				x: e.clientX - rect.left,
+				y: e.clientY - rect.top,
+			})
+			document.body.style.cursor = 'move'
+		}
+	}
+
+	// Handle window resize and orientation change
+	useEffect(() => {
+		const handleResize = () => {
+			if (modalRef.current) {
+				const rect = modalRef.current.getBoundingClientRect()
+				setPosition(prev => {
+					const maxX = window.innerWidth - rect.width
+					const maxY = window.innerHeight - rect.height
+					return {
+						x: Math.max(0, Math.min(prev.x, maxX)),
+						y: Math.max(0, Math.min(prev.y, maxY)),
+					}
+				})
+			}
+		}
+
+		window.addEventListener('resize', handleResize)
+		window.addEventListener('orientationchange', handleResize)
+		return () => {
+			window.removeEventListener('resize', handleResize)
+			window.removeEventListener('orientationchange', handleResize)
+		}
+	}, [])
+
 	useEffect(() => {
 		if (isVisible) {
 			if (!ringtoneRef.current) {
@@ -76,7 +164,18 @@ const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
 
 	return (
 		<div className='modal-overlay'>
-			<div className='incoming-call-modal'>
+			<div
+				ref={modalRef}
+				className='incoming-call-modal draggable'
+				style={{
+					position: 'fixed',
+					left: `${position.x}px`,
+					top: `${position.y}px`,
+					margin: 0, // Reset margin since we use absolute positioning
+					cursor: isDragging ? 'grabbing' : 'move',
+				}}
+				onMouseDown={handleMouseDown}
+			>
 				<div className='modal-header'>
 					<h2>Входящий звонок</h2>
 				</div>

@@ -17,7 +17,6 @@ try:
 except ImportError:
     BCrypter = None
 
-
 class AuthService:
     @staticmethod
     def register_user(data):

@@ -22,7 +22,6 @@ from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import check_password_hash, generate_password_hash
 
-
 class UserService:
     @staticmethod
     def get_all_users():
@@ -74,10 +73,10 @@ class UserService:
     def update_user(user_id, data, current_user):
         user = User.query.get(user_id)
         if not user:
-            return None, "User not found"
+            return None, "Пользователь не найден"
 
         if user.id != current_user.id and current_user.role != "Admin":
-            return None, "Unauthorized"
+            return None, "Неавторизовано"
 
         if "username" in data:
             user.username = data["username"]
@@ -110,7 +109,7 @@ class UserService:
             if raw_status in status_map:
                 user.status = status_map[raw_status]
             else:
-                return None, "Invalid status"
+                return None, "Неверный статус"
 
         if current_user.role == "Admin":
             if "role" in data:
@@ -221,11 +220,11 @@ class UserService:
     @staticmethod
     def block_user(user_id, admin_user):
         if not admin_user or admin_user.role != "Admin":
-            return None, "Unauthorized"
+            return None, "Неавторизовано"
 
         user = User.query.get(user_id)
         if not user:
-            return None, "User not found"
+            return None, "Пользователь не найден"
 
         user.is_blocked = 1
         user.is_blocked_at = datetime.utcnow()
@@ -240,11 +239,11 @@ class UserService:
     @staticmethod
     def unblock_user(user_id, admin_user):
         if not admin_user or admin_user.role != "Admin":
-            return None, "Unauthorized"
+            return None, "Неавторизовано"
 
         user = User.query.get(user_id)
         if not user:
-            return None, "User not found"
+            return None, "Пользователь не найден"
 
         user.is_blocked = 0
         user.is_blocked_at = None
@@ -322,7 +321,7 @@ class UserService:
                 db.session.execute(text(f"""
                     DELETE FROM escalation_messages WHERE escalation_id IN ({placeholders})
                 """), params)
-            
+
             db.session.execute(text("DELETE FROM escalations WHERE user_id = :user_id"), {"user_id": user_id})
             db.session.execute(text("DELETE FROM notifications WHERE user_id = :user_id"), {"user_id": user_id})
             db.session.execute(text("DELETE FROM post_reports WHERE reporter_id = :user_id"), {"user_id": user_id})

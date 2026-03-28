@@ -11,14 +11,12 @@ from sqlalchemy import text
 
 videos_bp = Blueprint("videos", __name__, url_prefix="/api/v1/videos")
 
-
 def _get_ip() -> str:
     ip = request.headers.get("X-Forwarded-For") or request.remote_addr or ""
-    # X-Forwarded-For may contain list, take first
+
     if isinstance(ip, str) and "," in ip:
         ip = ip.split(",", 1)[0].strip()
     return ip
-
 
 def _ensure_video_likes_table():
     try:
@@ -71,7 +69,6 @@ def _ensure_video_likes_table():
             db.session.commit()
     except Exception:
         pass
-
 
 def _ensure_video_views_table():
     try:
@@ -129,7 +126,6 @@ def _ensure_video_views_table():
     except Exception:
         pass
 
-
 def _ensure_video_columns():
     try:
         if db.engine.dialect.name == "sqlite":
@@ -172,7 +168,6 @@ def _ensure_video_columns():
         db.session.commit()
     except Exception:
         pass
-
 
 def _ensure_video_checks_table():
     try:
@@ -221,20 +216,17 @@ def _ensure_video_checks_table():
     except Exception:
         pass
 
-
 def _cond_is_deleted(prefix: str = "") -> str:
     col = f"{prefix}is_deleted" if prefix else "is_deleted"
     if db.engine.dialect.name == "sqlite":
         return f"{col} = 0"
     return f"COALESCE(CAST({col} AS INT), 0) = 0"
 
-
 def _cond_is_published(prefix: str = "") -> str:
     col = f"{prefix}is_published" if prefix else "is_published"
     if db.engine.dialect.name == "sqlite":
         return f"{col} = 1"
     return f"COALESCE(CAST({col} AS INT), 1) = 1"
-
 
 def _publish_video_check(job_id: str, file_path: str, video_url: str):
     import pika
@@ -261,7 +253,6 @@ def _publish_video_check(job_id: str, file_path: str, video_url: str):
     )
     connection.close()
 
-
 def _sync_video_views(video_id: str):
     _ensure_video_views_table()
     row = db.session.execute(
@@ -279,7 +270,6 @@ def _sync_video_views(video_id: str):
     )
     return views
 
-
 def _sync_video_likes(video_id: str):
     _ensure_video_likes_table()
     row = db.session.execute(
@@ -296,7 +286,6 @@ def _sync_video_likes(video_id: str):
         {"likes": likes, "ts": datetime.utcnow().isoformat(), "vid": video_id},
     )
     return likes
-
 
 @videos_bp.route("/", methods=["GET"])
 def list_videos():
@@ -356,7 +345,6 @@ def list_videos():
         items.append(d)
     return jsonify(items), 200
 
-
 @videos_bp.route("/<video_id>", methods=["GET"])
 def get_video(video_id):
     _ensure_video_views_table()
@@ -382,7 +370,6 @@ def get_video(video_id):
     data["views"] = int(data.get("views_calc") or 0)
     data["likes"] = int(data.get("likes_calc") or 0)
     return jsonify(data), 200
-
 
 @videos_bp.route("/my", methods=["GET"])
 @token_required
@@ -431,7 +418,6 @@ def list_my_videos(current_user):
         d["likes"] = int(d.get("likes_calc") or 0)
         items.append(d)
     return jsonify(items), 200
-
 
 @videos_bp.route("/<video_id>", methods=["PATCH"])
 @token_required
@@ -490,7 +476,6 @@ def update_video(current_user, video_id):
     data["likes"] = int(data.get("likes_calc") or 0)
     return jsonify(data), 200
 
-
 @videos_bp.route("/<video_id>", methods=["DELETE"])
 @token_required
 def delete_video(current_user, video_id):
@@ -510,7 +495,6 @@ def delete_video(current_user, video_id):
     )
     db.session.commit()
     return jsonify({"ok": True}), 200
-
 
 @videos_bp.route("/", methods=["POST"])
 @token_required
@@ -596,7 +580,6 @@ def create_video(current_user):
         db.session.rollback()
         return jsonify({"error": str(e)}), 400
 
-
 @videos_bp.route("/check", methods=["POST"])
 @token_required
 def check_video(current_user):
@@ -608,8 +591,11 @@ def check_video(current_user):
     path = parsed.path if parsed.scheme else str(video_url)
     if not path.startswith("/static/"):
         return jsonify({"error": "Unsupported video path"}), 400
-    file_path = os.path.join(current_app.root_path, path.lstrip("/"))
+
+    file_path = os.path.join(current_app.root_path, "static", path[len("/static/"):])
     if not os.path.isfile(file_path):
+
+        print(f"Video file not found: {file_path} (from URL: {video_url})")
         return jsonify({"error": "Video file not found"}), 404
     try:
         _ensure_video_checks_table()
@@ -650,7 +636,6 @@ def check_video(current_user):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @videos_bp.route("/check/<job_id>", methods=["GET"])
 @token_required
 def check_video_status(current_user, job_id):
@@ -677,7 +662,6 @@ def check_video_status(current_user, job_id):
             payload["result"] = row[2]
     return jsonify(payload), 200
 
-
 @videos_bp.route("/view", methods=["POST"])
 @token_required
 def register_view(current_user):
@@ -689,7 +673,6 @@ def register_view(current_user):
 
     ip = _get_ip()
 
-    # 1. Per-account: count only once
     existing_user_row = db.session.execute(
         text("SELECT id FROM video_views WHERE video_id = :vid AND user_id = :uid"), {
             "vid": video_id, "uid": current_user.id}, ).fetchone()
@@ -697,7 +680,6 @@ def register_view(current_user):
         return jsonify({"ok": True, "counted": False,
                         "reason": "already_counted_for_user"}), 200
 
-    # 2. IP cap: do not count more than 3 per IP per video
     ip_total_row = db.session.execute(
         text(
             "SELECT SUM(count) as total FROM video_views WHERE video_id = :vid AND ip = :ip"
@@ -710,7 +692,7 @@ def register_view(current_user):
                        "reason": "ip_cap_reached"}), 200
 
     try:
-        # Insert per-user view row
+
         db.session.execute(
             text("""
             INSERT INTO video_views (video_id, user_id, ip, count, last_viewed_at)
@@ -726,7 +708,6 @@ def register_view(current_user):
 
         _sync_video_views(video_id)
 
-        # Track per-user history in users.video_history (TEXT JSON)
         try:
             hist_row = db.session.execute(
                 text("SELECT video_history FROM users WHERE id = :uid"),
@@ -741,13 +722,13 @@ def register_view(current_user):
                     items = json.loads(payload) or []
                 except Exception:
                     items = []
-            # remove existing
+
             items = [x for x in items if isinstance(
                 x, dict) and x.get("id") != video_id]
-            # prepend new
+
             items.insert(
                 0, {"id": video_id, "ts": datetime.utcnow().isoformat()})
-            # cap to 200
+
             items = items[:200]
             import json
 
@@ -765,7 +746,6 @@ def register_view(current_user):
         db.session.rollback()
         return jsonify({"error": str(e)}), 400
 
-
 def _toggle_user_list_column(
         user_id: str,
         column: str,
@@ -773,7 +753,6 @@ def _toggle_user_list_column(
         add: bool):
     import json
 
-    # read
     row = db.session.execute(
         text(f"SELECT {column} FROM users WHERE id = :uid"), {"uid": user_id}
     ).fetchone()
@@ -784,7 +763,7 @@ def _toggle_user_list_column(
             arr = json.loads(payload) or []
         except Exception:
             arr = []
-    # normalize to list of ids
+
     if isinstance(arr, list):
         arr = [
             x["id"]
@@ -803,7 +782,6 @@ def _toggle_user_list_column(
         text(f"UPDATE users SET {column} = :val WHERE id = :uid"),
         {"val": json.dumps(arr, ensure_ascii=False), "uid": user_id},
     )
-
 
 @videos_bp.route("/like", methods=["POST"])
 @token_required
@@ -856,7 +834,6 @@ def like_toggle(current_user):
         db.session.rollback()
         return jsonify({"error": str(e)}), 400
 
-
 @videos_bp.route("/liked", methods=["GET"])
 @token_required
 def liked_list(current_user):
@@ -883,7 +860,6 @@ def liked_list(current_user):
     result = [by_id[i] for i in ids if i in by_id]
     return jsonify(result), 200
 
-
 @videos_bp.route("/later", methods=["POST"])
 @token_required
 def later_toggle(current_user):
@@ -901,7 +877,6 @@ def later_toggle(current_user):
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 400
-
 
 @videos_bp.route("/later", methods=["GET"])
 @token_required
@@ -935,7 +910,6 @@ def later_list(current_user):
     items = [dict(r._mapping) for r in rows]
     return jsonify(items), 200
 
-
 @videos_bp.route("/history", methods=["GET"])
 @token_required
 def history_list(current_user):
@@ -968,13 +942,9 @@ def history_list(current_user):
     """
     rows = db.session.execute(text(sql), params).fetchall()
     by_id = {r._mapping["id"]: dict(r._mapping) for r in rows}
-    # preserve order
+
     result = [by_id[i] for i in ids if i in by_id]
     return jsonify(result), 200
-
-
-# Simple video comments table ensure and endpoints
-
 
 def _ensure_video_comments_table():
     try:
@@ -1015,7 +985,6 @@ def _ensure_video_comments_table():
     except Exception:
         pass
 
-
 @videos_bp.route("/comments/<video_id>", methods=["GET"])
 def get_video_comments(video_id):
     _ensure_video_comments_table()
@@ -1031,7 +1000,6 @@ def get_video_comments(video_id):
     ).fetchall()
     items = [dict(r._mapping) for r in rows]
     return jsonify(items), 200
-
 
 @videos_bp.route("/comments", methods=["POST"])
 @token_required

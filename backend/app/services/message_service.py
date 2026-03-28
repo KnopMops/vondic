@@ -7,7 +7,6 @@ from app.models.message import Message
 from app.models.user import User
 from sqlalchemy import or_
 
-
 class MessageService:
     @staticmethod
     def _sanitize_text(value):

@@ -13,7 +13,7 @@ const ApiDocumentationPage = () => {
 		{ id: 'messages', label: 'Сообщения' },
 		{ id: 'comments', label: 'Комментарии' },
 		{ id: 'botiksdk', label: 'BotikSDK' },
-		{ id: 'vondicapi', label: 'VondicAPI' },
+		{ id: 'vondicapi', label: 'ВондикAPI' },
 	]
 
 	const renderContent = () => {
@@ -23,11 +23,11 @@ const ApiDocumentationPage = () => {
 					<div className='space-y-6'>
 						<section>
 							<h2 className='text-2xl font-bold mb-4 text-white'>
-								API Социальной Сети Vondic
+								API Социальной Сети Вондик
 							</h2>
 							<p className='mb-4 text-gray-300'>
 								Добро пожаловать в документацию по публичному API социальной
-								сети Vondic. Этот API позволяет разработчикам интегрироваться с
+								сети Вондик. Этот API позволяет разработчикам интегрироваться с
 								нашей платформой социальной сети и создавать приложения, которые
 								взаимодействуют с пользователями, постами, сообщениями и другими
 								социальными функциями.
@@ -76,7 +76,7 @@ const ApiDocumentationPage = () => {
 									Получение API ключа
 								</h3>
 								<ol className='list-decimal pl-5 space-y-2 text-gray-300'>
-									<li>Войдите в ваш аккаунт Vondic</li>
+									<li>Войдите в ваш аккаунт Вондик</li>
 									<li>Перейдите в Настройки &gt; Настройки разработчика</li>
 									<li>Нажмите "Сгенерировать API ключ"</li>
 									<li>
@@ -1003,10 +1003,10 @@ async def attachment_handler(message: Message):
 				return (
 					<div className='space-y-6'>
 						<section>
-							<h2 className='text-2xl font-bold mb-4 text-white'>VondicAPI</h2>
+							<h2 className='text-2xl font-bold mb-4 text-white'>ВондикAPI</h2>
 							<p className='mb-4 text-gray-300'>
-								VondicAPI - это клиентская библиотека Python для взаимодействия
-								с публичным API социальной сети Vondic.
+								ВондикAPI - это клиентская библиотека Python для взаимодействия
+								с публичным API социальной сети Вондик.
 							</p>
 
 							<div className='mb-6'>
@@ -1039,7 +1039,7 @@ for post in posts:
 
 # Создать новый пост
 new_post = client.create_post(
-    content="Привет из клиентской библиотеки Vondic API!",
+    content="Привет из клиентской библиотеки Вондик API!",
     privacy="public"
 )
 print(f"Создан пост с ID: {new_post.id}")`}
@@ -1163,7 +1163,7 @@ client.delete_comment("comment123")`}
 				<div className='max-w-6xl mx-auto px-4'>
 					<header className='mb-8 text-center'>
 						<h1 className='text-4xl font-bold text-white mb-2'>
-							Документация API Vondic
+							Документация API Вондик
 						</h1>
 						<p className='text-lg text-gray-300'>
 							Создавайте приложения, которые интегрируются с нашей социальной
@@ -1195,7 +1195,7 @@ client.delete_comment("comment123")`}
 
 					<footer className='mt-12 text-center text-gray-500 text-sm'>
 						<p>
-							© {new Date().getFullYear()} Социальная сеть Vondic. Все права
+							© {new Date().getFullYear()} Социальная сеть Вондик. Все права
 							защищены.
 						</p>
 						<p className='mt-2'>

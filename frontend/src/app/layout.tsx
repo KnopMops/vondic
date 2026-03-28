@@ -1,5 +1,6 @@
 import { GlobalCallUI, WebRTCProvider } from '@/components/calls'
 import NotificationBell from '@/components/notifications/NotificationBell'
+import { UrlFallbackProvider } from '@/components/UrlFallbackProvider'
 import { AuthProvider } from '@/lib/AuthContext'
 import ReactQueryProvider from '@/lib/ReactQueryProvider'
 import { SocketProvider } from '@/lib/SocketContext'
@@ -21,7 +22,7 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-	title: 'Vondic',
+	title: 'Вондик',
 	description: 'Универсальный коммуникационный хаб',
 }
 
@@ -35,21 +36,23 @@ export default function RootLayout({
 			<body
 				className={`${geistSans.variable} ${geistMono.variable} antialiased`}
 			>
-				<StoreProvider>
-					<ReactQueryProvider>
-						<AuthProvider>
-							<SocketProvider>
-								<ToastProvider>
-									<WebRTCProvider>
-										{children}
-										<GlobalCallUI />
-										<NotificationBell />
-									</WebRTCProvider>
-								</ToastProvider>
-							</SocketProvider>
-						</AuthProvider>
-					</ReactQueryProvider>
-				</StoreProvider>
+				<UrlFallbackProvider>
+					<StoreProvider>
+						<ReactQueryProvider>
+							<AuthProvider>
+								<SocketProvider>
+									<ToastProvider>
+										<WebRTCProvider>
+											{children}
+											<GlobalCallUI />
+											<NotificationBell />
+										</WebRTCProvider>
+									</ToastProvider>
+								</SocketProvider>
+							</AuthProvider>
+						</ReactQueryProvider>
+					</StoreProvider>
+				</UrlFallbackProvider>
 			</body>
 		</html>
 	)

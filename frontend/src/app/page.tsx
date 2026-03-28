@@ -72,7 +72,7 @@ export default function Home() {
 			<nav className='relative z-50 flex items-center justify-between px-6 py-6 mx-auto max-w-7xl'>
 				<div className='flex items-center gap-3'>
 					<BrandLogo size={40} />
-					<span className='text-2xl font-bold tracking-tight'>Vondic</span>
+					<span className='text-2xl font-bold tracking-tight'>Вондик</span>
 				</div>
 				<div className='flex items-center gap-6'>
 					{user ? (
@@ -80,7 +80,7 @@ export default function Home() {
 							href='/feed'
 							className='px-6 py-2.5 text-sm font-medium text-white transition-all bg-indigo-600 rounded-full hover:bg-indigo-500 shadow-lg shadow-indigo-500/20'
 						>
-							Открыть Vondic Web
+							Открыть Вондик Web
 						</Link>
 					) : (
 						<>
@@ -115,7 +115,7 @@ export default function Home() {
 						className='inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-bold uppercase tracking-widest mb-4'
 					>
 						<span className='w-2 h-2 rounded-full bg-indigo-500 animate-pulse shadow-[0_0_10px_rgba(99,102,241,0.5)]' />
-						Vondic
+						Вондик
 					</motion.div>
 
 					<h1 className='text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight leading-tight'>
@@ -176,7 +176,7 @@ export default function Home() {
 							className='w-full sm:w-auto px-6 py-3 text-sm font-semibold text-white transition-all bg-white/10 rounded-full hover:bg-white/20 border border-white/10 hover:border-white/20 flex items-center justify-center gap-2'
 						>
 							<Zap className='h-4 w-4' />
-							<span>API Docs</span>
+							<span>Документация API</span>
 						</Link>
 						<Link
 							href='/download/desktop'
@@ -261,10 +261,10 @@ export default function Home() {
 
 			<footer className='py-12 text-center relative z-10 border-t border-gray-900'>
 				<div className='flex items-center justify-center gap-2 mb-4 opacity-50 hover:opacity-100 transition-opacity'>
-					<span className='text-xl font-bold'>V</span>
-					<span className='font-semibold'>Vondic</span>
+					<span className='text-xl font-bold'>В</span>
+					<span className='font-semibold'>Вондик</span>
 				</div>
-				<p className='text-gray-600 text-sm'>&copy; 2026 Vondic</p>
+				<p className='text-gray-600 text-sm'>&copy; 2026 Вондик</p>
 			</footer>
 
 			<LoginModal

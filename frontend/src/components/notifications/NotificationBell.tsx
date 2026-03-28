@@ -15,6 +15,18 @@ export const NotificationBell: React.FC = () => {
 	const userCacheRef = React.useRef<Map<string, string>>(new Map())
 	const audioRef = React.useRef<HTMLAudioElement | null>(null)
 	const [open, setOpen] = useState(false)
+	
+	// Check if user is admin
+	const [isAdmin, setIsAdmin] = useState(false)
+	useEffect(() => {
+		const userData = localStorage.getItem('user_data')
+		if (userData) {
+			try {
+				const user = JSON.parse(userData)
+				setIsAdmin(user?.role === 'Admin' || user?.role === 'admin')
+			} catch {}
+		}
+	}, [])
 
 	useEffect(() => {
 		const backendUrl =
@@ -292,6 +304,9 @@ export const NotificationBell: React.FC = () => {
 	useEffect(() => {
 		let timer: any
 		const poll = async () => {
+			// Only poll for admin users
+			if (!isAdmin) return
+			
 			try {
 				setPolling(true)
 				const res = await fetch('/api/support/admin/escalations')

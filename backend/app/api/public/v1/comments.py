@@ -8,16 +8,13 @@ from flask import Blueprint, jsonify, request
 public_comments_bp = Blueprint(
     "public_comments", __name__, url_prefix="/api/public/v1/comments")
 
-
 @public_comments_bp.route("/", methods=["GET"])
 def get_comments():
-    """Get all public comments"""
     try:
         page = request.args.get('page', 1, type=int)
         limit = request.args.get('limit', 20, type=int)
         offset = (page - 1) * limit
 
-        # Get public comments (comments on public posts)
         comments = CommentService.get_public_comments(
             limit=limit, offset=offset)
         total_count = CommentService.get_public_comments_count()
@@ -34,16 +31,13 @@ def get_comments():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @public_comments_bp.route("/<comment_id>", methods=["GET"])
 def get_comment(comment_id):
-    """Get a specific comment by ID"""
     try:
         comment = CommentService.get_comment_by_id(comment_id)
         if not comment:
             return jsonify({"error": "Comment not found"}), 404
 
-        # Check if the comment is on a public post
         post = PostService.get_post_by_id(comment.post_id)
         if not post or post.privacy != 'public':
             return jsonify({"error": "Access denied"}), 403
@@ -52,17 +46,14 @@ def get_comment(comment_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @public_comments_bp.route("/", methods=["POST"])
 @token_required
-# 15 comments per hour per user
+
 @rate_limit(limit=15, window=3600, per_user=True)
 def create_comment(current_user):
-    """Create a new comment"""
     try:
         data = request.get_json() or {}
 
-        # Validate required fields
         post_id = data.get('post_id')
         content = data.get('content')
 
@@ -71,17 +62,14 @@ def create_comment(current_user):
         if not content:
             return jsonify({"error": "Content is required"}), 400
 
-        # Check for spam content
         is_spam, spam_reason = check_spam_protection(content)
         if is_spam:
             return jsonify({"error": f"Spam detected: {spam_reason}"}), 400
 
-        # Check if the post exists and is accessible
         post = PostService.get_post_by_id(post_id)
         if not post:
             return jsonify({"error": "Post not found"}), 404
 
-        # Check if user has permission to comment on this post
         if post.privacy == 'private' and post.user_id != current_user.id:
             return jsonify({"error": "Access denied"}), 403
         elif post.privacy == 'friends' and not PostService.is_friend_of_post_owner(post.user_id, current_user.id):
@@ -101,13 +89,11 @@ def create_comment(current_user):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @public_comments_bp.route("/<comment_id>", methods=["PUT"])
 @token_required
-# 10 updates per hour per user
+
 @rate_limit(limit=10, window=3600, per_user=True)
 def update_comment(current_user, comment_id):
-    """Update a comment"""
     try:
         comment = CommentService.get_comment_by_id(comment_id)
         if not comment:
@@ -120,7 +106,7 @@ def update_comment(current_user, comment_id):
 
         update_data = {}
         if 'content' in data:
-            # Check for spam content
+
             is_spam, spam_reason = check_spam_protection(data['content'])
             if is_spam:
                 return jsonify({"error": f"Spam detected: {spam_reason}"}), 400
@@ -138,17 +124,14 @@ def update_comment(current_user, comment_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @public_comments_bp.route("/<comment_id>", methods=["DELETE"])
 @token_required
 def delete_comment(current_user, comment_id):
-    """Delete a comment"""
     try:
         comment = CommentService.get_comment_by_id(comment_id)
         if not comment:
             return jsonify({"error": "Comment not found"}), 404
 
-        # Allow deletion by comment owner or post owner
         if comment.user_id != current_user.id and comment.post.user_id != current_user.id:
             return jsonify({"error": "Access denied"}), 403
 
@@ -160,17 +143,14 @@ def delete_comment(current_user, comment_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @public_comments_bp.route("/<comment_id>/like", methods=["POST"])
 @token_required
 def like_comment(current_user, comment_id):
-    """Like a comment"""
     try:
         comment = CommentService.get_comment_by_id(comment_id)
         if not comment:
             return jsonify({"error": "Comment not found"}), 404
 
-        # Check if comment is on a public post
         post = PostService.get_post_by_id(comment.post_id)
         if not post or post.privacy != 'public':
             return jsonify({"error": "Access denied"}), 403
@@ -184,17 +164,14 @@ def like_comment(current_user, comment_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @public_comments_bp.route("/<comment_id>/unlike", methods=["POST"])
 @token_required
 def unlike_comment(current_user, comment_id):
-    """Unlike a comment"""
     try:
         comment = CommentService.get_comment_by_id(comment_id)
         if not comment:
             return jsonify({"error": "Comment not found"}), 404
 
-        # Check if comment is on a public post
         post = PostService.get_post_by_id(comment.post_id)
         if not post or post.privacy != 'public':
             return jsonify({"error": "Access denied"}), 403
@@ -208,16 +185,13 @@ def unlike_comment(current_user, comment_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @public_comments_bp.route("/post/<post_id>", methods=["GET"])
 def get_comments_for_post(post_id):
-    """Get all comments for a specific post"""
     try:
         post = PostService.get_post_by_id(post_id)
         if not post:
             return jsonify({"error": "Post not found"}), 404
 
-        # Check if post is public
         if post.privacy != 'public':
             return jsonify({"error": "Access denied"}), 403
 

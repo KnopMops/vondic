@@ -15,7 +15,6 @@ from config import Config
 
 logger = logging.getLogger(__name__)
 
-
 class UserRepository:
     def __init__(self):
         try:
@@ -411,15 +410,13 @@ class UserRepository:
                 if isinstance(msg_data["attachments"], str) and msg_data[
                     "attachments"
                 ].startswith("e2e:"):
-                    # For PostgreSQL JSON column, we must store valid JSON.
-                    # Wrap the E2E string in quotes (JSON string).
+
                     encrypted_attachments = json.dumps(msg_data["attachments"])
                 else:
                     attachments_json = json.dumps(
                         msg_data["attachments"], ensure_ascii=False
                     )
-                    # _encrypt_payload returns a base64 string, which is not valid JSON on its own.
-                    # It must be wrapped in quotes too.
+
                     encrypted_payload = self._encrypt_payload(attachments_json)
                     encrypted_attachments = json.dumps(encrypted_payload)
 
@@ -428,7 +425,6 @@ class UserRepository:
             reply_to = msg_data.get("reply_to")
             msg_type = msg_data.get("type", "text")
 
-            # Ensure timestamp is a datetime object
             ts = msg_data.get("timestamp")
             if isinstance(ts, str):
                 try:

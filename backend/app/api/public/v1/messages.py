@@ -8,16 +8,14 @@ from flask import Blueprint, jsonify, request
 public_messages_bp = Blueprint(
     "public_messages", __name__, url_prefix="/api/public/v1/messages")
 
-
 @public_messages_bp.route("/", methods=["GET"])
 @token_required
 def get_messages(current_user):
-    """Get messages from the current user's inbox"""
     try:
         page = request.args.get('page', 1, type=int)
         limit = request.args.get('limit', 20, type=int)
         offset = (page - 1) * limit
-        # Optional: filter by specific user
+
         thread_with = request.args.get('thread_with')
 
         messages = MessageService.get_user_messages(
@@ -41,17 +39,14 @@ def get_messages(current_user):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @public_messages_bp.route("/<message_id>", methods=["GET"])
 @token_required
 def get_message(current_user, message_id):
-    """Get a specific message"""
     try:
         message = MessageService.get_message_by_id(message_id)
         if not message:
             return jsonify({"error": "Message not found"}), 404
 
-        # Check if the user has permission to view this message
         if message.sender_id != current_user.id and message.receiver_id != current_user.id:
             return jsonify({"error": "Access denied"}), 403
 
@@ -59,17 +54,14 @@ def get_message(current_user, message_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @public_messages_bp.route("/", methods=["POST"])
 @token_required
-# 50 messages per hour per user
+
 @rate_limit(limit=50, window=3600, per_user=True)
 def send_message(current_user):
-    """Send a new message"""
     try:
         data = request.get_json() or {}
 
-        # Validate required fields
         recipient_id = data.get('recipient_id')
         content = data.get('content')
 
@@ -78,17 +70,14 @@ def send_message(current_user):
         if not content:
             return jsonify({"error": "Content is required"}), 400
 
-        # Check for spam content
         is_spam, spam_reason = check_spam_protection(content)
         if is_spam:
             return jsonify({"error": f"Spam detected: {spam_reason}"}), 400
 
-        # Check if recipient exists
         recipient = UserService.get_user_by_id(recipient_id)
         if not recipient:
             return jsonify({"error": "Recipient not found"}), 404
 
-        # Prevent sending messages to self
         if recipient_id == current_user.id:
             return jsonify({"error": "Cannot send message to yourself"}), 400
 
@@ -98,7 +87,6 @@ def send_message(current_user):
             'content': content
         }
 
-        # Handle optional fields
         if 'media_urls' in data:
             message_data['media_urls'] = data['media_urls']
 
@@ -110,23 +98,19 @@ def send_message(current_user):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @public_messages_bp.route("/<message_id>", methods=["PUT"])
 @token_required
-# 20 updates per hour per user
+
 @rate_limit(limit=20, window=3600, per_user=True)
 def update_message(current_user, message_id):
-    """Update a message (only for draft messages or own messages)"""
     try:
         message = MessageService.get_message_by_id(message_id)
         if not message:
             return jsonify({"error": "Message not found"}), 404
 
-        # Only allow updating messages sent by the current user
         if message.sender_id != current_user.id:
             return jsonify({"error": "Access denied"}), 403
 
-        # Only allow updating if the message hasn't been read yet
         if message.read_at is not None:
             return jsonify(
                 {"error": "Cannot update message that has been read"}), 400
@@ -135,7 +119,7 @@ def update_message(current_user, message_id):
         update_data = {}
 
         if 'content' in data:
-            # Check for spam content
+
             is_spam, spam_reason = check_spam_protection(data['content'])
             if is_spam:
                 return jsonify({"error": f"Spam detected: {spam_reason}"}), 400
@@ -155,17 +139,14 @@ def update_message(current_user, message_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @public_messages_bp.route("/<message_id>", methods=["DELETE"])
 @token_required
 def delete_message(current_user, message_id):
-    """Delete a message"""
     try:
         message = MessageService.get_message_by_id(message_id)
         if not message:
             return jsonify({"error": "Message not found"}), 404
 
-        # Allow deletion if the user is either the sender or receiver
         if message.sender_id != current_user.id and message.receiver_id != current_user.id:
             return jsonify({"error": "Access denied"}), 403
 
@@ -177,17 +158,14 @@ def delete_message(current_user, message_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @public_messages_bp.route("/read/<message_id>", methods=["POST"])
 @token_required
 def mark_message_as_read(current_user, message_id):
-    """Mark a message as read"""
     try:
         message = MessageService.get_message_by_id(message_id)
         if not message:
             return jsonify({"error": "Message not found"}), 404
 
-        # Only the receiver can mark a message as read
         if message.receiver_id != current_user.id:
             return jsonify({"error": "Access denied"}), 403
 
@@ -199,11 +177,9 @@ def mark_message_as_read(current_user, message_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @public_messages_bp.route("/unread", methods=["GET"])
 @token_required
 def get_unread_messages(current_user):
-    """Get unread messages"""
     try:
         page = request.args.get('page', 1, type=int)
         limit = request.args.get('limit', 20, type=int)
@@ -225,11 +201,9 @@ def get_unread_messages(current_user):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @public_messages_bp.route("/threads", methods=["GET"])
 @token_required
 def get_message_threads(current_user):
-    """Get message threads (conversations)"""
     try:
         page = request.args.get('page', 1, type=int)
         limit = request.args.get('limit', 20, type=int)

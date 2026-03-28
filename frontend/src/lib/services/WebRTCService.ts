@@ -1,4 +1,5 @@
 import { Socket } from 'socket.io-client'
+import { AudioProcessor, getDiscordLikeAudioConstraints } from './AudioProcessor'
 
 export interface WebRTCConfig {
 	iceServers: RTCIceServer[]
@@ -32,6 +33,10 @@ export class WebRTCService {
 	private configuration: WebRTCConfig
 	private hasTurn: boolean = false
 	private forceRelay: boolean = false
+	private turnTested: boolean = false
+	private useInternalTurnOnly: boolean = false
+	private audioProcessor: AudioProcessor | null = null
+	private iceDisconnectTimeouts: Map<string, NodeJS.Timeout> = new Map()
 
 	// Callbacks
 	public onRemoteStream?: (socketId: string, stream: MediaStream) => void
@@ -73,6 +78,14 @@ export class WebRTCService {
 				typeof process !== 'undefined'
 					? (process.env.NEXT_PUBLIC_TURN_PASSWORD as string | undefined)
 					: undefined
+			
+			// Internal TURN fallback (192.168.20.31)
+			const internalTurnUrl = 'turn:192.168.20.31:3478?transport=udp'
+			const internalTurnUrls = [
+				'turn:192.168.20.31:3478?transport=udp',
+				'turn:192.168.20.31:3478?transport=tcp',
+			]
+			
 			const turnRawList: string[] = []
 			if (turnUrl) turnRawList.push(turnUrl)
 			if (turnUrlsEnv)
@@ -82,6 +95,8 @@ export class WebRTCService {
 						.map(s => s.trim())
 						.filter(Boolean),
 				)
+			
+			// Add internal TURN as fallback
 			if (turnRawList.length && turnUser && turnPass) {
 				const urls: string[] = []
 				for (let u of turnRawList) {
@@ -103,14 +118,34 @@ export class WebRTCService {
 					}
 				}
 				if (urls.length) {
+					// Add external TURN servers first
 					;(this.configuration.iceServers as RTCIceServer[]).push({
 						urls,
 						username: turnUser,
 						credential: turnPass,
 					} as any)
 					this.hasTurn = true
+					
+					// Add internal TURN (192.168.20.31) as fallback
+					;(this.configuration.iceServers as RTCIceServer[]).push({
+						urls: internalTurnUrls,
+						username: turnUser,
+						credential: turnPass,
+					} as any)
+					
+					console.log('[WebRTC] TURN configured with internal fallback (192.168.20.31)')
 				}
+			} else if (turnUser && turnPass) {
+				// Only internal TURN if no external configured
+				;(this.configuration.iceServers as RTCIceServer[]).push({
+					urls: internalTurnUrls,
+					username: turnUser,
+					credential: turnPass,
+				} as any)
+				this.hasTurn = true
+				console.log('[WebRTC] Using internal TURN server (192.168.20.31)')
 			}
+			
 			const fr =
 				typeof process !== 'undefined'
 					? (process.env.NEXT_PUBLIC_FORCE_RELAY as string | undefined)
@@ -126,10 +161,65 @@ export class WebRTCService {
 
 	async initializeLocalStream(): Promise<MediaStream> {
 		try {
+			// Discord-like audio constraints with advanced processing
+			const audioConstraints = getDiscordLikeAudioConstraints()
+
 			this.localStream = await navigator.mediaDevices.getUserMedia({
-				audio: true,
+				audio: audioConstraints,
 				video: false, // Только аудио для голосовых звонков
 			})
+
+			// Apply audio processing for Discord-like quality
+			try {
+				this.audioProcessor = new AudioProcessor({
+					noiseSuppression: 3, // Maximum noise suppression for clean audio
+					echoCancellation: true,
+					autoGainControl: true,
+					highPassFilter: 100, // Remove low-frequency rumble
+					lowPassFilter: 8000, // Telephone quality - removes high-frequency hiss
+					gain: 1.5, // Moderate gain to avoid amplifying background noise
+					smoothing: true,
+				})
+
+				// Process the audio stream
+				const processedStream = await this.audioProcessor.initialize(
+					this.localStream,
+				)
+
+				// Replace local stream with processed version
+				this.localStream = processedStream
+
+				// Stop original tracks to avoid duplicates
+				const originalTracks = this.localStream.getTracks()
+				originalTracks.forEach(track => {
+					if (track.kind === 'audio') {
+						// Keep the processed track, stop original
+						if (!processedStream.getAudioTracks().includes(track)) {
+							track.stop()
+						}
+					}
+				})
+
+				console.log(
+					'[WebRTC] Audio processing enabled with Discord-like quality',
+				)
+			} catch (error) {
+				console.warn(
+					'[WebRTC] Audio processor initialization failed, using native processing:',
+					error,
+				)
+				// Continue with native stream if processor fails
+			}
+
+			// Set constraints on the audio track for maximum quality
+			const audioTrack = this.localStream.getAudioTracks()[0]
+			if (audioTrack) {
+				try {
+					await audioTrack.applyConstraints(audioConstraints)
+				} catch (e) {
+					console.warn('Could not apply advanced audio constraints:', e)
+				}
+			}
 
 			if (this.onLocalStream) {
 				this.onLocalStream(this.localStream)
@@ -157,34 +247,68 @@ export class WebRTCService {
 		if (!mediaDevices || typeof mediaDevices.getDisplayMedia !== 'function') {
 			throw new Error('Демонстрация экрана недоступна на этом устройстве')
 		}
-		const userAgent =
-			typeof navigator !== 'undefined' ? navigator.userAgent : ''
-		const isMobile = /Android|iPhone|iPad|iPod/i.test(userAgent)
-		const videoConstraints = isMobile
-			? {
-					width: { ideal: 960, max: 1280 },
-					height: { ideal: 540, max: 720 },
-					frameRate: { ideal: 12, max: 24 },
-				}
-			: {
-					width: { ideal: 1280, max: 1920 },
-					height: { ideal: 720, max: 1080 },
-					frameRate: { ideal: 15, max: 30 },
-				}
-		const stream = await navigator.mediaDevices.getDisplayMedia({
-			video: videoConstraints,
-			audio: false,
-		})
-		this.screenStream = stream
-		this.isSharingScreen = true
-		const track = stream.getVideoTracks()[0]
-		if (track) {
-			track.onended = () => {
-				this.stopScreenShare().catch(() => {})
-			}
+
+		// Full HD 60fps constraints for smooth screen sharing
+		const videoConstraints: MediaTrackConstraints = {
+			width: { ideal: 1920, max: 1920 },
+			height: { ideal: 1080, max: 1080 },
+			frameRate: { ideal: 60, max: 60 },
+			cursor: 'always',
+			displaySurface: 'monitor',
 		}
-		this.notifyScreenShareState()
-		return stream
+
+		try {
+			const stream = await navigator.mediaDevices.getDisplayMedia({
+				video: videoConstraints,
+				audio: true, // Capture system audio for screen share
+			} as any)
+
+			this.screenStream = stream
+			this.isSharingScreen = true
+
+			const track = stream.getVideoTracks()[0]
+			if (track) {
+				// Force Full HD 60fps constraints
+				try {
+					await track.applyConstraints({
+						width: 1920,
+						height: 1080,
+						frameRate: { exact: 60, ideal: 60 },
+						advanced: [
+							{ width: 1920, height: 1080, frameRate: 60 },
+							{ width: 1920, height: 1080, frameRate: 59.94 },
+							{ width: 1920, height: 1080, frameRate: 50 },
+							{ width: 1600, height: 900, frameRate: 60 },
+							{ width: 1280, height: 720, frameRate: 60 },
+						],
+					} as any)
+					
+					// Log actual constraints applied
+					const settings = track.getSettings()
+					console.log('[WebRTC] Screen share settings:', {
+						width: settings.width,
+						height: settings.height,
+						frameRate: settings.frameRate,
+					})
+				} catch (e) {
+					console.warn('Failed to apply screen share constraints:', e)
+				}
+
+				track.onended = () => {
+					console.log('[WebRTC] Screen share track ended by user')
+					this.stopScreenShare().catch(() => {})
+				}
+			}
+
+			this.notifyScreenShareState()
+			return stream
+		} catch (error: any) {
+			console.error('[WebRTC] Screen share error:', error)
+			if (error.name === 'NotAllowedError') {
+				throw new Error('Демонстрация экрана отменена пользователем')
+			}
+			throw new Error('Ошибка при захвате экрана: ' + error.message)
+		}
 	}
 
 	private isSocketKey(key: string) {
@@ -193,33 +317,42 @@ export class WebRTCService {
 
 	async startScreenShare(): Promise<void> {
 		const stream = await this.ensureScreenStream()
-		const track = stream.getVideoTracks()[0]
-		if (!track) return
+		const videoTrack = stream.getVideoTracks()[0]
+		// Note: We do NOT capture system audio from screen share to avoid replacing microphone audio
+		// Users will hear each other through microphone audio while screen sharing
+		if (!videoTrack) return
+
 		const tasks: Promise<void>[] = []
 		for (const [socketId, pc] of this.peerConnections.entries()) {
 			if (!this.isSocketKey(socketId)) continue
-						
+
 			// Check if we can renegotiate - must be in stable state
 			if (pc.signalingState !== 'stable') {
 				console.log(`[WebRTC] Cannot start screen share: PC for ${socketId} is in ${pc.signalingState}, waiting for stable state`)
-				// If in have-local-offer or have-remote-offer, we need to wait or handle the current negotiation first
 				continue
 			}
-						
-			const sender = pc.getSenders().find(s => s.track?.kind === 'video')
-			if (sender) {
+
+			// Replace/add video track with screen share
+			const videoSender = pc.getSenders().find(s => s.track?.kind === 'video')
+			if (videoSender) {
 				try {
-					await sender.replaceTrack(track)
+					await videoSender.replaceTrack(videoTrack)
+					console.log(`[WebRTC] Replaced video track with screen share for ${socketId}`)
 				} catch (e) {
 					console.error(`[WebRTC] Failed to replace video track for ${socketId}:`, e)
 				}
 			} else {
 				try {
-					pc.addTrack(track, stream)
+					pc.addTrack(videoTrack, stream)
+					console.log(`[WebRTC] Added screen share video track for ${socketId}`)
 				} catch (e) {
 					console.error(`[WebRTC] Failed to add video track for ${socketId}:`, e)
 				}
 			}
+
+			// Keep microphone audio - do NOT replace with system audio
+			// This ensures users can still talk while screen sharing
+
 			tasks.push(
 				(async () => {
 					try {
@@ -240,6 +373,7 @@ export class WebRTCService {
 							offer,
 							caller_user_id: this.userId,
 						})
+						console.log(`[WebRTC] Screen share offer sent to ${socketId}`)
 					} catch (e) {
 						console.error(`[WebRTC] Screen share offer failed for ${socketId}:`, e)
 					}
@@ -247,11 +381,20 @@ export class WebRTCService {
 			)
 		}
 		await Promise.allSettled(tasks)
+		console.log(`[WebRTC] Screen share started to ${tasks.length} peer(s)`)
+		
+		// Emit screen share state change to notify other participants
+		this.socket.emit('screen_share_state_changed', {
+			sender_socket_id: this.socket.id,
+			is_sharing: true,
+			user_id: this.userId
+		})
 	}
 
 	async stopScreenShare(): Promise<void> {
 		const stream = this.screenStream
 		if (!stream) return
+
 		stream.getTracks().forEach(track => {
 			try {
 				track.stop()
@@ -260,29 +403,30 @@ export class WebRTCService {
 		this.screenStream = null
 		this.isSharingScreen = false
 		this.notifyScreenShareState()
+
 		const tasks: Promise<void>[] = []
 		for (const [socketId, pc] of this.peerConnections.entries()) {
 			if (!this.isSocketKey(socketId)) continue
-						
+
 			// Check if we can renegotiate - must be in stable state
 			if (pc.signalingState !== 'stable') {
 				console.log(`[WebRTC] Cannot stop screen share: PC for ${socketId} is in ${pc.signalingState}, waiting for stable state`)
 				continue
 			}
-						
-			const sender = pc.getSenders().find(s => s.track?.kind === 'video')
-			if (sender) {
+
+			// Remove screen share video track
+			const videoSender = pc.getSenders().find(s => s.track?.kind === 'video')
+			if (videoSender) {
 				try {
-					pc.removeTrack(sender)
-				} catch (e) {
-					console.error(`[WebRTC] Failed to remove video sender for ${socketId}:`, e)
-				}
-				try {
-					await sender.replaceTrack(null)
+					await videoSender.replaceTrack(null)
+					console.log(`[WebRTC] Removed screen share track for ${socketId}`)
 				} catch (e) {
 					console.error(`[WebRTC] Failed to replace video track with null for ${socketId}:`, e)
 				}
 			}
+
+			// Microphone audio was never replaced, so nothing to restore
+
 			tasks.push(
 				(async () => {
 					try {
@@ -303,6 +447,7 @@ export class WebRTCService {
 							offer,
 							caller_user_id: this.userId,
 						})
+						console.log(`[WebRTC] Screen share stop offer sent to ${socketId}`)
 					} catch (e) {
 						console.error(`[WebRTC] Stop screen share offer failed for ${socketId}:`, e)
 					}
@@ -310,6 +455,14 @@ export class WebRTCService {
 			)
 		}
 		await Promise.allSettled(tasks)
+		console.log(`[WebRTC] Screen share stopped for ${tasks.length} peer(s)`)
+		
+		// Emit screen share state change to notify other participants
+		this.socket.emit('screen_share_state_changed', {
+			sender_socket_id: this.socket.id,
+			is_sharing: false,
+			user_id: this.userId
+		})
 	}
 
 	getScreenStream(): MediaStream | null {
@@ -328,66 +481,89 @@ export class WebRTCService {
 		const mediaDevices =
 			typeof navigator !== 'undefined' ? navigator.mediaDevices : null
 		if (!mediaDevices || typeof mediaDevices.getUserMedia !== 'function') {
-			throw new Error('Camera access not available on this device')
+			throw new Error('Доступ к камере недоступен на этом устройстве')
 		}
-		const userAgent =
-			typeof navigator !== 'undefined' ? navigator.userAgent : ''
-		const isMobile = /Android|iPhone|iPad|iPod/i.test(userAgent)
-		const videoConstraints = isMobile
-			? {
-					width: { ideal: 1280, max: 1920 },
-					height: { ideal: 720, max: 1080 },
-					frameRate: { ideal: 15, max: 30 },
+
+		// High-quality video constraints for camera
+		const videoConstraints: MediaTrackConstraints = {
+			width: { ideal: 1280, max: 1920 },
+			height: { ideal: 720, max: 1080 },
+			frameRate: { ideal: 30, max: 30 },
+			facingMode: 'user',
+		}
+
+		try {
+			const stream = await navigator.mediaDevices.getUserMedia({
+				video: videoConstraints,
+				audio: false,
+			})
+
+			this.videoStream = stream
+			this.isVideoEnabled = true
+
+			const track = stream.getVideoTracks()[0]
+			if (track) {
+				// Apply constraints for optimal quality
+				try {
+					await track.applyConstraints({
+						width: { ideal: 1280 },
+						height: { ideal: 720 },
+						frameRate: { ideal: 30 },
+					})
+				} catch (e) {
+					console.warn('Failed to apply video constraints:', e)
 				}
-			: {
-					width: { ideal: 1280, max: 1920 },
-					height: { ideal: 720, max: 1080 },
-					frameRate: { ideal: 30, max: 60 },
+
+				track.onended = () => {
+					console.log('[WebRTC] Video track ended')
+					this.stopVideo().catch(() => {})
 				}
-		const stream = await navigator.mediaDevices.getUserMedia({
-			video: videoConstraints,
-			audio: false, // We already have audio separately
-		})
-		this.videoStream = stream
-		this.isVideoEnabled = true
-		const track = stream.getVideoTracks()[0]
-		if (track) {
-			track.onended = () => {
-				this.stopVideo().catch(() => {})
 			}
+
+			return stream
+		} catch (error: any) {
+			console.error('[WebRTC] Video error:', error)
+			if (error.name === 'NotAllowedError') {
+				throw new Error('Доступ к камере запрещён')
+			} else if (error.name === 'NotFoundError') {
+				throw new Error('Камера не найдена')
+			}
+			throw new Error('Ошибка доступа к камере: ' + error.message)
 		}
-		return stream
 	}
 
 	async startVideo(): Promise<void> {
 		const stream = await this.ensureVideoStream()
 		const track = stream.getVideoTracks()[0]
 		if (!track) return
+
 		const tasks: Promise<void>[] = []
 		for (const [socketId, pc] of this.peerConnections.entries()) {
 			if (!this.isSocketKey(socketId)) continue
-			
+
 			// Check if we can renegotiate - must be in stable state
 			if (pc.signalingState !== 'stable') {
 				console.log(`[WebRTC] Cannot start video: PC for ${socketId} is in ${pc.signalingState}, waiting for stable state`)
-				// If in have-local-offer or have-remote-offer, we need to wait or handle the current negotiation first
 				continue
 			}
-			
+
 			const sender = pc.getSenders().find(s => s.track?.kind === 'video')
 			if (sender) {
 				try {
 					await sender.replaceTrack(track)
+					console.log(`[WebRTC] Replaced video track with camera for ${socketId}`)
 				} catch (e) {
 					console.error(`[WebRTC] Failed to replace video track for ${socketId}:`, e)
 				}
 			} else {
 				try {
 					pc.addTrack(track, stream)
+					console.log(`[WebRTC] Added camera video track for ${socketId}`)
 				} catch (e) {
 					console.error(`[WebRTC] Failed to add video track for ${socketId}:`, e)
 				}
 			}
+
 			tasks.push(
 				(async () => {
 					try {
@@ -408,6 +584,7 @@ export class WebRTCService {
 							offer,
 							caller_user_id: this.userId,
 						})
+						console.log(`[WebRTC] Video offer sent to ${socketId}`)
 					} catch (e) {
 						console.error(`[WebRTC] Video offer failed for ${socketId}:`, e)
 					}
@@ -415,12 +592,12 @@ export class WebRTCService {
 			)
 		}
 		await Promise.allSettled(tasks)
-		
+
 		// Notify video state change
 		if (this.onVideoStateChange) {
 			this.onVideoStateChange(this.videoStream, true)
 		}
-		
+
 		// Emit video state change to other participants
 		for (const [socketId] of this.peerConnections.entries()) {
 			if (this.isSocketKey(socketId)) {
@@ -431,33 +608,33 @@ export class WebRTCService {
 				});
 			}
 		}
+
+		console.log(`[WebRTC] Video started to ${tasks.length} peer(s)`)
 	}
 
 	async stopVideo(): Promise<void> {
 		this.isVideoEnabled = false
+
 		const tasks: Promise<void>[] = []
 		for (const [socketId, pc] of this.peerConnections.entries()) {
 			if (!this.isSocketKey(socketId)) continue
-			
+
 			// Check if we can renegotiate - must be in stable state
 			if (pc.signalingState !== 'stable') {
 				console.log(`[WebRTC] Cannot stop video: PC for ${socketId} is in ${pc.signalingState}, waiting for stable state`)
 				continue
 			}
-			
+
 			const sender = pc.getSenders().find(s => s.track?.kind === 'video')
 			if (sender) {
 				try {
-					pc.removeTrack(sender)
-				} catch (e) {
-					console.error(`[WebRTC] Failed to remove video sender for ${socketId}:`, e)
-				}
-				try {
 					await sender.replaceTrack(null)
+					console.log(`[WebRTC] Removed camera video track for ${socketId}`)
 				} catch (e) {
 					console.error(`[WebRTC] Failed to replace video track with null for ${socketId}:`, e)
 				}
 			}
+
 			tasks.push(
 				(async () => {
 					try {
@@ -478,6 +655,7 @@ export class WebRTCService {
 							offer,
 							caller_user_id: this.userId,
 						})
+						console.log(`[WebRTC] Video stop offer sent to ${socketId}`)
 					} catch (e) {
 						console.error(`[WebRTC] Stop video offer failed for ${socketId}:`, e)
 					}
@@ -485,7 +663,7 @@ export class WebRTCService {
 			)
 		}
 		await Promise.allSettled(tasks)
-		
+
 		// Stop all video tracks
 		if (this.videoStream) {
 			this.videoStream.getVideoTracks().forEach(track => {
@@ -493,12 +671,12 @@ export class WebRTCService {
 			})
 			this.videoStream = null
 		}
-		
+
 		// Notify video state change
 		if (this.onVideoStateChange) {
 			this.onVideoStateChange(null, false)
 		}
-		
+
 		// Emit video state change to other participants
 		for (const [socketId] of this.peerConnections.entries()) {
 			if (this.isSocketKey(socketId)) {
@@ -509,6 +687,8 @@ export class WebRTCService {
 				});
 			}
 		}
+
+		console.log(`[WebRTC] Video stopped for ${tasks.length} peer(s)`)
 	}
 
 	toggleVideo(): Promise<void> {
@@ -551,29 +731,16 @@ export class WebRTCService {
 		// Обработка входящих стримов
 		pc.ontrack = event => {
 			console.log(`[WebRTC] ontrack for ${targetSocketId}: kind=${event.track.kind}, state=${event.track.readyState}, muted=${event.track.muted}`)
-			
+
 			// Get or create stream for this peer
 			let stream = this.remoteStreams.get(targetSocketId)
 			if (!stream) {
 				stream = new MediaStream()
 				this.remoteStreams.set(targetSocketId, stream)
 			}
-			
-		// Add track to stream if not already present
-			// For audio tracks, ensure we only have one active audio track per peer to prevent interference
-			if (event.track.kind === 'audio') {
-				// Remove any existing audio tracks of the same kind to prevent audio mixing issues
-				const existingAudioTracks = stream.getTracks().filter(t => t.kind === 'audio')
-				existingAudioTracks.forEach(track => {
-					try {
-						stream!.removeTrack(track)
-					} catch (e) {
-						console.error(`[WebRTC] Could not remove audio track:`, e)
-					}
-				})
-			}
-						
+
 			// Add the new track if not already present
+			// Do NOT remove existing tracks - just add new ones
 			if (!stream.getTracks().includes(event.track)) {
 				try {
 					stream.addTrack(event.track)
@@ -584,7 +751,17 @@ export class WebRTCService {
 			} else {
 				console.log(`[WebRTC] Track already exists in stream for ${targetSocketId}`)
 			}
-			
+
+			// Debounce stream updates to prevent flickering
+			const now = Date.now()
+			const lastUpdate = (this as any)._lastStreamUpdate?.get(targetSocketId) || 0
+			if (now - lastUpdate < 100) {
+				// Skip if less than 100ms since last update
+				return
+			}
+			(this as any)._lastStreamUpdate = (this as any)._lastStreamUpdate || new Map()
+			;(this as any)._lastStreamUpdate.set(targetSocketId, now)
+
 			const assign = () => {
 				console.log(`[WebRTC] Assigning remote stream for ${targetSocketId}, tracks: ${stream?.getTracks().length}`)
 				if (this.onRemoteStream) {
@@ -607,16 +784,19 @@ export class WebRTCService {
 						}
 						assign();
 					};
-					
-					// Check for mute/unmute events
+
+					// Check for mute/unmute events - debounce these too
+					let muteDebounceTimer: any = null
 					if (typeof (track as any).onunmute !== 'undefined') {
 						;(track as any).onunmute = () => {
 							console.log(`[WebRTC] Remote ${track.kind} track unmuted for ${targetSocketId}`)
-							assign()
+							clearTimeout(muteDebounceTimer)
+							muteDebounceTimer = setTimeout(assign, 100)
 						}
 						;(track as any).onmute = () => {
 							console.log(`[WebRTC] Remote ${track.kind} track muted for ${targetSocketId}`)
-							assign()
+							clearTimeout(muteDebounceTimer)
+							muteDebounceTimer = setTimeout(assign, 100)
 						}
 					}
 				}
@@ -644,25 +824,52 @@ export class WebRTCService {
 		// Handle signaling state changes which might occur when tracks are added/removed
 		pc.onsignalingstatechange = () => {
 			console.log(`[WebRTC] Signaling state changed for ${targetSocketId}: ${pc.signalingState}`)
-			// Sync remote stream tracks when signaling state changes
-			this.syncRemoteStreamTracks(targetSocketId);
+			// Only sync tracks when transitioning to stable state after being connected
+			// This prevents unnecessary track manipulation during renegotiation
+			if (pc.signalingState === 'stable' && pc.connectionState === 'connected') {
+				this.syncRemoteStreamTracks(targetSocketId);
+			}
 		}
+
 		try {
 			;(pc as any).oniceconnectionstatechange = () => {
 				console.log(`[WebRTC] ICE connection state changed for ${targetSocketId}: ${pc.iceConnectionState}`)
 				if (this.onConnectionStateChange) {
 					this.onConnectionStateChange(targetSocketId, pc.connectionState)
 				}
+
+				// Clear any existing timeout
+				const existingTimeout = this.iceDisconnectTimeouts.get(targetSocketId)
+				if (existingTimeout) {
+					clearTimeout(existingTimeout)
+					this.iceDisconnectTimeouts.delete(targetSocketId)
+				}
+
 				// Handle ICE failures with restart
 				if (pc.iceConnectionState === 'failed') {
 					console.log(`[WebRTC] ICE failed for ${targetSocketId}, attempting ICE restart`)
-					this.attemptIceRestart(targetSocketId).catch(e => 
+					this.attemptIceRestart(targetSocketId).catch(e =>
 						console.error('ICE restart failed:', e)
 					)
 				}
-				// Log when ICE becomes disconnected - might be temporary
+
+				// If disconnected, wait a bit then restart ICE if still disconnected
 				if (pc.iceConnectionState === 'disconnected') {
 					console.log(`[WebRTC] ICE disconnected for ${targetSocketId}, waiting for reconnection...`)
+					const timeout = setTimeout(() => {
+						if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
+							console.log(`[WebRTC] ICE still disconnected for ${targetSocketId}, attempting ICE restart`)
+							this.attemptIceRestart(targetSocketId).catch(e =>
+								console.error('ICE restart failed:', e)
+							)
+						}
+					}, 3000) // Wait 3 seconds before attempting restart
+					this.iceDisconnectTimeouts.set(targetSocketId, timeout)
+				}
+
+				// Clear timeout on connected/checking
+				if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'checking') {
+					this.iceDisconnectTimeouts.delete(targetSocketId)
 				}
 			}
 		} catch {}
@@ -672,16 +879,41 @@ export class WebRTCService {
 		targetSocketId: string,
 		policy: 'all' | 'relay' = 'all',
 	): RTCPeerConnection {
-		const baseConfig: any = { iceServers: this.configuration.iceServers }
+		// Use internal TURN only if external failed
+		let iceServers = this.configuration.iceServers
+
+		if (this.useInternalTurnOnly) {
+			// Filter to only internal TURN (192.168.20.31)
+			iceServers = this.configuration.iceServers.filter(server => {
+				const urls = Array.isArray(server.urls) ? server.urls : [server.urls]
+				return urls.some(url => String(url).includes('192.168.20.31'))
+			})
+			console.log('[WebRTC] Using internal TURN only (192.168.20.31)')
+		}
+
+		const baseConfig: any = { iceServers }
 		if (policy === 'relay') baseConfig.iceTransportPolicy = 'relay'
 		const pc = new RTCPeerConnection(baseConfig)
 
-		// Добавление локального стрима
+		// Add local AUDIO stream tracks (microphone)
 		if (this.localStream) {
 			this.localStream.getTracks().forEach(track => {
 				pc.addTrack(track, this.localStream!)
 			})
+			console.log(`[WebRTC] Added local audio track to new PC for ${targetSocketId}`)
 		}
+
+		// Add video track if camera is active (NOT screen share - that's started explicitly)
+		if (this.videoStream) {
+			const videoTrack = this.videoStream.getVideoTracks()[0]
+			if (videoTrack) {
+				pc.addTrack(videoTrack, this.videoStream)
+				console.log(`[WebRTC] Added camera video track to new PC for ${targetSocketId}`)
+			}
+		}
+
+		// NOTE: Screen share is NOT added automatically - it must be started explicitly via startScreenShare()
+		// This prevents screen share from interfering with call establishment
 
 		this.setupPeerConnectionHandlers(pc, targetSocketId)
 
@@ -1152,13 +1384,15 @@ export class WebRTCService {
 				if (this.hasTurn) {
 					setTimeout(() => {
 						const current = this.peerConnections.get(data.sender_socket_id)
-						if (current && current.connectionState !== 'connected') {
+						if (current && current.connectionState === 'failed') {
 							console.log(
-								`[WebRTC] Connection not established, attempting TURN relay fallback for ${data.sender_socket_id}`,
+								`[WebRTC] Connection failed, attempting TURN relay fallback for ${data.sender_socket_id}`,
 							)
 							this.renegotiateWithRelay(data.sender_socket_id).catch(err =>
 								console.error('Relay fallback failed:', err),
 							)
+						} else if (current) {
+							console.log(`[WebRTC] Connection state after answer: ${current.connectionState}, ICE: ${(current as any).iceConnectionState}`)
 						}
 					}, 8000)
 				}
@@ -1254,21 +1488,12 @@ export class WebRTCService {
 			// Add any new tracks from receivers
 			receivers.forEach(receiver => {
 				if (receiver.track) {
-					const trackExists = existingTracks.some(t => 
+					const trackExists = existingTracks.some(t =>
 						t.id === receiver.track.id && t.kind === receiver.track.kind && t.readyState === receiver.track.readyState
 					);
 					if (!trackExists) {
-						// Remove any tracks of the same kind first to prevent duplicates
-						const existingSameKind = existingTracks.filter(t => t.kind === receiver.track.kind);
-						existingSameKind.forEach(track => {
-							try {
-								stream!.removeTrack(track);
-							} catch (e) {
-								// Track might already be removed, ignore error
-							}
-						});
-						
-						// Add the new track
+						// Simply add the new track - do NOT remove existing tracks
+						// Removing tracks causes audio disruption
 						console.log(`[WebRTC] Adding ${receiver.track.kind} track to remote stream for ${targetSocketId}`);
 						stream!.addTrack(receiver.track);
 					}
@@ -1322,6 +1547,11 @@ export class WebRTCService {
 
 	endCall(targetSocketId: string): void {
 		this.socket.emit('call_end', { target_socket_id: targetSocketId })
+		
+		// Stop screen share and video before cleaning up
+		this.stopScreenShare().catch(() => {})
+		this.stopVideo().catch(() => {})
+		
 		this.cleanupCall(targetSocketId)
 	}
 
@@ -1344,11 +1574,10 @@ export class WebRTCService {
 			return
 		}
 
-		// Check if we're the offerer or answerer
-		const isOfferer = pc.localDescription?.type === 'offer'
-		
-		if (isOfferer) {
-			console.log(`[WebRTC] Restarting ICE as offerer for ${targetSocketId}`)
+		// Check if we're in a stable state to send a new offer
+		// Both offerer and answerer can initiate ICE restart by creating a new offer
+		if (pc.signalingState === 'stable' || pc.signalingState === 'have-local-offer') {
+			console.log(`[WebRTC] Restarting ICE for ${targetSocketId}`)
 			try {
 				const offer = await pc.createOffer({ iceRestart: true })
 				await pc.setLocalDescription(offer)
@@ -1356,6 +1585,7 @@ export class WebRTCService {
 					target_socket_id: targetSocketId,
 					offer,
 				})
+				console.log(`[WebRTC] ICE restart offer sent to ${targetSocketId}`)
 			} catch (e: any) {
 				console.error('[WebRTC] ICE restart failed:', e)
 				// Fall back to full reconnect with relay
@@ -1364,13 +1594,18 @@ export class WebRTCService {
 				}
 			}
 		} else {
-			console.log(`[WebRTC] Not the offerer for ${targetSocketId}, requesting ICE restart from peer`)
-			// Request the other side to restart ICE by sending a restart offer
-			// We can't initiate ICE restart as answerer
+			console.log(`[WebRTC] Cannot restart ICE in signaling state: ${pc.signalingState}, waiting for stable state`)
 		}
 	}
 
 	public cleanupCall(socketId: string) {
+		// Clear ICE disconnect timeout
+		const existingTimeout = this.iceDisconnectTimeouts.get(socketId)
+		if (existingTimeout) {
+			clearTimeout(existingTimeout)
+			this.iceDisconnectTimeouts.delete(socketId)
+		}
+
 		const pc = this.peerConnections.get(socketId)
 		if (pc) {
 			pc.close()
@@ -1382,6 +1617,12 @@ export class WebRTCService {
 			remoteStream.getTracks().forEach(track => track.stop())
 			this.remoteStreams.delete(socketId)
 		}
+
+		// If this is the last connection, stop screen share and video
+		if (this.peerConnections.size === 0) {
+			this.stopScreenShare().catch(() => {})
+			this.stopVideo().catch(() => {})
+		}
 	}
 
 	endAllCalls(): void {
@@ -1389,6 +1630,101 @@ export class WebRTCService {
 			this.socket.emit('call_end', { target_socket_id: socketId })
 			this.cleanupCall(socketId)
 		}
+	}
+
+	/**
+	 * Test TURN server connectivity and switch to internal (192.168.20.31) if external fails
+	 */
+	async testTurnAndFallback(): Promise<void> {
+		if (this.turnTested) {
+			return
+		}
+
+		this.turnTested = true
+
+		// Skip if no TURN configured or already using internal
+		if (!this.hasTurn || this.useInternalTurnOnly) {
+			return
+		}
+
+		console.log('[WebRTC] Testing TURN server connectivity...')
+
+		// Create test peer connection
+		const testPc = new RTCPeerConnection({
+			iceServers: this.configuration.iceServers,
+			iceTransportPolicy: 'relay',
+		})
+
+		const iceTimeout = setTimeout(() => {
+			testPc.close()
+		}, 5000)
+
+		return new Promise((resolve) => {
+			const cleanup = () => {
+				clearTimeout(iceTimeout)
+				testPc.close()
+			}
+
+			testPc.oniceconnectionstatechange = () => {
+				const state = testPc.iceConnectionState
+
+				if (state === 'connected' || state === 'completed') {
+					cleanup()
+					console.log('[WebRTC] External TURN server is working')
+					resolve()
+				} else if (state === 'failed' || state === 'closed') {
+					cleanup()
+					console.warn('[WebRTC] External TURN server failed, switching to internal (192.168.20.31)')
+					this.useInternalTurnOnly = true
+					
+					// Recreate all peer connections with internal TURN
+					const oldConnections = Array.from(this.peerConnections.entries())
+					oldConnections.forEach(([socketId, oldPc]) => {
+						oldPc.close()
+						this.peerConnections.delete(socketId)
+						this.createPeerConnection(socketId)
+					})
+					
+					resolve()
+				}
+			}
+
+			// Add dummy track to trigger ICE
+			testPc.addTransceiver('audio')
+
+			// If no response after timeout, assume failed
+			setTimeout(() => {
+				if (testPc.iceConnectionState === 'new' || testPc.iceConnectionState === 'checking') {
+					cleanup()
+					console.warn('[WebRTC] TURN server timeout, switching to internal (192.168.20.31)')
+					this.useInternalTurnOnly = true
+				}
+				resolve()
+			}, 5000)
+		})
+	}
+
+	/**
+	 * Force use internal TURN server (192.168.20.31)
+	 */
+	forceInternalTurn(): void {
+		this.useInternalTurnOnly = true
+		console.log('[WebRTC] Forced to use internal TURN (192.168.20.31)')
+		
+		// Recreate all peer connections
+		const oldConnections = Array.from(this.peerConnections.entries())
+		oldConnections.forEach(([socketId, oldPc]) => {
+			oldPc.close()
+			this.peerConnections.delete(socketId)
+			this.createPeerConnection(socketId)
+		})
+	}
+
+	/**
+	 * Check if using internal TURN only
+	 */
+	isUsingInternalTurn(): boolean {
+		return this.useInternalTurnOnly
 	}
 
 	toggleMute(): boolean {
@@ -1437,6 +1773,16 @@ export class WebRTCService {
 	cleanup(): void {
 		this.endAllCalls()
 
+		// Clear all ICE disconnect timeouts
+		this.iceDisconnectTimeouts.forEach(timeout => clearTimeout(timeout))
+		this.iceDisconnectTimeouts.clear()
+
+		// Cleanup audio processor
+		if (this.audioProcessor) {
+			this.audioProcessor.cleanup()
+			this.audioProcessor = null
+		}
+
 		if (this.localStream) {
 			this.localStream.getTracks().forEach(track => track.stop())
 			this.localStream = null
@@ -1447,5 +1793,50 @@ export class WebRTCService {
 			this.isSharingScreen = false
 			this.notifyScreenShareState()
 		}
+	}
+
+	// Audio Processing Controls
+	setNoiseSuppression(level: number) {
+		if (this.audioProcessor) {
+			this.audioProcessor.setNoiseSuppression(level)
+			console.log(`[WebRTC] Noise suppression set to ${level}`)
+		}
+	}
+
+	setGain(db: number) {
+		if (this.audioProcessor) {
+			this.audioProcessor.setGain(db)
+			console.log(`[WebRTC] Gain set to ${db}dB`)
+		}
+	}
+
+	setEchoCancellation(enabled: boolean) {
+		if (this.audioProcessor) {
+			this.audioProcessor.setEchoCancellation(enabled)
+			console.log(`[WebRTC] Echo cancellation ${enabled ? 'enabled' : 'disabled'}`)
+		}
+	}
+
+	setAutoGainControl(enabled: boolean) {
+		if (this.audioProcessor) {
+			this.audioProcessor.setAutoGainControl(enabled)
+			console.log(`[WebRTC] Auto gain control ${enabled ? 'enabled' : 'disabled'}`)
+		}
+	}
+
+	async suspendAudioProcessing() {
+		if (this.audioProcessor) {
+			await this.audioProcessor.suspend()
+		}
+	}
+
+	async resumeAudioProcessing() {
+		if (this.audioProcessor) {
+			await this.audioProcessor.resume()
+		}
+	}
+
+	getAudioProcessor(): AudioProcessor | null {
+		return this.audioProcessor
 	}
 }

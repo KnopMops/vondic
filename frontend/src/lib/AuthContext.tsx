@@ -53,7 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 						'temp_user_data=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;'
 					return
 				} catch (e) {
-					console.error('Failed to parse temp_user_data', e)
+					console.error('Не удалось разобрать temp_user_data', e)
 				}
 			}
 
@@ -95,7 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			const data = await response.json()
 
 			if (!response.ok) {
-				throw new Error(data.error || 'Login failed')
+				throw new Error(data.error || 'Вход не выполнен')
 			}
 
 			const userData = data.user
@@ -109,7 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 			router.push('/feed')
 		} catch (error) {
-			alert(error instanceof Error ? error.message : 'An error occurred')
+			alert(error instanceof Error ? error.message : 'Произошла ошибка')
 		}
 	}
 
@@ -124,7 +124,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			const data = await response.json()
 
 			if (!response.ok) {
-				throw new Error(data.error || 'Telegram login failed')
+				throw new Error(data.error || 'Вход через Telegram не выполнен')
 			}
 
 			const userData = data.user
@@ -136,7 +136,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 			router.push('/feed')
 		} catch (error) {
-			alert(error instanceof Error ? error.message : 'An error occurred')
+			alert(error instanceof Error ? error.message : 'Произошла ошибка')
 		}
 	}
 
@@ -150,16 +150,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			const data = await response.json()
 
 			if (!response.ok) {
-				throw new Error(data.error || 'Yandex login init failed')
+				throw new Error(data.error || 'Вход через Яндекс не выполнен')
 			}
 
 			if (data.auth_url) {
 				window.location.href = data.auth_url
 			} else {
-				throw new Error('No auth_url returned')
+				throw new Error('Не получен auth_url')
 			}
 		} catch (error) {
-			alert(error instanceof Error ? error.message : 'An error occurred')
+			alert(error instanceof Error ? error.message : 'Произошла ошибка')
 		}
 	}
 
@@ -179,7 +179,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			const data = await response.json()
 
 			if (!response.ok) {
-				throw new Error(data.error || 'Registration failed')
+				throw new Error(data.error || 'Регистрация не выполнена')
 			}
 
 			// Если бэкенд возвращает пользователя и токены сразу
@@ -195,12 +195,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			// Перенаправляем на верификацию
 			router.push('/verify')
 		} catch (error) {
-			alert(error instanceof Error ? error.message : 'An error occurred')
+			alert(error instanceof Error ? error.message : 'Произошла ошибка')
 		}
 	}
 
 	const logout = async () => {
 		try {
+			// Set status to offline before logout
+			if (user?.access_token) {
+				try {
+					await fetch('/api/v1/users/status', {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+							'Authorization': `Bearer ${user.access_token}`,
+						},
+						body: JSON.stringify({ status: 'offline' }),
+					})
+				} catch (e) {
+					console.error('Не удалось установить статус offline:', e)
+				}
+			}
+			
 			await fetch('/api/auth/logout', { method: 'POST' })
 		} catch (e) {
 			console.error(e)

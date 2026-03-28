@@ -18,6 +18,18 @@ interface Message {
 	reply_to?: string
 	attachments?: Attachment[]
 	is_deleted?: boolean
+	forwarded_from?: {
+		sender_id: string
+		sender_name: string
+		sender_avatar?: string | null
+	}
+	reply_markup?: {
+		inline_keyboard: Array<Array<{
+			text: string
+			callback_data?: string
+			url?: string
+		}>>
+	}
 }
 
 interface MessageBubbleProps {
@@ -35,6 +47,9 @@ interface MessageBubbleProps {
 	onEdit?: (msg: Message, text: string) => void
 	onReact?: (msg: Message, emoji: string) => void
 	onForward?: (msg: Message) => void
+	isSelectionMode?: boolean
+	isSelected?: boolean
+	onToggleSelect?: (msg: Message) => void
 }
 
 const REACTIONS = ['❤️', '🔥', '😂', '👍', '😮', '😢']
@@ -53,6 +68,9 @@ const MessageBubble = memo(
 		onEdit,
 		onReact,
 		onForward,
+		isSelectionMode,
+		isSelected,
+		onToggleSelect,
 	}: MessageBubbleProps) => {
 		const [isDetailsOpen, setIsDetailsOpen] = useState(false)
 		const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -204,34 +222,71 @@ const MessageBubble = memo(
 									'bg-gradient-to-br from-blue-600 to-blue-700'
 								} text-white rounded-2xl rounded-tr-sm`
 							: 'bg-gray-800 border border-gray-700 text-gray-100 rounded-2xl rounded-tl-sm'
+					} ${
+						isSelectionMode && msg.isOwn
+							? isSelected
+								? 'ring-2 ring-emerald-400'
+								: 'opacity-60'
+							: ''
 					}`}
 				>
 					<div
 						ref={menuRef}
 						className={`absolute -top-2 ${
 							msg.isOwn ? 'left-2' : 'right-2'
-						} flex items-center gap-1`}
+						} flex items-center gap-1 z-20`}
 					>
+						{isSelectionMode && msg.isOwn && (
+							<button
+								onClick={e => {
+									e.stopPropagation()
+									onToggleSelect?.(msg)
+								}}
+								className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all hover:scale-110 ${
+									isSelected
+										? 'bg-emerald-500 border-emerald-500 shadow-lg shadow-emerald-500/30'
+										: 'border-white/60 hover:border-white hover:bg-white/10'
+								}`}
+								title={isSelected ? 'Отменить выделение' : 'Выбрать'}
+							>
+								{isSelected && (
+									<svg
+										className='w-4 h-4 text-white'
+										viewBox='0 0 24 24'
+										fill='none'
+										stroke='currentColor'
+										strokeWidth='3'
+										strokeLinecap='round'
+										strokeLinejoin='round'
+									>
+										<polyline points='20 6 9 17 4 12'></polyline>
+									</svg>
+								)}
+							</button>
+						)}
 						{isPinned && (
 							<span className='text-[10px] rounded-full bg-amber-400/20 px-2 py-0.5 text-amber-300'>
 								📌
 							</span>
 						)}
 						<button
-							onClick={() => setIsMenuOpen(o => !o)}
-							className='rounded-full bg-black/30 px-2 py-0.5 text-xs text-white/80 hover:text-white hover:bg-black/50 transition'
+							onClick={(e) => {
+								e.stopPropagation()
+								setIsMenuOpen(o => !o)
+							}}
+							className='rounded-full bg-black/30 px-2 py-0.5 text-xs text-white/80 hover:text-white hover:bg-black/50 transition z-30 relative'
 						>
 							⋯
 						</button>
 						{isMenuOpen && (
-							<div className='absolute right-0 top-6 z-10 w-36 rounded-lg border border-white/10 bg-gray-900/95 p-1 shadow-xl'>
+							<div className='absolute right-0 top-full mt-1 z-50 w-40 rounded-lg border border-white/10 bg-gray-900/95 p-1 shadow-xl'>
 								{!msg.isOwn && (
 									<button
 										onClick={() => {
 											onReply?.(msg)
 											setIsMenuOpen(false)
 										}}
-										className='w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-200 hover:bg-white/10'
+										className='w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-200 hover:bg-white/10 whitespace-nowrap'
 									>
 										Ответить
 									</button>
@@ -241,7 +296,7 @@ const MessageBubble = memo(
 										onPin?.(msg)
 										setIsMenuOpen(false)
 									}}
-									className='w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-200 hover:bg-white/10'
+									className='w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-200 hover:bg-white/10 whitespace-nowrap'
 								>
 									{isPinned ? 'Открепить' : 'Закрепить'}
 								</button>
@@ -251,7 +306,7 @@ const MessageBubble = memo(
 											onForward?.(msg)
 											setIsMenuOpen(false)
 										}}
-										className='w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-200 hover:bg-white/10'
+										className='w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-200 hover:bg-white/10 whitespace-nowrap'
 									>
 										Переслать
 									</button>
@@ -262,7 +317,7 @@ const MessageBubble = memo(
 											setIsEditing(true)
 											setIsMenuOpen(false)
 										}}
-										className='w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-200 hover:bg-white/10'
+										className='w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-200 hover:bg-white/10 whitespace-nowrap'
 									>
 										Изменить
 									</button>
@@ -272,7 +327,7 @@ const MessageBubble = memo(
 										onDelete?.(msg)
 										setIsMenuOpen(false)
 									}}
-									className='w-full rounded-md px-2 py-1.5 text-left text-xs text-rose-200 hover:bg-rose-500/20'
+									className='w-full rounded-md px-2 py-1.5 text-left text-xs text-rose-200 hover:bg-rose-500/20 whitespace-nowrap'
 								>
 									Удалить
 								</button>
@@ -281,9 +336,18 @@ const MessageBubble = memo(
 										setIsReactionsOpen(o => !o)
 										setIsMenuOpen(false)
 									}}
-									className='w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-200 hover:bg-white/10'
+									className='w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-200 hover:bg-white/10 whitespace-nowrap'
 								>
 									Реакция
+								</button>
+								<button
+									onClick={() => {
+										onToggleSelect?.(msg)
+										setIsMenuOpen(false)
+									}}
+									className='w-full rounded-md px-2 py-1.5 text-left text-xs text-emerald-200 hover:bg-emerald-500/20 whitespace-nowrap'
+								>
+									{isSelected ? 'Снять выделение' : 'Выбрать'}
 								</button>
 							</div>
 						)}
@@ -312,6 +376,25 @@ const MessageBubble = memo(
 								{replyPreview.sender}
 							</div>
 							<div className='truncate text-gray-400'>{replyPreview.text}</div>
+						</div>
+					)}
+					{msg.forwarded_from && (
+						<div className='mb-2 flex items-center gap-2 rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-xs'>
+							<svg
+								className='w-3.5 h-3.5 text-blue-400 flex-shrink-0'
+								viewBox='0 0 24 24'
+								fill='none'
+								stroke='currentColor'
+								strokeWidth='2'
+							>
+								<polyline points='17 1 21 5 17 9'></polyline>
+								<path d='M3 11V9a4 4 0 0 1 4-4h14'></path>
+								<polyline points='7 23 3 19 7 15'></polyline>
+								<path d='M21 13v2a4 4 0 0 1-4 4H3'></path>
+							</svg>
+							<span className='text-blue-300 truncate'>
+								Переслано от <span className='font-semibold text-white'>{msg.forwarded_from.sender_name}</span>
+							</span>
 						</div>
 					)}
 					{isEditing ? (
@@ -484,6 +567,58 @@ const MessageBubble = memo(
 							})}
 						</div>
 					)}
+					
+					{/* Inline Keyboard Buttons (for bot messages) */}
+					{msg.reply_markup?.inline_keyboard && (
+						<div className='mt-3 flex flex-col gap-2'>
+							{msg.reply_markup.inline_keyboard.map((row, rowIndex) => (
+								<div key={rowIndex} className='flex flex-wrap gap-2'>
+									{row.map((btn, btnIndex) => (
+										<button
+											key={`${rowIndex}-${btnIndex}`}
+											onClick={async (e) => {
+												e.preventDefault()
+												e.stopPropagation()
+												console.log('[Button] Clicked:', btn.callback_data, btn.text)
+												if (btn.callback_data) {
+													// Send callback to backend via frontend proxy
+													try {
+														const token = localStorage.getItem('access_token')
+														const userData = localStorage.getItem('user')
+														const user = userData ? JSON.parse(userData) : null
+														const url = `/api/public/v1/bots/${msg.sender_id}/callback`
+														console.log('[Button] Sending to:', url)
+														const response = await fetch(url, {
+															method: 'POST',
+															headers: {
+																'Content-Type': 'application/json',
+															},
+															body: JSON.stringify({
+																message_id: msg.id,
+																data: btn.callback_data,
+																user_id: user?.id || 'unknown',
+															}),
+														})
+														console.log('[Button] Response:', response.status, await response.text())
+													} catch (e) {
+														console.error('[Button] Error:', e)
+													}
+												}
+												if (btn.url) {
+													window.open(btn.url, '_blank')
+												}
+											}}
+											className='w-full bg-blue-600/80 hover:bg-blue-500 text-white font-medium py-2.5 px-4 rounded-lg transition-colors text-sm cursor-pointer'
+											type='button'
+										>
+											{btn.text}
+										</button>
+									))}
+								</div>
+							))}
+						</div>
+					)}
+					
 					{reactionEntries.length > 0 && (
 						<div className='mt-2 flex flex-wrap gap-1'>
 							{reactionEntries.map(([emoji, info]) => (

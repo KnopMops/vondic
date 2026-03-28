@@ -7,16 +7,13 @@ from flask import Blueprint, jsonify, request
 public_posts_bp = Blueprint(
     "public_posts", __name__, url_prefix="/api/public/v1/posts")
 
-
 @public_posts_bp.route("/", methods=["GET"])
 def get_posts():
-    """Get all public posts"""
     try:
         page = request.args.get('page', 1, type=int)
         limit = request.args.get('limit', 20, type=int)
         offset = (page - 1) * limit
 
-        # Get public posts (posts with privacy level 'public')
         posts = PostService.get_public_posts(limit=limit, offset=offset)
         total_count = PostService.get_public_posts_count()
 
@@ -32,16 +29,13 @@ def get_posts():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @public_posts_bp.route("/<post_id>", methods=["GET"])
 def get_post(post_id):
-    """Get a specific post by ID"""
     try:
         post = PostService.get_post_by_id(post_id)
         if not post:
             return jsonify({"error": "Post not found"}), 404
 
-        # Check if post is public or user has permission to view it
         if post.privacy != 'public':
             return jsonify({"error": "Access denied"}), 403
 
@@ -49,26 +43,22 @@ def get_post(post_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @public_posts_bp.route("/", methods=["POST"])
 @token_required
-@rate_limit(limit=10, window=3600, per_user=True)  # 10 posts per hour per user
+@rate_limit(limit=10, window=3600, per_user=True)
 def create_post(current_user):
-    """Create a new post"""
     try:
         data = request.get_json() or {}
 
-        # Validate required fields
         content = data.get('content')
         if not content:
             return jsonify({"error": "Content is required"}), 400
 
-        # Check for spam content
         is_spam, spam_reason = check_spam_protection(content)
         if is_spam:
             return jsonify({"error": f"Spam detected: {spam_reason}"}), 400
 
-        privacy = data.get('privacy', 'public')  # Default to public
+        privacy = data.get('privacy', 'public')
         allowed_privacy = ['public', 'friends', 'private']
         if privacy not in allowed_privacy:
             return jsonify(
@@ -80,7 +70,6 @@ def create_post(current_user):
             'privacy': privacy
         }
 
-        # Handle optional fields
         if 'media_urls' in data:
             post_data['media_urls'] = data['media_urls']
 
@@ -98,13 +87,11 @@ def create_post(current_user):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @public_posts_bp.route("/<post_id>", methods=["PUT"])
 @token_required
-# 20 updates per hour per user
+
 @rate_limit(limit=20, window=3600, per_user=True)
 def update_post(current_user, post_id):
-    """Update a post"""
     try:
         post = PostService.get_post_by_id(post_id)
         if not post:
@@ -117,7 +104,7 @@ def update_post(current_user, post_id):
 
         update_data = {}
         if 'content' in data:
-            # Check for spam content
+
             is_spam, spam_reason = check_spam_protection(data['content'])
             if is_spam:
                 return jsonify({"error": f"Spam detected: {spam_reason}"}), 400
@@ -146,11 +133,9 @@ def update_post(current_user, post_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @public_posts_bp.route("/<post_id>", methods=["DELETE"])
 @token_required
 def delete_post(current_user, post_id):
-    """Delete a post"""
     try:
         post = PostService.get_post_by_id(post_id)
         if not post:
@@ -167,17 +152,14 @@ def delete_post(current_user, post_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @public_posts_bp.route("/<post_id>/like", methods=["POST"])
 @token_required
 def like_post(current_user, post_id):
-    """Like a post"""
     try:
         post = PostService.get_post_by_id(post_id)
         if not post:
             return jsonify({"error": "Post not found"}), 404
 
-        # Check if post is public or user has permission to view it
         if post.privacy != 'public' and post.user_id != current_user.id:
             return jsonify({"error": "Access denied"}), 403
 
@@ -189,17 +171,14 @@ def like_post(current_user, post_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @public_posts_bp.route("/<post_id>/unlike", methods=["POST"])
 @token_required
 def unlike_post(current_user, post_id):
-    """Unlike a post"""
     try:
         post = PostService.get_post_by_id(post_id)
         if not post:
             return jsonify({"error": "Post not found"}), 404
 
-        # Check if post is public or user has permission to view it
         if post.privacy != 'public' and post.user_id != current_user.id:
             return jsonify({"error": "Access denied"}), 403
 
@@ -211,16 +190,13 @@ def unlike_post(current_user, post_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @public_posts_bp.route("/<post_id>/comments", methods=["GET"])
 def get_post_comments(post_id):
-    """Get comments for a post"""
     try:
         post = PostService.get_post_by_id(post_id)
         if not post:
             return jsonify({"error": "Post not found"}), 404
 
-        # Check if post is public or user has permission to view it
         if post.privacy != 'public':
             return jsonify({"error": "Access denied"}), 403
 

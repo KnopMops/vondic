@@ -50,7 +50,7 @@ export default function PremiumSuccessPage() {
 				>
 					Добро пожаловать в клуб{' '}
 					<span className='font-bold bg-clip-text text-transparent bg-gradient-to-r from-amber-200 via-yellow-400 to-amber-500'>
-						Vondic Premium
+						Вондик Premium
 					</span>
 				</motion.p>
 

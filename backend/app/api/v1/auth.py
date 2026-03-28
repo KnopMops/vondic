@@ -4,7 +4,6 @@ import uuid
 from datetime import datetime, timezone
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
-# from user_agents import parse as parse_ua
 from app.core.extensions import cache
 from app.schemas.user_schema import user_schema
 from app.services.auth_service import AuthService
@@ -17,7 +16,6 @@ auth_bp = Blueprint("auth", __name__, url_prefix="/api/v1/auth")
 
 desktop_yandex_sessions: dict[str, dict] = {}
 
-
 def _get_client_ip():
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
@@ -27,9 +25,8 @@ def _get_client_ip():
         return real_ip.strip()
     return request.remote_addr or ""
 
-
 def _parse_user_agent(ua_string: str):
-    # Simple fallback without external library
+
     ua_string = ua_string.lower()
     if "mobile" in ua_string or "android" in ua_string or "iphone" in ua_string:
         device = "mobile"
@@ -60,7 +57,6 @@ def _parse_user_agent(ua_string: str):
 
     return device, platform, browser
 
-
 def _extract_access_token():
     data = request.get_json(silent=True) or {}
     token = data.get("access_token")
@@ -73,7 +69,6 @@ def _extract_access_token():
     if not token:
         token = request.cookies.get("access_token")
     return token
-
 
 def _store_login_session(
         user,
@@ -116,17 +111,12 @@ def _store_login_session(
         if not isinstance(existing, list):
             existing = []
 
-        # Remove duplicates based on IP and User-Agent to keep list clean
-        # Or keep history? User asked for "saving sessions", usually means active sessions.
-        # But let's just prepend new session.
         existing.insert(0, payload)
-        existing = existing[:50]  # Limit to 50 sessions
+        existing = existing[:50]
 
         cache.set(key, existing, timeout=ttl)
         cache.set(f"session:{session_id}", payload, timeout=ttl)
 
-        # Also store JSON strings for easier debugging/external access if
-        # needed
         cache.set(
             f"sessions_json:{user.id}",
             json.dumps(existing, ensure_ascii=False),
@@ -144,13 +134,12 @@ def _store_login_session(
         current_app.logger.error(
             f"Failed to store login session in Redis: {e}")
 
-
 @auth_bp.route("/register", methods=["POST"])
 @rate_limit("auth-register", limit=5, window_seconds=60)
 def register():
     data = request.get_json()
     if not data:
-        return (jsonify({"error": "No data provided"}), 400)
+        return (jsonify({"error": "Нет данных"}), 400)
     user, error = AuthService.register_user(data)
     if error:
         return (jsonify({"error": error}), 400)
@@ -161,14 +150,13 @@ def register():
     return (
         jsonify(
             {
-                "message": "User registered successfully. Please check your email to verify account.",
+                "message": "Пользователь зарегистрирован. Пожалуйста, проверьте свою почту для подтверждения.",
                 "user": user_schema.dump(user),
                 "access_token": user.access_token,
                 "refresh_token": user.refresh_token,
             }),
         201,
     )
-
 
 @auth_bp.route("/verify-email/<token>", methods=["GET"])
 def verify_email(token):
@@ -177,35 +165,33 @@ def verify_email(token):
         return (jsonify({"error": message}), 400)
     return (jsonify({"message": message}), 200)
 
-
 @auth_bp.route("/login", methods=["POST"])
 @rate_limit("auth-login", limit=10, window_seconds=60)
 def login():
     try:
-        # Получаем raw данные и обрабатываем экранирование
+
         raw_data = request.get_data(as_text=True)
         current_app.logger.info(f"Raw login data: {raw_data}")
-        
-        # Если JSON содержит экранированные символы, пытаем их исправить
+
         if raw_data and '\\"' in raw_data:
-            # Заменяем двойное экранирование на одинарное
+
             raw_data = raw_data.replace('\\"', '"')
             current_app.logger.info(f"Fixed raw data: {raw_data}")
-        
+
         data = request.get_json()
         current_app.logger.info(f"Parsed login data: {data}")
-        
+
         if not data:
             return (jsonify({"error": "No data provided"}), 400)
-        
+
         email = data.get("email")
         password = data.get("password")
         current_app.logger.info(f"Email: {email}, Password length: {len(password) if password else 0}")
-        
+
     except Exception as e:
         current_app.logger.error(f"JSON parsing error: {e}")
-        return (jsonify({"error": "Invalid JSON format"}), 400)
-    
+        return (jsonify({"error": "Неверный формат JSON"}), 400)
+
     result, error = AuthService.login_user(data)
     if error:
         if error == "TwoFactorEmailRequired":
@@ -239,7 +225,7 @@ def login():
     return (
         jsonify(
             {
-                "message": "Login successful",
+                "message": "Вход выполнен успешно",
                 "access_token": result["access_token"],
                 "refresh_token": result["refresh_token"],
                 "user": user_schema.dump(result["user"]),
@@ -248,7 +234,6 @@ def login():
         200,
     )
 
-
 @auth_bp.route("/telegram/link", methods=["POST"])
 def link_telegram_account():
     data = request.get_json() or {}
@@ -256,17 +241,16 @@ def link_telegram_account():
     telegram_id = data.get("telegram_id")
 
     if not link_key or not telegram_id:
-        return jsonify({"error": "Missing link_key or telegram_id"}), 400
+        return jsonify({"error": "Отсутствуют link_key или telegram_id"}), 400
 
     user, error = AuthService.link_telegram(link_key, telegram_id)
     if error:
         return jsonify({"error": error}), 400
 
     return jsonify(
-        {"message": "Account linked successfully",
+        {"message": "Аккаунт успешно привязан",
             "user": user_schema.dump(user)}
     ), 200
-
 
 @auth_bp.route("/me", methods=["POST"])
 def me():
@@ -274,7 +258,7 @@ def me():
     token = data.get("access_token")
 
     if not token:
-        return jsonify({"error": "access_token is required"}), 400
+        return jsonify({"error": "Требуется access_token"}), 400
 
     user, error = AuthService.get_user_by_token(token)
 
@@ -284,14 +268,13 @@ def me():
     return (
         jsonify(
             {
-                "message": "User is authenticated",
+                "message": "Пользователь авторизован",
                 "is_authenticated": True,
                 "user": user_schema.dump(user),
             }
         ),
         200,
     )
-
 
 @auth_bp.route("/socket-token", methods=["GET"])
 @token_required
@@ -301,7 +284,6 @@ def socket_token(current_user):
     token = serializer.dumps(
         {"uid": str(current_user.id)}, salt="socket-token")
     return jsonify({"token": token, "expires_in": 300}), 200
-
 
 @auth_bp.route("/yandex/login", methods=["GET"])
 def yandex_login():
@@ -326,20 +308,19 @@ def yandex_login():
         )
     return jsonify({"auth_url": auth_url}), 200
 
-
 @auth_bp.route("/yandex/callback", methods=["GET"])
 def yandex_callback():
     code = request.args.get("code")
     cid = request.args.get("state") or request.args.get("cid")
     if not code:
-        return jsonify({"error": "No code provided"}), 400
+        return jsonify({"error": "Не предоставлен код"}), 400
 
     result, error = AuthService.login_yandex_user(code)
     if error:
         return jsonify({"error": error}), 400
 
     response_payload = {
-        "message": "Login successful",
+        "message": "Вход выполнен успешно",
         "access_token": result["access_token"],
         "refresh_token": result["refresh_token"],
         "user": user_schema.dump(result["user"]),
@@ -353,12 +334,11 @@ def yandex_callback():
 
     return jsonify(response_payload), 200
 
-
 @auth_bp.route("/yandex/desktop-session", methods=["GET"])
 def yandex_desktop_session():
     cid = request.args.get("cid")
     if not cid:
-        return jsonify({"error": "cid is required"}), 400
+        return jsonify({"error": "Требуется cid"}), 400
 
     data = desktop_yandex_sessions.get(cid)
     if not data:
@@ -373,7 +353,6 @@ def yandex_desktop_session():
         }
     ), 200
 
-
 @auth_bp.route("/2fa/setup", methods=["POST"])
 @token_required
 def setup_2fa(current_user):
@@ -384,7 +363,6 @@ def setup_2fa(current_user):
     if error:
         return jsonify({"error": error}), 400
     return jsonify({"user": user_schema.dump(user)}), 200
-
 
 @auth_bp.route("/2fa/email/send", methods=["POST"])
 @token_required
@@ -403,7 +381,6 @@ def send_2fa_email(current_user):
         return jsonify({"error": error}), 400
     return jsonify({"message": "Code sent"}), 200
 
-
 @auth_bp.route("/2fa/email/verify", methods=["POST"])
 @token_required
 def verify_2fa_email(current_user):
@@ -412,8 +389,7 @@ def verify_2fa_email(current_user):
     success, error = AuthService.verify_2fa_email_code(current_user, code)
     if not success:
         return jsonify({"error": error}), 400
-    return jsonify({"message": "2FA email code verified"}), 200
-
+    return jsonify({"message": "Код 2FA подтверждён"}), 200
 
 @auth_bp.route("/login-alerts/toggle", methods=["POST"])
 @token_required
@@ -423,8 +399,7 @@ def toggle_login_alerts(current_user):
     success, error = AuthService.toggle_login_alerts(current_user, enable)
     if not success:
         return jsonify({"error": error}), 400
-    return jsonify({"message": "Login alerts updated"}), 200
-
+    return jsonify({"message": "Настройки оповещений о входе обновлены"}), 200
 
 @auth_bp.route("/sessions", methods=["GET"])
 @token_required
@@ -457,14 +432,13 @@ def list_sessions(current_user):
         items.append(item_copy)
     return jsonify({"items": items}), 200
 
-
 @auth_bp.route("/sessions/terminate", methods=["POST"])
 @token_required
 def terminate_session(current_user):
     data = request.get_json() or {}
     session_id = data.get("session_id")
     if not session_id:
-        return jsonify({"error": "session_id is required"}), 400
+        return jsonify({"error": "Требуется session_id"}), 400
     token = _extract_access_token()
     current_hash = hashlib.sha256(token.encode(
         "utf-8")).hexdigest() if token else None
@@ -523,19 +497,18 @@ def terminate_session(current_user):
         access_hash and current_hash and access_hash == current_hash)
     return jsonify(
         {
-            "message": "Session terminated",
+            "message": "Сессия завершена",
             "items": updated,
             "logout_current": logout_current,
         }
     ), 200
-
 
 @auth_bp.route("/telegram-login", methods=["POST"])
 @rate_limit("auth-telegram-login", limit=10, window_seconds=60)
 def telegram_login():
     data = request.get_json()
     if not data:
-        return (jsonify({"error": "No data provided"}), 400)
+        return (jsonify({"error": "Нет данных"}), 400)
     result, error = AuthService.login_telegram_user(data)
     if error:
         return (jsonify({"error": error}), 401)
@@ -548,7 +521,7 @@ def telegram_login():
     return (
         jsonify(
             {
-                "message": "Login successful",
+                "message": "Вход выполнен успешно",
                 "access_token": result["access_token"],
                 "refresh_token": result["refresh_token"],
                 "user": user_schema.dump(result["user"]),
@@ -557,7 +530,6 @@ def telegram_login():
         200,
     )
 
-
 @auth_bp.route("/api-key-login", methods=["POST"])
 @rate_limit("auth-api-key-login", limit=20, window_seconds=60)
 def api_key_login():
@@ -565,11 +537,11 @@ def api_key_login():
     api_key = data.get("api_key")
     cloud_password = data.get("cloud_password")
     if not api_key:
-        return jsonify({"error": "api_key is required"}), 400
+        return jsonify({"error": "Требуется api_key"}), 400
 
     user = UserService.get_user_by_api_key(api_key)
     if not user:
-        return jsonify({"error": "Invalid api_key"}), 401
+        return jsonify({"error": "Неверный api_key"}), 401
 
     if cloud_password:
         error_msg = UserService.set_or_reset_cloud_password(
@@ -590,7 +562,7 @@ def api_key_login():
     return (
         jsonify(
             {
-                "message": "Login successful",
+                "message": "Вход выполнен успешно",
                 "access_token": tokens["access_token"],
                 "refresh_token": tokens["refresh_token"],
                 "user": user_schema.dump(tokens["user"]),
@@ -606,7 +578,6 @@ def api_key_login():
         ),
         200,
     )
-
 
 @auth_bp.route("/ai-user", methods=["GET"])
 def get_ai_user():

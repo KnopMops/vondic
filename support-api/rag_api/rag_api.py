@@ -6,26 +6,25 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 try:
-    import pandas as pd  # type: ignore
+    import pandas as pd
 except Exception:
     pd = None
 try:
-    import numpy as np  # type: ignore
+    import numpy as np
 except Exception:
     np = None
 try:
-    from sentence_transformers import SentenceTransformer  # type: ignore
+    from sentence_transformers import SentenceTransformer
 except Exception:
     SentenceTransformer = None
 try:
-    import faiss  # type: ignore
+    import faiss
 except Exception:
     faiss = None
 try:
-    from transformers import pipeline  # type: ignore
+    from transformers import pipeline
 except Exception:
     pipeline = None
-
 
 class RAGEngine:
     def __init__(self):
@@ -79,7 +78,7 @@ class RAGEngine:
 
     def _preprocess(self, text: str) -> str:
         t = str(text).lower()
-        # normalize common brand/name synonyms between ru/en
+
         try:
             syn = {
                 "телеграм": "telegram",
@@ -188,21 +187,17 @@ class RAGEngine:
             return content
         return ""
 
-
 app = FastAPI()
 engine = RAGEngine()
 
-
 class AskPayload(BaseModel):
     question: str
-
 
 @app.post("/ask")
 def ask(payload: AskPayload):
     q = (payload.question or "").strip()
     ans = engine.answer(q)
     return {"answer": ans}
-
 
 @app.get("/health")
 def health():

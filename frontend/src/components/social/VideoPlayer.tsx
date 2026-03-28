@@ -259,7 +259,7 @@ export default function VideoPlayer({ src, poster, className, videoId, onFirstPl
 				{showAd && (
 					<div className='absolute inset-0 flex items-center justify-center bg-black'>
 						<div className='text-center space-y-1'>
-							<div className='text-white font-bold text-lg'>Vondic Premium</div>
+							<div className='text-white font-bold text-lg'>Вондик Premium</div>
 							<div className='text-gray-300 text-xs'>Без рекламы и задержек</div>
 							<div className='text-gray-400 text-xs'>{adLeft} сек...</div>
 						</div>

@@ -2,7 +2,6 @@ from app.core.extensions import db
 from app.models.group import Group
 from app.models.user import User
 
-
 class GroupService:
     @staticmethod
     def create_group(data, user_id):

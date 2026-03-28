@@ -79,7 +79,7 @@ export default function Header({ email, onLogout }: Props) {
 					<BrandLogo size={28} />
 					<div
 						className={`h-2.5 w-2.5 rounded-full ${isConnected ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-red-500'} transition-colors duration-300`}
-						title={isConnected ? 'Socket Connected' : 'Socket Disconnected'}
+						title={isConnected ? 'Socket подключён' : 'Socket отключён'}
 					/>
 				</div>
 
@@ -91,7 +91,7 @@ export default function Header({ email, onLogout }: Props) {
 						<div className='relative'>
 							<input
 								type='text'
-								placeholder='Поиск (@пользователь)'
+								placeholder='Поиск'
 								value={searchQuery}
 								onChange={e => handleSearch(e.target.value)}
 								onFocus={() => searchQuery && setShowResults(true)}

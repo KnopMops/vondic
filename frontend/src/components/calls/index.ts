@@ -4,4 +4,7 @@ export { default as CallButton } from './CallButton'
 export { default as IncomingCallModal } from './IncomingCallModal'
 export { WebRTCProvider } from './WebRTCProvider'
 export { GlobalCallUI } from './GlobalCallUI'
+export { IntegratedCallPanel } from './IntegratedCallPanel'
+export { ScreenShareViewer } from './ScreenShareViewer'
+export { ChatMenu } from './ChatMenu'
 

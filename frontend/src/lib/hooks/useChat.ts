@@ -385,12 +385,28 @@ export const useChat = (
 	}, [])
 
 	const ensureKeyExchange = useCallback(async () => {
-		if (!socket || !targetUserId || !currentUserId || !e2eKeyId) return
-		if (!hasCryptoSubtle) return // Skip E2E in insecure context
+		if (!socket || !targetUserId || !currentUserId || !e2eKeyId) {
+			console.log('[E2E] ensureKeyExchange skipping - missing params:', {
+				hasSocket: !!socket,
+				hasTargetUserId: !!targetUserId,
+				hasCurrentUserId: !!currentUserId,
+				hasE2eKeyId: !!e2eKeyId,
+			})
+			return
+		}
+		if (!hasCryptoSubtle) {
+			console.log('[E2E] ensureKeyExchange skipping - no crypto.subtle')
+			return
+		}
+		console.log('[E2E] ensureKeyExchange called for:', e2eKeyId)
 		loadStoredKey()
-		if (e2eKeysRef.current.has(e2eKeyId)) return
+		if (e2eKeysRef.current.has(e2eKeyId)) {
+			console.log('[E2E] Key already loaded for:', e2eKeyId)
+			return
+		}
 		let pair = e2ePairsRef.current.get(e2eKeyId)
 		if (!pair) {
+			console.log('[E2E] Generating key pair for:', e2eKeyId)
 			pair = await crypto.subtle.generateKey(
 				{ name: 'ECDH', namedCurve: 'P-256' },
 				true,
@@ -399,6 +415,7 @@ export const useChat = (
 			e2ePairsRef.current.set(e2eKeyId, pair)
 		}
 		const publicKeyRaw = await crypto.subtle.exportKey('raw', pair.publicKey)
+		console.log('[E2E] Sending key exchange offer to:', targetUserId)
 		socket.emit('e2e_key_exchange', {
 			target_user_id: targetUserId,
 			public_key: base64FromBytes(new Uint8Array(publicKeyRaw)),
@@ -409,52 +426,95 @@ export const useChat = (
 
 	const decryptMessage = useCallback(
 		(msg: any) => {
-			if (!e2eKeyId) return msg
-			const key = e2eKeysRef.current.get(e2eKeyId)
-			if (!key) return msg
 			const next = { ...msg }
+			
+			// Try to decrypt content if it looks encrypted
 			if (typeof next.content === 'string' && next.content.startsWith('e2e:')) {
-				const decrypted = mtDecrypt(next.content, key)
-				if (decrypted !== null) next.content = decrypted
-				else console.warn('Decryption failed for content', next.content, key)
+				// Get current e2eKeyId from ref or state
+				const currentE2eKeyId = e2eKeyId || (targetUserId && currentUserId ? [currentUserId, targetUserId].sort().join(':') : null)
+				
+				if (currentE2eKeyId) {
+					const key = e2eKeysRef.current.get(currentE2eKeyId)
+					if (key) {
+						const decrypted = mtDecrypt(next.content, key)
+						if (decrypted !== null) {
+							next.content = decrypted
+						} else {
+							// If decryption fails, strip e2e: prefix and show base64-decoded
+							try {
+								next.content = decodeURIComponent(escape(atob(next.content.slice(4))))
+							} catch {
+								next.content = next.content.slice(4)
+							}
+						}
+					} else {
+						// No key yet - keep encrypted, will decrypt later
+					}
+				} else {
+					// No e2eKeyId - strip prefix as fallback
+					try {
+						next.content = decodeURIComponent(escape(atob(next.content.slice(4))))
+					} catch {
+						next.content = next.content.slice(4)
+					}
+				}
 			}
+			
+			// Try to decrypt attachments if they look encrypted
 			if (
 				typeof next.attachments === 'string' &&
 				next.attachments.startsWith('e2e:')
 			) {
-				const decrypted = mtDecrypt(next.attachments, key)
-				if (decrypted !== null) {
-					try {
-						next.attachments = JSON.parse(decrypted)
-					} catch {
-						console.warn(
-							'Decryption failed for attachments JSON parse',
-							decrypted,
-						)
+				const currentE2eKeyId = e2eKeyId || (targetUserId && currentUserId ? [currentUserId, targetUserId].sort().join(':') : null)
+				if (currentE2eKeyId) {
+					const key = e2eKeysRef.current.get(currentE2eKeyId)
+					if (key) {
+						const decrypted = mtDecrypt(next.attachments, key)
+						if (decrypted !== null) {
+							try {
+								next.attachments = JSON.parse(decrypted)
+							} catch {
+								next.attachments = undefined
+							}
+						} else {
+							next.attachments = undefined
+						}
+					} else {
 						next.attachments = undefined
 					}
 				} else {
-					console.warn(
-						'Decryption failed for attachments',
-						next.attachments,
-						key,
-					)
+					next.attachments = undefined
 				}
 			}
+			
 			return next
 		},
-		[e2eKeyId],
+		[e2eKeyId, targetUserId, currentUserId],
 	)
 
 	useEffect(() => {
-		if (!socket || !e2eKeyId || !currentUserId || !targetUserId) return
-		if (!hasCryptoSubtle) return // Skip E2E in insecure context
+		if (!socket || !e2eKeyId || !currentUserId || !targetUserId) {
+			console.log('[E2E] Skipping key exchange - missing params:', {
+				hasSocket: !!socket,
+				hasE2eKeyId: !!e2eKeyId,
+				hasCurrentUserId: !!currentUserId,
+				hasTargetUserId: !!targetUserId,
+			})
+			return
+		}
+		if (!hasCryptoSubtle) {
+			console.log('[E2E] Skipping - insecure context (no crypto.subtle)')
+			return
+		}
+		console.log('[E2E] Starting key exchange for:', e2eKeyId)
 		loadStoredKey()
 		const handleKeyExchange = async (data: any) => {
+			console.log('[E2E] Received key exchange:', data)
 			if (!data || data.key_id !== e2eKeyId) return
 			if (data.from_user_id !== targetUserId) return
 			let pair = e2ePairsRef.current.get(e2eKeyId)
 			if (!pair) {
+				console.log('[E2E] Generating new key pair')
 				pair = await crypto.subtle.generateKey(
 					{ name: 'ECDH', namedCurve: 'P-256' },
 					true,
@@ -464,6 +524,7 @@ export const useChat = (
 			}
 
 			if (data.type !== 'answer') {
+				console.log('[E2E] Sending answer with public key')
 				const myPublic = await crypto.subtle.exportKey('raw', pair.publicKey)
 				socket.emit('e2e_key_exchange', {
 					target_user_id: targetUserId,
@@ -486,9 +547,26 @@ export const useChat = (
 				256,
 			)
 			const derived = await deriveKey(shared, e2eKeyId)
+			console.log('[E2E] Derived key, storing for:', e2eKeyId)
 			storeKey(e2eKeyId, derived)
+			
+			// Re-decrypt ALL messages with the new key
+			console.log('[E2E] Re-decrypting all messages with new key')
+			setMessages(prev => {
+				console.log('[E2E] Decrypting', prev.length, 'messages')
+				return prev.map(m => {
+					const decrypted = decryptMessage(m)
+					// Log if content changed
+					if (decrypted.content !== m.content) {
+						console.log('[E2E] Decrypted message:', m.content.substring(0, 30) + '...', '->', decrypted.content.substring(0, 30) + '...')
+					}
+					return decrypted
+				})
+			})
+			
 			const pending = e2ePendingRef.current.get(e2eKeyId)
 			if (pending && pending.length) {
+				console.log('[E2E] Sending pending messages:', pending.length)
 				const queue = [...pending]
 				e2ePendingRef.current.delete(e2eKeyId)
 				queue.forEach(item => {
@@ -505,7 +583,6 @@ export const useChat = (
 					socket.emit('send_message', payload)
 				})
 			}
-			setMessages(prev => prev.map(m => decryptMessage(m)))
 		}
 		socket.on('e2e_key_exchange', handleKeyExchange)
 		ensureKeyExchange()
@@ -814,7 +891,8 @@ export const useChat = (
 					type: data.type || 'text',
 					attachments: data.attachments,
 				}
-				setMessages(prevMessages => [...prevMessages, newMessage])
+				const decrypted = decryptMessage(newMessage)
+				setMessages(prevMessages => [...prevMessages, decrypted as Message])
 				return
 			}
 
@@ -833,25 +911,27 @@ export const useChat = (
 					type: data.type || 'text',
 					attachments: data.attachments,
 				}
-				setMessages(prevMessages => [...prevMessages, newMessage])
+				const decrypted = decryptMessage(newMessage)
+				setMessages(prevMessages => [...prevMessages, decrypted as Message])
 				return
 			}
 
 			// Handle Direct Message
+			// Check if this message belongs to current DM conversation (either direction)
 			if (
 				!channelId &&
 				!groupId &&
 				targetUserId &&
-				data.sender_id === targetUserId &&
 				!data.channel_id &&
-				!data.group_id
+				!data.group_id &&
+				(data.sender_id === targetUserId || data.target_id === targetUserId || data.target_user_id === targetUserId)
 			) {
 				const newMessage: Message = {
 					id: data.id || Date.now().toString() + Math.random().toString(),
 					sender_id: data.sender_id,
 					content: data.content,
 					timestamp: data.timestamp || new Date().toISOString(),
-					isOwn: false,
+					isOwn: data.sender_id === currentUserId,
 					is_read: false,
 					is_deleted: !!data.is_deleted,
 					reply_to: data.reply_to,
@@ -881,7 +961,8 @@ export const useChat = (
 					type: msg.type || 'text',
 					attachments: msg.attachments,
 				}
-				setMessages(prevMessages => [...prevMessages, newMessage])
+				const decrypted = decryptMessage(newMessage)
+				setMessages(prevMessages => [...prevMessages, decrypted as Message])
 				return
 			}
 
@@ -900,29 +981,29 @@ export const useChat = (
 					type: msg.type || 'text',
 					attachments: msg.attachments,
 				}
-				setMessages(prevMessages => [...prevMessages, newMessage])
+				const decrypted = decryptMessage(newMessage)
+				setMessages(prevMessages => [...prevMessages, decrypted as Message])
 				return
 			}
 
 			// Handle Direct Message Confirmation
+			// Check if this message belongs to current DM conversation (either direction)
 			if (
 				!channelId &&
 				!groupId &&
 				targetUserId &&
+				!msg.channel_id &&
+				!msg.group_id &&
 				(msg.target_id === targetUserId ||
 					msg.target_user_id === targetUserId ||
-					(!msg.target_id &&
-						!msg.target_user_id &&
-						!msg.channel_id &&
-						!msg.group_id))
+					msg.sender_id === targetUserId)
 			) {
-				// Fallback logic for DM
 				const newMessage: Message = {
 					id: msg.id || Date.now().toString() + Math.random().toString(),
 					sender_id: msg.sender_id,
 					content: msg.content,
 					timestamp: msg.timestamp || new Date().toISOString(),
-					isOwn: true,
+					isOwn: msg.sender_id === currentUserId,
 					is_read: false,
 					is_deleted: !!msg.is_deleted,
 					reply_to: msg.reply_to,
@@ -936,10 +1017,13 @@ export const useChat = (
 
 		const handleTyping = (data: any) => {
 			// Only for Direct Messages for now
+			// Check if typing event is from the other participant in current DM
 			if (
 				!channelId &&
 				!groupId &&
 				targetUserId &&
+				!data.channel_id &&
+				!data.group_id &&
 				data.sender_id === targetUserId
 			) {
 				setIsTyping(true)
@@ -951,10 +1035,13 @@ export const useChat = (
 		}
 
 		const handleStopTyping = (data: any) => {
+			// Check if stop typing event is from the other participant in current DM
 			if (
 				!channelId &&
 				!groupId &&
 				targetUserId &&
+				!data.channel_id &&
+				!data.group_id &&
 				data.sender_id === targetUserId
 			) {
 				setIsTyping(false)
@@ -963,11 +1050,14 @@ export const useChat = (
 		}
 
 		const handleMessagesReadUpdate = (data: any) => {
+			// Handle read receipts for DM
 			if (
 				!channelId &&
 				!groupId &&
 				targetUserId &&
-				data.reader_id === targetUserId &&
+				!data.channel_id &&
+				!data.group_id &&
+				(data.reader_id === targetUserId || data.reader_id === currentUserId) &&
 				Array.isArray(data.message_ids)
 			) {
 				setMessages(prevMessages =>

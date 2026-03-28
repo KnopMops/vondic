@@ -2,7 +2,6 @@ from app.core.extensions import db
 from app.models.community import Community
 from app.models.user import User
 
-
 class CommunityService:
     @staticmethod
     def create_community(data, user_id):
@@ -36,7 +35,7 @@ class CommunityService:
 
     @staticmethod
     def join_community(invite_code, user_id):
-        # Найти сообщество по коду приглашения
+
         community = Community.query.filter_by(invite_code=invite_code).first()
         if not community:
             return None, "Invalid invite code"
@@ -45,12 +44,11 @@ class CommunityService:
         if not user:
             return None, "User not found"
 
-        # Проверить не состоит ли пользователь уже в сообществе
         if user in community.members:
             return None, "User already a member"
 
         try:
-            # Добавить пользователя в сообщество
+
             community.members.append(user)
             db.session.commit()
             return community, None

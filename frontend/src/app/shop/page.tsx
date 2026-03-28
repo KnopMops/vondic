@@ -268,7 +268,7 @@ export default function ShopPage() {
 											: typeof user?.balance === 'number'
 												? user.balance
 												: 0}{' '}
-										Vondic Coins
+										Вондик Coins
 									</div>
 								</div>
 								<div className='flex items-center gap-3'>

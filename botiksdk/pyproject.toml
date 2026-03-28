@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "botiksdk"
-version = "0.1.0"
-description = "Vondic Botik SDK"
+version = "0.1.2"
+description = "Vondic Botik SDK - Telegram Bot Framework for Vondic Platform"
 readme = "README.md"
 authors = [
   { name = "Vondic", email = "support@vondic.com" },
@@ -16,14 +16,18 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
+    "Development Status :: 4 - Beta",
+    "Framework :: AsyncIO",
+    "Intended Audience :: Developers",
+    "Topic :: Communications :: Chat",
 ]
 dependencies = [
     "requests>=2.32.5",
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/vondic/botiksdk"
-"Bug Tracker" = "https://github.com/vondic/botiksdk/issues"
+"Homepage" = "https://github.com/vondic/vondic/tree/main/botiksdk"
+"Bug Tracker" = "https://github.com/vondic/vondic/issues"
 
 [tool.setuptools]
 packages = ["botiksdk"]

@@ -9,7 +9,6 @@ from .database import AuthRepository
 
 logger = logging.getLogger(__name__)
 
-
 class BCrypter:
     def __init__(self, db_path=None):
         self.repo = AuthRepository(db_path)

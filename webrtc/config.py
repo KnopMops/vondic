@@ -7,7 +7,6 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 load_dotenv(dotenv_path=os.path.join(BASE_DIR, "backend", ".env.backend"))
 load_dotenv(dotenv_path=".env.webrtc")
 
-
 def _build_postgres_url() -> str | None:
     explicit = os.environ.get("POSTGRES_URL")
     if explicit:
@@ -28,7 +27,6 @@ def _build_postgres_url() -> str | None:
         url = f"{url}?sslmode={sslmode}"
     return url.replace("postgresql+psycopg2://", "postgresql://")
 
-
 class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY") or "secret!"
     DATABASE_URL = (
@@ -37,7 +35,7 @@ class Config:
     DEBUG = os.environ.get("DEBUG", "True").lower() in ("true", "1", "t")
     HOST = os.environ.get("HOST", "0.0.0.0")
     PORT = int(os.environ.get("PORT", 5000))
-    
+
     BACKEND_INTERNAL_URL = (
         os.environ.get("BACKEND_INTERNAL_URL") or "http://127.0.0.1:5050"
     )

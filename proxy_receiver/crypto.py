@@ -13,7 +13,6 @@ VERSION = 1
 HANDSHAKE_NONCE_SIZE = 32
 FRAME_NONCE_SIZE = 12
 
-
 def derive_session_key(
     master_key: bytes,
     client_nonce: bytes,
@@ -26,7 +25,6 @@ def derive_session_key(
         info=b"proxy_receiver_session",
     )
     return hkdf.derive(master_key)
-
 
 async def read_frame(
     reader,
@@ -41,11 +39,9 @@ async def read_frame(
     payload = await reader.readexactly(frame_len)
     return payload
 
-
 async def write_frame(writer, payload: bytes) -> None:
     writer.write(struct.pack(">I", len(payload)) + payload)
     await writer.drain()
-
 
 async def encrypt_and_send(
     writer,
@@ -58,7 +54,6 @@ async def encrypt_and_send(
     async with stats.lock:
         stats.bytes_out += len(plaintext)
     await write_frame(writer, nonce + ciphertext)
-
 
 async def recv_and_decrypt(
     reader,
@@ -78,19 +73,16 @@ async def recv_and_decrypt(
         stats.bytes_in += len(plaintext)
     return plaintext
 
-
 async def read_api_key(reader, max_frame_size: int) -> Optional[str]:
     payload = await read_frame(reader, max_frame_size)
     if payload is None:
         return None
     return payload.decode(errors="ignore")
 
-
 async def send_api_key(writer, api_key: Optional[str]) -> None:
     if not api_key:
         return
     await write_frame(writer, api_key.encode())
-
 
 async def perform_handshake(
     reader,
@@ -109,7 +101,6 @@ async def perform_handshake(
     await writer.drain()
     session_key = derive_session_key(master_key, client_nonce, server_nonce)
     return AESGCM(session_key)
-
 
 async def perform_client_handshake(
     reader,

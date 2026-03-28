@@ -9,7 +9,6 @@ from safetext import SafeText
 
 os.environ.setdefault("ORT_LOGGING_LEVEL", "4")
 
-
 def load_models():
     warnings.filterwarnings(
         "ignore", message="You are using the default legacy behaviour"
@@ -18,7 +17,6 @@ def load_models():
     profanity_filter = SafeText(language="ru")
     nude_classifier = NudeClassifier()
     return whisper_model, profanity_filter, nude_classifier
-
 
 def analyze_video(video_path: str, unsafe_threshold: float = 0.7):
     whisper_model, profanity_filter, nude_classifier = load_models()
@@ -88,12 +86,10 @@ def analyze_video(video_path: str, unsafe_threshold: float = 0.7):
         "issues": all_issues,
     }
 
-
 def _trim_text(text: str, limit: int = 800):
     if not text:
         return text
     return text[:limit]
-
 
 def main():
     if len(sys.argv) < 2:
@@ -109,7 +105,6 @@ def main():
         msg = _trim_text(msg)
         print(json.dumps({"error": msg}, ensure_ascii=False))
         sys.exit(1)
-
 
 if __name__ == "__main__":
     main()

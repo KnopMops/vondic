@@ -24,7 +24,6 @@ def _build_postgres_dsn() -> str:
         auth = f"{user}:{password}@"
     return f"postgresql://{auth}{host}:{port}/{db}"
 
-
 class AuthRepository:
     def __init__(self, db_path=None):
         self.db_path = db_path or _build_postgres_dsn()

@@ -4,7 +4,6 @@ import os
 
 from botiksdk import Bot, Command, Dispatcher
 
-
 async def main():
     logging.basicConfig(
         level=logging.INFO,
@@ -58,7 +57,6 @@ async def main():
         logging.getLogger(__name__).info("handler_help_result %s", result)
 
     await dp.start_polling(bot)
-
 
 if __name__ == "__main__":
     asyncio.run(main())

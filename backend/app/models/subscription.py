@@ -5,7 +5,6 @@ from sqlalchemy import TEXT, TIMESTAMP
 
 from app.core.extensions import db
 
-
 class Subscription(db.Model):
     __tablename__ = "subscriptions"
     id = db.Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))

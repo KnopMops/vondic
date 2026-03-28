@@ -1,7 +1,20 @@
 'use client'
 
-import { useWebRTCService } from '@/lib/stores/callStore'
 import { getAttachmentUrl } from '@/lib/utils'
+import {
+	ChevronDown,
+	ChevronUp,
+	Maximize2,
+	Mic,
+	MicOff,
+	Minimize2,
+	Monitor,
+	MonitorOff,
+	PhoneOff,
+	Video,
+	VideoOff,
+	X,
+} from 'lucide-react'
 import React, { useEffect, useRef, useState } from 'react'
 import { CallState } from '../../lib/services/WebRTCService'
 
@@ -41,27 +54,99 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 	const remoteVideoRef = useRef<HTMLVideoElement>(null)
 	const localVideoRef = useRef<HTMLVideoElement>(null)
 	const localScreenRef = useRef<HTMLVideoElement>(null)
+	const callWindowRef = useRef<HTMLDivElement>(null)
+
 	const [duration, setDuration] = useState(0)
 	const [isMinimized, setIsMinimized] = useState(false)
-	const [connState, setConnState] = useState<string>('')
-	const [iceType, setIceType] = useState<string>('')
-	const [iceConnState, setIceConnState] = useState<string>('')
-	const [signalingState, setSignalingState] = useState<string>('')
-	const [remoteTrackCount, setRemoteTrackCount] = useState<number>(0)
-	const [needUnmute, setNeedUnmute] = useState<boolean>(false)
+	const [isExpanded, setIsExpanded] = useState(false)
 	const [pingMs, setPingMs] = useState<number>(0)
-	const [isScreenPip, setIsScreenPip] = useState(false)
-	const [isScreenFullscreen, setIsScreenFullscreen] = useState(false)
-	const [isScreenZoomed, setIsScreenZoomed] = useState(false)
-	const webRTCService = useWebRTCService()
-	const ringtoneRef = useRef<HTMLAudioElement | null>(null)
-	const playAttemptRef = useRef<any>(null)
-	const analyserRef = useRef<any>(null)
-	const audioCtxRef = useRef<any>(null)
-	const webAudioSourceRef = useRef<any>(null)
-	const [webAudioEnabled, setWebAudioEnabled] = useState<boolean>(false)
+	const [connState, setConnState] = useState<string>('')
+	const [iceConnState, setIceConnState] = useState<string>('')
+	const [wasDisconnected, setWasDisconnected] = useState(false)
 
-	// Обновление длительности звонка
+	// Draggable state
+	const [isDragging, setIsDragging] = useState(false)
+	const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
+	const [position, setPosition] = useState({ x: 0, y: 0 })
+	const [windowSize, setWindowSize] = useState({ width: 320, height: 400 })
+
+	// Fullscreen state
+	const [isFullscreen, setIsFullscreen] = useState(false)
+
+	// Resizing state
+	const [isResizing, setIsResizing] = useState(false)
+	const [resizeDirection, setResizeDirection] = useState<string>('')
+	const [resizeStart, setResizeStart] = useState({
+		x: 0,
+		y: 0,
+		width: 0,
+		height: 0,
+	})
+	const [lastResizeTime, setLastResizeTime] = useState(0)
+
+	// Expanded video state
+	const [expandedVideo, setExpandedVideo] = useState<
+		'local' | 'remote' | 'screen' | null
+	>(null)
+	const [hoverVideo, setHoverVideo] = useState<
+		'local' | 'remote' | 'screen' | null
+	>(null)
+
+	const isFullscreenSupported =
+		typeof document !== 'undefined' &&
+		(!!document.documentElement.requestFullscreen ||
+			(document.documentElement as any).webkitRequestFullscreen ||
+			(document.documentElement as any).mozRequestFullScreen ||
+			(document.documentElement as any).msRequestFullscreen)
+
+	// Initialize position
+	useEffect(() => {
+		if (typeof window !== 'undefined') {
+			setPosition({
+				x: window.innerWidth - 340,
+				y: window.innerHeight - 420,
+			})
+		}
+	}, [])
+
+	// Handle visibility change
+	useEffect(() => {
+		const handleVisibilityChange = () => {
+			if (document.visibilityState === 'visible') {
+				if (wasDisconnected && callInfo.status === 'connected') {
+					console.log('[ActiveCall] Tab became visible, call still connected')
+					setWasDisconnected(false)
+				}
+				if (remoteAudioRef.current && remoteStream) {
+					remoteAudioRef.current.play().catch(err => {
+						console.log(
+							'[ActiveCall] Could not resume audio after tab switch:',
+							err,
+						)
+					})
+				}
+			} else if (document.visibilityState === 'hidden') {
+				console.log('[ActiveCall] Tab hidden, call should remain active')
+				setWasDisconnected(false)
+			}
+		}
+
+		document.addEventListener('visibilitychange', handleVisibilityChange)
+		return () => {
+			document.removeEventListener('visibilitychange', handleVisibilityChange)
+		}
+	}, [wasDisconnected, callInfo.status, remoteStream])
+
+	// Monitor connection state
+	useEffect(() => {
+		if (callInfo.status === 'connected') {
+			setWasDisconnected(false)
+		} else if (callInfo.status === 'ended' || callInfo.status === 'failed') {
+			setWasDisconnected(true)
+		}
+	}, [callInfo.status])
+
+	// Duration timer
 	useEffect(() => {
 		if (callInfo.status === 'connected' && callInfo.startTime) {
 			const interval = setInterval(() => {
@@ -70,12 +155,11 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 				)
 				setDuration(elapsed)
 			}, 1000)
-
 			return () => clearInterval(interval)
 		}
 	}, [callInfo.status, callInfo.startTime])
 
-	// Настройка удалённого аудио: включать только при установленном ICE-соединении
+	// Audio setup with noise suppression
 	useEffect(() => {
 		const el = remoteAudioRef.current
 		if (!el) return
@@ -83,69 +167,54 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 			el.srcObject = remoteStream
 			el.muted = false
 			el.volume = 1
-			
-			// Try to play and handle potential play restrictions
-			const p = el.play()
-			if (p && typeof p.catch === 'function') {
-				p.catch(() => {
-					setNeedUnmute(true)
-					// If play failed, try to resume after user interaction
-					const handleInteraction = () => {
-						el.play().catch(() => setNeedUnmute(true))
-						document.removeEventListener('click', handleInteraction)
-						document.removeEventListener('touchstart', handleInteraction)
+			const audioTracks = remoteStream.getAudioTracks()
+			audioTracks.forEach(track => {
+				try {
+					const settings: any = {
+						echoCancellation: true,
+						noiseSuppression: true,
+						autoGainControl: true,
 					}
-					document.addEventListener('click', handleInteraction)
-					document.addEventListener('touchstart', handleInteraction)
-				})
-			}
+					track.applyConstraints({ advanced: [settings] }).catch(() => {})
+				} catch (e) {
+					console.log('[ActiveCall] Could not apply audio constraints:', e)
+				}
+			})
+			el.play().catch(() => {})
 		} else {
 			try {
 				el.pause()
 			} catch {}
 			el.srcObject = null
-			setNeedUnmute(false)
 		}
 	}, [remoteStream, callInfo.status, iceConnState])
 
-	useEffect(() => {
-		let timer: any
-		const tryPlay = () => {
-			const el = remoteAudioRef.current
-			if (!el) return
-			if (remoteStream) {
-				if (el.paused || el.muted) {
-					el.muted = false
-					el.volume = 1
-					const p = el.play()
-					if (p && typeof p.then === 'function') {
-						p.then(() => {
-							setNeedUnmute(false)
-							if (playAttemptRef.current) {
-								clearInterval(playAttemptRef.current)
-								playAttemptRef.current = null
-							}
-						}).catch(() => setNeedUnmute(true))
-					}
-				}
-			}
-		}
-		tryPlay()
-		timer = setInterval(tryPlay, 1500)
-		playAttemptRef.current = timer
-		return () => {
-			if (timer) clearInterval(timer)
-			playAttemptRef.current = null
-		}
-	}, [remoteStream])
+	// Local audio setup
 	useEffect(() => {
 		if (localAudioRef.current && localStream) {
 			localAudioRef.current.srcObject = localStream
-			const p = localAudioRef.current.play()
-			if (p && typeof p.catch === 'function') p.catch(() => {})
+			localAudioRef.current.muted = true
+			localAudioRef.current.play().catch(() => {})
+			const audioTracks = localStream.getAudioTracks()
+			audioTracks.forEach(track => {
+				try {
+					const settings: any = {
+						echoCancellation: true,
+						noiseSuppression: true,
+						autoGainControl: true,
+					}
+					track.applyConstraints({ advanced: [settings] }).catch(() => {})
+				} catch (e) {
+					console.log(
+						'[ActiveCall] Could not apply local audio constraints:',
+						e,
+					)
+				}
+			})
 		}
 	}, [localStream])
 
+	// Video setups
 	useEffect(() => {
 		const el = localVideoRef.current
 		if (!el) return
@@ -153,8 +222,7 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 		if (videoStream && hasVideo) {
 			el.srcObject = videoStream
 			el.muted = true
-			const p = el.play()
-			if (p && typeof p.catch === 'function') p.catch(() => {})
+			el.play().catch(() => {})
 		} else {
 			try {
 				el.pause()
@@ -170,8 +238,7 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 		if (remoteStream && hasVideo) {
 			el.srcObject = remoteStream
 			el.muted = true
-			const p = el.play()
-			if (p && typeof p.catch === 'function') p.catch(() => {})
+			el.play().catch(() => {})
 		} else {
 			try {
 				el.pause()
@@ -187,8 +254,7 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 		if (screenStream && hasVideo) {
 			el.srcObject = screenStream
 			el.muted = true
-			const p = el.play()
-			if (p && typeof p.catch === 'function') p.catch(() => {})
+			el.play().catch(() => {})
 		} else {
 			try {
 				el.pause()
@@ -197,45 +263,13 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 		}
 	}, [screenStream])
 
-	useEffect(() => {
-		const start = () => {
-			if (!ringtoneRef.current) {
-				const src = getAttachmentUrl('/static/rington.wav')
-				const el = new Audio(src)
-				el.loop = true
-				el.volume = 1
-				ringtoneRef.current = el
-			}
-			const el = ringtoneRef.current!
-			el.currentTime = 0
-			el.play().catch(() => {})
-		}
-		const stop = () => {
-			const el = ringtoneRef.current
-			if (!el) return
-			try {
-				el.pause()
-				el.currentTime = 0
-			} catch {}
-		}
-		if (callInfo.status === 'calling') start()
-		else stop()
-		return () => stop()
-	}, [callInfo.status])
-
+	// Ping polling
 	useEffect(() => {
 		let timer: any
 		const poll = async () => {
 			try {
-				if (!webRTCService || !callInfo.socketId) return
-				const pc = webRTCService.getPeerConnection(callInfo.socketId)
-				if (!pc) return
-				setConnState(pc.connectionState || '')
-				setIceConnState((pc as any).iceConnectionState || '')
-				setSignalingState(pc.signalingState || '')
-				const rs = webRTCService.getRemoteStream(callInfo.socketId)
-				setRemoteTrackCount(rs ? rs.getTracks().length : 0)
-				const stats = await pc.getStats()
+				const stats = await callInfo.peerConnection?.getStats()
+				if (!stats) return
 				let selectedId = ''
 				stats.forEach(r => {
 					const anyr: any = r
@@ -252,18 +286,7 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 						}
 					}
 				})
-				let localType = ''
-				let remoteType = ''
 				if (pair) {
-					const localId = pair.localCandidateId
-					const remoteId = pair.remoteCandidateId
-					stats.forEach(r => {
-						const anyr: any = r
-						if (r.id === localId && anyr.candidateType)
-							localType = anyr.candidateType
-						if (r.id === remoteId && anyr.candidateType)
-							remoteType = anyr.candidateType
-					})
 					const rtt =
 						typeof pair.currentRoundTripTime === 'number'
 							? pair.currentRoundTripTime * 1000
@@ -272,59 +295,115 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 								: 0
 					setPingMs(Math.max(0, Math.round(rtt)))
 				}
-				setIceType(localType || remoteType || '')
 			} catch {}
 		}
 		poll()
 		timer = setInterval(poll, 1000)
 		return () => clearInterval(timer)
-	}, [webRTCService, callInfo.socketId])
+	}, [callInfo.peerConnection])
 
+	// Drag and Resize handlers
 	useEffect(() => {
-		if (!webRTCService) return
-		const timer = setTimeout(() => {
-			try {
-				const allRemoteKeys = Array.from(
-					webRTCService.getAllRemoteStreams().keys(),
+		const handleMouseMove = (e: MouseEvent) => {
+			if (isDragging) {
+				const newX = e.clientX - dragOffset.x
+				const newY = e.clientY - dragOffset.y
+				const windowWidth = window.innerWidth
+				const windowHeight = window.innerHeight
+
+				const clampedX = Math.max(
+					0,
+					Math.min(newX, windowWidth - windowSize.width),
 				)
-				const allPeerKeys = Array.from(
-					webRTCService.getAllPeerConnections().keys(),
+				const clampedY = Math.max(
+					0,
+					Math.min(newY, windowHeight - windowSize.height),
 				)
-				console.log(
-					'Delayed check:',
-					'remoteKeys=',
-					allRemoteKeys,
-					'peerKeys=',
-					allPeerKeys,
-					'currentSocketId=',
-					callInfo.socketId,
-				)
-				if (
-					allRemoteKeys.length > 0 &&
-					!allRemoteKeys.includes(callInfo.socketId)
-				) {
-					console.warn(
-						'Remote stream exists but under different key:',
-						allRemoteKeys[0],
-					)
+
+				setPosition({ x: clampedX, y: clampedY })
+			}
+
+			if (isResizing) {
+				// Throttle resize updates to 16ms (~60fps)
+				const now = Date.now()
+				if (now - lastResizeTime < 16) return
+				setLastResizeTime(now)
+
+				const deltaX = e.clientX - resizeStart.x
+				const deltaY = e.clientY - resizeStart.y
+
+				let newWidth = resizeStart.width
+				let newHeight = resizeStart.height
+
+				if (resizeDirection.includes('e')) {
+					newWidth = Math.max(280, resizeStart.width + deltaX)
+				} else if (resizeDirection.includes('w')) {
+					newWidth = Math.max(280, resizeStart.width - deltaX)
 				}
-			} catch {}
-		}, 1000)
-		return () => clearTimeout(timer)
-	}, [webRTCService, callInfo.socketId])
+
+				if (resizeDirection.includes('s')) {
+					newHeight = Math.max(350, resizeStart.height + deltaY)
+				} else if (resizeDirection.includes('n')) {
+					newHeight = Math.max(350, resizeStart.height - deltaY)
+				}
+
+				setWindowSize({ width: newWidth, height: newHeight })
+
+				if (resizeDirection.includes('w')) {
+					setPosition(prev => ({
+						...prev,
+						x: resizeStart.x - (newWidth - resizeStart.width),
+					}))
+				}
+				if (resizeDirection.includes('n')) {
+					setPosition(prev => ({
+						...prev,
+						y: resizeStart.y - (newHeight - resizeStart.height),
+					}))
+				}
+			}
+		}
+
+		const handleMouseUp = () => {
+			setIsDragging(false)
+			setIsResizing(false)
+			setResizeDirection('')
+			document.body.style.cursor = 'default'
+			document.body.style.userSelect = 'auto'
+		}
+
+		if (isDragging || isResizing) {
+			document.addEventListener('mousemove', handleMouseMove)
+			document.addEventListener('mouseup', handleMouseUp)
+			document.body.style.cursor = isDragging ? 'grabbing' : 'se-resize'
+			document.body.style.userSelect = 'none'
+		}
+
+		return () => {
+			document.removeEventListener('mousemove', handleMouseMove)
+			document.removeEventListener('mouseup', handleMouseUp)
+			document.body.style.cursor = 'default'
+			document.body.style.userSelect = 'auto'
+		}
+	}, [
+		isDragging,
+		dragOffset,
+		isResizing,
+		resizeDirection,
+		resizeStart,
+		windowSize,
+	])
+
+	// Fullscreen change listener
 	useEffect(() => {
-		if (!webRTCService) return
-		try {
-			const rsKeys = Array.from(webRTCService.getAllRemoteStreams().keys())
-			const pcKeys = Array.from(webRTCService.getAllPeerConnections().keys())
-			const sid = callInfo.socketId
-			const stream = webRTCService.getRemoteStream(sid)
-			console.log('Remote streams keys:', rsKeys)
-			console.log('Peer connections keys:', pcKeys)
-			console.log('Current call socketId:', sid)
-			console.log('Remote stream for current key:', stream ? 'exists' : 'null')
-		} catch {}
-	}, [webRTCService, callInfo.socketId])
+		const handleFullscreenChange = () => {
+			setIsFullscreen(!!document.fullscreenElement)
+		}
+		document.addEventListener('fullscreenchange', handleFullscreenChange)
+		return () => {
+			document.removeEventListener('fullscreenchange', handleFullscreenChange)
+		}
+	}, [])
 
 	const formatDuration = (seconds: number): string => {
 		const mins = Math.floor(seconds / 60)
@@ -342,72 +421,9 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 		if (el) {
 			el.muted = false
 			el.volume = 1
-			const p = el.play()
-			if (p && typeof p.catch === 'function') p.catch(() => setNeedUnmute(true))
+			el.play().catch(() => {})
 		}
 	}
-
-	useEffect(() => {
-		if (!remoteStream) return
-		if (!remoteStream.getAudioTracks().length) return
-		const AC: any =
-			(window as any).AudioContext || (window as any).webkitAudioContext
-		if (!AC) return
-		const ctx = new AC()
-		audioCtxRef.current = ctx
-		const source = ctx.createMediaStreamSource(remoteStream)
-		const analyser = ctx.createAnalyser()
-		analyser.fftSize = 512
-		try {
-			if (ctx.state === 'suspended') {
-				ctx.resume().catch(() => {})
-			}
-			source.connect(ctx.destination)
-			webAudioSourceRef.current = source
-			setWebAudioEnabled(true)
-			console.log('Web Audio API playing')
-		} catch {}
-		source.connect(analyser)
-		analyserRef.current = analyser
-		const buf = new Uint8Array(analyser.frequencyBinCount)
-		const tick = () => {
-			analyser.getByteFrequencyData(buf)
-			const avg = buf.reduce((a, b) => a + b, 0) / buf.length
-			console.log('Audio volume level:', Math.round(avg))
-			if (avg > 10) console.log('Audio data detected')
-			requestAnimationFrame(tick)
-		}
-		tick()
-		return () => {
-			try {
-				source.disconnect()
-				if (webAudioSourceRef.current) {
-					try {
-						webAudioSourceRef.current.disconnect()
-					} catch {}
-					webAudioSourceRef.current = null
-				}
-				analyser.disconnect()
-				ctx.close()
-			} catch {}
-			analyserRef.current = null
-			setWebAudioEnabled(false)
-			audioCtxRef.current = null
-		}
-	}, [remoteStream])
-
-	useEffect(() => {
-		const el = remoteAudioRef.current
-		if (el && remoteStream) {
-			console.log('Audio element state:', {
-				srcObject: !!el.srcObject,
-				muted: el.muted,
-				volume: el.volume,
-				paused: el.paused,
-				currentTime: el.currentTime,
-			})
-		}
-	}, [remoteStream, callInfo.status])
 
 	const toggleMinimize = () => {
 		setIsMinimized(!isMinimized)
@@ -418,187 +434,151 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 		if (el && remoteStream) {
 			el.muted = false
 			el.volume = 1
-			const p = el.play()
-			if (p && typeof p.catch === 'function') p.catch(() => setNeedUnmute(true))
+			el.play().catch(() => {})
 		}
 	}
 
-	const getPrimaryVideo = () => {
-		if (screenStream?.getVideoTracks().length && localScreenRef.current) {
-			return localScreenRef.current
-		}
-		if (remoteStream?.getVideoTracks().length && remoteVideoRef.current) {
-			return remoteVideoRef.current
-		}
-		return null
-	}
-
-	const togglePictureInPicture = async () => {
-		const video = getPrimaryVideo()
-		if (!video) return
-		if (
-			'pictureInPictureEnabled' in document &&
-			document.pictureInPictureEnabled
-		) {
-			if (document.pictureInPictureElement) {
-				await document.exitPictureInPicture()
-				setIsScreenPip(false)
-				return
-			}
-			try {
-				await (video as any).requestPictureInPicture()
-				setIsScreenPip(true)
-			} catch {}
+	// Drag start handler
+	const handleDragStart = (e: React.MouseEvent) => {
+		if (isFullscreen || isResizing) return
+		e.preventDefault()
+		e.stopPropagation()
+		setIsDragging(true)
+		const rect = callWindowRef.current?.getBoundingClientRect()
+		if (rect) {
+			setDragOffset({
+				x: e.clientX - rect.left,
+				y: e.clientY - rect.top,
+			})
 		}
 	}
 
+	// Resize start handler
+	const handleResizeStart = (e: React.MouseEvent, direction: string) => {
+		if (isFullscreen) return
+		e.preventDefault()
+		e.stopPropagation()
+		setIsResizing(true)
+		setResizeDirection(direction)
+		setResizeStart({
+			x: e.clientX,
+			y: e.clientY,
+			width: windowSize.width,
+			height: windowSize.height,
+		})
+	}
+
+	// Toggle fullscreen
 	const toggleFullscreen = async () => {
-		const root = document.documentElement
-		if (document.fullscreenElement) {
-			await document.exitFullscreen()
-			return
+		if (!callWindowRef.current) return
+
+		if (!isFullscreen) {
+			try {
+				await callWindowRef.current.requestFullscreen()
+				setIsFullscreen(true)
+			} catch (err) {
+				console.error('[ActiveCall] Could not enter fullscreen:', err)
+			}
+		} else {
+			try {
+				await document.exitFullscreen()
+				setIsFullscreen(false)
+			} catch (err) {
+				console.error('[ActiveCall] Could not exit fullscreen:', err)
+			}
 		}
-		try {
-			await root.requestFullscreen()
-		} catch {}
 	}
-	useEffect(() => {
-		const handleFullscreenChange = () => {
-			setIsScreenFullscreen(!!document.fullscreenElement)
-		}
-		document.addEventListener('fullscreenchange', handleFullscreenChange)
-		return () => {
-			document.removeEventListener('fullscreenchange', handleFullscreenChange)
-		}
-	}, [])
+
 	const hasScreenVideo =
 		!!screenStream?.getVideoTracks().length ||
 		!!remoteStream?.getVideoTracks().length ||
 		!!videoStream?.getVideoTracks().length
-	const screenShareDisabled = !isScreenShareSupported
 	const statusLabel =
 		callInfo.status === 'connected'
 			? 'В сети'
 			: callInfo.status === 'calling'
 				? 'Звонок...'
 				: callInfo.status === 'ringing'
-					? 'Ожидание ответа...'
-					: callInfo.status === 'failed'
-						? 'Ошибка'
-						: callInfo.status === 'ended'
-							? 'Завершено'
-							: callInfo.status === 'rejected'
-								? 'Отклонено'
-								: 'Звонок'
-	const statusLine = (() => {
-		const mapConn: Record<string, string> = {
-			new: 'Инициализация',
-			connecting: 'Подключение',
-			connected: 'Подключено',
-			disconnected: 'Отключено',
-			failed: 'Ошибка',
-			closed: 'Закрыто',
-		}
-		const mapIce: Record<string, string> = {
-			new: 'Инициализация',
-			checking: 'Проверка путей',
-			connected: 'Подключено',
-			completed: 'Завершено',
-			disconnected: 'Отключено',
-			failed: 'Ошибка',
-			closed: 'Закрыто',
-		}
-		const mapType: Record<string, string> = {
-			host: 'Прямой',
-			srflx: 'Через NAT',
-			prflx: 'Peer Reflexive',
-			relay: 'Через TURN',
-		}
-		const connLbl = mapConn[connState] || connState || 'Неизвестно'
-		const iceLbl = mapIce[iceConnState] || iceConnState || ''
-		const pathLbl = mapType[iceType] || (iceType ? iceType : '')
-		const pingLbl = pingMs > 0 ? ` · Пинг: ${pingMs} мс` : ''
-		const pathPart = pathLbl ? ` · Путь: ${pathLbl}` : ''
-		const icePart = iceLbl ? ` · ICE: ${iceLbl}` : ''
-		return `Статус: ${connLbl}${pathPart}${icePart}${pingLbl}`
-	})()
+					? 'Ожидание...'
+					: 'Звонок'
 	const avatarUrl = callInfo.avatarUrl
 		? getAttachmentUrl(callInfo.avatarUrl)
 		: ''
 
-	const handleUnlockAudio = async () => {
-		try {
-			const ctx: AudioContext | null = audioCtxRef.current
-			if (ctx && ctx.state === 'suspended') {
-				await ctx.resume()
-			}
-			if (!webAudioSourceRef.current && remoteStream && ctx) {
-				const src = ctx.createMediaStreamSource(remoteStream)
-				src.connect(ctx.destination)
-				webAudioSourceRef.current = src
-				setWebAudioEnabled(true)
-			}
-		} catch {}
-	}
-
-	useEffect(() => {
-		if (!remoteStream) return
-		try {
-			remoteStream.getTracks().forEach(t => {
-				if (!t.enabled) t.enabled = true
-			})
-		} catch {}
-	}, [remoteStream])
-
+	// Minimized view
 	if (isMinimized) {
 		return (
-			<div className='fixed left-1/2 top-4 z-40 w-[min(92vw,760px)] -translate-x-1/2 rounded-3xl border border-white/10 bg-gradient-to-br from-black/90 via-black/80 to-zinc-900/80 px-4 py-3 text-white shadow-2xl backdrop-blur'>
-				<div className='flex items-center justify-between gap-3'>
+			<div
+				ref={callWindowRef}
+				className='fixed z-50 w-72 bg-[#2b2d31] rounded-xl shadow-2xl border border-[#1e1f22] overflow-hidden cursor-grab active:cursor-grabbing select-none'
+				style={{ left: `${position.x}px`, top: `${position.y}px` }}
+				onMouseDown={handleDragStart}
+			>
+				<div className='flex items-center justify-between p-3'>
 					<button
-						onClick={toggleMinimize}
-						className='flex items-center gap-3 text-left'
-						aria-label='Развернуть'
+						onClick={e => {
+							e.stopPropagation()
+							toggleMinimize()
+						}}
+						className='flex items-center gap-3 text-left flex-1 min-w-0'
 					>
-						<div className='h-9 w-9 overflow-hidden rounded-2xl bg-white/10 flex items-center justify-center'>
+						<div className='w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0'>
 							{avatarUrl ? (
 								<img
 									src={avatarUrl}
-									alt={callInfo.userName || 'Собеседник'}
-									className='h-full w-full object-cover'
+									alt=''
+									className='w-full h-full object-cover rounded-full'
 								/>
 							) : (
-								<span className='text-sm font-semibold'>
-									{(callInfo.userName || 'V').slice(0, 1).toUpperCase()}
+								<span>
+									{(callInfo.userName || 'В').slice(0, 1).toUpperCase()}
 								</span>
 							)}
 						</div>
-						<div>
+						<div className='flex flex-col min-w-0'>
 							<p className='text-xs font-semibold text-white truncate'>
 								{callInfo.userName || 'Звонок'}
 							</p>
-							<p className='text-[10px] text-white/60'>
-								{formatDuration(duration)} · {statusLabel}
+							<p className='text-[10px] text-green-400 flex items-center gap-1'>
+								<span className='w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse' />
+								{formatDuration(duration)}
 							</p>
 						</div>
 					</button>
-					<div className='flex items-center gap-2'>
+					<div className='flex items-center gap-1'>
 						<button
-							onClick={handleMuteToggle}
-							className={`rounded-xl border px-2 py-1 text-white transition ${
-								isMuted
-									? 'border-rose-500/40 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20'
-									: 'border-white/10 bg-white/5 hover:bg-white/10'
-							}`}
-							title={isMuted ? 'Включить микрофон' : 'Выключить микрофон'}
+							onClick={e => {
+								e.stopPropagation()
+								toggleFullscreen()
+							}}
+							className='p-2 text-gray-400 hover:text-white hover:bg-[#35373c] rounded-lg transition-colors'
+							title='Во весь экран'
 						>
-							{isMuted ? '🔇' : '🎤'}
+							<Maximize2 className='w-4 h-4' />
 						</button>
 						<button
-							onClick={handleEndCall}
-							className='rounded-xl border border-rose-500/40 bg-rose-500/10 px-2 py-1 text-rose-200 transition hover:bg-rose-500/20'
+							onClick={e => {
+								e.stopPropagation()
+								handleMuteToggle()
+							}}
+							className={`p-2 rounded-lg transition-colors ${isMuted ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-[#1e1f22] text-gray-300 hover:bg-[#35373c]'}`}
+							title={isMuted ? 'Включить микрофон' : 'Выключить микрофон'}
+						>
+							{isMuted ? (
+								<MicOff className='w-4 h-4' />
+							) : (
+								<Mic className='w-4 h-4' />
+							)}
+						</button>
+						<button
+							onClick={e => {
+								e.stopPropagation()
+								handleEndCall()
+							}}
+							className='p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors'
 							title='Завершить звонок'
 						>
-							📞
+							<PhoneOff className='w-4 h-4' />
 						</button>
 					</div>
 				</div>
@@ -606,237 +586,477 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 		)
 	}
 
+	// Full view
 	return (
-		<div
-			className='fixed left-1/2 top-4 z-40 w-[min(92vw,760px)] -translate-x-1/2 rounded-3xl border border-white/10 bg-gradient-to-br from-black/90 via-black/80 to-zinc-900/80 p-4 text-white shadow-2xl backdrop-blur'
-			onClick={handleUserInteraction}
-		>
-			<div className='flex items-start justify-between gap-3'>
-				<div className='flex items-center gap-3 min-w-0'>
-					<div className='h-10 w-10 overflow-hidden rounded-2xl bg-white/10 flex items-center justify-center'>
-						{avatarUrl ? (
-							<img
-								src={avatarUrl}
-								alt={callInfo.userName || 'Собеседник'}
-								className='h-full w-full object-cover'
-							/>
-						) : (
-							<span className='text-sm font-semibold'>
-								{(callInfo.userName || 'V').slice(0, 1).toUpperCase()}
-							</span>
-						)}
-					</div>
-					<div className='min-w-0'>
-						<p className='text-sm font-semibold truncate'>
-							{callInfo.userName || 'Звонок'}
-						</p>
-						<div className='mt-1 flex items-center gap-2 text-[10px] text-white/60'>
-							<span className='rounded-full bg-white/10 px-2 py-0.5 text-white/70'>
-								{statusLabel}
-							</span>
-							<span>{formatDuration(duration)}</span>
-						</div>
-						<p className='mt-1 text-[10px] text-white/50'>{statusLine}</p>
-						<p className='text-[10px] text-white/50'>
-							{`Треки собеседника: ${remoteTrackCount}`}
-						</p>
-					</div>
-				</div>
-				<button
-					onClick={toggleMinimize}
-					className='rounded-xl border border-white/10 bg-white/5 px-2 py-1 text-white hover:bg-white/10'
-					title='Свернуть'
-				>
-					➖
-				</button>
-			</div>
-
-			{(hasScreenVideo || videoStream?.getVideoTracks().length) && (
-				<div className='mt-3 grid gap-3'>
-					{screenStream?.getVideoTracks().length ? (
-						<div className='rounded-2xl border border-white/10 bg-white/5 p-2'>
-							<video
-								ref={localScreenRef}
-								autoPlay
-								playsInline
-								muted
-								className='h-44 w-full rounded-xl bg-black object-cover'
-							/>
-							<span className='mt-2 block text-xs text-white/70'>
-								Ваш экран
-							</span>
-						</div>
-					) : null}
-					{videoStream?.getVideoTracks().length ? (
-						<div className='rounded-2xl border border-white/10 bg-white/5 p-2'>
-							<video
-								ref={localVideoRef}
-								autoPlay
-								playsInline
-								muted
-								className='h-44 w-full rounded-xl bg-black object-cover'
-							/>
-							<span className='mt-2 block text-xs text-white/70'>
-								Ваше видео
-							</span>
-						</div>
-					) : null}
-					{remoteStream?.getVideoTracks().length ? (
-						<div className='rounded-2xl border border-white/10 bg-white/5 p-2'>
-							<video
-								ref={remoteVideoRef}
-								autoPlay
-								playsInline
-								muted
-								className={`h-44 w-full rounded-xl bg-black object-cover ${
-									isScreenZoomed ? 'scale-105' : ''
-								}`}
-							/>
-							<span className='mt-2 block text-xs text-white/70'>
-								{callInfo.userName || 'Экран собеседника'}
-							</span>
-						</div>
-					) : remoteStream ? (
-						<div className='rounded-2xl border border-white/10 bg-white/5 p-2 flex items-center justify-center'>
-							<div className='text-center'>
-								<div className='mx-auto h-16 w-16 rounded-full bg-gray-700 flex items-center justify-center'>
-									<span className='text-2xl'>👤</span>
-								</div>
-								<p className='mt-2 text-xs text-white/70'>
-									{callInfo.userName || 'Собеседник'}
-								</p>
-								<p className='text-[10px] text-white/50 mt-1'>
-									Камера выключена
-								</p>
-							</div>
-						</div>
-					) : null}
-				</div>
-			)}
-
-			<div className='mt-3 flex flex-wrap items-center justify-center gap-2'>
-				{needUnmute && (
-					<button
-						onClick={() => {
-							const el = remoteAudioRef.current
-							if (el) {
-								el.muted = false
-								el.volume = 1
-								const p = el.play()
-								if (p && typeof p.catch === 'function') p.catch(() => {})
-								setNeedUnmute(false)
+		<>
+			<div
+				ref={callWindowRef}
+				className={`fixed z-50 bg-[#2b2d31] rounded-xl shadow-2xl border border-[#1e1f22] overflow-hidden transition-all duration-300 ${isFullscreen ? 'inset-0 w-full h-full' : ''}`}
+				style={
+					!isFullscreen
+						? {
+								left: `${position.x}px`,
+								top: `${position.y}px`,
+								width: `${windowSize.width}px`,
+								height: `${windowSize.height}px`,
 							}
-						}}
-						className='rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-emerald-200 transition hover:bg-emerald-500/20'
-						title='Включить звук собеседника'
-					>
-						🔊 Включить звук
-					</button>
-				)}
-				{webAudioEnabled &&
-					audioCtxRef.current &&
-					audioCtxRef.current.state === 'suspended' && (
-						<button
-							onClick={handleUnlockAudio}
-							className='rounded-2xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-amber-200 transition hover:bg-amber-500/20'
-							title='Разблокировать аудио'
-						>
-							🔓 Разблокировать звук
-						</button>
-					)}
-				<button
-					onClick={handleMuteToggle}
-					className={`rounded-2xl border px-4 py-2 text-white transition ${
-						isMuted
-							? 'border-rose-500/40 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20'
-							: 'border-white/10 bg-white/5 hover:bg-white/10'
-					}`}
-					title={isMuted ? 'Включить микрофон' : 'Выключить микрофон'}
-				>
-					{isMuted ? '🔇' : '🎤'}
-				</button>
-				{hasScreenVideo && (
+						: {}
+				}
+				onClick={handleUserInteraction}
+			>
+				{/* Resize handles */}
+				{!isFullscreen && (
 					<>
-						<button
-							onClick={togglePictureInPicture}
-							className={`rounded-2xl border px-4 py-2 text-white transition ${
-								isScreenPip
-									? 'border-indigo-500/40 bg-indigo-500/10 text-indigo-200 hover:bg-indigo-500/20'
-									: 'border-white/10 bg-white/5 hover:bg-white/10'
-							}`}
-							title={isScreenPip ? 'Скрыть окно' : 'Вынести в окно'}
-						>
-							🗔
-						</button>
-						<button
-							onClick={toggleFullscreen}
-							className={`rounded-2xl border px-4 py-2 text-white transition ${
-								isScreenFullscreen
-									? 'border-indigo-500/40 bg-indigo-500/10 text-indigo-200 hover:bg-indigo-500/20'
-									: 'border-white/10 bg-white/5 hover:bg-white/10'
-							}`}
-							title={
-								isScreenFullscreen ? 'Выйти из полноэкранного' : 'Во весь экран'
-							}
-						>
-							⛶
-						</button>
-						<button
-							onClick={() => setIsScreenZoomed(prev => !prev)}
-							className={`rounded-2xl border px-4 py-2 text-white transition ${
-								isScreenZoomed
-									? 'border-indigo-500/40 bg-indigo-500/10 text-indigo-200 hover:bg-indigo-500/20'
-									: 'border-white/10 bg-white/5 hover:bg-white/10'
-							}`}
-							title={isScreenZoomed ? 'Обычный размер' : 'Увеличить'}
-						>
-							🔍
-						</button>
+						<div
+							className='absolute top-0 left-0 w-3 h-3 cursor-nw-resize z-50'
+							onMouseDown={e => handleResizeStart(e, 'nw')}
+						/>
+						<div
+							className='absolute top-0 right-0 w-3 h-3 cursor-ne-resize z-50'
+							onMouseDown={e => handleResizeStart(e, 'ne')}
+						/>
+						<div
+							className='absolute bottom-0 left-0 w-3 h-3 cursor-sw-resize z-50'
+							onMouseDown={e => handleResizeStart(e, 'sw')}
+						/>
+						<div
+							className='absolute bottom-0 right-0 w-3 h-3 cursor-se-resize z-50'
+							onMouseDown={e => handleResizeStart(e, 'se')}
+						/>
+						<div
+							className='absolute top-0 left-3 right-3 h-1 cursor-n-resize z-40'
+							onMouseDown={e => handleResizeStart(e, 'n')}
+						/>
+						<div
+							className='absolute bottom-0 left-3 right-3 h-1 cursor-s-resize z-40'
+							onMouseDown={e => handleResizeStart(e, 's')}
+						/>
+						<div
+							className='absolute left-0 top-3 bottom-3 w-1 cursor-w-resize z-40'
+							onMouseDown={e => handleResizeStart(e, 'w')}
+						/>
+						<div
+							className='absolute right-0 top-3 bottom-3 w-1 cursor-e-resize z-40'
+							onMouseDown={e => handleResizeStart(e, 'e')}
+						/>
 					</>
 				)}
-				<button
-					onClick={onVideoToggle}
-					className={`rounded-2xl border px-4 py-2 text-white transition ${
-						isVideoEnabled
-							? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20'
-							: 'border-white/10 bg-white/5 hover:bg-white/10'
-					}`}
-					title={isVideoEnabled ? 'Выключить камеру' : 'Включить камеру'}
+
+				{/* Header - draggable area */}
+				<div
+					className='p-4 border-b border-[#1e1f22] cursor-grab active:cursor-grabbing select-none'
+					onMouseDown={handleDragStart}
 				>
-					{isVideoEnabled ? '📹' : '📷'}
-				</button>
-				<button
-					onClick={onScreenShareToggle}
-					disabled={screenShareDisabled}
-					className={`rounded-2xl border px-4 py-2 text-white transition ${
-						screenShareDisabled
-							? 'border-white/10 bg-white/5 opacity-60'
-							: isScreenSharing
-								? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20'
-								: 'border-white/10 bg-white/5 hover:bg-white/10'
-					}`}
-					title={
-						screenShareDisabled
-							? 'Демонстрация экрана недоступна на этом устройстве'
-							: isScreenSharing
-								? 'Остановить демонстрацию'
-								: 'Демонстрация экрана'
-					}
-				>
-					🖥️
-				</button>
-				<button
-					onClick={handleEndCall}
-					className='rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-rose-200 transition hover:bg-rose-500/20'
-					title='Завершить звонок'
-				>
-					📞
-				</button>
+					<div
+						className='flex items-start justify-between gap-3'
+						onClick={e => e.stopPropagation()}
+					>
+						<div className='flex items-center gap-3 min-w-0'>
+							<div className='w-12 h-12 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white font-bold text-base flex-shrink-0'>
+								{avatarUrl ? (
+									<img
+										src={avatarUrl}
+										alt=''
+										className='w-full h-full object-cover rounded-full'
+									/>
+								) : (
+									<span>
+										{(callInfo.userName || 'В').slice(0, 1).toUpperCase()}
+									</span>
+								)}
+							</div>
+							<div className='min-w-0'>
+								<p className='text-sm font-semibold truncate text-white'>
+									{callInfo.userName || 'Звонок'}
+								</p>
+								<div className='mt-1 flex items-center gap-2 text-xs text-gray-400'>
+									<span className='rounded-full bg-green-500/20 text-green-400 px-2 py-0.5'>
+										{statusLabel}
+									</span>
+									<span className='text-gray-500'>
+										{formatDuration(duration)}
+									</span>
+								</div>
+								{pingMs > 0 && (
+									<p className='mt-1 text-[10px] text-gray-500'>
+										Пинг: {pingMs} мс
+									</p>
+								)}
+							</div>
+						</div>
+						<div className='flex items-center gap-1'>
+							{!isFullscreen && (
+								<button
+									onClick={e => {
+										e.stopPropagation()
+										toggleFullscreen()
+									}}
+									className='p-2 text-gray-400 hover:text-white hover:bg-[#35373c] rounded-lg transition-colors'
+									title='Во весь экран'
+								>
+									<Maximize2 className='w-4 h-4' />
+								</button>
+							)}
+							{isFullscreen && (
+								<button
+									onClick={e => {
+										e.stopPropagation()
+										toggleFullscreen()
+									}}
+									className='p-2 text-gray-400 hover:text-white hover:bg-[#35373c] rounded-lg transition-colors'
+									title='Выйти из полноэкранного режима'
+								>
+									<Minimize2 className='w-4 h-4' />
+								</button>
+							)}
+							<button
+								onClick={e => {
+									e.stopPropagation()
+									toggleMinimize()
+								}}
+								className='p-2 text-gray-400 hover:text-white hover:bg-[#35373c] rounded-lg transition-colors'
+								title='Свернуть'
+							>
+								<Minimize2 className='w-4 h-4' />
+							</button>
+						</div>
+					</div>
+				</div>
+
+				{/* Video section */}
+				{(hasScreenVideo || videoStream?.getVideoTracks().length) && (
+					<div
+						className='p-4 space-y-3'
+						style={{ maxHeight: 'calc(100% - 280px)', overflowY: 'auto' }}
+					>
+						{screenStream?.getVideoTracks().length && (
+							<div
+								className={`relative rounded-lg overflow-hidden bg-[#1e1f22] ${expandedVideo === 'screen' ? 'h-64' : 'h-32'} transition-all duration-300 group`}
+								onMouseEnter={() => setHoverVideo('screen')}
+								onMouseLeave={() => setHoverVideo(null)}
+							>
+								<video
+									ref={localScreenRef}
+									autoPlay
+									playsInline
+									muted
+									className='w-full h-full object-cover'
+								/>
+								<span className='absolute bottom-2 left-2 text-xs text-white bg-black/60 px-2 py-0.5 rounded'>
+									Ваш экран
+								</span>
+
+								{isFullscreenSupported && (
+									<div
+										className={`absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity duration-300 ${hoverVideo === 'screen' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+									>
+										<button
+											onClick={e => {
+												e.stopPropagation()
+												setExpandedVideo(
+													expandedVideo === 'screen' ? null : 'screen',
+												)
+											}}
+											className='p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white transition-all transform hover:scale-110'
+											title={
+												expandedVideo === 'screen'
+													? 'Выход из полноэкранного режима'
+													: 'Во весь экран'
+											}
+											aria-label={
+												expandedVideo === 'screen'
+													? 'Выход из полноэкранного режима'
+													: 'Во весь экран'
+											}
+											onKeyDown={e => {
+												if (e.key === 'Enter' || e.key === ' ') {
+													e.preventDefault()
+													setExpandedVideo(
+														expandedVideo === 'screen' ? null : 'screen',
+													)
+												}
+											}}
+										>
+											{expandedVideo === 'screen' ? (
+												<Minimize2 className='w-6 h-6' />
+											) : (
+												<Maximize2 className='w-6 h-6' />
+											)}
+										</button>
+									</div>
+								)}
+							</div>
+						)}
+						{videoStream?.getVideoTracks().length && (
+							<div
+								className={`relative rounded-lg overflow-hidden bg-[#1e1f22] ${expandedVideo === 'local' ? 'h-64' : 'h-32'} transition-all duration-300 group`}
+								onMouseEnter={() => setHoverVideo('local')}
+								onMouseLeave={() => setHoverVideo(null)}
+							>
+								<video
+									ref={localVideoRef}
+									autoPlay
+									playsInline
+									muted
+									className='w-full h-full object-cover'
+								/>
+								<span className='absolute bottom-2 left-2 text-xs text-white bg-black/60 px-2 py-0.5 rounded'>
+									Ваше видео
+								</span>
+
+								{isFullscreenSupported && (
+									<div
+										className={`absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity duration-300 ${hoverVideo === 'local' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+									>
+										<button
+											onClick={e => {
+												e.stopPropagation()
+												setExpandedVideo(
+													expandedVideo === 'local' ? null : 'local',
+												)
+											}}
+											className='p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white transition-all transform hover:scale-110'
+											title={
+												expandedVideo === 'local'
+													? 'Выход из полноэкранного режима'
+													: 'Во весь экран'
+											}
+											aria-label={
+												expandedVideo === 'local'
+													? 'Выход из полноэкранного режима'
+													: 'Во весь экран'
+											}
+											onKeyDown={e => {
+												if (e.key === 'Enter' || e.key === ' ') {
+													e.preventDefault()
+													setExpandedVideo(
+														expandedVideo === 'local' ? null : 'local',
+													)
+												}
+											}}
+										>
+											{expandedVideo === 'local' ? (
+												<Minimize2 className='w-6 h-6' />
+											) : (
+												<Maximize2 className='w-6 h-6' />
+											)}
+										</button>
+									</div>
+								)}
+							</div>
+						)}
+						{remoteStream?.getVideoTracks().length && (
+							<div
+								className={`relative rounded-lg overflow-hidden bg-[#1e1f22] ${expandedVideo === 'remote' ? 'h-64' : 'h-32'} transition-all duration-300 group`}
+								onMouseEnter={() => setHoverVideo('remote')}
+								onMouseLeave={() => setHoverVideo(null)}
+							>
+								<video
+									ref={remoteVideoRef}
+									autoPlay
+									playsInline
+									muted
+									className='w-full h-full object-cover'
+								/>
+								<span className='absolute bottom-2 left-2 text-xs text-white bg-black/60 px-2 py-0.5 rounded'>
+									{callInfo.userName || 'Видео'}
+								</span>
+
+								{isFullscreenSupported && (
+									<div
+										className={`absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity duration-300 ${hoverVideo === 'remote' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+									>
+										<button
+											onClick={e => {
+												e.stopPropagation()
+												setExpandedVideo(
+													expandedVideo === 'remote' ? null : 'remote',
+												)
+											}}
+											className='p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white transition-all transform hover:scale-110'
+											title={
+												expandedVideo === 'remote'
+													? 'Выход из полноэкранного режима'
+													: 'Во весь экран'
+											}
+											aria-label={
+												expandedVideo === 'remote'
+													? 'Выход из полноэкранного режима'
+													: 'Во весь экран'
+											}
+											onKeyDown={e => {
+												if (e.key === 'Enter' || e.key === ' ') {
+													e.preventDefault()
+													setExpandedVideo(
+														expandedVideo === 'remote' ? null : 'remote',
+													)
+												}
+											}}
+										>
+											{expandedVideo === 'remote' ? (
+												<Minimize2 className='w-6 h-6' />
+											) : (
+												<Maximize2 className='w-6 h-6' />
+											)}
+										</button>
+									</div>
+								)}
+							</div>
+						)}
+					</div>
+				)}
+
+				{/* Controls */}
+				<div className='absolute bottom-0 left-0 right-0 p-4 bg-[#2b2d31] border-t border-[#1e1f22]'>
+					<div className='flex items-center justify-center gap-2'>
+						<button
+							onClick={e => {
+								e.stopPropagation()
+								handleMuteToggle()
+							}}
+							className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg transition-colors ${isMuted ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-[#1e1f22] text-gray-300 hover:bg-[#35373c]'}`}
+							title={isMuted ? 'Включить микрофон' : 'Выключить микрофон'}
+						>
+							{isMuted ? (
+								<MicOff className='w-5 h-5' />
+							) : (
+								<Mic className='w-5 h-5' />
+							)}
+						</button>
+
+						<button
+							onClick={e => {
+								e.stopPropagation()
+								onVideoToggle()
+							}}
+							className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg transition-colors ${!isVideoEnabled ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-[#1e1f22] text-gray-300 hover:bg-[#35373c]'}`}
+							title={!isVideoEnabled ? 'Включить камеру' : 'Выключить камеру'}
+						>
+							{!isVideoEnabled ? (
+								<VideoOff className='w-5 h-5' />
+							) : (
+								<Video className='w-5 h-5' />
+							)}
+						</button>
+
+						{isScreenShareSupported && (
+							<button
+								onClick={e => {
+									e.stopPropagation()
+									onScreenShareToggle()
+								}}
+								className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg transition-colors ${isScreenSharing ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30' : 'bg-[#1e1f22] text-gray-300 hover:bg-[#35373c]'}`}
+								title={
+									isScreenSharing
+										? 'Остановить демонстрацию'
+										: 'Демонстрация экрана'
+								}
+							>
+								{isScreenSharing ? (
+									<MonitorOff className='w-5 h-5' />
+								) : (
+									<Monitor className='w-5 h-5' />
+								)}
+							</button>
+						)}
+
+						<button
+							onClick={e => {
+								e.stopPropagation()
+								handleEndCall()
+							}}
+							className='flex-1 flex items-center justify-center gap-2 p-3 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors'
+							title='Завершить звонок'
+						>
+							<PhoneOff className='w-5 h-5' />
+						</button>
+					</div>
+
+					{isExpanded && (
+						<div className='mt-3 pt-3 border-t border-[#1e1f22]'>
+							<div className='grid grid-cols-2 gap-2 text-xs'>
+								<div className='bg-[#1e1f22] rounded-lg p-2'>
+									<p className='text-gray-500 mb-1'>Соединение</p>
+									<p className='text-white font-medium'>{connState || 'N/A'}</p>
+								</div>
+								<div className='bg-[#1e1f22] rounded-lg p-2'>
+									<p className='text-gray-500 mb-1'>ICE</p>
+									<p className='text-white font-medium'>
+										{iceConnState || 'N/A'}
+									</p>
+								</div>
+								<div className='bg-[#1e1f22] rounded-lg p-2'>
+									<p className='text-gray-500 mb-1'>Пинг</p>
+									<p className='text-white font-medium'>
+										{pingMs > 0 ? `${pingMs} мс` : 'N/A'}
+									</p>
+								</div>
+								<div className='bg-[#1e1f22] rounded-lg p-2'>
+									<p className='text-gray-500 mb-1'>Статус</p>
+									<p className='text-green-400 font-medium'>{statusLabel}</p>
+								</div>
+							</div>
+						</div>
+					)}
+
+					<div className='mt-3 flex justify-center'>
+						<button
+							onClick={e => {
+								e.stopPropagation()
+								setIsExpanded(!isExpanded)
+							}}
+							className='flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#1e1f22] hover:bg-[#35373c] text-gray-400 hover:text-white text-xs transition'
+							title={isExpanded ? 'Свернуть' : 'Расширить'}
+						>
+							{isExpanded ? (
+								<ChevronUp className='w-3 h-3' />
+							) : (
+								<ChevronDown className='w-3 h-3' />
+							)}
+							<span>{isExpanded ? 'Свернуть' : 'Расширить'}</span>
+						</button>
+					</div>
+				</div>
+
+				<audio ref={remoteAudioRef} autoPlay playsInline />
+				<audio ref={localAudioRef} autoPlay playsInline muted />
 			</div>
 
-			<audio ref={remoteAudioRef} autoPlay playsInline />
-			<audio ref={localAudioRef} autoPlay playsInline muted />
-		</div>
+			{/* Expanded video modal */}
+			{expandedVideo && (
+				<div className='fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex items-center justify-center p-4'>
+					<div className='relative w-full max-w-6xl aspect-video'>
+						<video
+							ref={
+								expandedVideo === 'local'
+									? localVideoRef
+									: expandedVideo === 'remote'
+										? remoteVideoRef
+										: localScreenRef
+							}
+							autoPlay
+							playsInline
+							muted
+							className='w-full h-full object-contain'
+						/>
+						<div className='absolute top-4 left-4 text-sm text-white bg-black/60 px-3 py-1.5 rounded-lg'>
+							{expandedVideo === 'local'
+								? 'Ваше видео'
+								: expandedVideo === 'remote'
+									? callInfo.userName || 'Видео'
+									: 'Ваш экран'}
+						</div>
+						<button
+							onClick={() => setExpandedVideo(null)}
+							className='absolute top-4 right-4 p-2 bg-black/60 hover:bg-black/80 rounded-full text-white transition-colors'
+							title='Закрыть'
+						>
+							<X className='w-6 h-6' />
+						</button>
+					</div>
+				</div>
+			)}
+		</>
 	)
 }
 

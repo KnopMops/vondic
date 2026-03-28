@@ -119,22 +119,39 @@ export const useCallStore = create<CallStore>((set, get) => ({
 				set({ localStream: stream })
 			}
 
+			// Debounced remote stream update to prevent flickering
+			let streamUpdateTimeout: NodeJS.Timeout | null = null
 			callManager.onRemoteStream = (socketId: string, stream: MediaStream) => {
-				const { activeCalls, remoteStreams } = get()
-				const call = activeCalls.get(socketId)
-
-				// Обновляем стримы
-				const newStreams = new Map(remoteStreams)
-				newStreams.set(socketId, stream)
-
-				if (call) {
-					call.status = 'connected'
-					const newCalls = new Map(activeCalls)
-					newCalls.set(socketId, call)
-					set({ activeCalls: newCalls, remoteStreams: newStreams })
-				} else {
-					set({ remoteStreams: newStreams })
+				// Clear pending update
+				if (streamUpdateTimeout) {
+					clearTimeout(streamUpdateTimeout)
 				}
+				
+				// Debounce updates by 150ms
+				streamUpdateTimeout = setTimeout(() => {
+					const { activeCalls, remoteStreams } = get()
+					const call = activeCalls.get(socketId)
+
+					// Check if stream actually changed
+					const existingStream = remoteStreams.get(socketId)
+					if (existingStream === stream) {
+						return // No change, skip update
+					}
+
+					// Обновляем стримы
+					const newStreams = new Map(remoteStreams)
+					newStreams.set(socketId, stream)
+
+					if (call) {
+						call.status = 'connected'
+						const newCalls = new Map(activeCalls)
+						newCalls.set(socketId, call)
+						set({ activeCalls: newCalls, remoteStreams: newStreams })
+					} else {
+						set({ remoteStreams: newStreams })
+					}
+					streamUpdateTimeout = null
+				}, 150)
 			}
 
 			callManager.onIncomingCall = (call: CallState) => {
@@ -193,6 +210,11 @@ export const useCallStore = create<CallStore>((set, get) => ({
 			) => {
 				set({ screenStream: stream, isScreenSharing: isSharing })
 			}
+
+			// Test TURN server and fallback to internal (192.168.20.31) if needed
+			webRTCService.testTurnAndFallback().catch(err => {
+				console.warn('[CallStore] TURN test failed:', err)
+			})
 
 			callManager.onCallEnded = (call: CallState) => {
 				const { activeCalls, callHistory, remoteStreams } = get()
@@ -277,6 +299,11 @@ export const useCallStore = create<CallStore>((set, get) => ({
 
 		if (webRTCService) {
 			webRTCService.cleanup()
+		}
+
+		// Clear any pending stream update timeouts
+		if ((get() as any)._streamUpdateTimeout) {
+			clearTimeout((get() as any)._streamUpdateTimeout)
 		}
 
 		set({
@@ -576,3 +603,61 @@ export const useStartVideo = () => useCallStore(state => state.startVideo)
 export const useStopVideo = () => useCallStore(state => state.stopVideo)
 export const useToggleVideo = () => useCallStore(state => state.toggleVideo)
 export const useIsVideoEnabled = () => useCallStore(state => state.isVideoEnabled)
+
+// Save call state to localStorage
+export const saveCallState = () => {
+	if (typeof window === 'undefined') return
+	const state = useCallStore.getState()
+	try {
+		const data = {
+			activeCalls: Array.from(state.activeCalls.entries()).map(([key, value]) => ({
+				key,
+				socketId: value.socketId,
+				userId: value.userId,
+				userName: value.userName,
+				userAvatar: value.userAvatar,
+				status: value.status,
+				isGroupCall: value.isGroupCall,
+				callId: value.callId,
+				startTime: value.startTime?.toISOString(),
+			})),
+			activeGroupCallId: state.activeGroupCallId,
+		}
+		localStorage.setItem('active_call_state', JSON.stringify(data))
+	} catch {}
+}
+
+// Restore call state from localStorage
+export const restoreCallState = () => {
+	if (typeof window === 'undefined') return null
+	try {
+		const saved = localStorage.getItem('active_call_state')
+		if (!saved) return null
+		const data = JSON.parse(saved)
+		
+		// Clear old state (older than 1 hour)
+		const oneHourAgo = Date.now() - 60 * 60 * 1000
+		const validCalls = data.activeCalls?.filter?.((c: any) => {
+			if (!c.startTime) return false
+			return new Date(c.startTime).getTime() > oneHourAgo
+		}) || []
+		
+		if (validCalls.length === 0 && !data.activeGroupCallId) {
+			localStorage.removeItem('active_call_state')
+			return null
+		}
+		
+		return {
+			activeCalls: new Map(validCalls.map((c: any) => [c.socketId, { ...c, startTime: new Date(c.startTime) }])),
+			activeGroupCallId: data.activeGroupCallId,
+		}
+	} catch {
+		return null
+	}
+}
+
+// Clear call state
+export const clearCallState = () => {
+	if (typeof window === 'undefined') return
+	localStorage.removeItem('active_call_state')
+}

@@ -15,7 +15,6 @@ from flask import Blueprint, jsonify, request
 
 posts_bp = Blueprint("posts", __name__, url_prefix="/api/v1/posts")
 
-
 def notify_all_users(
         title: str,
         message: str,
@@ -27,7 +26,7 @@ def notify_all_users(
             f"{u.id}|{message}|{ts}".encode("utf-8")
         ).hexdigest()
         db.session.execute(text("""
-            INSERT INTO notifications (user_id, title, type, message, created_at, delivered, notification_hash) 
+            INSERT INTO notifications (user_id, title, type, message, created_at, delivered, notification_hash)
             VALUES (:user_id, :title, :type, :message, :created_at, :delivered, :notification_hash)
         """), {
             "user_id": u.id,
@@ -39,7 +38,6 @@ def notify_all_users(
             "notification_hash": content_hash
         })
     db.session.commit()
-
 
 @posts_bp.route("/", methods=["GET"])
 def get_posts():
@@ -69,14 +67,12 @@ def get_posts():
         }
     ), 200
 
-
 @posts_bp.route("/<post_id>", methods=["GET"])
 def get_post(post_id):
     post = PostService.get_post_by_id(post_id)
     if not post:
-        return jsonify({"error": "Post not found"}), 404
+        return jsonify({"error": "Пост не найден"}), 404
     return jsonify(post_schema.dump(post)), 200
-
 
 @posts_bp.route("/detail", methods=["POST"])
 def get_post_detail():
@@ -84,32 +80,31 @@ def get_post_detail():
     post_id = data.get("post_id")
 
     if not post_id:
-        return jsonify({"error": "post_id is required"}), 400
+        return jsonify({"error": "Требуется post_id"}), 400
 
     post = PostService.get_post_by_id(post_id)
     if not post:
-        return jsonify({"error": "Post not found"}), 404
+        return jsonify({"error": "Пост не найден"}), 404
     return jsonify(post_schema.dump(post)), 200
-
 
 @posts_bp.route("/", methods=["POST"])
 @token_required
 def create_post(current_user):
     data = request.get_json()
     if not data:
-        return jsonify({"error": "No data provided"}), 400
+        return jsonify({"error": "Нет данных"}), 400
 
     attachments = data.get("attachments")
     if attachments is not None and not isinstance(attachments, list):
-        return jsonify({"error": "attachments must be a list"}), 400
+        return jsonify({"error": "attachments должен быть списком"}), 400
 
     is_blog = bool(data.get("is_blog"))
     if is_blog and current_user.role != "Admin":
-        return jsonify({"error": "Unauthorized"}), 403
+        return jsonify({"error": "Неавторизовано"}), 403
 
     post = PostService.create_post(data, current_user.id, is_blog=is_blog)
     if not post:
-        return jsonify({"error": "Failed to create post"}), 500
+        return jsonify({"error": "Не удалось создать пост"}), 500
 
     if is_blog:
         notify_all_users(
@@ -120,7 +115,6 @@ def create_post(current_user):
 
     return jsonify(post_schema.dump(post)), 201
 
-
 @posts_bp.route("/", methods=["PUT"])
 @token_required
 def update_post(current_user):
@@ -128,16 +122,15 @@ def update_post(current_user):
     post_id = data.get("post_id")
 
     if not post_id:
-        return jsonify({"error": "post_id is required"}), 400
+        return jsonify({"error": "Требуется post_id"}), 400
 
     is_admin = current_user.role == "Admin"
     post, error = PostService.update_post(
         post_id, data, current_user.id, is_admin)
     if error:
-        status_code = 404 if error == "Post not found" else 403
+        status_code = 404 if error == "Пост не найден" else 403
         return jsonify({"error": error}), status_code
     return jsonify(post_schema.dump(post)), 200
-
 
 @posts_bp.route("/", methods=["DELETE"])
 @token_required
@@ -147,23 +140,22 @@ def delete_post(current_user):
     user_id = data.get("user_id")
 
     if not post_id or not user_id:
-        return jsonify({"error": "post_id and user_id are required"}), 400
+        return jsonify({"error": "Требуется post_id и user_id"}), 400
 
     if str(user_id) != str(current_user.id):
-        return jsonify({"error": "User ID mismatch"}), 403
+        return jsonify({"error": "Несоответствие ID пользователя"}), 403
 
     post, error = PostService.delete_post_by_user(post_id, user_id)
     if error:
-        status_code = 404 if error == "Post not found" else 403
+        status_code = 404 if error == "Пост не найден" else 403
         return jsonify({"error": error}), status_code
-    return jsonify({"message": "Post deleted successfully"}), 200
-
+    return jsonify({"message": "Пост успешно удалён"}), 200
 
 @posts_bp.route("/admin", methods=["DELETE"])
 @token_required
 def delete_post_admin(current_user):
     if current_user.role != "Admin":
-        return jsonify({"error": "Unauthorized"}), 403
+        return jsonify({"error": "Неавторизовано"}), 403
 
     data = request.get_json() or {}
     post_id = data.get("post_id")
@@ -172,18 +164,17 @@ def delete_post_admin(current_user):
 
     if not post_id or not user_id or not reason:
         return jsonify(
-            {"error": "post_id, user_id and reason are required"}), 400
+            {"error": "Требуется post_id, user_id и reason"}), 400
 
     if str(user_id) != str(current_user.id):
-        return jsonify({"error": "User ID mismatch"}), 403
+        return jsonify({"error": "Несоответствие ID пользователя"}), 403
 
     post, error = PostService.delete_post_by_admin(
         post_id, current_user.id, reason)
     if error:
-        status_code = 404 if error == "Post not found" else 403
+        status_code = 404 if error == "Пост не найден" else 403
         return jsonify({"error": error}), status_code
-    return jsonify({"message": "Post deleted by admin successfully"}), 200
-
+    return jsonify({"message": "Пост удалён администратором"}), 200
 
 @posts_bp.route("/like", methods=["POST"])
 @token_required
@@ -191,14 +182,13 @@ def like_post(current_user):
     data = request.get_json() or {}
     post_id = data.get("post_id")
     if not post_id:
-        return jsonify({"error": "post_id is required"}), 400
+        return jsonify({"error": "Требуется post_id"}), 400
 
     post, error = PostService.like_post(post_id, current_user.id)
     if error:
-        status_code = 404 if error == "Post not found" else 400
+        status_code = 404 if error == "Пост не найден" else 400
         return jsonify({"error": error}), status_code
     return jsonify(post_schema.dump(post)), 200
-
 
 @posts_bp.route("/unlike", methods=["POST"])
 @token_required
@@ -206,31 +196,29 @@ def unlike_post(current_user):
     data = request.get_json() or {}
     post_id = data.get("post_id")
     if not post_id:
-        return jsonify({"error": "post_id is required"}), 400
+        return jsonify({"error": "Требуется post_id"}), 400
 
     post, error = PostService.unlike_post(post_id, current_user.id)
     if error:
-        status_code = 404 if error == "Post not found" else 400
+        status_code = 404 if error == "Пост не найден" else 400
         return jsonify({"error": error}), status_code
     return jsonify(post_schema.dump(post)), 200
-
 
 @posts_bp.route("/<post_id>/comments", methods=["GET"])
 def get_post_comments(post_id):
     comments = CommentService.get_comments_by_post(post_id)
     return jsonify(comments_schema.dump(comments)), 200
 
-
 @posts_bp.route("/comment", methods=["POST"])
 @token_required
 def create_comment(current_user):
     data = request.get_json()
     if not data:
-        return jsonify({"error": "No data provided"}), 400
+        return jsonify({"error": "Нет данных"}), 400
 
     post_id = data.get("post_id")
     if not post_id:
-        return jsonify({"error": "post_id is required"}), 400
+        return jsonify({"error": "Требуется post_id"}), 400
 
     comment, error = CommentService.create_comment(
         data, current_user.id, post_id)

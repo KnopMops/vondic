@@ -6,7 +6,6 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from app.core.extensions import db
 
-
 class User(db.Model):
     __tablename__ = "users"
     id = db.Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -43,6 +42,7 @@ class User(db.Model):
     profile_bg_image = db.Column(TEXT, default=None)
     gifts = db.Column(JSON, default=list)
     storis = db.Column(JSON, default=list)
+    pinned_chats = db.Column(JSON, default=list)
     is_developer = db.Column(INTEGER, default=0)
     api_key_hash = db.Column(TEXT, default=None)
     api_key = db.Column(TEXT, default=None)
@@ -93,6 +93,7 @@ class User(db.Model):
             "profile_bg_image": self.profile_bg_image,
             "avatar_url": self.avatar_url,
             "storis": self.storis or [],
+            "pinned_chats": self.pinned_chats or [],
             "is_blocked": bool(self.is_blocked),
             "blocked_by_admin": self.blocked_by_admin,
             "two_factor_enabled": bool(self.two_factor_enabled),

@@ -5,7 +5,6 @@ from sqlalchemy import INTEGER, TEXT, TIMESTAMP
 
 from app.core.extensions import db
 
-
 class Bot(db.Model):
     __tablename__ = "bots"
 
@@ -14,6 +13,7 @@ class Bot(db.Model):
     description = db.Column(TEXT, default=None)
     avatar_url = db.Column(TEXT, default=None)
     is_active = db.Column(INTEGER, default=1)
+    is_verified = db.Column(INTEGER, default=0)
     bot_token_hash = db.Column(TEXT, default=None)
     created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
     updated_at = db.Column(
