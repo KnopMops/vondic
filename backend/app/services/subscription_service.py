@@ -2,7 +2,6 @@ from app.core.extensions import db
 from app.models.subscription import Subscription
 from app.models.user import User
 
-
 class SubscriptionService:
     @staticmethod
     def subscribe(subscriber_id, target_id):

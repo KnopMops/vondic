@@ -1,4 +1,4 @@
-aiogram
+botiksdk>=0.1.1
 bcrypt
 python-dotenv
 flask

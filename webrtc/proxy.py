@@ -6,7 +6,6 @@ from .database import UserRepository
 
 logger = logging.getLogger(__name__)
 
-
 class ConnectionBroker:
     def __init__(self, repo: UserRepository):
         self.repo = repo

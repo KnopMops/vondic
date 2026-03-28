@@ -13,7 +13,6 @@ community_members = db.Table(
     db.Column("joined_at", TIMESTAMP, default=datetime.utcnow),
 )
 
-
 class Community(db.Model):
     __tablename__ = "communities"
 

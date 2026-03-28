@@ -9,7 +9,6 @@ BASE_DIR = os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__))))
 DEFAULT_DB_PATH = os.path.join(BASE_DIR, "database.db")
 
-
 class AuthRepository:
     def __init__(self, db_path=None):
         self.db_path = db_path or DEFAULT_DB_PATH

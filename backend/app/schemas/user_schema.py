@@ -1,7 +1,6 @@
 from app.core.extensions import ma
 from app.models.user import User
 
-
 class UserSchema(ma.SQLAlchemyAutoSchema):
     avatar_url = ma.Method("get_avatar_url")
 
@@ -19,7 +18,6 @@ class UserSchema(ma.SQLAlchemyAutoSchema):
 
     def get_avatar_url(self, obj):
         return None if obj.is_blocked else obj.avatar_url
-
 
 user_schema = UserSchema()
 users_schema = UserSchema(many=True)

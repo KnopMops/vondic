@@ -1,0 +1,224 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    environment:
+      POSTGRES_USER: vondic
+      POSTGRES_PASSWORD: vondic
+      POSTGRES_DB: vondic
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U vondic -d vondic']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    image: redis:7
+    container_name: redis
+    volumes:
+      - redis_data:/data
+    networks:
+      - app-network
+    ports:
+      - '6379:6379'
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - '5672:5672'
+      - '15672:15672'
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: pgbouncer
+    restart: unless-stopped
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=vondic
+      - DB_PASSWORD=vondic
+      - DB_NAME=vondic
+      - POOL_MODE=transaction
+      - MAX_CLIENT_CONN=100
+      - DEFAULT_POOL_SIZE=20
+      - SERVER_RESET_QUERY="DISCARD ALL"
+      - ADMIN_USERS=postgres,admin
+    ports:
+      - '6432:6432'
+    networks:
+      - app-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:ro
+      - ./pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: backend
+    env_file:
+      - ./backend/.env.backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - '5050:5050'
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  videochecker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.videochecker
+    container_name: videochecker
+    env_file:
+      - ./backend/.env.backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  webrtc:
+    build:
+      context: .
+      dockerfile: webrtc/Dockerfile.webrtc
+    container_name: webrtc
+    env_file:
+      - ./webrtc/.env.webrtc
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app-network
+    ports:
+      - '5000:5000'
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    env_file:
+      - ./frontend/.env
+    depends_on:
+      - backend
+      - webrtc
+    networks:
+      - app-network
+    ports:
+      - '3000:3000'
+    restart: unless-stopped
+
+  bot:
+    build:
+      context: .
+      dockerfile: bot/Dockerfile
+    container_name: bot
+    env_file:
+      - ./bot/.env.bot
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  nginx:
+    build: ./nginx
+    container_name: nginx
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - backend
+      - webrtc
+      - frontend
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  turn:
+    image: coturn/coturn
+    container_name: turn
+    restart: unless-stopped
+    ports:
+      - '3478:3478'
+      - '3478:3478/udp'
+      - '50000-50050:50000-50050'
+      - '50000-50050:50000-50050/udp'
+    command: >
+      -n --log-file=stdout
+      --min-port=50000 --max-port=50050
+      --user=vondic:свой пароль
+      --realm=домен
+      --listening-port=3478
+      --listening-ip=0.0.0.0
+      --fingerprint
+      --lt-cred-mech
+      --no-cli
+      --no-tls
+      --no-dtls
+    networks:
+      - app-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+
+networks:
+  app-network:
+    driver: bridge

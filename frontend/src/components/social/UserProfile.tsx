@@ -1242,37 +1242,6 @@ export default function UserProfile({ user, currentUser }: Props) {
 					</motion.div>
 				)}
 			</AnimatePresence>
-			{/* Telegram Integration Section */}
-			{isMe && (
-				<div className='mb-6 rounded-xl bg-white/5 border border-white/10 p-4'>
-					<h3 className='text-lg font-bold text-white mb-2'>
-						Привязка Telegram
-					</h3>
-					<p className='text-gray-400 text-sm mb-4'>
-						Сгенерируйте код для привязки вашего аккаунта к Telegram боту.
-					</p>
-					{linkKey ? (
-						<div className='bg-white/10 p-4 rounded-lg text-center'>
-							<div className='text-3xl font-mono text-white tracking-widest mb-2'>
-								{linkKey}
-							</div>
-							<p className='text-xs text-gray-500'>Введите этот код в боте</p>
-						</div>
-					) : (
-						<button
-							onClick={generateLinkKey}
-							className='w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors'
-						>
-							Сгенерировать код
-						</button>
-					)}
-					{user.telegram_id && (
-						<div className='mt-2 text-green-400 text-sm'>
-							✓ Telegram привязан
-						</div>
-					)}
-				</div>
-			)}
 
 			{/* Content Tabs */}
 			<div className='rounded-3xl bg-white/5 border border-white/10 backdrop-blur-md p-1'>

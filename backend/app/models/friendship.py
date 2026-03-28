@@ -5,7 +5,6 @@ from sqlalchemy import TEXT, TIMESTAMP
 
 from app.core.extensions import db
 
-
 class Friendship(db.Model):
     __tablename__ = "friendships"
     id = db.Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))

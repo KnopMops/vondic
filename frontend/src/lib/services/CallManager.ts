@@ -129,22 +129,29 @@ export class CallManager {
 			if (iCreateOffer) {
 				console.log(`I (${mySocketId}) am creating offer for ${socket_id}`)
 				const pc = this.webRTCService.getPeerConnection(socket_id) || this.webRTCService.createPeerConnection(socket_id)
-				
+
 				// Check state before creating offer
 				if (pc.signalingState !== 'stable') {
 					console.log(`Cannot create offer: PC state is ${pc.signalingState}`)
 					return
 				}
-				
-				// Add audio track if not already present
+
+				// Ensure local audio track is present (same as direct calls)
 				const localStream = this.webRTCService.getLocalStream()
 				if (localStream) {
 					const audioTrack = localStream.getAudioTracks()[0]
-					if (audioTrack && !pc.getSenders().some(s => s.track?.kind === 'audio')) {
-						pc.addTrack(audioTrack, localStream)
+					if (audioTrack) {
+						const existingSender = pc.getSenders().find(s => s.track?.kind === 'audio')
+						if (!existingSender) {
+							pc.addTrack(audioTrack, localStream)
+							console.log(`[GroupCall] Added audio track for ${socket_id}`)
+						} else if (existingSender.track !== audioTrack) {
+							await existingSender.replaceTrack(audioTrack)
+							console.log(`[GroupCall] Replaced audio track for ${socket_id}`)
+						}
 					}
 				}
-				
+
 				const offer = await pc.createOffer()
 				await pc.setLocalDescription(offer)
 
@@ -173,13 +180,20 @@ export class CallManager {
 				console.log(`I (${mySocketId}) am waiting for offer from ${socket_id}`)
 				// Just prepare the peer connection but don't create an offer
 				const pc = this.webRTCService.getPeerConnection(socket_id) || this.webRTCService.createPeerConnection(socket_id)
-				
-				// Add audio track if not already present
+
+				// Ensure local audio track is present (same as direct calls)
 				const localStream = this.webRTCService.getLocalStream()
 				if (localStream) {
 					const audioTrack = localStream.getAudioTracks()[0]
-					if (audioTrack && !pc.getSenders().some(s => s.track?.kind === 'audio')) {
-						pc.addTrack(audioTrack, localStream)
+					if (audioTrack) {
+						const existingSender = pc.getSenders().find(s => s.track?.kind === 'audio')
+						if (!existingSender) {
+							pc.addTrack(audioTrack, localStream)
+							console.log(`[GroupCall] Added audio track for ${socket_id} (answerer)`)
+						} else if (existingSender.track !== audioTrack) {
+							await existingSender.replaceTrack(audioTrack)
+							console.log(`[GroupCall] Replaced audio track for ${socket_id} (answerer)`)
+						}
 					}
 				}
 
@@ -268,22 +282,29 @@ export class CallManager {
 			if (iCreateOffer) {
 				console.log(`I (${mySocketId}) am creating offer for ${socket_id}`)
 				const pc = this.webRTCService.getPeerConnection(socket_id) || this.webRTCService.createPeerConnection(socket_id)
-				
+
 				// Check state before creating offer
 				if (pc.signalingState !== 'stable') {
 					console.log(`Cannot create offer: PC state is ${pc.signalingState}`)
 					return
 				}
-				
-				// Add audio track if not already present
+
+				// Ensure local audio track is present (same as direct calls)
 				const localStream = this.webRTCService.getLocalStream()
 				if (localStream) {
 					const audioTrack = localStream.getAudioTracks()[0]
-					if (audioTrack && !pc.getSenders().some(s => s.track?.kind === 'audio')) {
-						pc.addTrack(audioTrack, localStream)
+					if (audioTrack) {
+						const existingSender = pc.getSenders().find(s => s.track?.kind === 'audio')
+						if (!existingSender) {
+							pc.addTrack(audioTrack, localStream)
+							console.log(`[VoiceChannel] Added audio track for ${socket_id}`)
+						} else if (existingSender.track !== audioTrack) {
+							await existingSender.replaceTrack(audioTrack)
+							console.log(`[VoiceChannel] Replaced audio track for ${socket_id}`)
+						}
 					}
 				}
-				
+
 				const offer = await pc.createOffer()
 				await pc.setLocalDescription(offer)
 				this.socket.emit('offer', {
@@ -311,13 +332,20 @@ export class CallManager {
 				console.log(`I (${mySocketId}) am waiting for offer from ${socket_id}`)
 				// Just prepare the peer connection but don't create an offer
 				const pc = this.webRTCService.getPeerConnection(socket_id) || this.webRTCService.createPeerConnection(socket_id)
-				
-				// Add audio track if not already present
+
+				// Ensure local audio track is present (same as direct calls)
 				const localStream = this.webRTCService.getLocalStream()
 				if (localStream) {
 					const audioTrack = localStream.getAudioTracks()[0]
-					if (audioTrack && !pc.getSenders().some(s => s.track?.kind === 'audio')) {
-						pc.addTrack(audioTrack, localStream)
+					if (audioTrack) {
+						const existingSender = pc.getSenders().find(s => s.track?.kind === 'audio')
+						if (!existingSender) {
+							pc.addTrack(audioTrack, localStream)
+							console.log(`[VoiceChannel] Added audio track for ${socket_id} (answerer)`)
+						} else if (existingSender.track !== audioTrack) {
+							await existingSender.replaceTrack(audioTrack)
+							console.log(`[VoiceChannel] Replaced audio track for ${socket_id} (answerer)`)
+						}
 					}
 				}
 
@@ -334,7 +362,7 @@ export class CallManager {
 				}
 				this.currentCalls.set(socket_id, callState)
 				this.updateCallState(socket_id, callState)
-			
+
 			}
 		})
 
@@ -736,23 +764,48 @@ export class CallManager {
 		// Listen for video state changes from other participants
 		this.socket.on('video_state_changed', (data: any) => {
 			console.log('Received video state change:', data);
-			const from_socket_id = 
+			const from_socket_id =
 				data.from_socket_id ||
 				data.sender_socket_id ||
 				data.caller_socket_id;
-				
+
 			const has_video = data.has_video;
-			
+
 			if (from_socket_id) {
 				// The video state has changed for this participant
 				// We need to update the remote stream accordingly
 				console.log(`Participant ${from_socket_id} video state changed: ${has_video}`);
-				
+
 				// Get the current remote stream for this participant
 				const currentStream = this.webRTCService.getRemoteStream(from_socket_id);
 				if (currentStream) {
 					// The stream should automatically reflect the current state
 					// as tracks are added/removed by the WebRTC service
+					if (this.onRemoteStream) {
+						this.onRemoteStream(from_socket_id, currentStream);
+					}
+				}
+			}
+		})
+
+		// Listen for screen share state changes from other participants
+		this.socket.on('screen_share_state_changed', (data: any) => {
+			console.log('Received screen share state change:', data);
+			const from_socket_id =
+				data.from_socket_id ||
+				data.sender_socket_id;
+
+			const is_sharing = data.is_sharing;
+			const user_id = data.user_id;
+
+			if (from_socket_id) {
+				console.log(`Participant ${from_socket_id} screen share state changed: ${is_sharing}`);
+				
+				// Get the current remote stream for this participant
+				const currentStream = this.webRTCService.getRemoteStream(from_socket_id);
+				if (currentStream) {
+					// Notify about the screen share state change
+					// The actual screen share track will be added via WebRTC renegotiation
 					if (this.onRemoteStream) {
 						this.onRemoteStream(from_socket_id, currentStream);
 					}
@@ -880,6 +933,10 @@ export class CallManager {
 		this.socket.emit('group_call_end', { call_id: callId })
 		this.activeGroupCallId = null
 		if (this.onGroupCallIdChange) this.onGroupCallIdChange(null)
+
+		// Stop screen share and video before closing connections
+		this.webRTCService.stopScreenShare().catch(() => {})
+		this.webRTCService.stopVideo().catch(() => {})
 
 		this.webRTCService.peerConnections.forEach(pc => pc.close())
 		this.webRTCService.peerConnections.clear()

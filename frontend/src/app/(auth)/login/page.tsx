@@ -125,7 +125,7 @@ export default function LoginPage() {
 						<div className='space-y-4'>
 							<div>
 								<label htmlFor='email-address' className='sr-only'>
-									Email address
+									Электронная почта
 								</label>
 								<input
 									id='email-address'
@@ -142,7 +142,7 @@ export default function LoginPage() {
 							{!twoFactorRequired ? (
 								<div>
 									<label htmlFor='password' className='sr-only'>
-										Password
+										Пароль
 									</label>
 									<input
 										id='password'
@@ -159,7 +159,7 @@ export default function LoginPage() {
 							) : (
 								<div>
 									<label htmlFor='twofactor' className='sr-only'>
-										Two Factor Code
+										Код двухфакторной аутентификации
 									</label>
 									<input
 										id='twofactor'

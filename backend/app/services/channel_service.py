@@ -2,7 +2,6 @@ from app.core.extensions import db
 from app.models.channel import Channel
 from app.models.user import User
 
-
 class ChannelService:
     @staticmethod
     def create_channel(data, user_id):

@@ -6,7 +6,6 @@ from sqlalchemy import TEXT, TIMESTAMP
 
 from app.core.extensions import db
 
-
 class CommunityChannel(db.Model):
     __tablename__ = "community_channels"
 

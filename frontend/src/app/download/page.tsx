@@ -13,7 +13,7 @@ export default function DownloadPage() {
 			<div className='relative z-10 mx-auto max-w-5xl px-6 py-16'>
 				<div className='flex items-center justify-between mb-12'>
 					<div>
-						<h1 className='text-3xl md:text-4xl font-bold'>Загрузки Vondic</h1>
+						<h1 className='text-3xl md:text-4xl font-bold'>Загрузки Вондик</h1>
 						<p className='text-gray-400 mt-2'>
 							Выберите платформу для скачивания.
 						</p>

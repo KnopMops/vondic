@@ -1,22 +1,23 @@
-# Используем официальный образ Python (slim-версия для меньшего размера)
 FROM python:3.13-slim
 
-# Устанавливаем рабочую директорию внутри контейнера
 WORKDIR /app
 
-# Копируем файл с зависимостями и устанавливаем их
-COPY webrtc.requirements.txt .
-RUN pip install --no-cache-dir -r webrtc.requirements.txt
+COPY requirements_a.txt .
+RUN pip install --no-cache-dir -r requirements_a.txt
 
-# Копируем остальные файлы приложения
-COPY . .
+# Копируем код webrtc в подпапку /app/webrtc
+COPY webrtc/ /app/webrtc/
 
-# (Рекомендуется) Создаём непривилегированного пользователя и переключаемся на него
+# Убедимся, что есть __init__.py для возможности импорта (если нужно),
+# но мы будем запускать напрямую, без модуля
+# RUN touch /app/webrtc/__init__.py   # раскомментируйте, если хотите использовать -m
+
 RUN useradd --create-home appuser
 USER appuser
 
-# Указываем порт, который будет слушать контейнер
+WORKDIR /app
+
 EXPOSE 5000
 
-# Запускаем Flask-приложение через Uvicorn с WSGI-интерфейсом
-CMD ["python", "-m", "webrtc.main"]
+# Запускаем main.py из папки webrtc
+CMD ["python", "webrtc/main.py"]

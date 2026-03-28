@@ -1,7 +1,16 @@
 'use client'
 
-import { CallButton } from '@/components/calls'
+import { ChatMenu } from '@/components/calls'
+import { ConnectingModal } from '@/components/calls/ConnectingModal'
+import { FloatingCallBar } from '@/components/calls/FloatingCallBar'
+import { IntegratedCallPanel } from '@/components/calls/IntegratedCallPanel'
+import { ScreenShareViewer } from '@/components/calls/ScreenShareViewer'
 import { useAuth } from '@/lib/AuthContext'
+import {
+	canPinChats,
+	sortChatsWithPinned,
+	togglePinChat,
+} from '@/lib/chatUtils'
 import { useChannels } from '@/lib/hooks/useChannels'
 import { useChat } from '@/lib/hooks/useChat'
 import { useCommunities } from '@/lib/hooks/useCommunities'
@@ -9,31 +18,35 @@ import { useDebounce } from '@/lib/hooks/useDebounce'
 import { useGroups } from '@/lib/hooks/useGroups'
 import { useSocket } from '@/lib/SocketContext'
 import {
-    useActiveCalls,
-    useActiveGroupCallId,
-    useCallStore,
-    useIsInitialized,
-    useIsScreenShareSupported,
-    useIsWebRTCSupported,
+	clearCallState,
+	restoreCallState,
+	saveCallState,
+	useActiveCalls,
+	useActiveGroupCallId,
+	useCallStore,
+	useIsInitialized,
+	useIsScreenShareSupported,
+	useIsWebRTCSupported,
 } from '@/lib/stores/callStore'
 import { useToast } from '@/lib/ToastContext'
 import { Channel, Group, Message, User } from '@/lib/types'
+import { apiUrl, webrtcUrl } from '@/lib/url-fallback'
 import { getAttachmentUrl, getAvatarUrl } from '@/lib/utils'
 import Link from 'next/link'
 import {
-    useCallback,
-    useEffect,
-    useLayoutEffect,
-    useMemo,
-    useRef,
-    useState,
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
 } from 'react'
 import MessageBubble from './MessageBubble'
 
 // --- Utility Functions ---
 const formatLastSeen = (lastSeen?: string | Date): string => {
 	if (!lastSeen) return 'Не в сети'
-	
+
 	const now = new Date()
 	const lastSeenDate = new Date(lastSeen)
 	const diffMs = now.getTime() - lastSeenDate.getTime()
@@ -45,41 +58,50 @@ const formatLastSeen = (lastSeen?: string | Date): string => {
 	if (diffMins < 60) return `${diffMins} мин. назад`
 	if (diffHours < 24) return `${diffHours} ч. назад`
 	if (diffDays < 7) return `${diffDays} д. назад`
-	
+
 	return lastSeenDate.toLocaleDateString('ru-RU', {
 		day: 'numeric',
-		month: 'short'
+		month: 'short',
 	})
 }
 
 const getLastMessage = (friendId: string, messages: Message[]): string => {
-	const friendMessages = messages.filter(m => 
-		m.sender_id === friendId || 
-		(m.channel_id === undefined && m.group_id === undefined && !m.isOwn)
+	// Filter only direct messages (no channel_id or group_id) between current user and friend
+	const friendMessages = messages.filter(
+		m =>
+			// Direct message: no channel or group
+			(m.channel_id === undefined || m.channel_id === null) &&
+			(m.group_id === undefined || m.group_id === null) &&
+			// Messages from or to this friend
+			(m.sender_id === friendId || (!m.isOwn && m.sender_id !== friendId))
 	)
 	if (friendMessages.length === 0) return ''
-	
+
 	const lastMessage = friendMessages[friendMessages.length - 1]
 	if (lastMessage.type === 'voice') return '🎤 Голосовое сообщение'
 	if (lastMessage.type === 'image') return '🖼️ Фото'
 	if (lastMessage.type === 'file') return '📎 Файл'
-	
-	return lastMessage.content.length > 30 
-		? lastMessage.content.substring(0, 30) + '...'
-		: lastMessage.content
+
+	const content = lastMessage.content
+	return content.length > 30 ? content.substring(0, 30) + '...' : content
 }
 
 const getLastMessageTime = (friendId: string, messages: Message[]): string => {
-	const friendMessages = messages.filter(m => 
-		m.sender_id === friendId || 
-		(m.channel_id === undefined && m.group_id === undefined && !m.isOwn)
+	// Filter only direct messages (no channel_id or group_id) between current user and friend
+	const friendMessages = messages.filter(
+		m =>
+			// Direct message: no channel or group
+			(m.channel_id === undefined || m.channel_id === null) &&
+			(m.group_id === undefined || m.group_id === null) &&
+			// Messages from or to this friend
+			(m.sender_id === friendId || (!m.isOwn && m.sender_id !== friendId))
 	)
 	if (friendMessages.length === 0) return ''
-	
+
 	const lastMessage = friendMessages[friendMessages.length - 1]
 	return new Date(lastMessage.timestamp).toLocaleTimeString('ru-RU', {
 		hour: '2-digit',
-		minute: '2-digit'
+		minute: '2-digit',
 	})
 }
 
@@ -162,6 +184,21 @@ const StickerIcon = ({ className }: { className?: string }) => (
 	</svg>
 )
 
+const XIcon = ({ className }: { className?: string }) => (
+	<svg
+		viewBox='0 0 24 24'
+		fill='none'
+		stroke='currentColor'
+		strokeWidth='2'
+		strokeLinecap='round'
+		strokeLinejoin='round'
+		className={className}
+	>
+		<path d='M18 6 6 18'></path>
+		<path d='m6 6 12 12'></path>
+	</svg>
+)
+
 const MoreVerticalIcon = ({ className }: { className?: string }) => (
 	<svg
 		viewBox='0 0 24 24'
@@ -238,21 +275,6 @@ const FilterIcon = ({ className }: { className?: string }) => (
 		className={className}
 	>
 		<polygon points='22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3'></polygon>
-	</svg>
-)
-
-const XIcon = ({ className }: { className?: string }) => (
-	<svg
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}
-	>
-		<line x1='18' y1='6' x2='6' y2='18'></line>
-		<line x1='6' y1='6' x2='18' y2='18'></line>
 	</svg>
 )
 
@@ -588,12 +610,13 @@ const CopyIcon = ({ className }: { className?: string }) => (
 export default function MessengerPage() {
 	const { user } = useAuth()
 	const { socket, isConnected } = useSocket()
+	const [hasConnectedBefore, setHasConnectedBefore] = useState(false)
 	const SUPPORT_API_URL =
 		process.env.NEXT_PUBLIC_SUPPORT_API_URL || 'http://127.0.0.1:8000'
 	const [aiUser, setAiUser] = useState<User>({
 		id: 'vondic-ai',
 		email: 'ai@vondic.local',
-		username: 'Vondic AI',
+		username: 'Вондик AI',
 		role: 'AI',
 		is_bot: false,
 		avatar_url: null,
@@ -603,7 +626,7 @@ export default function MessengerPage() {
 	const botUser = useMemo<User>(
 		() => ({
 			id: 'botik',
-			email: 'botik@vondic.local',
+			email: 'botik@вондик.local',
 			username: 'Botik',
 			role: 'Bot',
 			is_bot: true,
@@ -1056,6 +1079,16 @@ export default function MessengerPage() {
 	>({})
 	const [replyMap, setReplyMap] = useState<Record<string, Message>>({})
 	const [forwardMessage, setForwardMessage] = useState<Message | null>(null)
+	// Selection mode for mass deletion
+	const [isSelectionMode, setIsSelectionMode] = useState(false)
+	const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(
+		new Set(),
+	)
+	// Message filter state
+	const [isFilterOpen, setIsFilterOpen] = useState(false)
+	const [messageFilter, setMessageFilter] = useState<
+		'all' | 'files' | 'photos' | 'links'
+	>('all')
 
 	const getReactionsForMessage = (id: string) => {
 		const counts = reactionCounts[id] || {}
@@ -1118,8 +1151,13 @@ export default function MessengerPage() {
 	const [communityChannels, setCommunityChannels] = useState<any[]>([])
 	const [selectedCommunity, setSelectedCommunity] = useState<any | null>(null)
 	// Voice channel participants state (per channel)
-	const [voiceChannelParticipants, setVoiceChannelParticipants] = useState<Record<string, Record<string, { userId: string; username: string; avatarUrl?: string }>>>({});
-	
+	const [voiceChannelParticipants, setVoiceChannelParticipants] = useState<
+		Record<
+			string,
+			Record<string, { userId: string; username: string; avatarUrl?: string }>
+		>
+	>({})
+
 	const updateChatUrl = useCallback(
 		(
 			next: {
@@ -1180,10 +1218,71 @@ export default function MessengerPage() {
 	const [chatSearchQuery, setChatSearchQuery] = useState('')
 	const [foundMessages, setFoundMessages] = useState<Message[]>([])
 	const [isSearchingMessages, setIsSearchingMessages] = useState(false)
-	const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false)
-	const [isStickerPickerOpen, setIsStickerPickerOpen] = useState(false)
-	const emojiPickerRef = useRef<HTMLDivElement>(null)
-	const stickerPickerRef = useRef<HTMLDivElement>(null)
+	// Unified Emoji/Sticker Picker State
+	const [isPickerOpen, setIsPickerOpen] = useState(false)
+	const [pickerTab, setPickerTab] = useState<'emoji' | 'sticker'>('emoji')
+	const pickerRef = useRef<HTMLDivElement>(null)
+
+	// Close picker when clicking outside
+	useEffect(() => {
+		const handleClickOutside = (event: MouseEvent) => {
+			if (
+				pickerRef.current &&
+				!pickerRef.current.contains(event.target as Node)
+			) {
+				setIsPickerOpen(false)
+			}
+		}
+
+		if (isPickerOpen) {
+			document.addEventListener('mousedown', handleClickOutside)
+		}
+
+		return () => {
+			document.removeEventListener('mousedown', handleClickOutside)
+		}
+	}, [isPickerOpen])
+	const [isScreenViewerOpen, setIsScreenViewerOpen] = useState(false)
+	const [customStickers, setCustomStickers] = useState<
+		Array<{ id: string; url: string }>
+	>(() => {
+		if (typeof window !== 'undefined') {
+			const saved = localStorage.getItem('custom_stickers')
+			if (saved) {
+				try {
+					return JSON.parse(saved)
+				} catch {
+					return []
+				}
+			}
+		}
+		return []
+	})
+
+	// Pinned Chats State (Premium feature)
+	const [pinnedChatIds, setPinnedChatIds] = useState<string[]>(() => {
+		// Load from localStorage on mount
+		if (typeof window !== 'undefined') {
+			const saved = localStorage.getItem('pinned_chats')
+			if (saved) {
+				try {
+					return JSON.parse(saved)
+				} catch {
+					return []
+				}
+			}
+		}
+		return []
+	})
+	const [isPinnedChatsOpen, setIsPinnedChatsOpen] = useState(false)
+
+	// Save pinned chats to localStorage when changed
+	useEffect(() => {
+		if (typeof window !== 'undefined') {
+			localStorage.setItem('pinned_chats', JSON.stringify(pinnedChatIds))
+		}
+	}, [pinnedChatIds])
+	const stickerUploadRef = useRef<HTMLInputElement>(null)
 	const messageInputRef = useRef<HTMLTextAreaElement>(null)
 
 	// Voice Recording State
@@ -1356,14 +1455,29 @@ export default function MessengerPage() {
 	// Chat Settings State
 	const [isSettingsOpen, setIsSettingsOpen] = useState(false)
 	const [currentBackground, setCurrentBackground] = useState(BACKGROUNDS[0])
+	const [chatBackgroundImage, setChatBackgroundImage] = useState<string | null>(
+		null,
+	)
+	const [messageTheme, setMessageTheme] = useState(BACKGROUNDS[0])
+	const [isCustomBgOpen, setIsCustomBgOpen] = useState(false)
+	const [customBgUrl, setCustomBgUrl] = useState('')
 	const settingsRef = useRef<HTMLDivElement>(null)
 
 	// Load saved theme
 	useEffect(() => {
 		const savedThemeId = localStorage.getItem('chat_theme')
-		if (savedThemeId) {
+		const savedBgImage = localStorage.getItem('chat_background_image')
+		const savedMessageThemeId = localStorage.getItem('message_theme')
+		if (savedBgImage) setChatBackgroundImage(savedBgImage)
+		if (savedMessageThemeId) {
+			const theme = BACKGROUNDS.find(bg => bg.id === savedMessageThemeId)
+			if (theme) setMessageTheme(theme)
+		} else if (savedThemeId) {
 			const theme = BACKGROUNDS.find(bg => bg.id === savedThemeId)
-			if (theme) setCurrentBackground(theme)
+			if (theme) {
+				setCurrentBackground(theme)
+				setMessageTheme(theme)
+			}
 		}
 	}, [])
 
@@ -1609,7 +1723,7 @@ export default function MessengerPage() {
 
 	const handleShowInviteCode = async () => {
 		if (!selectedCommunity) return
-		
+
 		try {
 			const inviteCode = await getCommunityInviteCode(selectedCommunity.id)
 			setCommunityInviteCode(inviteCode)
@@ -1662,7 +1776,28 @@ export default function MessengerPage() {
 
 	const handleThemeChange = (theme: (typeof BACKGROUNDS)[0]) => {
 		setCurrentBackground(theme)
+		setChatBackgroundImage(null)
 		localStorage.setItem('chat_theme', theme.id)
+		localStorage.removeItem('chat_background_image')
+	}
+
+	const handleMessageThemeChange = (theme: (typeof BACKGROUNDS)[0]) => {
+		setMessageTheme(theme)
+		localStorage.setItem('message_theme', theme.id)
+	}
+
+	const handleSetCustomBackground = (url: string) => {
+		setChatBackgroundImage(url)
+		setCurrentBackground(BACKGROUNDS[0])
+		localStorage.setItem('chat_background_image', url)
+		localStorage.removeItem('chat_theme')
+		setIsCustomBgOpen(false)
+		setCustomBgUrl('')
+	}
+
+	const handleClearCustomBackground = () => {
+		setChatBackgroundImage(null)
+		localStorage.removeItem('chat_background_image')
 	}
 
 	const isAiChat = selectedFriend?.id === aiUser.id
@@ -1730,7 +1865,53 @@ export default function MessengerPage() {
 		}
 	}, [selectedFriend?.id, selectedGroup?.id, selectedChannel?.id])
 
-	// Typing Indicator Logic
+	// Restore call state on mount
+	useEffect(() => {
+		const restored = restoreCallState()
+		if (
+			restored &&
+			(restored.activeCalls.size > 0 || restored.activeGroupCallId)
+		) {
+			console.log('[Call] Restored call state from localStorage')
+			// The call store will be updated automatically
+		}
+	}, [])
+
+	// Save call state when it changes
+	useEffect(() => {
+		if (hasActiveCall) {
+			saveCallState()
+		} else {
+			clearCallState()
+		}
+	}, [hasActiveCall, activeCalls.size, activeGroupCallId])
+
+	// Save user data to localStorage for CallPanel
+	useEffect(() => {
+		if (user) {
+			localStorage.setItem(
+				'user_data',
+				JSON.stringify({
+					id: user.id,
+					username: user.username,
+					avatar_url: user.avatar_url,
+				}),
+			)
+		}
+	}, [user])
+
+	// Close call panel on page unload
+	useEffect(() => {
+		const handleBeforeUnload = () => {
+			if (hasActiveCall) {
+				saveCallState()
+			}
+		}
+		window.addEventListener('beforeunload', handleBeforeUnload)
+		return () => {
+			window.removeEventListener('beforeunload', handleBeforeUnload)
+		}
+	}, [hasActiveCall])
 	const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 	const isTypingRef = useRef(false)
 
@@ -1790,20 +1971,26 @@ export default function MessengerPage() {
 			setFriends(prev =>
 				prev.map(friend =>
 					friend.id === data.user_id
-						? { 
-								...friend, 
+						? {
+								...friend,
 								status: data.status,
-								last_seen: data.status.toLowerCase() === 'offline' ? new Date() : friend.last_seen
+								last_seen:
+									data.status.toLowerCase() === 'offline'
+										? new Date()
+										: friend.last_seen,
 							}
 						: friend,
 				),
 			)
 			setSelectedFriend(prev => {
 				if (prev && prev.id === data.user_id) {
-					return { 
-						...prev, 
+					return {
+						...prev,
 						status: data.status,
-						last_seen: data.status.toLowerCase() === 'offline' ? new Date() : prev.last_seen
+						last_seen:
+							data.status.toLowerCase() === 'offline'
+								? new Date()
+								: prev.last_seen,
 					}
 				}
 				return prev
@@ -1824,17 +2011,23 @@ export default function MessengerPage() {
 				prev.map(friend =>
 					data.includes(friend.id)
 						? { ...friend, status: 'Online' }
-						: { 
-								...friend, 
+						: {
+								...friend,
 								status: 'Offline',
-								last_seen: friend.last_seen || new Date()
+								last_seen: friend.last_seen || new Date(),
 							},
 				),
 			)
 		}
 
 		// Voice channel participant handlers
-		const handleVoiceChannelParticipantJoined = (data: { channel_id: string; user_id: string; socket_id: string; username: string; avatar_url?: string }) => {
+		const handleVoiceChannelParticipantJoined = (data: {
+			channel_id: string
+			user_id: string
+			socket_id: string
+			username: string
+			avatar_url?: string
+		}) => {
 			if (data.channel_id && data.user_id && data.username) {
 				setVoiceChannelParticipants(prev => ({
 					...prev,
@@ -1843,37 +2036,47 @@ export default function MessengerPage() {
 						[data.user_id]: {
 							userId: data.user_id,
 							username: data.username,
-							avatarUrl: data.avatar_url
-						}
-					}
-				}));
+							avatarUrl: data.avatar_url,
+						},
+					},
+				}))
 			}
-		};
+		}
 
-		const handleVoiceChannelParticipantLeft = (data: { channel_id: string; user_id: string; username: string }) => {
+		const handleVoiceChannelParticipantLeft = (data: {
+			channel_id: string
+			user_id: string
+			username: string
+		}) => {
 			if (data.channel_id && data.user_id) {
 				setVoiceChannelParticipants(prev => {
-					const channelParticipants = { ...(prev[data.channel_id] || {}) };
-					delete channelParticipants[data.user_id];
-					
-					const next = { ...prev };
+					const channelParticipants = { ...(prev[data.channel_id] || {}) }
+					delete channelParticipants[data.user_id]
+
+					const next = { ...prev }
 					if (Object.keys(channelParticipants).length > 0) {
-						next[data.channel_id] = channelParticipants;
+						next[data.channel_id] = channelParticipants
 					} else {
-						delete next[data.channel_id]; // Remove channel if no participants left
+						delete next[data.channel_id] // Remove channel if no participants left
 					}
-					
-					return next;
-				});
+
+					return next
+				})
 			}
-		};
+		}
 
 		socket.on('user_status_change', handleStatusChange)
 		socket.on('user_connected', handleUserConnected)
 		socket.on('user_disconnected', handleUserDisconnected)
 		socket.on('online_users', handleOnlineUsers)
-		socket.on('voice_channel_participant_joined', handleVoiceChannelParticipantJoined)
-		socket.on('voice_channel_participant_left', handleVoiceChannelParticipantLeft)
+		socket.on(
+			'voice_channel_participant_joined',
+			handleVoiceChannelParticipantJoined,
+		)
+		socket.on(
+			'voice_channel_participant_left',
+			handleVoiceChannelParticipantLeft,
+		)
 
 		// Request initial online users list
 		socket.emit('get_online_users')
@@ -1888,8 +2091,14 @@ export default function MessengerPage() {
 			socket.off('user_connected', handleUserConnected)
 			socket.off('user_disconnected', handleUserDisconnected)
 			socket.off('online_users', handleOnlineUsers)
-			socket.off('voice_channel_participant_joined', handleVoiceChannelParticipantJoined)
-			socket.off('voice_channel_participant_left', handleVoiceChannelParticipantLeft)
+			socket.off(
+				'voice_channel_participant_joined',
+				handleVoiceChannelParticipantJoined,
+			)
+			socket.off(
+				'voice_channel_participant_left',
+				handleVoiceChannelParticipantLeft,
+			)
 			clearInterval(statusUpdateInterval)
 		}
 	}, [socket])
@@ -1906,13 +2115,16 @@ export default function MessengerPage() {
 					const data = await res.json()
 					const friendList = Array.isArray(data) ? data : []
 					const cleaned = friendList.filter(
-						f => f.username !== 'Vondic AI' && f.username !== 'vondic_ai',
+						f => f.username !== 'Вондик AI' && f.username !== 'vondic_ai',
 					)
 					setFriends(
 						cleaned.map((f: any) => ({
 							...f,
 							is_bot: f.is_bot === true ? true : false,
-							last_seen: f.status?.toLowerCase() === 'offline' ? (f.last_seen || new Date()) : f.last_seen,
+							last_seen:
+								f.status?.toLowerCase() === 'offline'
+									? f.last_seen || new Date()
+									: f.last_seen,
 						})),
 					)
 				}
@@ -1929,9 +2141,7 @@ export default function MessengerPage() {
 			return
 		}
 		try {
-			const baseUrl =
-				process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
-			const res = await fetch(`${baseUrl}/api/v1/dm/recent?limit=50`, {
+			const res = await fetch(`/api/v1/dm/recent?limit=50`, {
 				headers: {
 					Authorization: `Bearer ${accessToken}`,
 				},
@@ -1946,7 +2156,7 @@ export default function MessengerPage() {
 					if (user?.id && String(id) === String(user.id)) return false
 					if (aiUser?.id && String(id) === String(aiUser.id)) return false
 					const username = String(item?.username || '')
-					if (username === 'Vondic AI' || username === 'vondic_ai') return false
+					if (username === 'Вондик AI' || username === 'vondic_ai') return false
 					return true
 				})
 				.map((item: any) => ({
@@ -2200,6 +2410,9 @@ export default function MessengerPage() {
 
 			setIsSearchingUsers(true)
 			try {
+				// Получаем токен для запросов к API
+				const token = accessToken || localStorage.getItem('access_token')
+
 				const [usersRes, botsRes] = await Promise.all([
 					fetch('/api/chats/search', {
 						method: 'POST',
@@ -2209,7 +2422,10 @@ export default function MessengerPage() {
 					fetch('/api/v1/bots/search', {
 						method: 'POST',
 						headers: { 'Content-Type': 'application/json' },
-						body: JSON.stringify({ query: trimmedQuery }),
+						body: JSON.stringify({
+							query: trimmedQuery,
+							access_token: token || undefined,
+						}),
 					}),
 				])
 
@@ -2260,46 +2476,6 @@ export default function MessengerPage() {
 		searchUsers()
 	}, [debouncedSearchQuery, aiUser.id])
 
-	// Close emoji picker when clicking outside
-	useEffect(() => {
-		const handleClickOutside = (event: MouseEvent) => {
-			if (
-				emojiPickerRef.current &&
-				!emojiPickerRef.current.contains(event.target as Node)
-			) {
-				setIsEmojiPickerOpen(false)
-			}
-		}
-
-		if (isEmojiPickerOpen) {
-			document.addEventListener('mousedown', handleClickOutside)
-		}
-
-		return () => {
-			document.removeEventListener('mousedown', handleClickOutside)
-		}
-	}, [isEmojiPickerOpen])
-
-	// Close sticker picker when clicking outside
-	useEffect(() => {
-		const handleClickOutside = (event: MouseEvent) => {
-			if (
-				stickerPickerRef.current &&
-				!stickerPickerRef.current.contains(event.target as Node)
-			) {
-				setIsStickerPickerOpen(false)
-			}
-		}
-
-		if (isStickerPickerOpen) {
-			document.addEventListener('mousedown', handleClickOutside)
-		}
-
-		return () => {
-			document.removeEventListener('mousedown', handleClickOutside)
-		}
-	}, [isStickerPickerOpen])
-
 	// Close settings menu when clicking outside
 	useEffect(() => {
 		const handleClickOutside = (event: MouseEvent) => {
@@ -2336,7 +2512,7 @@ export default function MessengerPage() {
 			return
 		}
 		const results = messages.filter(m =>
-			m.content?.toLowerCase().includes(chatSearchQuery.toLowerCase())
+			m.content?.toLowerCase().includes(chatSearchQuery.toLowerCase()),
 		)
 		setFoundMessages(results)
 		setIsSearchingMessages(false)
@@ -2486,11 +2662,9 @@ export default function MessengerPage() {
 				setReplyToMessage(null)
 				return
 			}
-			const baseUrl =
-				process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
 			try {
 				const res = await fetch(
-					`${baseUrl}/api/v1/bots/${selectedFriend?.id}/updates/push`,
+					`${apiUrl()}/api/v1/bots/${selectedFriend?.id}/updates/push`,
 					{
 						method: 'POST',
 						headers: {
@@ -2546,6 +2720,7 @@ export default function MessengerPage() {
 								isOwn: false,
 								is_read: true,
 								type: 'text',
+								reply_markup: item?.reply_markup || undefined,
 							})
 						}
 						return next
@@ -2596,13 +2771,29 @@ export default function MessengerPage() {
 					buildBotReply(argText || 'Нечего повторять.'),
 				])
 			} else if (cmd === 'createbot') {
-				if (!accessToken) {
+				// Проверяем наличие accessToken несколькими способами
+				const token = accessToken || localStorage.getItem('access_token')
+
+				// Отладочная информация
+				console.log('[CreateBot] Debug info:', {
+					hasAccessToken: !!accessToken,
+					accessTokenLength: accessToken?.length,
+					hasLocalStorageToken: !!localStorage.getItem('access_token'),
+					localStorageTokenLength: localStorage.getItem('access_token')?.length,
+					user: user ? { id: user.id, username: user.username } : null,
+				})
+
+				if (!token) {
+					console.error('[CreateBot] No token found!')
 					setBotMessages(prev => [
 						...prev,
 						nextMessage,
-						buildBotReply('Нужна авторизация для создания бота.'),
+						buildBotReply(
+							'Нужна авторизация для создания бота. Пожалуйста, войдите в аккаунт. Если вы уже вошли, попробуйте обновить страницу.',
+						),
 					])
 				} else {
+					console.log('[CreateBot] Using token with length:', token.length)
 					const args = parseBotCommandArgs(argText)
 					const name = args.name?.trim()
 					if (!name) {
@@ -2638,17 +2829,29 @@ export default function MessengerPage() {
 							}
 						}
 						try {
-							const res = await fetch('/api/v1/bots', {
+							// Отправляем напрямую на backend, чтобы избежать проблем с redirect в Next.js proxy
+							const backendUrl =
+								process.env.NEXT_PUBLIC_BACKEND_URL ||
+								'https://api.vondic.knopusmedia.ru'
+							console.log(
+								'[CreateBot] Sending directly to backend:',
+								`${backendUrl}/api/v1/bots/`,
+							)
+
+							const res = await fetch(`${backendUrl}/api/v1/bots/`, {
 								method: 'POST',
 								headers: {
 									'Content-Type': 'application/json',
 								},
 								body: JSON.stringify({
 									...payload,
-									access_token: accessToken,
+									access_token: token,
 								}),
 							})
+
+							console.log('[CreateBot] Response status:', res.status)
 							const text = await res.text()
+							console.log('[CreateBot] Response body:', text.substring(0, 500))
 							let data: any = {}
 							try {
 								data = JSON.parse(text)
@@ -2767,7 +2970,7 @@ export default function MessengerPage() {
 	const handleSendSticker = (stickerUrl: string) => {
 		if (isAiChat || isBotChat) {
 			showToast('В этом чате доступны только текстовые сообщения', 'info')
-			setIsStickerPickerOpen(false)
+			setIsPickerOpen(false)
 			return
 		}
 		if (isUploading) return
@@ -2787,7 +2990,90 @@ export default function MessengerPage() {
 		sendChatMessage(stickerPayload, 'text', [], replyToMessage?.id)
 		setInput('')
 		setReplyToMessage(null)
-		setIsStickerPickerOpen(false)
+		setIsPickerOpen(false)
+	}
+
+	const handleUploadSticker = () => {
+		stickerUploadRef.current?.click()
+	}
+
+	const handleStickerFileChange = async (
+		e: React.ChangeEvent<HTMLInputElement>,
+	) => {
+		const file = e.target.files?.[0]
+		if (!file) return
+
+		// Check file size (max 1MB)
+		if (file.size > 1024 * 1024) {
+			alert('Файл слишком большой. Максимум 1MB')
+			return
+		}
+
+		// Check file type
+		if (!file.type.match('image/(png|jpeg|webp)')) {
+			alert('Только PNG, JPEG или WebP')
+			return
+		}
+
+		try {
+			setIsUploading(true)
+
+			// Convert file to base64
+			const base64 = await new Promise<string>((resolve, reject) => {
+				const reader = new FileReader()
+				reader.onload = () => {
+					const result = reader.result as string
+					// Remove data:image/png;base64, prefix
+					const base64Data = result.split(',')[1] || result
+					resolve(base64Data)
+				}
+				reader.onerror = reject
+				reader.readAsDataURL(file)
+			})
+
+			const response = await fetch('/api/v1/upload/file', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({
+					file: base64,
+					filename: file.name,
+				}),
+			})
+
+			if (!response.ok) {
+				const errorData = await response.json()
+				throw new Error(errorData.error || 'Ошибка загрузки')
+			}
+
+			const data = await response.json()
+			const fileUrl = data.url
+
+			// Add to custom stickers
+			const newSticker = {
+				id: `custom-${Date.now()}`,
+				url: fileUrl,
+			}
+
+			const updated = [...customStickers, newSticker]
+			setCustomStickers(updated)
+			localStorage.setItem('custom_stickers', JSON.stringify(updated))
+
+			// Clear input
+			e.target.value = ''
+			setIsUploading(false)
+		} catch (error) {
+			console.error('Failed to upload sticker:', error)
+			alert('Ошибка загрузки стикера: ' + (error as Error).message)
+			setIsUploading(false)
+		}
+	}
+
+	const deleteCustomSticker = (stickerId: string) => {
+		const updated = customStickers.filter(s => s.id !== stickerId)
+		setCustomStickers(updated)
+		localStorage.setItem('custom_stickers', JSON.stringify(updated))
 	}
 
 	useEffect(() => {
@@ -2848,7 +3134,7 @@ export default function MessengerPage() {
 				ext === 'bmp' ||
 				ext === 'svg'
 			if (isImage) return 'Изображение'
-			return (typeof a === 'object' && a.name ? a.name : 'Файл')
+			return typeof a === 'object' && a.name ? a.name : 'Файл'
 		}
 		const text = msg.content?.trim()
 		if (!text) return 'Сообщение'
@@ -2940,8 +3226,33 @@ export default function MessengerPage() {
 				),
 			)
 		} else {
-			markMessageDeleted(msg.id)
-			deleteMessage(msg.id)
+			// Delete via REST API
+			const token = accessToken
+
+			;(async () => {
+				try {
+					if (selectedFriend) {
+						const res = await fetch(
+							`${apiUrl()}/api/v1/dm/${selectedFriend.id}/messages/${msg.id}`,
+							{
+								method: 'DELETE',
+								headers: {
+									'Content-Type': 'application/json',
+									Authorization: `Bearer ${token}`,
+								},
+							},
+						)
+						if (res.ok) {
+							markMessageDeleted(msg.id)
+							showToast('Сообщение удалено', 'success')
+						} else {
+							showToast('Ошибка при удалении сообщения', 'error')
+						}
+					}
+				} catch (err) {
+					showToast('Ошибка при удалении сообщения', 'error')
+				}
+			})()
 		}
 		if (pinnedMessageId === msg.id) {
 			setPinnedMessageId(null)
@@ -2949,6 +3260,136 @@ export default function MessengerPage() {
 		if (pinnedMessageIds.includes(msg.id)) {
 			setPinnedMessageIds(prev => prev.filter(id => id !== msg.id))
 		}
+	}
+
+	// Selection mode handlers
+	const handleToggleSelectionMode = () => {
+		setIsSelectionMode(prev => !prev)
+		setSelectedMessageIds(new Set())
+	}
+
+	const handleToggleMessageSelection = (msg: Message) => {
+		if (!msg.isOwn) {
+			showToast('Можно выбрать только свои сообщения', 'error')
+			return
+		}
+		setSelectedMessageIds(prev => {
+			const next = new Set(prev)
+			if (next.has(msg.id)) {
+				next.delete(msg.id)
+			} else {
+				next.add(msg.id)
+			}
+			// Exit selection mode if no messages selected
+			if (next.size === 0) {
+				setIsSelectionMode(false)
+			}
+			return next
+		})
+	}
+
+	const handleSelectAllMessages = () => {
+		const ownMessageIds = messagesToDisplay.filter(m => m.isOwn).map(m => m.id)
+		setSelectedMessageIds(new Set(ownMessageIds))
+		if (ownMessageIds.length > 0) {
+			setIsSelectionMode(true)
+		}
+	}
+
+	const handleClearSelection = () => {
+		setSelectedMessageIds(new Set())
+		setIsSelectionMode(false)
+	}
+
+	const handleDeleteSelectedMessages = async () => {
+		if (selectedMessageIds.size === 0) return
+
+		const confirmed = window.confirm(
+			`Удалить ${selectedMessageIds.size} сообще${selectedMessageIds.size % 10 === 1 && selectedMessageIds.size % 100 !== 11 ? 'ние' : selectedMessageIds.size % 10 >= 2 && selectedMessageIds.size % 10 <= 4 && (selectedMessageIds.size % 100 < 12 || selectedMessageIds.size % 100 > 14) ? 'ния' : 'ний'} без возможности восстановления?`,
+		)
+		if (!confirmed) return
+
+		const messagesToDelete = messagesToDisplay.filter(m =>
+			selectedMessageIds.has(m.id),
+		)
+
+		if (isAiChat) {
+			setAiMessages(prev =>
+				prev.map(m =>
+					selectedMessageIds.has(m.id)
+						? {
+								...m,
+								content: 'Сообщение удалено',
+								attachments: [],
+								is_deleted: true,
+							}
+						: m,
+				),
+			)
+		} else if (isBotChat) {
+			setBotMessages(prev =>
+				prev.map(m =>
+					selectedMessageIds.has(m.id)
+						? {
+								...m,
+								content: 'Сообщение удалено',
+								attachments: [],
+								is_deleted: true,
+							}
+						: m,
+				),
+			)
+		} else if (selectedFriend) {
+			// Delete messages via REST API
+			const token = accessToken
+			let deletedCount = 0
+
+			// Delete all messages sequentially
+			for (const msg of messagesToDelete) {
+				if (msg.isOwn) {
+					try {
+						const res = await fetch(
+							`${apiUrl()}/api/v1/dm/${selectedFriend.id}/messages/${msg.id}`,
+							{
+								method: 'DELETE',
+								headers: {
+									'Content-Type': 'application/json',
+									Authorization: `Bearer ${token}`,
+								},
+							},
+						)
+						if (res.ok) {
+							// Update local state immediately
+							markMessageDeleted(msg.id)
+							deletedCount++
+						} else {
+							const errorData = await res.json().catch(() => ({}))
+							console.error('Failed to delete message:', msg.id, errorData)
+						}
+					} catch (err) {
+						console.error('Error deleting message:', msg.id, err)
+					}
+				}
+			}
+
+			if (deletedCount === 0) {
+				showToast('Не удалось удалить сообщения', 'error')
+				handleClearSelection()
+				return
+			}
+		}
+
+		// Clear pinned messages if they were deleted
+		setPinnedMessageIds(prev => prev.filter(id => !selectedMessageIds.has(id)))
+		if (pinnedMessageId && selectedMessageIds.has(pinnedMessageId)) {
+			setPinnedMessageId(null)
+		}
+
+		handleClearSelection()
+		showToast(
+			`${messagesToDelete.length} сообще${messagesToDelete.length % 10 === 1 && messagesToDelete.length % 100 !== 11 ? 'ние' : messagesToDelete.length % 10 >= 2 && messagesToDelete.length % 10 <= 4 && (messagesToDelete.length % 100 < 12 || messagesToDelete.length % 100 > 14) ? 'ния' : 'ний'} удалено`,
+			'success',
+		)
 	}
 
 	const handleDeleteAllHistory = async () => {
@@ -2967,8 +3408,6 @@ export default function MessengerPage() {
 		if (!confirmed) return
 
 		try {
-			const baseUrl =
-				process.env.NEXT_PUBLIC_WEBRTC_URL || 'http://localhost:5000'
 			let res: Response | null = null
 
 			if (selectedChannel) {
@@ -2980,7 +3419,7 @@ export default function MessengerPage() {
 					showToast('Недостаточно прав', 'error')
 					return
 				}
-				res = await fetch(`${baseUrl}/channels/history`, {
+				res = await fetch(`${webrtcUrl()}/channels/history`, {
 					method: 'DELETE',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({
@@ -2997,7 +3436,7 @@ export default function MessengerPage() {
 					showToast('Недостаточно прав', 'error')
 					return
 				}
-				res = await fetch(`${baseUrl}/groups/history`, {
+				res = await fetch(`${apiUrl()}/api/v1/groups/history`, {
 					method: 'DELETE',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({
@@ -3006,7 +3445,7 @@ export default function MessengerPage() {
 					}),
 				})
 			} else if (selectedFriend) {
-				res = await fetch(`${baseUrl}/messages/history`, {
+				res = await fetch(`${apiUrl()}/api/v1/messages/history`, {
 					method: 'DELETE',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({
@@ -3138,6 +3577,58 @@ export default function MessengerPage() {
 		showToast(`Переслано в ${target.label}`, 'success')
 	}
 
+	const handleForwardSelectedMessages = (target: {
+		id: string
+		kind: 'user' | 'group' | 'channel' | 'community'
+		label: string
+	}) => {
+		if (!socket || selectedMessageIds.size === 0) return
+		
+		const messagesToForward = messagesToDisplay.filter(m => 
+			selectedMessageIds.has(m.id) && !m.is_deleted
+		)
+		
+		if (messagesToForward.length === 0) {
+			showToast('Нет сообщений для пересылки', 'error')
+			return
+		}
+
+		let sentCount = 0
+		messagesToForward.forEach(msg => {
+			const payload: any = {
+				content: msg.content,
+				type: msg.type || 'text',
+				attachments: Array.isArray(msg.attachments) ? msg.attachments : [],
+			}
+			if (msg.type === 'voice') {
+				payload.type = 'voice'
+				payload.attachments = []
+				payload.content = msg.content
+			}
+			if (isSharedPostPayload(msg.content)) {
+				payload.content = msg.content
+			}
+			// Add forwarded_from information
+			if (user && msg.sender_id !== user.id) {
+				payload.forwarded_from = {
+					sender_id: msg.sender_id,
+					sender_name: user.username || user.email?.split('@')[0] || 'Пользователь',
+					sender_avatar: user.avatar_url,
+				}
+			}
+			if (target.kind === 'user') payload.target_user_id = target.id
+			if (target.kind === 'group') payload.group_id = target.id
+			if (target.kind === 'channel' || target.kind === 'community')
+				payload.channel_id = target.id
+			socket.emit('send_message', payload)
+			sentCount++
+		})
+
+		handleClearSelection()
+		setIsForwardOpen(false)
+		showToast(`Переслано ${sentCount} сообще${sentCount % 10 === 1 && sentCount % 100 !== 11 ? 'ние' : sentCount % 10 >= 2 && sentCount % 10 <= 4 && (sentCount % 100 < 12 || sentCount % 100 > 14) ? 'ния' : 'ний'} в ${target.label}`, 'success')
+	}
+
 	const resolvePinnedForScroll = (scrollTop: number) => {
 		if (!pinnedMessageIds.length) return
 		let bestId: string | null = null
@@ -3180,6 +3671,13 @@ export default function MessengerPage() {
 			showToast('Не удалось начать звонок', 'error')
 		}
 	}
+
+	// Track first Socket.IO connection
+	useEffect(() => {
+		if (isConnected && !hasConnectedBefore) {
+			setHasConnectedBefore(true)
+		}
+	}, [isConnected, hasConnectedBefore])
 
 	const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
 		// Disable infinite scroll loading when searching messages
@@ -3309,7 +3807,7 @@ export default function MessengerPage() {
 	const botFriend = botUser
 	const otherFriends = friends
 	const otherGroups = groups.filter(
-		g => g.name !== 'Vondic AI' && g.name !== 'AI Assistant',
+		g => g.name !== 'Вондик AI' && g.name !== 'AI Assistant',
 	)
 	// Determine list to show in sidebar
 	const normalizedSearch = searchQuery.trim().toLowerCase()
@@ -3330,11 +3828,11 @@ export default function MessengerPage() {
 	const sidebarList = useMemo(() => {
 		if (normalizedSearch) return searchResultsWithBot
 
-		// Create a Set of IDs currently in the list to avoid duplicates
+		// Create a Set of IDs to avoid duplicates
 		const addedIds = new Set<string>()
 		const list: User[] = []
 
-		// 1. Add recent contacts (friends + non-friends) sorted by backend (recency)
+		// 1. Add recent contacts sorted by backend (recency)
 		for (const contact of recentContacts) {
 			if (!addedIds.has(contact.id)) {
 				list.push(contact)
@@ -3350,12 +3848,71 @@ export default function MessengerPage() {
 			}
 		}
 
-		return list
-	}, [normalizedSearch, searchResultsWithBot, recentContacts, otherFriends])
+		// 3. Sort with pinned chats first
+		const finalUser =
+			user ||
+			(typeof window !== 'undefined'
+				? JSON.parse(localStorage.getItem('user') || 'null')
+				: null)
+		return sortChatsWithPinned(list, pinnedChatIds, finalUser)
+	}, [
+		normalizedSearch,
+		searchResultsWithBot,
+		recentContacts,
+		otherFriends,
+		pinnedChatIds,
+		user,
+	])
 
 	// Determine messages to show in chat
-	const messagesToDisplay =
+	let messagesToDisplay =
 		isChatSearchOpen && chatSearchQuery ? foundMessages : messages
+
+	// Apply message type filter
+	if (messageFilter !== 'all') {
+		messagesToDisplay = messagesToDisplay.filter(msg => {
+			const hasAttachments =
+				msg.attachments &&
+				(Array.isArray(msg.attachments)
+					? msg.attachments.length > 0
+					: msg.attachments !== '')
+			const attachmentsArray = Array.isArray(msg.attachments)
+				? msg.attachments
+				: []
+
+			if (messageFilter === 'files') {
+				// Show messages with file attachments (documents, etc.)
+				return (
+					hasAttachments &&
+					attachmentsArray.some(a => {
+						const ext = (a.ext || '').toLowerCase()
+						return !['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)
+					})
+				)
+			}
+			if (messageFilter === 'photos') {
+				// Show messages with image attachments
+				return (
+					hasAttachments &&
+					attachmentsArray.some(a => {
+						const ext = (a.ext || '').toLowerCase()
+						return ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)
+					})
+				)
+			}
+			if (messageFilter === 'links') {
+				// Show messages containing links
+				const urlRegex = /(https?:\/\/[^\s]+)/g
+				return urlRegex.test(msg.content)
+			}
+			return true
+		})
+	}
+
+	// Check if all selected messages are owned by current user
+	const allSelectedMessagesAreOwn = selectedMessageIds.size === 0 || 
+		messagesToDisplay.every(msg => !selectedMessageIds.has(msg.id) || msg.isOwn)
+
 	const pinnedMessage = pinnedMessageId
 		? messages.find(m => m.id === pinnedMessageId)
 		: null
@@ -3411,9 +3968,7 @@ export default function MessengerPage() {
 								<ArrowLeftIcon className='w-5 h-5' />
 							</Link>
 							<h2 className='text-xl font-bold tracking-tight text-white flex items-center gap-2'>
-								<span
-									className={`bg-gradient-to-r ${currentBackground.gradientText} bg-clip-text text-transparent transition-all duration-500`}
-								>
+								<span className='bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent transition-all duration-500'>
 									Vondic
 								</span>
 							</h2>
@@ -3528,7 +4083,7 @@ export default function MessengerPage() {
 														: 'text-gray-200 group-hover:text-white'
 												}`}
 											>
-												Vondic AI
+												Вондик AI
 											</span>
 											<span className='text-[10px] text-gray-600'>AI</span>
 										</div>
@@ -3615,10 +4170,10 @@ export default function MessengerPage() {
 										setChatSearchQuery('')
 										setFoundMessages([])
 									}}
-									className={`group p-3 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-200 border border-transparent ${
+									className={`group p-3 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-200 border border-transparent hover:bg-gray-900 ${
 										selectedFriend?.id === friend.id
 											? `bg-gray-800/50 ${currentBackground.borderColor} shadow-sm`
-											: 'hover:bg-gray-900 border-transparent'
+											: 'bg-transparent'
 									}`}
 								>
 									<div className='relative'>
@@ -3634,7 +4189,7 @@ export default function MessengerPage() {
 											}`}
 											alt={friend.username}
 										/>
-										{/* Status Indicator (Only show for friends list, not search results usually, but API might return status) */}
+										{/* Status Indicator */}
 										{!friend.is_bot && (
 											<div className='absolute bottom-0 right-0 w-3.5 h-3.5 bg-gray-950 rounded-full flex items-center justify-center'>
 												<div
@@ -3650,36 +4205,83 @@ export default function MessengerPage() {
 									<div className='flex flex-col flex-1 min-w-0'>
 										<div className='flex justify-between items-baseline'>
 											<span
-												className={`font-semibold truncate transition-colors duration-300 ${
+												className={`font-semibold truncate transition-colors duration-300 flex items-center gap-1 ${
 													selectedFriend?.id === friend.id
 														? currentBackground.accentColor
 														: 'text-gray-200 group-hover:text-white'
 												}`}
 											>
+												{pinnedChatIds.includes(friend.id) && (
+													<span className='text-amber-400 text-[10px]'>📌</span>
+												)}
 												{friend.username}
 												{friend.premium && (
-													<span className='ml-1 text-amber-400'>★</span>
+													<span className='text-amber-400'>★</span>
 												)}
 											</span>
-											<span className='text-[10px] text-gray-600'>{getLastMessageTime(friend.id, messages)}</span>
+											<span className='text-[10px] text-gray-600'>
+												{getLastMessageTime(friend.id, messages)}
+											</span>
 										</div>
 										<span className='text-xs text-gray-500 truncate group-hover:text-gray-400 transition-colors'>
 											{getLastMessage(friend.id, messages)}
 										</span>
 									</div>
-									{/* Call Button */}
-									{friend.role !== 'Bot' && (
-										<CallButton
-											userId={friend.id}
-											userName={friend.username}
+									{/* Chat Menu (Three Dots) - Always visible on hover */}
+									<div className='opacity-0 group-hover:opacity-100 transition-opacity'>
+										<ChatMenu
+											chatId={friend.id}
+											chatType='user'
+											isPinned={pinnedChatIds.includes(friend.id)}
 											isOnline={friend.status?.toLowerCase() === 'online'}
-											isInCall={Array.from(activeCalls.values()).some(
-												call => call.userId === friend.id,
-											)}
-											onCallInitiate={handleCallInitiate}
-											className='ml-2'
+											canPin={canPinChats(user)}
+											onPin={() => {
+												console.log(
+													'Pin clicked for:',
+													friend.id,
+													'current pinned:',
+													pinnedChatIds,
+												)
+												togglePinChat(
+													friend.id,
+													pinnedChatIds,
+													setPinnedChatIds,
+													user,
+													async newPinnedIds => {
+														console.log('Saving to backend:', newPinnedIds)
+														try {
+															const response = await fetch(
+																'/api/v1/users/pinned-chats',
+																{
+																	method: 'POST',
+																	headers: {
+																		'Content-Type': 'application/json',
+																		Authorization: `Bearer ${user?.access_token}`,
+																	},
+																	body: JSON.stringify({
+																		pinned_chats: newPinnedIds,
+																	}),
+																},
+															)
+															const data = await response.json()
+															console.log('Backend response:', data)
+															if (!response.ok) {
+																console.error('Backend error:', data)
+															}
+														} catch (err) {
+															console.error('Failed to save pinned chats:', err)
+														}
+													},
+												)
+											}}
+											onCall={() =>
+												handleCallInitiate(friend.id, friend.username)
+											}
+											onVideoCall={() => {
+												console.log('Video call to:', friend.id)
+											}}
 										/>
-									)}
+									</div>
 								</div>
 							))}
 
@@ -3919,7 +4521,7 @@ export default function MessengerPage() {
 															</span>
 														</div>
 														<span className='text-xs text-gray-500 truncate group-hover:text-gray-400 transition-colors'>
-															{comm.members_count ?? 0} участников
+															{comm.members_count && comm.members_count > 0 ? `${comm.members_count} участников` : ''}
 														</span>
 													</div>
 												</div>
@@ -4085,19 +4687,25 @@ export default function MessengerPage() {
 																Голосовой
 															</span>
 															{/* Display voice channel participants */}
-															{voiceChannelParticipants[ch.id] && Object.keys(voiceChannelParticipants[ch.id]).length > 0 && (
-																<div className='mt-1 flex flex-wrap gap-1'>
-																	{Object.values(voiceChannelParticipants[ch.id]).map((participant, idx) => (
-																		<div 
-																			key={`${participant.userId}-${idx}`} 
-																			className='flex items-center gap-1 text-[8px] bg-gray-700/50 px-1.5 py-0.5 rounded-full'
-																		>
-																			<span className='w-2 h-2 rounded-full bg-green-500'></span>
-																			<span className='truncate max-w-[60px]'>{participant.username}</span>
-																		</div>
-																	))}
-																</div>
-															)}
+															{voiceChannelParticipants[ch.id] &&
+																Object.keys(voiceChannelParticipants[ch.id])
+																	.length > 0 && (
+																	<div className='mt-1 flex flex-wrap gap-1'>
+																		{Object.values(
+																			voiceChannelParticipants[ch.id],
+																		).map((participant, idx) => (
+																			<div
+																				key={`${participant.userId}-${idx}`}
+																				className='flex items-center gap-1 text-[8px] bg-gray-700/50 px-1.5 py-0.5 rounded-full'
+																			>
+																				<span className='w-2 h-2 rounded-full bg-green-500'></span>
+																				<span className='truncate max-w-[60px]'>
+																					{participant.username}
+																				</span>
+																			</div>
+																		))}
+																	</div>
+																)}
 														</div>
 													</div>
 												))}
@@ -4118,720 +4726,1545 @@ export default function MessengerPage() {
 
 			{/* Chat Area */}
 			<div
-				className={`flex-1 flex flex-col relative min-w-0 transition-colors duration-500 ${currentBackground.class} ${
-					!hasActiveChat ? 'hidden md:flex' : ''
-				}`}
+				className={`flex-1 flex flex-col relative min-w-0 ${!hasActiveChat ? 'hidden md:flex' : ''}`}
 			>
-				{/* Background Decoration */}
-				<div className='absolute inset-0 bg-grid-pattern pointer-events-none opacity-20' />
+				{/* Chat Background Layer */}
+				<div
+					className={`absolute inset-0 transition-opacity duration-500 ${
+						chatBackgroundImage ? 'opacity-100' : 'opacity-30'
+					}`}
+					style={
+						chatBackgroundImage
+							? {
+									backgroundImage: `url(${chatBackgroundImage})`,
+									backgroundSize: 'cover',
+									backgroundPosition: 'center',
+									backgroundRepeat: 'no-repeat',
+								}
+							: undefined
+					}
+				/>
+				{/* Gradient/Color Background Layer */}
+				<div
+					className={`absolute inset-0 transition-colors duration-500 ${
+						chatBackgroundImage ? 'bg-gray-950/60' : currentBackground.class
+					}`}
+				/>
+				{/* Subtle Pattern Overlay */}
+				<div className='absolute inset-0 bg-grid-pattern pointer-events-none opacity-10' />
 
-				{selectedFriend || selectedChannel || selectedGroup ? (
-					<>
-						{/* Chat Header */}
-						<div className='h-16 px-6 border-b border-gray-800/50 flex items-center justify-between bg-gray-900/40 backdrop-blur-md z-10 sticky top-0'>
-							{isChatSearchOpen ? (
-								<div className='flex items-center gap-2 w-full animate-in fade-in slide-in-from-top-2 duration-200'>
-									<SearchIcon className='w-5 h-5 text-gray-400' />
-									<form onSubmit={handleMessageSearch} className='flex-1'>
-										<input
-											autoFocus
-											type='text'
-											placeholder='Поиск сообщений...'
-											value={chatSearchQuery}
-											onChange={e => setChatSearchQuery(e.target.value)}
-											className='w-full bg-transparent border-none text-white placeholder-gray-500 focus:ring-0 text-sm'
-										/>
-									</form>
-									{isSearchingMessages && (
+				{/* Chat Content */}
+				<div className='relative z-10 flex flex-col flex-1 min-h-0'>
+					{selectedFriend || selectedChannel || selectedGroup ? (
+						<>
+							{/* Chat Header */}
+							<div className='h-16 px-6 border-b border-gray-800/50 flex items-center justify-between bg-gray-900/40 backdrop-blur-md z-10 sticky top-0'>
+								{isChatSearchOpen ? (
+									<div className='flex items-center gap-2 w-full animate-in fade-in slide-in-from-top-2 duration-200'>
+										<SearchIcon className='w-5 h-5 text-gray-400' />
+										<form onSubmit={handleMessageSearch} className='flex-1'>
+											<input
+												autoFocus
+												type='text'
+												placeholder='Поиск сообщений...'
+												value={chatSearchQuery}
+												onChange={e => setChatSearchQuery(e.target.value)}
+												className='w-full bg-transparent border-none text-white placeholder-gray-500 focus:ring-0 text-sm'
+											/>
+										</form>
+										{isSearchingMessages && (
+											<div
+												className={`w-4 h-4 border-2 border-t-transparent rounded-full animate-spin ${currentBackground.borderColor.replace(
+													'/20',
+													'',
+												)}`}
+											/>
+										)}
+										<button
+											onClick={() => {
+												setIsChatSearchOpen(false)
+												setChatSearchQuery('')
+												setFoundMessages([])
+											}}
+											className='p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors'
+										>
+											<XIcon className='w-5 h-5' />
+										</button>
+									</div>
+								) : (
+									<>
+										<div className='flex items-center gap-4'>
+											<button
+												onClick={() => {
+													setSelectedFriend(null)
+													setSelectedGroup(null)
+													setSelectedChannel(null)
+												}}
+												className='p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors'
+												title='Назад к сообществам'
+											>
+												<ArrowLeftIcon className='w-5 h-5' />
+											</button>
+											{selectedFriend ? (
+												<>
+													<div className='relative'>
+														<img
+															src={getAvatarUrl(selectedFriend.avatar_url)}
+															className='w-10 h-10 rounded-full object-cover bg-gray-800 ring-2 ring-gray-800/50'
+															alt={selectedFriend.username}
+														/>
+														{selectedFriend.status?.toLowerCase() ===
+															'online' && (
+															<div className='absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-gray-900 rounded-full animate-pulse' />
+														)}
+													</div>
+													<button
+														onClick={() => setIsFilterOpen(true)}
+														className='flex flex-col text-left hover:bg-gray-800/50 rounded-lg p-2 -ml-2 transition-colors'
+														title='Показать фильтры сообщений'
+													>
+														<span className='font-bold text-white text-base leading-tight flex items-center gap-2'>
+															{selectedFriend.username}
+															{selectedFriend.premium && (
+																<span className='ml-1 text-amber-400'>★</span>
+															)}
+															{messageFilter !== 'all' && (
+																<span className='inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-600/30 text-emerald-300'>
+																	<svg
+																		className='w-3 h-3'
+																		viewBox='0 0 24 24'
+																		fill='none'
+																		stroke='currentColor'
+																		strokeWidth='2'
+																	>
+																		<polygon points='22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3'></polygon>
+																	</svg>
+																	{messageFilter === 'photos'
+																		? 'Фото'
+																		: messageFilter === 'files'
+																			? 'Файлы'
+																			: messageFilter === 'links'
+																				? 'Ссылки'
+																				: ''}
+																</span>
+															)}
+														</span>
+														<span className='text-xs text-emerald-500 font-medium flex items-center gap-1.5'>
+															{isChatTyping ? (
+																<>
+																	<span className='w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse' />
+																	Печатает...
+																</>
+															) : selectedFriend.status?.toLowerCase() ===
+															  'online' ? (
+																<>
+																	<span className='w-1.5 h-1.5 rounded-full bg-emerald-500' />
+																	В сети
+																</>
+															) : (
+																<span className='text-gray-500'>
+																	{formatLastSeen(selectedFriend.last_seen)}
+																</span>
+															)}
+														</span>
+													</button>
+												</>
+											) : selectedChannel ? (
+												<>
+													<div className='relative'>
+														<div className='w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center ring-2 ring-gray-800/50'>
+															<HashIcon className='w-5 h-5 text-gray-400' />
+														</div>
+													</div>
+													<button
+														onClick={() => setIsFilterOpen(true)}
+														className='flex flex-col text-left hover:bg-gray-800/50 rounded-lg p-2 -ml-2 transition-colors'
+														title='Показать фильтры сообщений'
+													>
+														<span className='font-bold text-white text-base leading-tight flex items-center gap-2'>
+															{selectedChannel.name}
+															{messageFilter !== 'all' && (
+																<span className='inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-600/30 text-emerald-300'>
+																	<svg
+																		className='w-3 h-3'
+																		viewBox='0 0 24 24'
+																		fill='none'
+																		stroke='currentColor'
+																		strokeWidth='2'
+																	>
+																		<polygon points='22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3'></polygon>
+																	</svg>
+																	{messageFilter === 'photos'
+																		? 'Фото'
+																		: messageFilter === 'files'
+																			? 'Файлы'
+																			: messageFilter === 'links'
+																				? 'Ссылки'
+																				: ''}
+																</span>
+															)}
+														</span>
+														<span className='text-xs text-gray-500 font-medium flex items-center gap-1.5'>
+															<UsersIcon className='w-3 h-3' />
+															{selectedChannel.participants_count && selectedChannel.participants_count > 0 ? `${selectedChannel.participants_count} участников` : ''}
+														</span>
+													</button>
+													<button
+														onClick={() => setIsChannelInfoOpen(true)}
+														className='ml-2 p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors'
+														title='Информация о канале'
+													>
+														<InfoIcon className='w-4 h-4' />
+													</button>
+												</>
+											) : selectedGroup ? (
+												<>
+													<div className='relative'>
+														<div className='w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center ring-2 ring-gray-800/50'>
+															<UsersIcon className='w-5 h-5 text-gray-400' />
+														</div>
+													</div>
+													<button
+														onClick={() => setIsFilterOpen(true)}
+														className='flex flex-col text-left hover:bg-gray-800/50 rounded-lg p-2 -ml-2 transition-colors'
+														title='Показать фильтры сообщений'
+													>
+														<span className='font-bold text-white text-base leading-tight flex items-center gap-2'>
+															{selectedGroup.name}
+															{messageFilter !== 'all' && (
+																<span className='inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-600/30 text-emerald-300'>
+																	<svg
+																		className='w-3 h-3'
+																		viewBox='0 0 24 24'
+																		fill='none'
+																		stroke='currentColor'
+																		strokeWidth='2'
+																	>
+																		<polygon points='22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3'></polygon>
+																	</svg>
+																	{messageFilter === 'photos'
+																		? 'Фото'
+																		: messageFilter === 'files'
+																			? 'Файлы'
+																			: messageFilter === 'links'
+																				? 'Ссылки'
+																				: ''}
+																</span>
+															)}
+														</span>
+														<span className='text-xs text-gray-500 font-medium flex items-center gap-1.5'>
+															<UsersIcon className='w-3 h-3' />
+															Группа
+														</span>
+													</button>
+													<button
+														onClick={() => initiateGroupCall(selectedGroup.id)}
+														className='ml-2 p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors'
+														title='Начать групповой звонок'
+													>
+														<PhoneIcon className='w-4 h-4' />
+													</button>
+													{user?.id === selectedGroup.owner_id && (
+														<button
+															onClick={() => setIsAddMemberOpen(true)}
+															className='ml-2 p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors'
+															title='Добавить участника'
+														>
+															<UserPlusIcon className='w-4 h-4' />
+														</button>
+													)}
+												</>
+											) : null}
+										</div>
+
+										{/* Header Actions */}
+										<div className='flex items-center gap-2'>
+											{selectedFriend && !isAiChat && !isBotChat && (
+												<button
+													onClick={() =>
+														handleCallInitiate(
+															selectedFriend.id,
+															selectedFriend.username,
+														)
+													}
+													disabled={
+														!isSelectedFriendOnline || isSelectedFriendInCall
+													}
+													className={`p-2 sm:px-3 sm:py-2 rounded-full sm:rounded-lg flex items-center gap-2 transition-colors ${
+														!isSelectedFriendOnline || isSelectedFriendInCall
+															? 'text-gray-600 cursor-not-allowed'
+															: 'text-emerald-400 hover:text-white hover:bg-emerald-500/20'
+													}`}
+													title={
+														!isSelectedFriendOnline
+															? 'Пользователь не в сети'
+															: isSelectedFriendInCall
+																? 'Уже идет звонок'
+																: 'Позвонить'
+													}
+												>
+													<PhoneIcon className='w-5 h-5' />
+													<span className='hidden sm:inline text-xs font-medium'>
+														Позвонить
+													</span>
+												</button>
+											)}
+											{hasActiveCall && (
+												<button
+													onClick={async () => {
+														if (!isScreenSharing) {
+															await toggleScreenShare()
+															setIsScreenViewerOpen(true)
+														} else {
+															await toggleScreenShare()
+															setIsScreenViewerOpen(false)
+														}
+													}}
+													disabled={
+														!isInitialized ||
+														!isWebRTCSupported ||
+														!isScreenShareSupported
+													}
+													className={`p-2 sm:px-3 sm:py-2 rounded-full sm:rounded-lg flex items-center gap-2 transition-colors ${
+														!isInitialized ||
+														!isWebRTCSupported ||
+														!isScreenShareSupported
+															? 'text-gray-600 cursor-not-allowed'
+															: isScreenSharing
+																? 'text-emerald-400 hover:text-white hover:bg-emerald-500/20'
+																: 'text-gray-400 hover:text-white hover:bg-gray-800'
+													}`}
+													title={
+														!isInitialized ||
+														!isWebRTCSupported ||
+														!isScreenShareSupported
+															? 'Демонстрация экрана недоступна'
+															: isScreenSharing
+																? 'Остановить демонстрацию'
+																: 'Демонстрация экрана'
+													}
+												>
+													<ScreenShareIcon className='w-5 h-5' />
+													<span className='hidden sm:inline text-xs font-medium'>
+														{isScreenSharing ? 'Стоп экран' : 'Экран'}
+													</span>
+												</button>
+											)}
+											<button
+												onClick={() => setIsChatSearchOpen(true)}
+												className='p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors'
+											>
+												<SearchIcon className='w-5 h-5' />
+											</button>
+											{!isSelectionMode && (
+												<button
+													onClick={handleToggleSelectionMode}
+													className='p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors'
+													title='Выбрать сообщения'
+												>
+													<svg
+														className='w-5 h-5'
+														viewBox='0 0 24 24'
+														fill='none'
+														stroke='currentColor'
+														strokeWidth='2'
+														strokeLinecap='round'
+														strokeLinejoin='round'
+													>
+														<polyline points='9 11 12 14 22 4'></polyline>
+														<path d='M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11'></path>
+													</svg>
+												</button>
+											)}
+											{isSelectionMode && (
+												<button
+													onClick={handleClearSelection}
+													className='p-2 text-rose-400 hover:text-white hover:bg-rose-500/20 rounded-full transition-colors'
+													title='Отменить выделение'
+												>
+													<XIcon className='w-5 h-5' />
+												</button>
+											)}
+											<div className='relative' ref={settingsRef}>
+												<button
+													onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+													className={`p-2 rounded-full transition-colors ${
+														isSettingsOpen
+															? 'text-white bg-gray-800'
+															: 'text-gray-400 hover:text-white hover:bg-gray-800'
+													}`}
+												>
+													<MoreVerticalIcon className='w-5 h-5' />
+												</button>
+
+												{/* Settings Dropdown */}
+												{isSettingsOpen && (
+													<div className='absolute right-0 top-full mt-2 w-72 bg-gray-900/95 backdrop-blur-xl border border-gray-800 rounded-xl shadow-2xl p-4 z-50 animate-in fade-in zoom-in-95 duration-200'>
+														<h3 className='text-sm font-semibold text-gray-300 mb-3'>
+															Настройки чата
+														</h3>
+
+														<div className='space-y-4 max-h-[70vh] overflow-y-auto custom-scrollbar'>
+															{/* Chat Background */}
+															<div>
+																<label className='text-xs text-gray-500 mb-2 block uppercase tracking-wider font-medium'>
+																	Фон чата
+																</label>
+																<div className='grid grid-cols-5 gap-2 mb-2'>
+																	{BACKGROUNDS.map(bg => (
+																		<button
+																			key={bg.id}
+																			onClick={() => handleThemeChange(bg)}
+																			title={bg.name}
+																			className={`w-8 h-8 rounded-full border-2 transition-all ${
+																				!chatBackgroundImage &&
+																				currentBackground.id === bg.id
+																					? `${bg.borderColor.replace(
+																							'/20',
+																							'',
+																						)} scale-110 shadow-lg`
+																					: 'border-transparent hover:scale-105 hover:border-gray-600'
+																			} overflow-hidden ring-1 ring-gray-950/50`}
+																		>
+																			<div
+																				className={`w-full h-full ${bg.preview}`}
+																			/>
+																		</button>
+																	))}
+																</div>
+																<div className='flex gap-2'>
+																	<button
+																		onClick={() => setIsCustomBgOpen(true)}
+																		className='flex-1 py-2 px-3 text-xs font-medium text-gray-300 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors flex items-center justify-center gap-2'
+																	>
+																		<svg
+																			className='w-4 h-4'
+																			viewBox='0 0 24 24'
+																			fill='none'
+																			stroke='currentColor'
+																			strokeWidth='2'
+																		>
+																			<rect
+																				x='3'
+																				y='3'
+																				width='18'
+																				height='18'
+																				rx='2'
+																				ry='2'
+																			></rect>
+																			<circle
+																				cx='8.5'
+																				cy='8.5'
+																				r='1.5'
+																			></circle>
+																			<polyline points='21 15 16 10 5 21'></polyline>
+																		</svg>
+																		Картинка
+																	</button>
+																	{chatBackgroundImage && (
+																		<button
+																			onClick={handleClearCustomBackground}
+																			className='py-2 px-3 text-xs font-medium text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 rounded-lg transition-colors'
+																			title='Убрать картинку'
+																		>
+																			<svg
+																				className='w-4 h-4'
+																				viewBox='0 0 24 24'
+																				fill='none'
+																				stroke='currentColor'
+																				strokeWidth='2'
+																			>
+																				<polyline points='3 6 5 6 21 6'></polyline>
+																				<path d='M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'></path>
+																			</svg>
+																		</button>
+																	)}
+																</div>
+															</div>
+
+															{/* Message Bubble Theme */}
+															<div className='pt-3 border-t border-gray-800'>
+																<label className='text-xs text-gray-500 mb-2 block uppercase tracking-wider font-medium'>
+																	Стиль сообщений
+																</label>
+																<div className='grid grid-cols-5 gap-2'>
+																	{BACKGROUNDS.map(bg => (
+																		<button
+																			key={bg.id}
+																			onClick={() =>
+																				handleMessageThemeChange(bg)
+																			}
+																			title={bg.name}
+																			className={`w-8 h-8 rounded-full border-2 transition-all ${
+																				messageTheme.id === bg.id
+																					? `${bg.borderColor.replace(
+																							'/20',
+																							'',
+																						)} scale-110 shadow-lg`
+																					: 'border-transparent hover:scale-105 hover:border-gray-600'
+																			} overflow-hidden ring-1 ring-gray-950/50`}
+																		>
+																			<div
+																				className={`w-full h-full ${bg.preview}`}
+																			/>
+																		</button>
+																	))}
+																</div>
+															</div>
+
+															<div className='pt-3 border-t border-gray-800'>
+																<button
+																	onClick={handleDeleteAllHistory}
+																	className='w-full text-left text-sm text-rose-500 hover:text-rose-400 hover:bg-rose-500/10 px-3 py-2 rounded-lg transition-colors'
+																>
+																	Удалить всю переписку без восстановления
+																</button>
+															</div>
+														</div>
+													</div>
+												)}
+											</div>
+										</div>
+									</>
+								)}
+							</div>
+
+							{pinnedMessage && (
+								<div className='px-6 py-2 border-b border-gray-800/60 bg-gray-900/60 backdrop-blur-md'>
+									<button
+										onClick={() => jumpToMessage(pinnedMessage.id)}
+										className='w-full flex items-center gap-3 rounded-xl border border-gray-800/60 bg-gray-800/40 px-3 py-2 text-left text-xs text-gray-200 hover:bg-gray-800/70 transition'
+									>
+										<span className='text-amber-400'>📌</span>
+										<div className='flex-1 min-w-0'>
+											<div className='text-[10px] uppercase tracking-wider text-gray-400'>
+												Закреплено
+											</div>
+											<div className='truncate'>
+												{getMessagePreview(pinnedMessage)}
+											</div>
+										</div>
+										{pinnedMessage.attachments &&
+											pinnedMessage.attachments.length > 0 && (
+												<div className='flex items-center gap-2'>
+													{(() => {
+														const a = pinnedMessage.attachments[0]
+														const ext = (
+															typeof a === 'object' && a.ext ? a.ext : ''
+														).toLowerCase()
+														const isImage =
+															ext === 'png' ||
+															ext === 'jpg' ||
+															ext === 'jpeg' ||
+															ext === 'gif' ||
+															ext === 'webp' ||
+															ext === 'bmp' ||
+															ext === 'svg'
+														if (isImage) {
+															return (
+																<img
+																	src={
+																		typeof a === 'object'
+																			? getAttachmentUrl(a.url)
+																			: ''
+																	}
+																	alt={typeof a === 'object' ? a.name : ''}
+																	className='h-10 w-10 rounded-md object-cover'
+																/>
+															)
+														}
+														return (
+															<span className='rounded-md border border-gray-700/60 bg-gray-900/60 px-2 py-1 text-[10px] text-gray-300'>
+																{a.ext ? a.ext.toUpperCase() : 'FILE'}
+															</span>
+														)
+													})()}
+												</div>
+											)}
+									</button>
+								</div>
+							)}
+
+							{/* Selection Mode Toolbar */}
+							{isSelectionMode && (
+								<div className='px-6 py-3 border-b border-gray-800/60 bg-emerald-900/60 backdrop-blur-md animate-in slide-in-from-top-2 duration-200'>
+									<div className='max-w-4xl mx-auto flex items-center justify-between'>
+										<div className='flex items-center gap-3'>
+											<div className='flex items-center gap-2'>
+												<div className='w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center'>
+													<svg
+														className='w-3 h-3 text-white'
+														viewBox='0 0 24 24'
+														fill='none'
+														stroke='currentColor'
+														strokeWidth='3'
+														strokeLinecap='round'
+														strokeLinejoin='round'
+													>
+														<polyline points='20 6 9 17 4 12'></polyline>
+													</svg>
+												</div>
+												<span className='text-sm font-medium text-emerald-200'>
+													{selectedMessageIds.size} сообще
+													{selectedMessageIds.size % 10 === 1 &&
+													selectedMessageIds.size % 100 !== 11
+														? 'ние'
+														: selectedMessageIds.size % 10 >= 2 &&
+															  selectedMessageIds.size % 10 <= 4 &&
+															  (selectedMessageIds.size % 100 < 12 ||
+																	selectedMessageIds.size % 100 > 14)
+															? 'ния'
+															: 'ний'}{' '}
+													выбрано
+												</span>
+											</div>
+										</div>
+										<div className='flex items-center gap-2'>
+											<button
+												onClick={handleSelectAllMessages}
+												className='rounded-lg px-3 py-1.5 text-xs font-medium text-emerald-200 hover:bg-emerald-800/50 transition'
+											>
+												Выбрать все
+											</button>
+											<button
+												onClick={handleClearSelection}
+												className='rounded-lg px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-700/50 transition'
+											>
+												Отмена
+											</button>
+											<button
+												onClick={() => {
+													setIsForwardOpen(true)
+													setForwardQuery('')
+												}}
+												disabled={selectedMessageIds.size === 0}
+												className='flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition'
+											>
+												<svg
+													className='w-4 h-4'
+													viewBox='0 0 24 24'
+													fill='none'
+													stroke='currentColor'
+													strokeWidth='2'
+													strokeLinecap='round'
+													strokeLinejoin='round'
+												>
+													<polyline points='17 1 21 5 17 9'></polyline>
+													<path d='M3 11V9a4 4 0 0 1 4-4h14'></path>
+													<polyline points='7 23 3 19 7 15'></polyline>
+													<path d='M21 13v2a4 4 0 0 1-4 4H3'></path>
+												</svg>
+												Переслать
+											</button>
+											<button
+												onClick={handleDeleteSelectedMessages}
+												disabled={selectedMessageIds.size === 0 || !allSelectedMessagesAreOwn}
+												className='flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed transition'
+												title={!allSelectedMessagesAreOwn ? 'Нельзя удалить чужие сообщения' : undefined}
+											>
+												<svg
+													className='w-4 h-4'
+													viewBox='0 0 24 24'
+													fill='none'
+													stroke='currentColor'
+													strokeWidth='2'
+													strokeLinecap='round'
+													strokeLinejoin='round'
+												>
+													<polyline points='3 6 5 6 21 6'></polyline>
+													<path d='M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'></path>
+													<line x1='10' y1='11' x2='10' y2='17'></line>
+													<line x1='14' y1='11' x2='14' y2='17'></line>
+												</svg>
+												Удалить{!allSelectedMessagesAreOwn && selectedMessageIds.size > 0 ? ' (только свои)' : ''}
+											</button>
+										</div>
+									</div>
+								</div>
+							)}
+
+							{/* Message Filter Modal */}
+							{isFilterOpen && (
+								<div
+									className='fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-start justify-center pt-20 p-4'
+									onClick={() => setIsFilterOpen(false)}
+								>
+									<div
+										className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md shadow-2xl animate-in fade-in zoom-in-95 duration-200'
+										onClick={e => e.stopPropagation()}
+									>
+										<div className='flex items-center justify-between p-4 border-b border-gray-800'>
+											<h3 className='text-lg font-bold text-white flex items-center gap-2'>
+												<svg
+													className='w-5 h-5 text-emerald-400'
+													viewBox='0 0 24 24'
+													fill='none'
+													stroke='currentColor'
+													strokeWidth='2'
+												>
+													<polygon points='22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3'></polygon>
+												</svg>
+												Фильтр сообщений
+											</h3>
+											<button
+												onClick={() => setIsFilterOpen(false)}
+												className='p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors'
+											>
+												<XIcon className='w-5 h-5' />
+											</button>
+										</div>
+										<div className='p-3 space-y-1'>
+											<button
+												onClick={() => {
+													setMessageFilter('all')
+													setIsFilterOpen(false)
+												}}
+												className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
+													messageFilter === 'all'
+														? 'bg-emerald-600/20 text-emerald-300'
+														: 'text-gray-300 hover:bg-gray-800'
+												}`}
+											>
+												<div
+													className={`w-10 h-10 rounded-full flex items-center justify-center ${
+														messageFilter === 'all'
+															? 'bg-emerald-600/30'
+															: 'bg-gray-800'
+													}`}
+												>
+													<svg
+														className='w-5 h-5'
+														viewBox='0 0 24 24'
+														fill='none'
+														stroke='currentColor'
+														strokeWidth='2'
+													>
+														<rect
+															x='3'
+															y='3'
+															width='18'
+															height='18'
+															rx='2'
+															ry='2'
+														></rect>
+														<line x1='9' y1='9' x2='15' y2='15'></line>
+														<line x1='15' y1='9' x2='9' y2='15'></line>
+													</svg>
+												</div>
+												<div className='flex-1 text-left'>
+													<div className='font-medium'>Все сообщения</div>
+													<div className='text-xs text-gray-500'>
+														Показать все сообщения
+													</div>
+												</div>
+												{messageFilter === 'all' && (
+													<svg
+														className='w-5 h-5 text-emerald-400'
+														viewBox='0 0 24 24'
+														fill='none'
+														stroke='currentColor'
+														strokeWidth='2'
+													>
+														<polyline points='20 6 9 17 4 12'></polyline>
+													</svg>
+												)}
+											</button>
+											<button
+												onClick={() => {
+													setMessageFilter('photos')
+													setIsFilterOpen(false)
+												}}
+												className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
+													messageFilter === 'photos'
+														? 'bg-emerald-600/20 text-emerald-300'
+														: 'text-gray-300 hover:bg-gray-800'
+												}`}
+											>
+												<div
+													className={`w-10 h-10 rounded-full flex items-center justify-center ${
+														messageFilter === 'photos'
+															? 'bg-emerald-600/30'
+															: 'bg-gray-800'
+													}`}
+												>
+													<svg
+														className='w-5 h-5'
+														viewBox='0 0 24 24'
+														fill='none'
+														stroke='currentColor'
+														strokeWidth='2'
+													>
+														<rect
+															x='3'
+															y='3'
+															width='18'
+															height='18'
+															rx='2'
+															ry='2'
+														></rect>
+														<circle cx='8.5' cy='8.5' r='1.5'></circle>
+														<polyline points='21 15 16 10 5 21'></polyline>
+													</svg>
+												</div>
+												<div className='flex-1 text-left'>
+													<div className='font-medium'>Фотографии</div>
+													<div className='text-xs text-gray-500'>
+														Только изображения
+													</div>
+												</div>
+												{messageFilter === 'photos' && (
+													<svg
+														className='w-5 h-5 text-emerald-400'
+														viewBox='0 0 24 24'
+														fill='none'
+														stroke='currentColor'
+														strokeWidth='2'
+													>
+														<polyline points='20 6 9 17 4 12'></polyline>
+													</svg>
+												)}
+											</button>
+											<button
+												onClick={() => {
+													setMessageFilter('files')
+													setIsFilterOpen(false)
+												}}
+												className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
+													messageFilter === 'files'
+														? 'bg-emerald-600/20 text-emerald-300'
+														: 'text-gray-300 hover:bg-gray-800'
+												}`}
+											>
+												<div
+													className={`w-10 h-10 rounded-full flex items-center justify-center ${
+														messageFilter === 'files'
+															? 'bg-emerald-600/30'
+															: 'bg-gray-800'
+													}`}
+												>
+													<svg
+														className='w-5 h-5'
+														viewBox='0 0 24 24'
+														fill='none'
+														stroke='currentColor'
+														strokeWidth='2'
+													>
+														<path d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'></path>
+														<polyline points='14 2 14 8 20 8'></polyline>
+														<line x1='16' y1='13' x2='8' y2='13'></line>
+														<line x1='16' y1='17' x2='8' y2='17'></line>
+														<polyline points='10 9 9 9 8 9'></polyline>
+													</svg>
+												</div>
+												<div className='flex-1 text-left'>
+													<div className='font-medium'>Файлы</div>
+													<div className='text-xs text-gray-500'>
+														Документы и файлы
+													</div>
+												</div>
+												{messageFilter === 'files' && (
+													<svg
+														className='w-5 h-5 text-emerald-400'
+														viewBox='0 0 24 24'
+														fill='none'
+														stroke='currentColor'
+														strokeWidth='2'
+													>
+														<polyline points='20 6 9 17 4 12'></polyline>
+													</svg>
+												)}
+											</button>
+											<button
+												onClick={() => {
+													setMessageFilter('links')
+													setIsFilterOpen(false)
+												}}
+												className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
+													messageFilter === 'links'
+														? 'bg-emerald-600/20 text-emerald-300'
+														: 'text-gray-300 hover:bg-gray-800'
+												}`}
+											>
+												<div
+													className={`w-10 h-10 rounded-full flex items-center justify-center ${
+														messageFilter === 'links'
+															? 'bg-emerald-600/30'
+															: 'bg-gray-800'
+													}`}
+												>
+													<svg
+														className='w-5 h-5'
+														viewBox='0 0 24 24'
+														fill='none'
+														stroke='currentColor'
+														strokeWidth='2'
+													>
+														<circle cx='12' cy='12' r='10'></circle>
+														<line x1='2' y1='12' x2='22' y2='12'></line>
+														<path d='M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z'></path>
+													</svg>
+												</div>
+												<div className='flex-1 text-left'>
+													<div className='font-medium'>Ссылки</div>
+													<div className='text-xs text-gray-500'>
+														Сообщения со ссылками
+													</div>
+												</div>
+												{messageFilter === 'links' && (
+													<svg
+														className='w-5 h-5 text-emerald-400'
+														viewBox='0 0 24 24'
+														fill='none'
+														stroke='currentColor'
+														strokeWidth='2'
+													>
+														<polyline points='20 6 9 17 4 12'></polyline>
+													</svg>
+												)}
+											</button>
+										</div>
+										<div className='p-4 border-t border-gray-800'>
+											<button
+												onClick={() => {
+													setMessageFilter('all')
+													setIsFilterOpen(false)
+												}}
+												className='w-full py-2.5 text-sm font-medium text-gray-400 hover:text-white hover:bg-gray-800 rounded-xl transition-colors'
+											>
+												Сбросить фильтр
+											</button>
+										</div>
+									</div>
+								</div>
+							)}
+
+							{/* Connecting Modal - Show until Socket.IO connects */}
+							{!isConnected && <ConnectingModal isVisible={!isConnected} />}
+
+							{/* Custom Background Modal */}
+							{isCustomBgOpen && (
+								<div
+									className='fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'
+									onClick={() => setIsCustomBgOpen(false)}
+								>
+									<div
+										className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-lg shadow-2xl animate-in fade-in zoom-in-95 duration-200'
+										onClick={e => e.stopPropagation()}
+									>
+										<div className='flex items-center justify-between p-4 border-b border-gray-800'>
+											<h3 className='text-lg font-bold text-white flex items-center gap-2'>
+												<svg
+													className='w-5 h-5 text-emerald-400'
+													viewBox='0 0 24 24'
+													fill='none'
+													stroke='currentColor'
+													strokeWidth='2'
+												>
+													<rect
+														x='3'
+														y='3'
+														width='18'
+														height='18'
+														rx='2'
+														ry='2'
+													></rect>
+													<circle cx='8.5' cy='8.5' r='1.5'></circle>
+													<polyline points='21 15 16 10 5 21'></polyline>
+												</svg>
+												Установить фон чата
+											</h3>
+											<button
+												onClick={() => setIsCustomBgOpen(false)}
+												className='p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors'
+											>
+												<XIcon className='w-5 h-5' />
+											</button>
+										</div>
+										<div className='p-4 space-y-4'>
+											{/* URL Input */}
+											<div>
+												<label className='block text-sm font-medium text-gray-400 mb-2'>
+													URL изображения
+												</label>
+												<div className='flex gap-2'>
+													<input
+														type='url'
+														value={customBgUrl}
+														onChange={e => setCustomBgUrl(e.target.value)}
+														placeholder='https://example.com/image.jpg'
+														className='flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50'
+														onKeyDown={e => {
+															if (e.key === 'Enter' && customBgUrl.trim()) {
+																handleSetCustomBackground(customBgUrl.trim())
+															}
+														}}
+													/>
+													<button
+														onClick={() =>
+															customBgUrl.trim() &&
+															handleSetCustomBackground(customBgUrl.trim())
+														}
+														disabled={!customBgUrl.trim()}
+														className='px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-xl transition-colors font-medium'
+													>
+														Применить
+													</button>
+												</div>
+											</div>
+
+											{/* Divider */}
+											<div className='relative'>
+												<div className='absolute inset-0 flex items-center'>
+													<div className='w-full border-t border-gray-800'></div>
+												</div>
+												<div className='relative flex justify-center text-xs uppercase'>
+													<span className='bg-gray-900 px-2 text-gray-500'>
+														или
+													</span>
+												</div>
+											</div>
+
+											{/* File Upload */}
+											<div>
+												<label className='block text-sm font-medium text-gray-400 mb-2'>
+													Загрузить файл
+												</label>
+												<div className='relative'>
+													<input
+														type='file'
+														accept='image/*'
+														onChange={async e => {
+															const file = e.target.files?.[0]
+															if (!file) return
+															const formData = new FormData()
+															formData.append('file', file)
+															try {
+																const res = await fetch('/api/upload/file', {
+																	method: 'POST',
+																	body: formData,
+																})
+																if (res.ok) {
+																	const data = await res.json()
+																	if (data.url) {
+																		handleSetCustomBackground(data.url)
+																	}
+																} else {
+																	showToast('Ошибка загрузки файла', 'error')
+																}
+															} catch (err) {
+																showToast('Ошибка загрузки файла', 'error')
+															}
+														}}
+														className='hidden'
+														id='bg-upload'
+													/>
+													<label
+														htmlFor='bg-upload'
+														className='flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-700 rounded-xl cursor-pointer hover:border-emerald-500/50 hover:bg-gray-800/50 transition-colors'
+													>
+														<svg
+															className='w-8 h-8 text-gray-500 mb-2'
+															viewBox='0 0 24 24'
+															fill='none'
+															stroke='currentColor'
+															strokeWidth='2'
+														>
+															<path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'></path>
+															<polyline points='17 8 12 3 7 8'></polyline>
+															<line x1='12' y1='3' x2='12' y2='15'></line>
+														</svg>
+														<span className='text-sm text-gray-400'>
+															Нажмите для загрузки
+														</span>
+														<span className='text-xs text-gray-600 mt-1'>
+															PNG, JPG, GIF до 5MB
+														</span>
+													</label>
+												</div>
+											</div>
+
+											{/* Preview */}
+											{customBgUrl && (
+												<div>
+													<label className='block text-sm font-medium text-gray-400 mb-2'>
+														Предпросмотр
+													</label>
+													<div className='relative h-32 rounded-xl overflow-hidden border border-gray-800'>
+														<img
+															src={customBgUrl}
+															alt='Preview'
+															className='w-full h-full object-cover'
+															onError={e => {
+																e.currentTarget.src =
+																	'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%23666" stroke-width="2"%3E%3Crect x="3" y="3" width="18" height="18" rx="2" ry="2"%3E%3C/rect%3E%3Ccircle cx="8.5" cy="8.5" r="1.5"%3E%3C/circle%3E%3Cpolyline points="21 15 16 10 5 21"%3E%3C/polyline%3E%3C/svg%3E'
+															}}
+														/>
+													</div>
+												</div>
+											)}
+										</div>
+										<div className='p-4 border-t border-gray-800 flex gap-2'>
+											<button
+												onClick={() => {
+													setIsCustomBgOpen(false)
+													setCustomBgUrl('')
+												}}
+												className='flex-1 py-2.5 text-sm font-medium text-gray-400 hover:text-white hover:bg-gray-800 rounded-xl transition-colors'
+											>
+												Отмена
+											</button>
+										</div>
+									</div>
+								</div>
+							)}
+
+							{/* Messages */}
+							<div
+								ref={containerRef}
+								onScroll={handleScroll}
+								className='flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar scroll-smooth'
+							>
+								{/* Loading State for History */}
+								{isChatLoading && messages.length > 0 && !isChatSearchOpen && (
+									<div className='flex justify-center py-4'>
 										<div
-											className={`w-4 h-4 border-2 border-t-transparent rounded-full animate-spin ${currentBackground.borderColor.replace(
+											className={`w-6 h-6 border-2 border-t-transparent rounded-full animate-spin ${currentBackground.borderColor.replace(
 												'/20',
 												'',
 											)}`}
 										/>
-									)}
-									<button
-										onClick={() => {
-											setIsChatSearchOpen(false)
-											setChatSearchQuery('')
-											setFoundMessages([])
-										}}
-										className='p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors'
-									>
-										<XIcon className='w-5 h-5' />
-									</button>
-								</div>
-							) : (
-								<>
-									<div className='flex items-center gap-4'>
-										<button
-											onClick={() => {
-												setSelectedFriend(null)
-												setSelectedGroup(null)
-												setSelectedChannel(null)
-											}}
-											className='p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors'
-											title='Назад к сообществам'
-										>
-											<ArrowLeftIcon className='w-5 h-5' />
-										</button>
-										{selectedFriend ? (
-											<>
-												<div className='relative'>
-													<img
-														src={getAvatarUrl(selectedFriend.avatar_url)}
-														className='w-10 h-10 rounded-full object-cover bg-gray-800 ring-2 ring-gray-800/50'
-														alt={selectedFriend.username}
-													/>
-													{selectedFriend.status?.toLowerCase() ===
-														'online' && (
-														<div className='absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-gray-900 rounded-full animate-pulse' />
-													)}
-												</div>
-												<div className='flex flex-col'>
-													<span className='font-bold text-white text-base leading-tight'>
-														{selectedFriend.username}
-														{selectedFriend.premium && (
-															<span className='ml-1 text-amber-400'>★</span>
-														)}
-													</span>
-													<span className='text-xs text-emerald-500 font-medium flex items-center gap-1.5'>
-														{isChatTyping ? (
-															<>
-																<span className='w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse' />
-																Печатает...
-															</>
-														) : selectedFriend.status?.toLowerCase() === 'online' ? (
-															<>
-																<span className='w-1.5 h-1.5 rounded-full bg-emerald-500' />
-																В сети
-															</>
-														) : (
-															<span className='text-gray-500'>
-																{formatLastSeen(selectedFriend.last_seen)}
-															</span>
-														)}
-													</span>
-												</div>
-											</>
-										) : selectedChannel ? (
-											<>
-												<div className='relative'>
-													<div className='w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center ring-2 ring-gray-800/50'>
-														<HashIcon className='w-5 h-5 text-gray-400' />
-													</div>
-												</div>
-												<div className='flex flex-col'>
-													<span className='font-bold text-white text-base leading-tight'>
-														{selectedChannel.name}
-													</span>
-													<span className='text-xs text-gray-500 font-medium flex items-center gap-1.5'>
-														<UsersIcon className='w-3 h-3' />
-														{selectedChannel.participants_count} участников
-													</span>
-												</div>
-												<button
-													onClick={() => setIsChannelInfoOpen(true)}
-													className='ml-2 p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors'
-													title='Информация о канале'
-												>
-													<InfoIcon className='w-4 h-4' />
-												</button>
-											</>
-										) : selectedGroup ? (
-											<>
-												<div className='relative'>
-													<div className='w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center ring-2 ring-gray-800/50'>
-														<UsersIcon className='w-5 h-5 text-gray-400' />
-													</div>
-												</div>
-												<div className='flex flex-col'>
-													<span className='font-bold text-white text-base leading-tight'>
-														{selectedGroup.name}
-													</span>
-													<span className='text-xs text-gray-500 font-medium flex items-center gap-1.5'>
-														<UsersIcon className='w-3 h-3' />
-														Группа
-													</span>
-												</div>
-												<button
-													onClick={() => initiateGroupCall(selectedGroup.id)}
-													className='ml-2 p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors'
-													title='Начать групповой звонок'
-												>
-													<PhoneIcon className='w-4 h-4' />
-												</button>
-												{user?.id === selectedGroup.owner_id && (
-													<button
-														onClick={() => setIsAddMemberOpen(true)}
-														className='ml-2 p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors'
-														title='Добавить участника'
-													>
-														<UserPlusIcon className='w-4 h-4' />
-													</button>
-												)}
-											</>
-										) : null}
 									</div>
+								)}
 
-									{/* Header Actions */}
-									<div className='flex items-center gap-2'>
-										{selectedFriend && !isAiChat && !isBotChat && (
-											<button
-												onClick={() =>
-													handleCallInitiate(
-														selectedFriend.id,
-														selectedFriend.username,
-													)
-												}
-												disabled={
-													!isSelectedFriendOnline || isSelectedFriendInCall
-												}
-												className={`p-2 sm:px-3 sm:py-2 rounded-full sm:rounded-lg flex items-center gap-2 transition-colors ${
-													!isSelectedFriendOnline || isSelectedFriendInCall
-														? 'text-gray-600 cursor-not-allowed'
-														: 'text-emerald-400 hover:text-white hover:bg-emerald-500/20'
-												}`}
-												title={
-													!isSelectedFriendOnline
-														? 'Пользователь не в сети'
-														: isSelectedFriendInCall
-															? 'Уже идет звонок'
-															: 'Позвонить'
-												}
-											>
-												<PhoneIcon className='w-5 h-5' />
-												<span className='hidden sm:inline text-xs font-medium'>
-													Позвонить
-												</span>
-											</button>
-										)}
-										{hasActiveCall && (
-											<button
-												onClick={() => toggleScreenShare()}
-												disabled={
-													!isInitialized ||
-													!isWebRTCSupported ||
-													!isScreenShareSupported
-												}
-												className={`p-2 sm:px-3 sm:py-2 rounded-full sm:rounded-lg flex items-center gap-2 transition-colors ${
-													!isInitialized ||
-													!isWebRTCSupported ||
-													!isScreenShareSupported
-														? 'text-gray-600 cursor-not-allowed'
-														: isScreenSharing
-															? 'text-emerald-400 hover:text-white hover:bg-emerald-500/20'
-															: 'text-gray-400 hover:text-white hover:bg-gray-800'
-												}`}
-												title={
-													!isInitialized ||
-													!isWebRTCSupported ||
-													!isScreenShareSupported
-														? 'Демонстрация экрана недоступна'
-														: isScreenSharing
-															? 'Остановить демонстрацию'
-															: 'Демонстрация экрана'
-												}
-											>
-												<ScreenShareIcon className='w-5 h-5' />
-												<span className='hidden sm:inline text-xs font-medium'>
-													{isScreenSharing ? 'Стоп экран' : 'Экран'}
-												</span>
-											</button>
-										)}
-										<button
-											onClick={() => setIsChatSearchOpen(true)}
-											className='p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors'
+								{/* Date Divider (Mockup) */}
+								{!isChatSearchOpen && (
+									<div className='flex justify-center my-4'>
+										<span className='text-[10px] font-medium text-gray-500 bg-gray-900/60 px-3 py-1 rounded-full backdrop-blur-sm'>
+											Сегодня
+										</span>
+									</div>
+								)}
+
+								{/* Search Results Header */}
+								{isChatSearchOpen && chatSearchQuery && (
+									<div className='flex justify-center my-4'>
+										<span className='text-[10px] font-medium text-gray-400 bg-gray-900/80 px-4 py-1.5 rounded-full border border-gray-800'>
+											{foundMessages.length > 0
+												? `Найдено сообщений: ${foundMessages.length}`
+												: isSearchingMessages
+													? 'Поиск...'
+													: 'Ничего не найдено'}
+										</span>
+									</div>
+								)}
+
+								{messagesToDisplay.length === 0 &&
+									!isChatLoading &&
+									!isSearchingMessages && (
+										<div className='flex flex-col h-full items-center justify-center text-gray-500 space-y-4 opacity-0 animate-in fade-in duration-700 fill-mode-forwards'>
+											<div className='w-24 h-24 rounded-3xl bg-gray-900/50 flex items-center justify-center border border-gray-800/50 rotate-3 transition-transform hover:rotate-6 duration-500'>
+												{messageFilter !== 'all' ? (
+													<svg
+														className='w-12 h-12 text-gray-700'
+														viewBox='0 0 24 24'
+														fill='none'
+														stroke='currentColor'
+														strokeWidth='2'
+													>
+														<polygon points='22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3'></polygon>
+													</svg>
+												) : (
+													<MessageSquareIcon className='w-12 h-12 text-gray-700' />
+												)}
+											</div>
+											<div className='text-center space-y-2'>
+												<p className='text-lg font-medium text-gray-300'>
+													{isChatSearchOpen
+														? 'Ничего не найдено'
+														: messageFilter !== 'all'
+															? 'Нет сообщений с таким фильтром'
+															: 'Нет сообщений'}
+												</p>
+												{!isChatSearchOpen && (
+													<p className='text-sm text-gray-600'>
+														{messageFilter !== 'all'
+															? `Фильтр: ${messageFilter === 'photos' ? 'Фотографии' : messageFilter === 'files' ? 'Файлы' : 'Ссылки'}. Выберите другой фильтр или сбросьте его`
+															: 'Напишите первое сообщение, чтобы начать диалог'}
+													</p>
+												)}
+											</div>
+										</div>
+									)}
+
+								{messagesToDisplay.map((msg, index) => {
+									const isLast = index === messagesToDisplay.length - 1
+									const replyMessage = replyMap[msg.id]
+									const replyPreview = replyMessage
+										? {
+												sender: getSenderName(replyMessage),
+												text: getMessagePreview(replyMessage),
+											}
+										: undefined
+									return (
+										<div
+											key={msg.id || index}
+											ref={el => {
+												messageRefs.current[msg.id] = el
+												if (isLast) messagesEndRef.current = el
+											}}
+											className='w-full'
 										>
-											<SearchIcon className='w-5 h-5' />
+											<MessageBubble
+												msg={msg}
+												theme={messageTheme}
+												sender={
+													msg.group_id || selectedGroup?.id
+														? groupParticipants[msg.sender_id]
+														: undefined
+												}
+												isPinned={pinnedMessageIds.includes(msg.id)}
+												replyPreview={replyPreview}
+												reactions={getReactionsForMessage(msg.id)}
+												onReply={handleReplyMessage}
+												onPin={handlePinMessage}
+												onDelete={handleDeleteMessage}
+												onEdit={handleEditMessage}
+												onReact={handleReactMessage}
+												onForward={handleForwardMessage}
+												isSelectionMode={isSelectionMode}
+												isSelected={selectedMessageIds.has(msg.id)}
+												onToggleSelect={handleToggleMessageSelection}
+											/>
+										</div>
+									)
+								})}
+
+								{/* Typing Indicator */}
+								{isChatTyping && (
+									<div className='flex items-center gap-2 px-5 py-2 animate-in fade-in slide-in-from-bottom-2 duration-300'>
+										<div className='bg-gray-800/80 border border-gray-700 px-4 py-2 rounded-2xl rounded-tl-sm flex items-center gap-1.5'>
+											<span className='w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]'></span>
+											<span className='w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]'></span>
+											<span className='w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce'></span>
+										</div>
+										<span className='text-xs text-gray-500 animate-pulse'>
+											печатает...
+										</span>
+									</div>
+								)}
+							</div>
+
+							{/* Input Area */}
+							<div className='p-4 bg-gray-900/40 backdrop-blur-md border-t border-gray-800/50'>
+								{replyToMessage && (
+									<div className='max-w-4xl mx-auto mb-2 flex items-center gap-3 rounded-2xl border border-gray-800/60 bg-gray-800/40 px-4 py-2 text-xs text-gray-200'>
+										<div className='flex-1 min-w-0'>
+											<div className='text-[10px] uppercase tracking-wider text-gray-400'>
+												Ответ на: {getSenderName(replyToMessage)}
+											</div>
+											<div className='truncate text-gray-300'>
+												{getMessagePreview(replyToMessage)}
+											</div>
+										</div>
+										<button
+											onClick={() => setReplyToMessage(null)}
+											className='rounded-full px-2 py-1 text-gray-400 hover:bg-gray-700/60 hover:text-white transition'
+										>
+											✕
 										</button>
-										<div className='relative' ref={settingsRef}>
+									</div>
+								)}
+								<div
+									className={`max-w-4xl mx-auto flex items-end gap-3 bg-gray-800/50 p-2 rounded-3xl shadow-lg focus-within:ring-2 transition-all duration-300 ${currentBackground.ringColor.replace('focus:', 'focus-within:').replace('/50', '/20')}`}
+								>
+									{isRecording ? (
+										<div className='flex-1 flex items-center justify-between px-4 py-2'>
+											<div className='flex items-center gap-3'>
+												<div className='w-3 h-3 bg-red-500 rounded-full animate-pulse' />
+												<span className='text-white font-mono text-lg'>
+													{formatTime(recordingTime)}
+												</span>
+											</div>
+											<div className='flex items-center gap-2'>
+												<button
+													onClick={handleCancelRecording}
+													className='p-2 text-gray-400 hover:text-red-400 hover:bg-gray-700/50 rounded-full transition-all'
+													title='Отмена'
+												>
+													<StopIcon className='w-6 h-6' />
+												</button>
+												<button
+													onClick={handleSendVoice}
+													className={`p-2 rounded-full transition-all ${currentBackground.buttonBg} ${currentBackground.buttonHover} text-white`}
+													title='Отправить'
+												>
+													<CheckIcon className='w-6 h-6' />
+												</button>
+											</div>
+										</div>
+									) : (
+										<>
+											{/* Attach Button */}
 											<button
-												onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-												className={`p-2 rounded-full transition-colors ${
-													isSettingsOpen
-														? 'text-white bg-gray-800'
-														: 'text-gray-400 hover:text-white hover:bg-gray-800'
-												}`}
+												onClick={handlePickFiles}
+												className={`p-2.5 text-gray-400 hover:bg-gray-700/50 rounded-full transition-all ${currentBackground.accentColor.replace('text-', 'hover:text-')}`}
 											>
-												<MoreVerticalIcon className='w-5 h-5' />
+												<PaperclipIcon className='w-5 h-5' />
 											</button>
+											<input
+												ref={fileInputRef}
+												type='file'
+												accept='*/*'
+												multiple
+												onChange={handleFilesSelected}
+												className='hidden'
+											/>
 
-											{/* Settings Dropdown */}
-											{isSettingsOpen && (
-												<div className='absolute right-0 top-full mt-2 w-64 bg-gray-900/95 backdrop-blur-xl border border-gray-800 rounded-xl shadow-2xl p-4 z-50 animate-in fade-in zoom-in-95 duration-200'>
-													<h3 className='text-sm font-semibold text-gray-300 mb-3'>
-														Настройки чата
-													</h3>
+											{files.length > 0 && (
+												<div className='absolute bottom-full left-0 right-0 mb-2 px-2'>
+													<div className='flex flex-wrap gap-2'>
+														{files.map((f, idx) => (
+															<div
+																key={`${f.name}-${f.size}-${idx}`}
+																className='flex items-center gap-2 rounded-lg border border-gray-700/50 bg-gray-800/40 px-3 py-2 text-xs text-gray-200'
+															>
+																<span className='max-w-[180px] truncate'>
+																	{f.name}
+																</span>
+																<button
+																	onClick={() => removeFile(idx)}
+																	className='rounded-md px-2 py-1 text-gray-400 hover:bg-gray-800 hover:text-white transition-colors'
+																	type='button'
+																>
+																	✕
+																</button>
+															</div>
+														))}
+													</div>
+												</div>
+											)}
+											{showBotCommandHints && (
+												<div className='absolute bottom-full left-0 right-0 mb-2 px-2'>
+													<div className='rounded-xl border border-gray-700/60 bg-gray-900/95 shadow-xl overflow-hidden'>
+														{filteredBotCommands.map(item => (
+															<button
+																key={item.command}
+																onClick={() => {
+																	setInput(
+																		`/${item.command}${
+																			item.command === 'echo' ? ' ' : ''
+																		}`,
+																	)
+																	messageInputRef.current?.focus()
+																}}
+																className='w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-gray-800 transition-colors flex items-center justify-between gap-3'
+															>
+																<span className='font-medium'>
+																	{item.title}
+																</span>
+																<span className='text-xs text-gray-500'>
+																	{item.description}
+																</span>
+															</button>
+														))}
+													</div>
+												</div>
+											)}
 
-													<div className='space-y-4'>
-														<div>
-															<label className='text-xs text-gray-500 mb-2 block uppercase tracking-wider font-medium'>
-																Фон чата
-															</label>
-															<div className='grid grid-cols-5 gap-2'>
-																{BACKGROUNDS.map(bg => (
+											{/* Unified Emoji/Sticker Picker */}
+											{isPickerOpen && (
+												<div
+													ref={pickerRef}
+													className='absolute bottom-full right-12 mb-2 w-80 rounded-2xl border border-gray-800 bg-gray-900/95 shadow-2xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200 flex flex-col'
+												>
+													{/* Picker Tabs */}
+													<div className='flex p-1 bg-gray-950/50 border-b border-gray-800'>
+														<button
+															onClick={() => setPickerTab('emoji')}
+															className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${
+																pickerTab === 'emoji'
+																	? 'bg-gray-800 text-white shadow-sm'
+																	: 'text-gray-500 hover:text-gray-300'
+															}`}
+														>
+															Эмодзи
+														</button>
+														<button
+															onClick={() => setPickerTab('sticker')}
+															className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${
+																pickerTab === 'sticker'
+																	? 'bg-gray-800 text-white shadow-sm'
+																	: 'text-gray-500 hover:text-gray-300'
+															}`}
+														>
+															Стикеры
+														</button>
+													</div>
+
+													{/* Picker Content */}
+													<div className='h-72 overflow-y-auto custom-scrollbar p-3'>
+														{pickerTab === 'emoji' ? (
+															<div className='grid grid-cols-6 gap-1'>
+																{EMOJIS.map(emoji => (
 																	<button
-																		key={bg.id}
-																		onClick={() => handleThemeChange(bg)}
-																		title={bg.name}
-																		className={`w-8 h-8 rounded-full border-2 transition-all ${
-																			currentBackground.id === bg.id
-																				? `${bg.borderColor.replace(
-																						'/20',
-																						'',
-																					)} scale-110 shadow-lg`
-																				: 'border-transparent hover:scale-105 hover:border-gray-600'
-																		} overflow-hidden ring-1 ring-gray-950/50`}
+																		key={emoji}
+																		onClick={() =>
+																			setInput(prev => prev + emoji)
+																		}
+																		className='text-2xl p-2 hover:bg-gray-800/50 rounded-xl transition-all hover:scale-110 active:scale-90'
 																	>
-																		<div
-																			className={`w-full h-full ${bg.preview}`}
-																		/>
+																		{emoji}
 																	</button>
 																))}
 															</div>
-														</div>
-														<div className='pt-3 border-t border-gray-800'>
-															<button
-																onClick={handleDeleteAllHistory}
-																className='w-full text-left text-sm text-rose-500 hover:text-rose-400 hover:bg-rose-500/10 px-3 py-2 rounded-lg transition-colors'
-															>
-																Удалить всю переписку без восстановления
-															</button>
-														</div>
+														) : (
+															<div className='space-y-4'>
+																<div className='flex items-center justify-between px-1'>
+																	<span className='text-[10px] font-bold uppercase tracking-widest text-gray-500'>
+																		Ваши стикеры
+																	</span>
+																	<button
+																		onClick={handleUploadSticker}
+																		className='text-[10px] font-bold text-indigo-400 hover:text-indigo-300 transition-colors uppercase tracking-widest'
+																	>
+																		+ Загрузить
+																	</button>
+																</div>
+																<div className='grid grid-cols-4 gap-2'>
+																	{STICKERS.map(sticker => (
+																		<button
+																			key={sticker.id}
+																			onClick={() =>
+																				handleSendSticker(sticker.url)
+																			}
+																			className='aspect-square rounded-xl bg-gray-800/40 hover:bg-gray-700/60 transition-all p-2 group hover:scale-105 active:scale-95'
+																		>
+																			<img
+																				src={getAttachmentUrl(sticker.url)}
+																				alt={sticker.id}
+																				className='w-full h-full object-contain transition-transform group-hover:scale-110'
+																			/>
+																		</button>
+																	))}
+																	{customStickers.map(sticker => (
+																		<button
+																			key={sticker.id}
+																			onClick={() =>
+																				handleSendSticker(sticker.url)
+																			}
+																			className='aspect-square rounded-xl bg-gray-800/40 hover:bg-gray-700/60 transition-all p-2 group relative hover:scale-105 active:scale-95'
+																		>
+																			<img
+																				src={getAttachmentUrl(sticker.url)}
+																				alt={sticker.id}
+																				className='w-full h-full object-contain transition-transform group-hover:scale-110'
+																			/>
+																			<button
+																				onClick={e => {
+																					e.stopPropagation()
+																					deleteCustomSticker(sticker.id)
+																				}}
+																				className='absolute -top-1 -right-1 p-1 bg-rose-500 rounded-full text-white opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-600 shadow-lg'
+																				title='Удалить стикер'
+																			>
+																				<XIcon className='w-3 h-3' />
+																			</button>
+																		</button>
+																	))}
+																</div>
+															</div>
+														)}
 													</div>
 												</div>
 											)}
-										</div>
-									</div>
-								</>
-							)}
-						</div>
 
-						{pinnedMessage && (
-							<div className='px-6 py-2 border-b border-gray-800/60 bg-gray-900/60 backdrop-blur-md'>
-								<button
-									onClick={() => jumpToMessage(pinnedMessage.id)}
-									className='w-full flex items-center gap-3 rounded-xl border border-gray-800/60 bg-gray-800/40 px-3 py-2 text-left text-xs text-gray-200 hover:bg-gray-800/70 transition'
-								>
-									<span className='text-amber-400'>📌</span>
-									<div className='flex-1 min-w-0'>
-										<div className='text-[10px] uppercase tracking-wider text-gray-400'>
-											Закреплено
-										</div>
-										<div className='truncate'>
-											{getMessagePreview(pinnedMessage)}
-										</div>
-									</div>
-									{pinnedMessage.attachments &&
-										pinnedMessage.attachments.length > 0 && (
-											<div className='flex items-center gap-2'>
-												{(() => {
-													const a = pinnedMessage.attachments[0]
-													const ext = (typeof a === 'object' && a.ext ? a.ext : '').toLowerCase()
-													const isImage =
-														ext === 'png' ||
-														ext === 'jpg' ||
-														ext === 'jpeg' ||
-														ext === 'gif' ||
-														ext === 'webp' ||
-														ext === 'bmp' ||
-														ext === 'svg'
-													if (isImage) {
-														return (
-															<img
-																src={typeof a === 'object' ? getAttachmentUrl(a.url) : ''}
-																alt={typeof a === 'object' ? a.name : ''}
-																className='h-10 w-10 rounded-md object-cover'
-															/>
-														)
+											<textarea
+												ref={messageInputRef}
+												value={input}
+												onChange={handleInputChange}
+												onKeyDown={e => {
+													if (e.key === 'Enter' && !e.shiftKey) {
+														e.preventDefault()
+														handleSendMessage()
 													}
-													return (
-														<span className='rounded-md border border-gray-700/60 bg-gray-900/60 px-2 py-1 text-[10px] text-gray-300'>
-															{a.ext ? a.ext.toUpperCase() : 'FILE'}
-														</span>
-													)
-												})()}
-											</div>
-										)}
-								</button>
-							</div>
-						)}
+												}}
+												rows={1}
+												className='flex-1 bg-transparent border-none text-white placeholder-gray-500 focus:ring-0 resize-none py-2.5 max-h-32 min-h-[44px] custom-scrollbar'
+												placeholder='Напишите сообщение...'
+												style={{ height: 'auto', minHeight: '44px' }}
+												onInput={e => {
+													const target = e.target as HTMLTextAreaElement
+													target.style.height = 'auto'
+													target.style.height = `${Math.min(
+														target.scrollHeight,
+														128,
+													)}px`
+												}}
+											/>
 
-						{/* Messages */}
-						<div
-							ref={containerRef}
-							onScroll={handleScroll}
-							className='flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar scroll-smooth'
-						>
-							{/* Loading State for History */}
-							{isChatLoading && messages.length > 0 && !isChatSearchOpen && (
-								<div className='flex justify-center py-4'>
-									<div
-										className={`w-6 h-6 border-2 border-t-transparent rounded-full animate-spin ${currentBackground.borderColor.replace(
-											'/20',
-											'',
-										)}`}
-									/>
-								</div>
-							)}
+											{/* Unified Picker Button */}
+											<button
+												onClick={() => {
+													setIsPickerOpen(!isPickerOpen)
+												}}
+												className={`p-2.5 text-gray-400 hover:bg-gray-700/50 rounded-full transition-all ${
+													isPickerOpen
+														? 'text-indigo-400 bg-gray-700/50'
+														: 'hover:text-indigo-400'
+												}`}
+												title='Эмодзи и стикеры'
+											>
+												<SmileIcon className='w-6 h-6' />
+											</button>
 
-							{/* Date Divider (Mockup) */}
-							{!isChatSearchOpen && (
-								<div className='flex justify-center my-4'>
-									<span className='text-[10px] font-medium text-gray-500 bg-gray-900/60 px-3 py-1 rounded-full backdrop-blur-sm'>
-										Сегодня
-									</span>
-								</div>
-							)}
-
-							{/* Search Results Header */}
-							{isChatSearchOpen && chatSearchQuery && (
-								<div className='flex justify-center my-4'>
-									<span className='text-[10px] font-medium text-gray-400 bg-gray-900/80 px-4 py-1.5 rounded-full border border-gray-800'>
-										{foundMessages.length > 0
-											? `Найдено сообщений: ${foundMessages.length}`
-											: isSearchingMessages
-												? 'Поиск...'
-												: 'Ничего не найдено'}
-									</span>
-								</div>
-							)}
-
-							{messagesToDisplay.length === 0 &&
-								!isChatLoading &&
-								!isSearchingMessages && (
-									<div className='flex flex-col h-full items-center justify-center text-gray-500 space-y-4 opacity-0 animate-in fade-in duration-700 fill-mode-forwards'>
-										<div className='w-24 h-24 rounded-3xl bg-gray-900/50 flex items-center justify-center border border-gray-800/50 rotate-3 transition-transform hover:rotate-6 duration-500'>
-											<MessageSquareIcon className='w-12 h-12 text-gray-700' />
-										</div>
-										<div className='text-center space-y-1'>
-											<p className='text-lg font-medium text-gray-300'>
-												{isChatSearchOpen
-													? 'Ничего не найдено'
-													: 'Нет сообщений'}
-											</p>
-											{!isChatSearchOpen && (
-												<p className='text-sm text-gray-600'>
-													Напишите первое сообщение, чтобы начать диалог
-												</p>
+											{/* Send/Mic Button */}
+											{input.trim() ? (
+												<button
+													onClick={handleSendMessage}
+													className={`p-3 rounded-2xl transition-all duration-300 shadow-lg flex items-center justify-center ${currentBackground.buttonBg} ${currentBackground.buttonHover} text-white translate-x-0 rotate-0`}
+												>
+													<SendIcon className='w-5 h-5' />
+												</button>
+											) : (
+												<button
+													onClick={handleStartRecording}
+													className='p-3 rounded-2xl transition-all duration-300 shadow-lg flex items-center justify-center bg-gray-700 hover:bg-gray-600 text-white translate-x-0 rotate-0'
+												>
+													<MicIcon className='w-5 h-5' />
+												</button>
 											)}
-										</div>
-									</div>
-								)}
-
-							{messagesToDisplay.map((msg, index) => {
-								const isLast = index === messagesToDisplay.length - 1
-								const replyMessage = replyMap[msg.id]
-								const replyPreview = replyMessage
-									? {
-											sender: getSenderName(replyMessage),
-											text: getMessagePreview(replyMessage),
-										}
-									: undefined
-								return (
-									<div
-										key={msg.id || index}
-										ref={el => {
-											messageRefs.current[msg.id] = el
-											if (isLast) messagesEndRef.current = el
-										}}
-										className='w-full'
-									>
-										<MessageBubble
-											msg={msg}
-											theme={currentBackground}
-											sender={
-												msg.group_id || selectedGroup?.id
-													? groupParticipants[msg.sender_id]
-													: undefined
-											}
-											isPinned={pinnedMessageIds.includes(msg.id)}
-											replyPreview={replyPreview}
-											reactions={getReactionsForMessage(msg.id)}
-											onReply={handleReplyMessage}
-											onPin={handlePinMessage}
-											onDelete={handleDeleteMessage}
-											onEdit={handleEditMessage}
-											onReact={handleReactMessage}
-											onForward={handleForwardMessage}
-										/>
-									</div>
-								)
-							})}
-
-							{/* Typing Indicator */}
-							{isChatTyping && (
-								<div className='flex items-center gap-2 px-5 py-2 animate-in fade-in slide-in-from-bottom-2 duration-300'>
-									<div className='bg-gray-800/80 border border-gray-700 px-4 py-2 rounded-2xl rounded-tl-sm flex items-center gap-1.5'>
-										<span className='w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]'></span>
-										<span className='w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]'></span>
-										<span className='w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce'></span>
-									</div>
-									<span className='text-xs text-gray-500 animate-pulse'>
-										печатает...
-									</span>
+										</>
+									)}
 								</div>
-							)}
-						</div>
+							</div>
+						</>
+					) : (
+						<div className='flex-1 flex flex-col items-center justify-center text-gray-500 gap-6 p-8 relative overflow-hidden'>
+							<div className='absolute inset-0 bg-gradient-to-tr from-blue-900/10 via-transparent to-purple-900/10 pointer-events-none' />
 
-						{/* Input Area */}
-						<div className='p-4 bg-gray-900/40 backdrop-blur-md border-t border-gray-800/50'>
-							{replyToMessage && (
-								<div className='max-w-4xl mx-auto mb-2 flex items-center gap-3 rounded-2xl border border-gray-800/60 bg-gray-800/40 px-4 py-2 text-xs text-gray-200'>
-									<div className='flex-1 min-w-0'>
-										<div className='text-[10px] uppercase tracking-wider text-gray-400'>
-											Ответ на: {getSenderName(replyToMessage)}
-										</div>
-										<div className='truncate text-gray-300'>
-											{getMessagePreview(replyToMessage)}
-										</div>
-									</div>
-									<button
-										onClick={() => setReplyToMessage(null)}
-										className='rounded-full px-2 py-1 text-gray-400 hover:bg-gray-700/60 hover:text-white transition'
-									>
-										✕
-									</button>
-								</div>
-							)}
-							<div
-								className={`max-w-4xl mx-auto flex items-end gap-3 bg-gray-800/50 p-2 rounded-3xl shadow-lg focus-within:ring-2 transition-all duration-300 ${currentBackground.ringColor.replace('focus:', 'focus-within:').replace('/50', '/20')}`}
-							>
-								{isRecording ? (
-									<div className='flex-1 flex items-center justify-between px-4 py-2'>
-										<div className='flex items-center gap-3'>
-											<div className='w-3 h-3 bg-red-500 rounded-full animate-pulse' />
-											<span className='text-white font-mono text-lg'>
-												{formatTime(recordingTime)}
-											</span>
-										</div>
-										<div className='flex items-center gap-2'>
-											<button
-												onClick={handleCancelRecording}
-												className='p-2 text-gray-400 hover:text-red-400 hover:bg-gray-700/50 rounded-full transition-all'
-												title='Отмена'
-											>
-												<StopIcon className='w-6 h-6' />
-											</button>
-											<button
-												onClick={handleSendVoice}
-												className={`p-2 rounded-full transition-all ${currentBackground.buttonBg} ${currentBackground.buttonHover} text-white`}
-												title='Отправить'
-											>
-												<CheckIcon className='w-6 h-6' />
-											</button>
-										</div>
-									</div>
-								) : (
-									<>
-										{/* Attach Button */}
-										<button
-											onClick={handlePickFiles}
-											className={`p-2.5 text-gray-400 hover:bg-gray-700/50 rounded-full transition-all ${currentBackground.accentColor.replace('text-', 'hover:text-')}`}
-										>
-											<PaperclipIcon className='w-5 h-5' />
-										</button>
-										<input
-											ref={fileInputRef}
-											type='file'
-											accept='*/*'
-											multiple
-											onChange={handleFilesSelected}
-											className='hidden'
-										/>
+							<div className='w-32 h-32 rounded-[2rem] bg-gray-900 shadow-2xl flex items-center justify-center border border-gray-800 rotate-12 transition-transform duration-700 hover:rotate-6 group'>
+								<MessageSquareIcon className='w-16 h-16 text-gray-700 group-hover:text-blue-500/50 transition-colors duration-500' />
+							</div>
 
-										{files.length > 0 && (
-											<div className='absolute bottom-full left-0 right-0 mb-2 px-2'>
-												<div className='flex flex-wrap gap-2'>
-													{files.map((f, idx) => (
-														<div
-															key={`${f.name}-${f.size}-${idx}`}
-															className='flex items-center gap-2 rounded-lg border border-gray-700/50 bg-gray-800/40 px-3 py-2 text-xs text-gray-200'
-														>
-															<span className='max-w-[180px] truncate'>
-																{f.name}
-															</span>
-															<button
-																onClick={() => removeFile(idx)}
-																className='rounded-md px-2 py-1 text-gray-400 hover:bg-gray-800 hover:text-white transition-colors'
-																type='button'
-															>
-																✕
-															</button>
-														</div>
-													))}
-												</div>
-											</div>
-										)}
-										{showBotCommandHints && (
-											<div className='absolute bottom-full left-0 right-0 mb-2 px-2'>
-												<div className='rounded-xl border border-gray-700/60 bg-gray-900/95 shadow-xl overflow-hidden'>
-													{filteredBotCommands.map(item => (
-														<button
-															key={item.command}
-															onClick={() => {
-																setInput(
-																	`/${item.command}${
-																		item.command === 'echo' ? ' ' : ''
-																	}`,
-																)
-																messageInputRef.current?.focus()
-															}}
-															className='w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-gray-800 transition-colors flex items-center justify-between gap-3'
-														>
-															<span className='font-medium'>{item.title}</span>
-															<span className='text-xs text-gray-500'>
-																{item.description}
-															</span>
-														</button>
-													))}
-												</div>
-											</div>
-										)}
-
-										{isStickerPickerOpen && (
-											<div
-												ref={stickerPickerRef}
-												className='absolute bottom-full right-20 mb-2 w-80 rounded-xl border border-gray-800 bg-gray-900/95 shadow-xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200'
-											>
-												<div className='px-3 py-2 border-b border-gray-800 text-[10px] font-semibold uppercase tracking-wider text-gray-400'>
-													Стандартные стикеры
-												</div>
-												<div className='p-3 grid grid-cols-4 gap-2 max-h-64 overflow-y-auto custom-scrollbar'>
-													{STICKERS.map(sticker => (
-														<button
-															key={sticker.id}
-															onClick={() => handleSendSticker(sticker.url)}
-															className='rounded-lg bg-gray-800/60 hover:bg-gray-700/60 transition-colors p-1'
-														>
-															<img
-																src={getAttachmentUrl(sticker.url)}
-																alt={sticker.id}
-																className='w-full h-14 object-contain'
-															/>
-														</button>
-													))}
-												</div>
-											</div>
-										)}
-
-										<textarea
-											ref={messageInputRef}
-											value={input}
-											onChange={handleInputChange}
-											onKeyDown={e => {
-												if (e.key === 'Enter' && !e.shiftKey) {
-													e.preventDefault()
-													handleSendMessage()
-												}
-											}}
-											rows={1}
-											className='flex-1 bg-transparent border-none text-white placeholder-gray-500 focus:ring-0 resize-none py-2.5 max-h-32 min-h-[44px] custom-scrollbar'
-											placeholder='Напишите сообщение...'
-											style={{ height: 'auto', minHeight: '44px' }}
-											onInput={e => {
-												const target = e.target as HTMLTextAreaElement
-												target.style.height = 'auto'
-												target.style.height = `${Math.min(target.scrollHeight, 128)}px`
-											}}
-										/>
-
-										{/* Emoji Picker */}
-										{isEmojiPickerOpen && (
-											<div
-												ref={emojiPickerRef}
-												className='absolute bottom-full right-12 mb-2 p-2 bg-gray-900 border border-gray-800 rounded-xl shadow-xl w-64 h-64 overflow-y-auto grid grid-cols-6 gap-1 z-50 custom-scrollbar animate-in fade-in zoom-in-95 duration-200'
-											>
-												{EMOJIS.map(emoji => (
-													<button
-														key={emoji}
-														onClick={() => setInput(prev => prev + emoji)}
-														className='text-xl p-1 hover:bg-gray-800 rounded-md transition-colors'
-													>
-														{emoji}
-													</button>
-												))}
-											</div>
-										)}
-
-										{/* Sticker Button */}
-										<button
-											onClick={() => {
-												setIsStickerPickerOpen(!isStickerPickerOpen)
-												setIsEmojiPickerOpen(false)
-											}}
-											className={`p-2.5 text-gray-400 hover:text-indigo-300 hover:bg-gray-700/50 rounded-full transition-all ${
-												isStickerPickerOpen
-													? 'text-indigo-300 bg-gray-700/50'
-													: ''
-											}`}
-										>
-											<StickerIcon className='w-5 h-5' />
-										</button>
-
-										{/* Emoji Button */}
-										<button
-											onClick={() => {
-												setIsEmojiPickerOpen(!isEmojiPickerOpen)
-												setIsStickerPickerOpen(false)
-											}}
-											className={`p-2.5 text-gray-400 hover:text-yellow-400 hover:bg-gray-700/50 rounded-full transition-all ${
-												isEmojiPickerOpen
-													? 'text-yellow-400 bg-gray-700/50'
-													: ''
-											}`}
-										>
-											<SmileIcon className='w-5 h-5' />
-										</button>
-
-										{/* Send/Mic Button */}
-										{input.trim() ? (
-											<button
-												onClick={handleSendMessage}
-												className={`p-3 rounded-2xl transition-all duration-300 shadow-lg flex items-center justify-center ${currentBackground.buttonBg} ${currentBackground.buttonHover} text-white translate-x-0 rotate-0`}
-											>
-												<SendIcon className='w-5 h-5' />
-											</button>
-										) : (
-											<button
-												onClick={handleStartRecording}
-												className='p-3 rounded-2xl transition-all duration-300 shadow-lg flex items-center justify-center bg-gray-700 hover:bg-gray-600 text-white translate-x-0 rotate-0'
-											>
-												<MicIcon className='w-5 h-5' />
-											</button>
-										)}
-									</>
-								)}
+							<div className='text-center space-y-2 max-w-sm z-10'>
+								<h3 className='text-2xl font-bold text-gray-200'>
+									Вондик Мессенджер
+								</h3>
+								<p className='text-gray-500'>
+									Выберите чат слева или найдите друга, чтобы начать общение.
+								</p>
 							</div>
 						</div>
-					</>
-				) : (
-					<div className='flex-1 flex flex-col items-center justify-center text-gray-500 gap-6 p-8 relative overflow-hidden'>
-						<div className='absolute inset-0 bg-gradient-to-tr from-blue-900/10 via-transparent to-purple-900/10 pointer-events-none' />
-
-						<div className='w-32 h-32 rounded-[2rem] bg-gray-900 shadow-2xl flex items-center justify-center border border-gray-800 rotate-12 transition-transform duration-700 hover:rotate-6 group'>
-							<MessageSquareIcon className='w-16 h-16 text-gray-700 group-hover:text-blue-500/50 transition-colors duration-500' />
-						</div>
-
-						<div className='text-center space-y-2 max-w-sm z-10'>
-							<h3 className='text-2xl font-bold text-gray-200'>
-								Vondic Messenger
-							</h3>
-							<p className='text-gray-500'>
-								Выберите чат слева или найдите друга, чтобы начать общение.
-							</p>
-						</div>
-					</div>
-				)}
+					)}
+				</div>
 			</div>
 
-			{isForwardOpen && forwardMessage && (
+			{isForwardOpen && (forwardMessage || selectedMessageIds.size > 0) && (
 				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
 					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
 						<div className='flex items-center justify-between mb-4'>
 							<h3 className='text-xl font-bold text-white'>
-								Переслать сообщение
+								Переслать {selectedMessageIds.size > 0 ? `${selectedMessageIds.size} сообще${selectedMessageIds.size % 10 === 1 && selectedMessageIds.size % 100 !== 11 ? 'ние' : selectedMessageIds.size % 10 >= 2 && selectedMessageIds.size % 10 <= 4 && (selectedMessageIds.size % 100 < 12 || selectedMessageIds.size % 100 > 14) ? 'ния' : 'ний'}` : 'сообщение'}
 							</h3>
 							<button
 								onClick={() => {
@@ -4861,7 +6294,13 @@ export default function MessengerPage() {
 							{forwardTargets.map(target => (
 								<button
 									key={`${target.kind}-${target.id}`}
-									onClick={() => handleForwardToTarget(target)}
+									onClick={() => {
+										if (selectedMessageIds.size > 0) {
+											handleForwardSelectedMessages(target)
+										} else {
+											handleForwardToTarget(target)
+										}
+									}}
 									className='w-full flex items-center justify-between gap-3 rounded-xl border border-gray-800/60 bg-gray-800/40 px-4 py-3 text-left text-sm text-gray-200 hover:bg-gray-800/70 transition'
 								>
 									<div className='min-w-0'>
@@ -4884,10 +6323,19 @@ export default function MessengerPage() {
 								</div>
 							</div>
 						)}
+						{selectedMessageIds.size > 0 && (
+							<div className='mt-4 rounded-xl border border-gray-800/60 bg-gray-800/30 px-4 py-3 text-xs text-gray-300'>
+								<div className='text-[10px] uppercase tracking-wider text-gray-500 mb-1'>
+									Выбрано сообщений
+								</div>
+								<div>{selectedMessageIds.size} сообще{selectedMessageIds.size % 10 === 1 && selectedMessageIds.size % 100 !== 11 ? 'ние' : selectedMessageIds.size % 10 >= 2 && selectedMessageIds.size % 10 <= 4 && (selectedMessageIds.size % 100 < 12 || selectedMessageIds.size % 100 > 14) ? 'ния' : 'ний'}</div>
+							</div>
+						)}
 					</div>
 				</div>
 			)}
 
+			{/* Modals */}
 			{/* Create Channel Modal */}
 			{isCreateChannelOpen && (
 				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
@@ -5317,9 +6765,7 @@ export default function MessengerPage() {
 				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
 					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
 						<div className='flex items-center justify-between mb-6'>
-							<h3 className='text-xl font-bold text-white'>
-								Код приглашения
-							</h3>
+							<h3 className='text-xl font-bold text-white'>Код приглашения</h3>
 							<button
 								onClick={() => setShowInviteCode(false)}
 								className='p-1 text-gray-400 hover:text-white transition-colors'
@@ -5346,7 +6792,8 @@ export default function MessengerPage() {
 								</div>
 							</div>
 							<p className='text-sm text-gray-400 text-center'>
-								Поделитесь этим кодом с другими пользователями, чтобы они могли вступить в сообщество
+								Поделитесь этим кодом с другими пользователями, чтобы они могли
+								вступить в сообщество
 							</p>
 						</div>
 					</div>
@@ -5378,7 +6825,7 @@ export default function MessengerPage() {
 										{selectedChannel.name}
 									</h4>
 									<p className='text-sm text-gray-500'>
-										{selectedChannel.participants_count} участников
+										{selectedChannel.participants_count && selectedChannel.participants_count > 0 ? `${selectedChannel.participants_count} участников` : ''}
 									</p>
 								</div>
 							</div>
@@ -5417,6 +6864,44 @@ export default function MessengerPage() {
 					</div>
 				</div>
 			)}
+
+			{/* Screen Share Viewer - Fullscreen */}
+			{isScreenViewerOpen && isScreenSharing && (
+				<ScreenShareViewer onClose={() => setIsScreenViewerOpen(false)} />
+			)}
+
+			{/* Integrated Call Panel - shown only when in chat with active call */}
+			{((hasActiveCall && selectedFriend) || activeGroupCallId) && (
+				<IntegratedCallPanel />
+			)}
+
+			{/* Floating Call Bar - Shows when navigating away from 1-on-1 call */}
+			{hasActiveCall && !selectedFriend && !activeGroupCallId && (
+				<FloatingCallBar
+					onReturnToCall={() => {
+						// Return to the chat with the active call
+						const call = Array.from(activeCalls.values()).find(
+							c => !c.isGroupCall,
+						)
+						if (call) {
+							// Find and select the friend
+							const friend = otherFriends.find(f => f.id === call.userId)
+							if (friend) {
+								setSelectedFriend(friend)
+							}
+						}
+					}}
+				/>
+			)}
+
+			{/* Hidden file input for sticker upload */}
+			<input
+				ref={stickerUploadRef}
+				type='file'
+				accept='image/png,image/jpeg,image/webp'
+				onChange={handleStickerFileChange}
+				className='hidden'
+			/>
 		</div>
 	)
 }

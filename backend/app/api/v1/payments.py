@@ -17,18 +17,17 @@ COINS_PRICING = {
     2000: 15000,
 }
 
-
 @payments_bp.route("/create-checkout-session", methods=["POST"])
 def create_checkout_session():
     data = request.get_json()
     user_id = data.get("user_id")
 
     if not user_id:
-        return jsonify({"error": "Missing user_id"}), 400
+        return jsonify({"error": "Отсутствует user_id"}), 400
 
     user = User.query.get(user_id)
     if not user:
-        return jsonify({"error": "User not found"}), 404
+        return jsonify({"error": "Пользователь не найден"}), 404
 
     try:
         checkout_session = stripe.checkout.Session.create(
@@ -48,7 +47,6 @@ def create_checkout_session():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @payments_bp.route("/create-payment-session", methods=["POST"])
 def create_payment_session():
     data = request.get_json()
@@ -60,13 +58,13 @@ def create_payment_session():
     metadata = data.get("metadata") or {}
 
     if not buyer_id:
-        return jsonify({"error": "Missing buyer_id"}), 400
+        return jsonify({"error": "Отсутствует buyer_id"}), 400
     if not isinstance(items, list) or len(items) == 0:
-        return jsonify({"error": "items must be a non-empty array"}), 400
+        return jsonify({"error": "items должен быть непустым массивом"}), 400
 
     user = User.query.get(buyer_id)
     if not user:
-        return jsonify({"error": "User not found"}), 404
+        return jsonify({"error": "Пользователь не найден"}), 404
 
     try:
         line_items = []
@@ -76,7 +74,7 @@ def create_payment_session():
             currency = it.get("currency", "rub")
             quantity = int(it.get("quantity", 1))
             if not name or not amount or amount <= 0 or quantity <= 0:
-                return jsonify({"error": "Invalid item in items"}), 400
+                return jsonify({"error": "Неверный элемент в items"}), 400
             line_items.append(
                 {
                     "price_data": {
@@ -103,7 +101,6 @@ def create_payment_session():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @payments_bp.route("/create-coins-session", methods=["POST"])
 def create_coins_session():
     data = request.get_json() or {}
@@ -115,10 +112,10 @@ def create_coins_session():
         "success_url") or "http://localhost:3000/shop/success"
     cancel_url = data.get("cancel_url") or "http://localhost:3000/shop/cancel"
     if not buyer_id or coins <= 0 or amount <= 0:
-        return jsonify({"error": "Invalid parameters"}), 400
+        return jsonify({"error": "Неверные параметры"}), 400
     user = User.query.get(buyer_id)
     if not user:
-        return jsonify({"error": "User not found"}), 404
+        return jsonify({"error": "Пользователь не найден"}), 404
     try:
         checkout_session = stripe.checkout.Session.create(
             client_reference_id=buyer_id,
@@ -144,40 +141,38 @@ def create_coins_session():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @payments_bp.route("/confirm-coins", methods=["POST"])
 def confirm_coins():
     data = request.get_json() or {}
     session_id = data.get("session_id")
     if not session_id:
-        return jsonify({"error": "Missing session_id"}), 400
+        return jsonify({"error": "Отсутствует session_id"}), 400
     try:
         session = stripe.checkout.Session.retrieve(session_id)
         if not session:
-            return jsonify({"error": "Session not found"}), 404
+            return jsonify({"error": "Сессия не найдена"}), 404
         if session.get("mode") != "payment" or session.get(
                 "payment_status") != "paid":
-            return jsonify({"error": "Payment not completed"}), 400
+            return jsonify({"error": "Платёж не завершён"}), 400
         buyer_id = session.get("client_reference_id")
         metadata = session.get("metadata") or {}
         if metadata.get("type") != "coins":
-            return jsonify({"error": "Invalid session type"}), 400
+            return jsonify({"error": "Неверный тип сессии"}), 400
         coins_str = metadata.get("coins") or "0"
         try:
             coins_val = int(coins_str)
         except Exception:
             coins_val = 0
         if not buyer_id or coins_val <= 0:
-            return jsonify({"error": "Invalid session data"}), 400
+            return jsonify({"error": "Неверные данные сессии"}), 400
         user = User.query.get(buyer_id)
         if not user:
-            return jsonify({"error": "User not found"}), 404
+            return jsonify({"error": "Пользователь не найден"}), 404
         user.balance = (user.balance or 0) + coins_val
         db.session.commit()
         return jsonify({"success": True, "balance": user.balance})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 @payments_bp.route("/webhook", methods=["POST"])
 def stripe_webhook():
@@ -189,16 +184,18 @@ def stripe_webhook():
         event = stripe.Webhook.construct_event(
             payload, sig_header, endpoint_secret)
     except ValueError:
-        return "Invalid payload", 400
+        return "Неверные данные", 400
     except stripe.error.SignatureVerificationError:
-        return "Invalid signature", 400
+        return "Неверная подпись", 400
 
-    if event["type"] == "checkout.session.completed":
-        session = event["data"]["object"]
-        handle_checkout_session(session)
+    if event.get("type") == "checkout.session.completed":
+        session = event.get("data", {}).get("object", {})
+        try:
+            handle_checkout_session(session)
+        except Exception as e:
+            print(f"Webhook error: {e}")
 
     return jsonify(success=True)
-
 
 def handle_checkout_session(session):
     user_id = session.get("client_reference_id")

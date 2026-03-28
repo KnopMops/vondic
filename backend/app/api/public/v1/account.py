@@ -7,7 +7,6 @@ public_account_bp = Blueprint(
     "public_account", __name__, url_prefix="/api/public/v1/account"
 )
 
-
 @public_account_bp.route("/developer/toggle", methods=["POST"])
 @token_required
 def toggle_developer(current_user):
@@ -18,7 +17,6 @@ def toggle_developer(current_user):
         return jsonify({"error": error}), 400
     return jsonify({"user": user_schema.dump(user)}), 200
 
-
 @public_account_bp.route("/api-key", methods=["POST"])
 @token_required
 def generate_api_key(current_user):
@@ -28,7 +26,6 @@ def generate_api_key(current_user):
     if error:
         return jsonify({"error": error}), 400
     return jsonify({"api_key": token}), 200
-
 
 @public_account_bp.route("/api-key", methods=["GET"])
 @token_required

@@ -5,7 +5,6 @@ from app.models.bot import Bot
 from sqlalchemy import or_
 from werkzeug.security import check_password_hash, generate_password_hash
 
-
 class BotService:
     @staticmethod
     def get_all_bots():

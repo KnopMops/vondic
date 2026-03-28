@@ -16,12 +16,10 @@ LIMIT_PREMIUM = 100 * 1024 * 1024
 
 THROTTLE_SPEED_BPS = 1_750_000
 
-
 def _get_extension(filename: str) -> str | None:
     if not filename or "." not in filename:
         return None
     return filename.rsplit(".", 1)[1].lower()
-
 
 def _decode_base64(data: str, max_size: int = None) -> bytes:
     if not isinstance(data, str) or not data:
@@ -34,7 +32,6 @@ def _decode_base64(data: str, max_size: int = None) -> bytes:
             f"File too large. Limit is {max_size // (1024 * 1024)} MB")
     return decoded
 
-
 def _save_upload(file_bytes: bytes, ext: str, subdir: str) -> str:
     unique_filename = f"{uuid.uuid4()}.{ext}"
     upload_folder = os.path.join(
@@ -45,14 +42,9 @@ def _save_upload(file_bytes: bytes, ext: str, subdir: str) -> str:
         f.write(file_bytes)
     return f"/static/uploads/{subdir}/{unique_filename}"
 
-
 @upload_bp.route("/voice", methods=["POST"])
 @token_required
 def upload_voice(current_user):
-    """
-    Загрузка голосового сообщения
-    ...
-    """
     try:
         data = request.get_json()
         if not data:
@@ -106,49 +98,9 @@ def upload_voice(current_user):
     except Exception as e:
         return jsonify({"message": f"Upload failed: {str(e)}"}), 500
 
-
 @upload_bp.route("/file", methods=["POST"])
 @token_required
 def upload_file(current_user):
-    """
-    Загрузка вложения (файл) через JSON body
-    ---\n
-    tags:\n
-      - Upload\n
-    parameters:\n
-      - name: body\n
-        in: body\n
-        required: true\n
-        schema:\n
-          type: object\n
-          properties:\n
-            access_token:\n
-              type: string\n
-              description: Токен доступа\n
-            file:\n
-              type: string\n
-              format: base64\n
-              description: Файл в base64 или DataURL (data:*;base64,...)\n
-            filename:\n
-              type: string\n
-              description: Имя файла с расширением\n
-    responses:\n
-      201:\n
-        description: Файл успешно загружен\n
-        schema:\n
-          type: object\n
-          properties:\n
-            url:\n
-              type: string\n
-            original_filename:\n
-              type: string\n
-            size_bytes:\n
-              type: integer\n
-            ext:\n
-              type: string\n
-      400:\n
-        description: Ошибка валидации\n
-    """
     data = request.get_json()
     if not data:
         return jsonify({"error": "No data provided"}), 400
@@ -198,7 +150,6 @@ def upload_file(current_user):
     except Exception as e:
         return jsonify({"error": f"Failed to process file: {str(e)}"}), 400
 
-
 @upload_bp.route("/video", methods=["POST"])
 @token_required
 def upload_video(current_user):
@@ -225,6 +176,8 @@ def upload_video(current_user):
             time.sleep(delay)
 
         file_url = _save_upload(file_bytes, ext, "video")
+
+        print(f"Video uploaded: {file_url} -> {os.path.join(current_app.root_path, file_url.lstrip('/'))}")
 
         current_user.disk_usage += file_size
         from app.core.extensions import db

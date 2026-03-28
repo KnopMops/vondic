@@ -1,8 +1,3 @@
-"""
-Vondic API Client Library
-
-A Python library for interacting with the Vondic Social Network Public API.
-"""
 
 from .client import VondicClient
 from .exceptions import AuthenticationError, VondicAPIException

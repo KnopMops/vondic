@@ -20,7 +20,6 @@ OUTBOX_COUNTERS = defaultdict(int)
 QUEUE_LOCK = Lock()
 OUTBOX_LOCK = Lock()
 
-
 def _get_bot_token():
     auth = request.headers.get("Authorization") or ""
     if auth.startswith("Bot "):
@@ -30,7 +29,6 @@ def _get_bot_token():
         return header_token.strip()
     return None
 
-
 def _verify_bot_token(bot_id):
     token = _get_bot_token()
     if not token:
@@ -39,12 +37,10 @@ def _verify_bot_token(bot_id):
         return None, (jsonify({"error": "Invalid bot token"}), 401)
     return token, None
 
-
 @public_bots_bp.route("/", methods=["GET"])
 def list_public_bots():
     bots = BotService.get_active_bots()
     return jsonify(bots_schema.dump(bots)), 200
-
 
 @public_bots_bp.route("/<bot_id>", methods=["GET"])
 def get_public_bot(bot_id):
@@ -53,14 +49,12 @@ def get_public_bot(bot_id):
         return jsonify({"error": "Bot not found"}), 404
     return jsonify(bot_schema.dump(bot)), 200
 
-
 @public_bots_bp.route("/by-name/<name>", methods=["GET"])
 def get_public_bot_by_name(name):
     bot = BotService.get_active_bot_by_name(name)
     if not bot:
         return jsonify({"error": "Bot not found"}), 404
     return jsonify(bot_schema.dump(bot)), 200
-
 
 @public_bots_bp.route("/search", methods=["POST"])
 def search_public_bots():
@@ -71,7 +65,6 @@ def search_public_bots():
     bots = BotService.search_active_bots(query)
     return jsonify(bots_schema.dump(bots)), 200
 
-
 @public_bots_bp.route("/<bot_id>/token", methods=["POST"])
 @api_key_required
 def generate_public_bot_token(current_user, bot_id):
@@ -79,7 +72,6 @@ def generate_public_bot_token(current_user, bot_id):
     if error:
         return jsonify({"error": error}), 400
     return jsonify({"bot_token": token}), 200
-
 
 @public_bots_bp.route("/<bot_id>/updates", methods=["GET"])
 def get_bot_updates(bot_id):
@@ -130,7 +122,6 @@ def get_bot_updates(bot_id):
             )
             return jsonify({"items": []}), 200
         time.sleep(0.2)
-
 
 @public_bots_bp.route("/<bot_id>/updates/push", methods=["POST"])
 def push_bot_update(bot_id):
@@ -183,7 +174,6 @@ def push_bot_update(bot_id):
     )
     return jsonify({"ok": True, "update_id": update_id}), 200
 
-
 @public_bots_bp.route("/<bot_id>/send", methods=["POST"])
 def send_bot_message(bot_id):
     _, error_response = _verify_bot_token(bot_id)
@@ -193,6 +183,7 @@ def send_bot_message(bot_id):
     data = request.get_json() or {}
     chat_id = data.get("chat_id")
     text = data.get("text")
+    reply_markup = data.get("reply_markup")  # Inline keyboard buttons
     if not chat_id:
         logger.info("bot_send_missing_chat_id bot_id=%s", bot_id)
         return jsonify({"error": "chat_id is required"}), 400
@@ -202,14 +193,16 @@ def send_bot_message(bot_id):
     with OUTBOX_LOCK:
         OUTBOX_COUNTERS[bot_id] += 1
         message_id = OUTBOX_COUNTERS[bot_id]
-        OUTBOX_QUEUES[bot_id].append(
-            {
-                "message_id": str(message_id),
-                "chat_id": str(chat_id),
-                "text": text,
-                "date": int(time.time()),
-            }
-        )
+        message_data = {
+            "message_id": str(message_id),
+            "chat_id": str(chat_id),
+            "text": text,
+            "date": int(time.time()),
+        }
+        # Add reply_markup if present (for inline buttons)
+        if reply_markup:
+            message_data["reply_markup"] = reply_markup
+        OUTBOX_QUEUES[bot_id].append(message_data)
     logger.info(
         "bot_send_queued bot_id=%s message_id=%s chat_id=%s",
         bot_id,
@@ -217,3 +210,79 @@ def send_bot_message(bot_id):
         chat_id,
     )
     return jsonify({"ok": True, "chat_id": str(chat_id), "text": text}), 200
+
+@public_bots_bp.route("/<bot_id>/callback", methods=["POST"])
+def handle_bot_callback(bot_id):
+    """Handle inline keyboard button callbacks"""
+    # Skip token verification for callbacks (logging only)
+    data = request.get_json() or {}
+    message_id = data.get("message_id")
+    callback_data = data.get("data")
+    user_id = data.get("user_id")
+    chat_id = data.get("chat_id") or user_id
+    
+    logger.info(
+        "bot_callback_received bot_id=%s message_id=%s data=%s user_id=%s chat_id=%s",
+        bot_id,
+        message_id,
+        callback_data,
+        user_id,
+        chat_id,
+    )
+    
+    # Send acknowledgment message based on callback_data
+    if callback_data:
+        # Import here to avoid circular imports
+        from app.api.public.v1.bots import OUTBOX_LOCK, OUTBOX_QUEUES, OUTBOX_COUNTERS, QUEUE_LOCK, UPDATE_QUEUES, UPDATE_COUNTERS
+        import time
+        
+        # 1. Send outbox message (as acknowledgment)
+        with OUTBOX_LOCK:
+            OUTBOX_COUNTERS[bot_id] += 1
+            callback_message_id = OUTBOX_COUNTERS[bot_id]
+            
+            # Create response message based on callback
+            response_text = f"Вы нажали: {callback_data}"
+            if callback_data == "register":
+                response_text = "✅ Переход к регистрации..."
+            elif callback_data == "restore":
+                response_text = "🔄 Восстановление ключа..."
+            elif callback_data == "buy_premium_tg":
+                response_text = "💎 Оформление Premium..."
+            elif callback_data == "buy_coins":
+                response_text = "💰 Покупка монет..."
+            
+            OUTBOX_QUEUES[bot_id].append({
+                "message_id": str(callback_message_id),
+                "chat_id": str(chat_id),
+                "text": response_text,
+                "date": int(time.time()),
+            })
+
+        # 2. Push update for the bot service (so it can handle the callback)
+        with QUEUE_LOCK:
+            UPDATE_COUNTERS[bot_id] += 1
+            update_id = UPDATE_COUNTERS[bot_id]
+            
+            update = {
+                "update_id": str(update_id),
+                "callback_query": {
+                    "id": str(update_id),
+                    "from": {"id": str(user_id)},
+                    "message": {
+                        "message_id": str(message_id),
+                        "chat": {"id": str(chat_id)}
+                    },
+                    "data": callback_data
+                }
+            }
+            UPDATE_QUEUES[bot_id].append(update)
+        
+        logger.info(
+            "bot_callback_processed bot_id=%s chat_id=%s update_id=%s",
+            bot_id,
+            chat_id,
+            update_id
+        )
+    
+    return jsonify({"ok": True}), 200

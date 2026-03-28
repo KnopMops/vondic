@@ -4,12 +4,29 @@ import { getBackendUrl } from '@/lib/server-urls'
 
 export async function POST(req: NextRequest) {
 	try {
-		const token = await getAccessToken(req)
+		const body = await req.json().catch(() => ({}))
+		
+		// Сначала пробуем взять токен из тела запроса
+		let token = body?.access_token
+		
+		// Если нет в теле, пробуем получить из cookie/header
 		if (!token) {
-			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+			token = await getAccessToken(req)
+		}
+		
+		// Если нет в cookie, пробуем из Authorization header
+		if (!token) {
+			const authHeader = req.headers.get('authorization') || ''
+			if (authHeader.startsWith('Bearer ')) {
+				token = authHeader.slice(7).trim()
+			}
+		}
+		
+		if (!token) {
+			console.error('[Bots Search] No access token found')
+			return NextResponse.json({ error: 'access_token is missing' }, { status: 401 })
 		}
 
-		const body = await req.json().catch(() => ({}))
 		const backendUrl = getBackendUrl()
 		const payload = { ...body, access_token: token }
 

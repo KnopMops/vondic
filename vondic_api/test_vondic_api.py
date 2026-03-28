@@ -1,6 +1,3 @@
-"""
-Basic tests for the Vondic API Client Library.
-"""
 from unittest.mock import Mock, patch
 
 import pytest
@@ -8,18 +5,14 @@ import pytest
 from vondic_api import Post, User, VondicClient
 from vondic_api.exceptions import AuthenticationError, VondicAPIException
 
-
 def test_client_initialization():
-    """Test client initialization."""
     client = VondicClient(api_key="test_key")
     assert client.api_key == "test_key"
     assert client.base_url == "https://api.vondic.com/api/public/v1"
     assert client.session.headers["Authorization"] == "Bearer test_key"
 
-
 @patch('requests.Session.request')
 def test_get_current_user(mock_request):
-    """Test getting current user."""
     mock_response = Mock()
     mock_response.status_code = 200
     mock_response.json.return_value = {
@@ -40,10 +33,8 @@ def test_get_current_user(mock_request):
     assert user.id == '123'
     assert user.username == 'testuser'
 
-
 @patch('requests.Session.request')
 def test_create_post(mock_request):
-    """Test creating a post."""
     mock_response = Mock()
     mock_response.status_code = 200
     mock_response.json.return_value = {
@@ -64,10 +55,8 @@ def test_create_post(mock_request):
     assert post.id == '456'
     assert post.content == 'Test post content'
 
-
 @patch('requests.Session.request')
 def test_authentication_error(mock_request):
-    """Test authentication error handling."""
     mock_response = Mock()
     mock_response.status_code = 401
     mock_request.return_value = mock_response
@@ -77,10 +66,8 @@ def test_authentication_error(mock_request):
     with pytest.raises(AuthenticationError):
         client.get_current_user()
 
-
 @patch('requests.Session.request')
 def test_api_error(mock_request):
-    """Test general API error handling."""
     mock_response = Mock()
     mock_response.status_code = 400
     mock_response.text = "Bad Request"
@@ -90,7 +77,6 @@ def test_api_error(mock_request):
 
     with pytest.raises(VondicAPIException):
         client.get_current_user()
-
 
 if __name__ == "__main__":
     pytest.main([__file__])

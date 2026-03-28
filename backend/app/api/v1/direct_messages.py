@@ -2,22 +2,44 @@ from app.core.extensions import db
 from app.schemas.message_schema import message_schema, messages_schema
 from app.services.message_service import MessageService
 from app.utils.decorators import token_required
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, make_response, request
 
 dm_bp = Blueprint("direct_messages", __name__, url_prefix="/api/v1/dm")
 
+@dm_bp.route("/recent", methods=["GET", "OPTIONS"])
+def get_recent_contacts():
+    from app.services.auth_service import AuthService
+    
+    # Handle CORS preflight first (before auth check)
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.headers.add("Access-Control-Allow-Origin", "https://vondic.knopusmedia.ru")
+        response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
+        response.headers.add("Access-Control-Allow-Methods", "GET,OPTIONS")
+        response.headers.add("Access-Control-Allow-Credentials", "true")
+        return response
 
-@dm_bp.route("/recent", methods=["GET"])
-@token_required
-def get_recent_contacts(current_user):
+    # For GET, require authentication
+    token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
+    if not token:
+        return jsonify({"error": "Требуется авторизация"}), 401
+    
+    current_user, error = AuthService.get_user_by_token(token)
+    if error or not current_user:
+        return jsonify({"error": "Не авторизовано"}), 401
+
     limit = request.args.get("limit", 30, type=int)
     if limit < 1:
         limit = 1
     if limit > 100:
         limit = 100
     contacts = MessageService.get_recent_contacts(current_user.id, limit=limit)
-    return jsonify({"items": contacts}), 200
-
+    response = make_response(jsonify({"items": contacts}), 200)
+    response.headers.add("Access-Control-Allow-Origin", "https://vondic.knopusmedia.ru")
+    response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
+    response.headers.add("Access-Control-Allow-Methods", "GET,OPTIONS")
+    response.headers.add("Access-Control-Allow-Credentials", "true")
+    return response
 
 @dm_bp.route("/<target_id>/messages", methods=["POST"])
 @token_required
@@ -36,7 +58,6 @@ def send_dm(current_user, target_id):
         OllamaService.process_message_async(message.id, is_dm=True)
 
     return jsonify(message_schema.dump(message)), 201
-
 
 @dm_bp.route("/<target_id>/messages", methods=["GET"])
 @token_required
@@ -69,12 +90,29 @@ def get_dm_history(current_user, target_id):
         }
     ), 200
 
-
-@dm_bp.route("/<target_id>/messages/<message_id>", methods=["DELETE"])
-@token_required
-def delete_message(current_user, target_id, message_id):
-    # Check if message belongs to this conversation
+@dm_bp.route("/<target_id>/messages/<message_id>", methods=["DELETE", "OPTIONS"])
+def delete_message(target_id, message_id):
+    from app.services.auth_service import AuthService
     from app.models.message import Message
+    
+    # Handle CORS preflight first (before auth check)
+    if request.method == "OPTIONS":
+        response = make_response()
+        response.headers.add("Access-Control-Allow-Origin", "https://vondic.knopusmedia.ru")
+        response.headers.add("Access-Control-Allow-Methods", "DELETE, OPTIONS")
+        response.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        response.headers.add("Access-Control-Allow-Credentials", "true")
+        return response, 200
+
+    # For DELETE, require authentication
+    token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
+    if not token:
+        return jsonify({"error": "Требуется авторизация"}), 401
+    
+    current_user, error = AuthService.get_user_by_token(token)
+    if error or not current_user:
+        return jsonify({"error": "Не авторизовано"}), 401
+
     message = Message.query.filter(
         Message.id == message_id,
         (((Message.sender_id == current_user.id) & (
@@ -83,15 +121,19 @@ def delete_message(current_user, target_id, message_id):
                 Message.target_id == current_user.id)))).first()
 
     if not message:
-        return jsonify({"error": "Message not found"}), 404
+        return jsonify({"error": "Сообщение не найдено"}), 404
 
     if str(message.sender_id) != str(current_user.id):
-        return jsonify({"error": "Forbidden"}), 403
+        return jsonify({"error": "Доступ запрещён"}), 403
 
-    # Mark message as deleted
     message.content = "Сообщение удалено"
     message.attachments = []
     message.is_deleted = True
     db.session.commit()
 
-    return jsonify({"message": "Message deleted successfully"}), 200
+    response = make_response(jsonify({"message": "Сообщение успешно удалено"}), 200)
+    response.headers.add("Access-Control-Allow-Origin", "https://vondic.knopusmedia.ru")
+    response.headers.add("Access-Control-Allow-Methods", "DELETE, OPTIONS")
+    response.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization")
+    response.headers.add("Access-Control-Allow-Credentials", "true")
+    return response

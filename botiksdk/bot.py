@@ -1,7 +1,57 @@
 import logging
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 from botiksdk.client import PublicAPIClient
+
+
+class InlineKeyboardBuilder:
+    """Builder for inline keyboard markup"""
+
+    def __init__(self):
+        self._rows: List[List[Dict[str, Any]]] = []
+        self._current_row: List[Dict[str, Any]] = []
+
+    def row(self, *buttons: "InlineKeyboardButton") -> "InlineKeyboardBuilder":
+        """Add a row of buttons"""
+        if self._current_row:
+            self._rows.append(self._current_row)
+            self._current_row = []
+        for btn in buttons:
+            self._current_row.append(btn.to_dict())
+        return self
+
+    def add(self, button: "InlineKeyboardButton") -> "InlineKeyboardBuilder":
+        """Add a button to the current row"""
+        self._current_row.append(button.to_dict())
+        return self
+
+    def as_markup(self) -> Dict[str, Any]:
+        """Build the inline keyboard markup"""
+        if self._current_row:
+            self._rows.append(self._current_row)
+        return {"inline_keyboard": self._rows}
+
+
+class InlineKeyboardButton:
+    """Inline keyboard button"""
+
+    def __init__(
+        self,
+        text: str,
+        callback_data: Optional[str] = None,
+        url: Optional[str] = None,
+    ):
+        self.text = text
+        self.callback_data = callback_data
+        self.url = url
+
+    def to_dict(self) -> Dict[str, Any]:
+        result = {"text": self.text}
+        if self.callback_data:
+            result["callback_data"] = self.callback_data
+        if self.url:
+            result["url"] = self.url
+        return result
 
 
 class Bot:
@@ -51,12 +101,75 @@ class Bot:
             timeout=timeout,
         )
 
-    def send_message(self, chat_id: str, text: str):
+    def send_message(
+        self,
+        chat_id: str,
+        text: str,
+        parse_mode: Optional[str] = None,
+        reply_markup: Optional[Dict[str, Any]] = None,
+    ):
         self._ensure_ready()
-        logging.getLogger(__name__).info(
-            "botiksdk_send_message bot_id=%s chat_id=%s text=%s",
+        logger = logging.getLogger(__name__)
+        logger.info(
+            "botiksdk_send_message bot_id=%s chat_id=%s text=%s reply_markup=%s",
             self.bot_id,
             chat_id,
             text,
+            reply_markup is not None,
         )
-        return self.public.send_message(self.bot_id, self.token, chat_id, text)
+        result = self.public.send_message(
+            self.bot_id,
+            self.token,
+            chat_id,
+            text,
+            parse_mode=parse_mode,
+            reply_markup=reply_markup,
+        )
+        logger.info("botiksdk_send_message_result bot_id=%s result=%s", self.bot_id, result)
+        return result
+
+    def answer_callback_query(
+        self,
+        callback_query_id: str,
+        text: Optional[str] = None,
+        show_alert: bool = False,
+    ):
+        self._ensure_ready()
+        return self.public.answer_callback_query(
+            self.bot_id,
+            self.token,
+            callback_query_id,
+            text=text,
+            show_alert=show_alert,
+        )
+
+    async def get_user_profile_photos(self, user_id: str, limit: int = 1):
+        """Get user profile photos (returns mock data for local development)"""
+        self._ensure_ready()
+        try:
+            result = self.public.get_user_profile_photos(
+                self.bot_id,
+                self.token,
+                user_id,
+                offset=0,
+                limit=limit,
+            )
+            return result
+        except Exception:
+            # Return mock data for local development
+            return {
+                "total_count": 0,
+                "photos": [],
+            }
+
+    async def get_file(self, file_id: str):
+        """Get file by ID (returns mock data for local development)"""
+        self._ensure_ready()
+        try:
+            return self.public.get_file(self.bot_id, self.token, file_id)
+        except Exception:
+            # Return mock data for local development
+            return {
+                "file_id": file_id,
+                "file_path": "",
+            }

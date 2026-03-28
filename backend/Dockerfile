@@ -1,22 +1,27 @@
-# Используем официальный образ Python (slim-версия для меньшего размера)
 FROM python:3.13-slim
 
-# Устанавливаем рабочую директорию внутри контейнера
 WORKDIR /app
 
-# Копируем файл с зависимостями и устанавливаем их
-COPY webrtc.requirements.txt .
-RUN pip install --no-cache-dir -r webrtc.requirements.txt
+# Копируем общий файл зависимостей и устанавливаем их
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Копируем остальные файлы приложения
-COPY . .
+# Копируем код бэкенда в подпапку /app/backend
+COPY backend/ /app/backend/
 
-# (Рекомендуется) Создаём непривилегированного пользователя и переключаемся на него
+# Создаём непривилегированного пользователя
 RUN useradd --create-home appuser
+
+# Создаём директорию для загрузок и даём права пользователю
+RUN mkdir -p /app/backend/app/static/uploads && \
+    chown -R appuser:appuser /app/backend/app/static/uploads
+
 USER appuser
 
-# Указываем порт, который будет слушать контейнер
+# Переходим в папку с кодом
+WORKDIR /app/backend
+
 EXPOSE 5050
 
-# Запускаем Flask-приложение через Uvicorn с WSGI-интерфейсом
-CMD ["python", "backend/run.py"]
+# Запускаем приложение (файл run.py теперь лежит в /app/backend)
+CMD ["python", "run.py"]

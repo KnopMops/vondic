@@ -5,7 +5,6 @@ import time
 
 from .config import PROXY_RECEIVER_VERSION, ProxyConfig, ProxyStats
 
-
 def format_bytes(value: int) -> str:
     units = ["B", "KB", "MB", "GB", "TB"]
     size = float(value)
@@ -15,14 +14,11 @@ def format_bytes(value: int) -> str:
         size /= 1024
     return f"{size:.2f} TB"
 
-
 def color(text: str, code: str) -> str:
     return f"\033[{code}m{text}\033[0m"
 
-
 def strip_ansi(text: str) -> str:
     return re.sub(r"\x1b\[[0-9;]*m", "", text)
-
 
 def draw_box(lines: list[str], width: int) -> str:
     top = "┌" + "─" * (width - 2) + "┐"
@@ -38,7 +34,6 @@ def draw_box(lines: list[str], width: int) -> str:
         body.append("│" + line + " " * padding + "│")
     return "\n".join([top] + body + [bottom])
 
-
 def combine_panels(left: str, right: str, gap: int = 4) -> str:
     left_lines = left.splitlines()
     right_lines = right.splitlines()
@@ -53,7 +48,6 @@ def combine_panels(left: str, right: str, gap: int = 4) -> str:
     for left, right in zip(left_lines, right_lines):
         rows.append(left + " " * gap + right)
     return "\n".join(rows)
-
 
 async def tui_loop(config: ProxyConfig, stats: ProxyStats) -> None:
     last_time = time.time()

@@ -58,7 +58,7 @@ export default function RightPanel() {
 								<Zap className='w-5 h-5 text-white fill-current' />
 							</div>
 							<h3 className='text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-amber-200 via-yellow-400 to-amber-500 drop-shadow-sm'>
-								Vondic Premium
+								Вондик Premium
 							</h3>
 						</div>
 

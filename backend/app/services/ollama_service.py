@@ -13,7 +13,6 @@ AI_USERNAME = "Vondic AI"
 AI_EMAIL = "ai@vondic.com"
 logger = logging.getLogger(__name__)
 
-
 class OllamaService:
     @staticmethod
     def get_ai_user():

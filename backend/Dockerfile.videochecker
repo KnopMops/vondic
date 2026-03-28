@@ -1,0 +1,25 @@
+FROM python:3.13-slim
+
+WORKDIR /app
+
+# Копируем общий файл зависимостей и устанавливаем их
+COPY requirements_a.txt .
+RUN pip install --no-cache-dir -r requirements_a.txt
+
+# Копируем код бэкенда в подпапку /app/backend
+COPY backend/ /app/backend/
+
+# Создаём непривилегированного пользователя
+RUN useradd --create-home appuser
+
+# Создаём директорию для загрузок и даём права пользователю
+RUN mkdir -p /app/backend/app/static/uploads && \
+    chown -R appuser:appuser /app/backend/app/static/uploads
+
+USER appuser
+
+# Переходим в папку с кодом
+WORKDIR /app/backend
+
+# Запускаем video_check_worker
+CMD ["python", "video_check_worker.py"]

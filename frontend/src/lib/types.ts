@@ -22,6 +22,7 @@ export interface User {
 	socket_id?: string | null
 	status?: string
 	premium?: boolean
+	premium_expired_at?: string | Date
 	balance?: number
 	gifts?: GiftItem[]
 	disk_usage?: number
@@ -40,6 +41,7 @@ export interface User {
 	video_likes?: string[]
 	video_watch_later?: string[]
 	video_history?: { video_id: string; last_watched_at?: string; position?: number }[]
+	pinned_chats?: string[] // Array of user_ids or group_ids
 }
 
 export interface GiftItem {
@@ -109,4 +111,16 @@ export interface Message {
 	type?: 'text' | 'voice' | 'image' | 'file'
 	attachments?: Attachment[] | string
 	is_deleted?: boolean
+	forwarded_from?: {
+		sender_id: string
+		sender_name: string
+		sender_avatar?: string | null
+	}
+	reply_markup?: {
+		inline_keyboard: Array<Array<{
+			text: string
+			callback_data?: string
+			url?: string
+		}>>
+	}
 }

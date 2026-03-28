@@ -1,16 +1,9 @@
-"""
-Data models for the Vondic API Client Library.
-"""
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-
 @dataclass
 class User:
-    """
-    Represents a user in the Vondic Social Network.
-    """
     id: str
     username: str
     first_name: Optional[str] = None
@@ -27,7 +20,6 @@ class User:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'User':
-        """Create a User instance from a dictionary."""
         return cls(
             id=data.get('id'),
             username=data.get('username'),
@@ -47,7 +39,6 @@ class User:
         )
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert the User instance to a dictionary."""
         return {
             'id': self.id,
             'username': self.username,
@@ -63,12 +54,8 @@ class User:
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None}
 
-
 @dataclass
 class Post:
-    """
-    Represents a post in the Vondic Social Network.
-    """
     id: str
     content: str
     user_id: str
@@ -85,7 +72,6 @@ class Post:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Post':
-        """Create a Post instance from a dictionary."""
         user_data = data.get('user')
         user = User.from_dict(user_data) if user_data else None
 
@@ -108,7 +94,6 @@ class Post:
         )
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert the Post instance to a dictionary."""
         return {
             'id': self.id,
             'content': self.content,
@@ -124,12 +109,8 @@ class Post:
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None}
 
-
 @dataclass
 class Message:
-    """
-    Represents a message in the Vondic Social Network.
-    """
     id: str
     sender_id: str
     recipient_id: str
@@ -144,7 +125,6 @@ class Message:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Message':
-        """Create a Message instance from a dictionary."""
         sender_data = data.get('sender')
         recipient_data = data.get('recipient')
 
@@ -168,7 +148,6 @@ class Message:
         )
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert the Message instance to a dictionary."""
         return {
             'id': self.id,
             'sender_id': self.sender_id,
@@ -182,12 +161,8 @@ class Message:
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None}
 
-
 @dataclass
 class Comment:
-    """
-    Represents a comment in the Vondic Social Network.
-    """
     id: str
     content: str
     post_id: str
@@ -202,7 +177,6 @@ class Comment:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Comment':
-        """Create a Comment instance from a dictionary."""
         user_data = data.get('user')
         post_data = data.get('post')
 
@@ -226,7 +200,6 @@ class Comment:
         )
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert the Comment instance to a dictionary."""
         return {
             'id': self.id,
             'content': self.content,

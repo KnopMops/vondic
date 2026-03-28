@@ -14,7 +14,6 @@ from .proxy import ConnectionBroker
 
 logger = logging.getLogger(__name__)
 
-
 class SignalingService:
     def __init__(self, socket_server, broker: ConnectionBroker):
         self.io = socket_server
@@ -30,9 +29,8 @@ class SignalingService:
         self._bind_events()
 
     def _load_existing_interactions(self):
-        """Load existing pinned messages and reactions from database"""
         try:
-            # Load pinned messages
+
             rows = self.broker.repo._run(
                 self.broker.repo._fetch(
                     "SELECT id FROM messages WHERE pinned_by IS NOT NULL"
@@ -41,7 +39,6 @@ class SignalingService:
             for row in rows:
                 self._pinned_messages.add(row['id'])
 
-            # Load reactions
             reaction_rows = self.broker.repo._run(self.broker.repo._fetch(
                 "SELECT id, reactions FROM messages WHERE reactions IS NOT NULL"))
             for row in reaction_rows:
@@ -55,7 +52,7 @@ class SignalingService:
                                 self._message_reactions[message_id][emoji] = set(
                                     user_list)
                     except BaseException:
-                        pass  # Skip invalid reactions data
+                        pass
         except Exception as e:
             logger.error(f"Error loading existing interactions: {e}")
 
@@ -92,6 +89,9 @@ class SignalingService:
         self.io.on_event("message_read", self.on_message_read)
         self.io.on_event("get_group_history", self.on_get_group_history)
         self.io.on_event("get_history", self.on_get_history)
+        self.io.on_event("authenticate", self.on_authenticate)
+        self.io.on_event("video_state_changed", self.on_video_state_changed)
+        self.io.on_event("screen_share_state_changed", self.on_screen_share_state_changed)
 
     def _client_key(self):
         forwarded = request.headers.get("X-Forwarded-For", "")
@@ -164,21 +164,60 @@ class SignalingService:
     def on_disconnect(self):
         self.broker.close_session(request.sid)
 
+    def on_authenticate(self, payload):
+        if not payload:
+            emit("error", {"message": "Требуется данные для аутентификации"})
+            return
+
+        access_token = payload.get("access_token")
+        if not access_token:
+            emit("error", {"message": "Требуется токен доступа"})
+            return
+
+        user_info = self.broker.repo.fetch_user_by_token(access_token)
+        if not user_info:
+            emit("error", {"message": "Не авторизовано"})
+            return
+
+        if user_info.get("is_blocked"):
+            emit("error", {"message": "Пользователь заблокирован"})
+            return
+
+        session["user_id"] = user_info["id"]
+
+        self.broker.repo.bind_socket(user_info["id"], request.sid)
+
+        join_room(user_info["id"])
+
+        logger.info(
+            f"Пользователь {user_info['username']} аутентифицирован. SID: {request.sid}"
+        )
+
+        emit(
+            "connection_success",
+            {
+                "message": "Аутентификация успешна",
+                "user_id": user_info["id"],
+                "socket_id": request.sid,
+                "role": user_info.get("role", "User"),
+            },
+        )
+
     def on_ping(self, payload):
         emit("pong_stability", {"timestamp": payload.get("timestamp")})
 
     def on_join_voice_channel(self, payload):
         channel_id = payload.get("channel_id")
         if not channel_id:
-            emit("error", {"message": "Missing channel_id"})
+            emit("error", {"message": "Отсутствует channel_id"})
             return
         sender_id, sender = self._get_sender()
         if not sender_id:
-            emit("error", {"message": "Unauthorized"})
+            emit("error", {"message": "Не авторизовано"})
             return
         participants = self.broker.repo.get_channel_participants(channel_id)
         if str(sender_id) not in [str(p) for p in participants]:
-            emit("error", {"message": "Access denied"})
+            emit("error", {"message": "Доступ запрещён"})
             return
         channel_set = self.voice_channel_calls.get(channel_id)
         if channel_set is None:
@@ -188,7 +227,7 @@ class SignalingService:
             if not self.broker.resolve_recipient(existing_sid):
                 channel_set.discard(existing_sid)
                 continue
-            # Get sender info for notification to existing participants
+
             sender_info = self.broker.resolve_recipient(request.sid)
             emit("voice_channel_participant_joined",
                  {"channel_id": channel_id,
@@ -199,7 +238,7 @@ class SignalingService:
                   },
                  room=existing_sid,
                  )
-            # Get existing participant info for notification to new joiner
+
             existing_info = self.broker.resolve_recipient(existing_sid)
             emit("voice_channel_participant_joined",
                  {"channel_id": channel_id,
@@ -220,7 +259,7 @@ class SignalingService:
             return
         if request.sid in channel_set:
             channel_set.discard(request.sid)
-            # Get leaving user info
+
             leaving_info = self.broker.resolve_recipient(request.sid)
             for existing_sid in list(channel_set):
                 if self.broker.resolve_recipient(existing_sid):
@@ -258,19 +297,18 @@ class SignalingService:
                 incoming_payload["offer"] = offer_sdp
             emit("incoming_call", incoming_payload, room=target_user_id)
         else:
-            emit("call_failed", {
-                 "message": "Пользователь не в сети или не найден"})
+            emit("call_failed", {"message": "Пользователь не в сети или не найден"})
 
     def on_e2e_key_exchange(self, payload):
         target_user_id = payload.get("target_user_id")
         public_key = payload.get("public_key")
         key_id = payload.get("key_id")
         if not target_user_id or not public_key or not key_id:
-            emit("error", {"message": "Missing key data"})
+            emit("error", {"message": "Отсутствуют данные ключа"})
             return
         sender_id, sender = self._get_sender()
         if not sender_id:
-            emit("error", {"message": "Unauthorized"})
+            emit("error", {"message": "Не авторизовано"})
             return
         emit(
             "e2e_key_exchange",
@@ -300,17 +338,17 @@ class SignalingService:
         group_id = payload.get("group_id")
         offer_sdp = payload.get("offer")
         if not group_id:
-            emit("error", {"message": "Missing group_id"})
+            emit("error", {"message": "Отсутствует group_id"})
             return
 
         sender_id, sender = self._get_sender()
         if not sender_id:
-            emit("error", {"message": "Unauthorized"})
+            emit("error", {"message": "Не авторизовано"})
             return
 
         participants = self.broker.repo.get_group_participants(group_id)
         if str(sender_id) not in [str(p) for p in participants]:
-            emit("error", {"message": "Access denied"})
+            emit("error", {"message": "Доступ запрещён"})
             return
 
         online_participants = []
@@ -328,7 +366,7 @@ class SignalingService:
             "caller_socket_id": request.sid,
             "caller_user_id": sender_id,
             "participants": [p["user_id"] for p in online_participants],
-            "joined": {str(sender_id)},  # Caller is already in the call
+            "joined": {str(sender_id)},
             "caller_username": sender.get("username") if sender else None,
             "caller_avatar_url": sender.get("avatar_url") if sender else None,
         }
@@ -351,7 +389,6 @@ class SignalingService:
         for p in online_participants:
             emit("incoming_group_call", incoming_payload, room=p["socket_id"])
 
-        # Notify caller with their own info and other participants
         emit(
             "group_call_started",
             {
@@ -371,23 +408,23 @@ class SignalingService:
     def on_group_call_answer(self, payload):
         call_id = payload.get("call_id")
         if not call_id:
-            emit("error", {"message": "Missing call_id"})
+            emit("error", {"message": "Отсутствует call_id"})
             return
 
         call = self.group_calls.get(call_id)
         if not call:
-            emit("error", {"message": "Call not found"})
+            emit("error", {"message": "Звонок не найден"})
             return
 
         sender_id, sender = self._get_sender()
         if not sender_id:
-            emit("error", {"message": "Unauthorized"})
+            emit("error", {"message": "Не авторизовано"})
             return
 
         participants = self.broker.repo.get_group_participants(
             call["group_id"])
         if str(sender_id) not in [str(p) for p in participants]:
-            emit("error", {"message": "Access denied"})
+            emit("error", {"message": "Доступ запрещён"})
             return
 
         call["joined"].add(str(sender_id))
@@ -413,7 +450,6 @@ class SignalingService:
                 room=caller_socket_id,
             )
 
-        # Notify others about new participant with user info
         notify_payload = {
             "call_id": call_id,
             "user_id": sender_id,
@@ -433,8 +469,6 @@ class SignalingService:
                 emit("group_call_participant_joined",
                      notify_payload, room=pid_socket)
 
-        # Send info about existing participants (including caller) to new participant
-        # First, send the caller
         if caller_socket_id and caller_socket_id != request.sid:
             emit(
                 "group_call_participant_joined",
@@ -448,13 +482,12 @@ class SignalingService:
                 room=request.sid,
             )
 
-        # Then send other already-joined participants
         for pid in call.get("participants", []):
             if str(pid) == str(sender_id):
                 continue
             pid_socket = self.broker.get_user_socket(pid)
             if pid_socket and self.broker.resolve_recipient(pid_socket):
-                # Get user info for this participant
+
                 participant_info = self.broker.resolve_recipient(pid_socket)
                 emit(
                     "group_call_participant_joined",
@@ -468,8 +501,6 @@ class SignalingService:
                     room=request.sid,
                 )
 
-        # Additionally, send the new participant's info to themselves to ensure
-        # they're aware of their participation
         emit(
             "group_call_participant_joined",
             {
@@ -537,7 +568,7 @@ class SignalingService:
         offset = payload.get("offset", 0)
 
         if not group_id:
-            emit("error", {"message": "Missing group_id"})
+            emit("error", {"message": "Отсутствует group_id"})
             return
 
         sender_id = session.get("user_id")
@@ -547,17 +578,16 @@ class SignalingService:
                 sender_id = sender["id"]
 
         if not sender_id:
-            emit("error", {"message": "Unauthorized"})
+            emit("error", {"message": "Не авторизовано"})
             return
 
         participants = self.broker.repo.get_group_participants(group_id)
         if str(sender_id) not in [str(p) for p in participants]:
-            emit("error", {"message": "Access denied"})
+            emit("error", {"message": "Доступ запрещён"})
             return
 
         messages = self.broker.repo.get_group_history(group_id, limit, offset)
 
-        # Convert datetime objects to strings for JSON serialization
         for msg in messages:
             for key, value in msg.items():
                 if isinstance(value, datetime):
@@ -571,7 +601,7 @@ class SignalingService:
         offset = payload.get("offset", 0)
 
         if not target_id:
-            emit("error", {"message": "Missing target_id"})
+            emit("error", {"message": "Отсутствует target_id"})
             return
 
         sender_id = session.get("user_id")
@@ -581,14 +611,13 @@ class SignalingService:
                 sender_id = sender["id"]
 
         if not sender_id:
-            emit("error", {"message": "Unauthorized"})
+            emit("error", {"message": "Не авторизовано"})
             return
 
         messages = self.broker.repo.get_messages_history(
             sender_id, target_id, limit, offset
         )
 
-        # Convert datetime objects to strings for JSON serialization
         for msg in messages:
             for key, value in msg.items():
                 if isinstance(value, datetime):
@@ -1112,7 +1141,6 @@ class SignalingService:
             emit("error", {"message": "Forbidden"})
             return
 
-        # Load current reactions from database
         current_reactions = meta.get('reactions')
         if current_reactions:
             try:
@@ -1122,7 +1150,6 @@ class SignalingService:
         else:
             reactions_dict = {}
 
-        # Update reactions for this emoji
         if emoji in reactions_dict:
             users_for_emoji = set(reactions_dict[emoji])
             if sender_id in users_for_emoji:
@@ -1137,7 +1164,6 @@ class SignalingService:
         else:
             reactions_dict[emoji] = [sender_id]
 
-        # Save updated reactions to database
         try:
             import json
             updated_reactions = json.dumps(
@@ -1152,7 +1178,6 @@ class SignalingService:
             emit("error", {"message": "Failed to update reactions"})
             return
 
-        # Calculate count for this emoji
         count = len(reactions_dict.get(emoji, []))
 
         event_payload = {
@@ -1191,18 +1216,16 @@ class SignalingService:
             emit("error", {"message": "Forbidden"})
             return
 
-        # Get current pinned status from database
         current_pinned_by = meta.get('pinned_by')
         if current_pinned_by:
-            # Message is currently pinned, unpin it
+
             pinned = False
             new_pinned_by = None
         else:
-            # Message is not pinned, pin it
+
             pinned = True
             new_pinned_by = str(sender_id)
 
-        # Update the database with new pinned status
         try:
             query = "UPDATE messages SET pinned_by = ? WHERE id = ?"
             self.broker.repo._run(
@@ -1284,3 +1307,105 @@ class SignalingService:
                     {"message_ids": message_ids, "reader_id": reader_id},
                     room=sender_socket,
                 )
+
+    def on_video_state_changed(self, payload):
+        """Handle video state changes for group calls and voice channels"""
+        if not payload:
+            return
+
+        sender_id, sender = self._get_sender()
+        if not sender_id:
+            return
+
+        socket_id = payload.get("sender_socket_id") or request.sid
+        has_video = payload.get("has_video", False)
+        user_id = payload.get("user_id") or sender_id
+
+        # Forward to group call participants
+        call_id = payload.get("call_id")
+        if call_id and call_id in self.group_calls:
+            call = self.group_calls[call_id]
+            participants = call.get("participants", [])
+
+            for pid in participants:
+                if str(pid) == str(sender_id):
+                    continue
+                pid_socket = self.broker.get_user_socket(pid)
+                if pid_socket and self.broker.resolve_recipient(pid_socket):
+                    emit(
+                        "video_state_changed",
+                        {
+                            "from_socket_id": socket_id,
+                            "user_id": user_id,
+                            "has_video": has_video,
+                        },
+                        room=pid_socket,
+                    )
+
+        # Forward to voice channel participants
+        channel_id = payload.get("channel_id")
+        if channel_id and channel_id in self.voice_channel_calls:
+            channel_set = self.voice_channel_calls[channel_id]
+
+            for existing_sid in list(channel_set):
+                if existing_sid == socket_id:
+                    continue
+                if self.broker.resolve_recipient(existing_sid):
+                    emit(
+                        "video_state_changed",
+                        {
+                            "from_socket_id": socket_id,
+                            "user_id": user_id,
+                            "has_video": has_video,
+                        },
+                        room=existing_sid,
+                    )
+
+    def on_screen_share_state_changed(self, payload):
+        """Handle screen share state changes and forward to all call participants"""
+        if not payload:
+            return
+
+        sender_id, sender = self._get_sender()
+        if not sender_id:
+            return
+
+        socket_id = payload.get("sender_socket_id") or request.sid
+        is_sharing = payload.get("is_sharing", False)
+        user_id = payload.get("user_id") or sender_id
+
+        # Forward to all active peer connections for this user
+        # Get all active calls and forward to participants
+        for call_id, call in list(self.group_calls.items()):
+            participants = call.get("participants", [])
+            
+            for pid in participants:
+                if str(pid) == str(sender_id):
+                    continue
+                pid_socket = self.broker.get_user_socket(pid)
+                if pid_socket and self.broker.resolve_recipient(pid_socket):
+                    emit(
+                        "screen_share_state_changed",
+                        {
+                            "from_socket_id": socket_id,
+                            "user_id": user_id,
+                            "is_sharing": is_sharing,
+                        },
+                        room=pid_socket,
+                    )
+
+        # Forward to voice channel participants
+        for channel_id, channel_set in list(self.voice_channel_calls.items()):
+            for existing_sid in list(channel_set):
+                if existing_sid == socket_id:
+                    continue
+                if self.broker.resolve_recipient(existing_sid):
+                    emit(
+                        "screen_share_state_changed",
+                        {
+                            "from_socket_id": socket_id,
+                            "user_id": user_id,
+                            "is_sharing": is_sharing,
+                        },
+                        room=existing_sid,
+                    )

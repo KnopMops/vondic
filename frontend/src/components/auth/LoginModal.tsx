@@ -130,7 +130,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 
 				<div className='flex items-center justify-center gap-3'>
 					<BrandLogo size={32} />
-					<h2 className='text-2xl font-bold text-white'>Вход в Vondic</h2>
+					<h2 className='text-2xl font-bold text-white'>Вход в Вондик</h2>
 				</div>
 
 				{loginMethod === 'email' ? (

@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react'
 import { io, Socket } from 'socket.io-client'
 import { setSocketId } from './features/authSlice'
 import { useAppDispatch, useAppSelector } from './hooks'
+import { getWebRtcUrl } from './url-fallback'
 
 interface SocketContextType {
 	socket: Socket | null
@@ -52,8 +53,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 					return
 				}
 
-				const socketUrlRaw =
-					process.env.NEXT_PUBLIC_WEBRTC_URL || 'http://localhost:5000'
+				// Use fallback-aware URL
+				const socketUrlRaw = getWebRtcUrl()
 				const socketPath = process.env.NEXT_PUBLIC_SOCKET_PATH || '/socket.io'
 				const isSecure =
 					window.location.protocol === 'https:' ||

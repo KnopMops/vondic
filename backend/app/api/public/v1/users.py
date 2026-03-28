@@ -7,16 +7,13 @@ from flask import Blueprint, jsonify, request
 public_users_bp = Blueprint(
     "public_users", __name__, url_prefix="/api/public/v1/users")
 
-
 @public_users_bp.route("/", methods=["GET"])
 def get_users():
-    """Get all public users"""
     try:
         page = request.args.get('page', 1, type=int)
         limit = request.args.get('limit', 20, type=int)
         offset = (page - 1) * limit
 
-        # Get public users (visible users)
         users = UserService.get_public_users(limit=limit, offset=offset)
         total_count = UserService.get_public_users_count()
 
@@ -32,18 +29,15 @@ def get_users():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @public_users_bp.route("/<user_id>", methods=["GET"])
 def get_user(user_id):
-    """Get a specific user by ID"""
     try:
         user = UserService.get_user_by_id(user_id)
         if not user:
             return jsonify({"error": "User not found"}), 404
 
-        # Return only public information
         user_data = user_schema.dump(user)
-        # Remove sensitive information
+
         restricted_fields = ['email', 'password_hash',
                              'api_key', 'refresh_token']
         for field in restricted_fields:
@@ -53,18 +47,15 @@ def get_user(user_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @public_users_bp.route("/username/<username>", methods=["GET"])
 def get_user_by_username(username):
-    """Get a specific user by username"""
     try:
         user = UserService.get_user_by_username(username)
         if not user:
             return jsonify({"error": "User not found"}), 404
 
-        # Return only public information
         user_data = user_schema.dump(user)
-        # Remove sensitive information
+
         restricted_fields = ['email', 'password_hash',
                              'api_key', 'refresh_token']
         for field in restricted_fields:
@@ -74,10 +65,8 @@ def get_user_by_username(username):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @public_users_bp.route("/search", methods=["GET"])
 def search_users():
-    """Search users by username or name"""
     try:
         query = request.args.get('q', '').strip()
         if not query:
@@ -102,10 +91,8 @@ def search_users():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @public_users_bp.route("/<user_id>/followers", methods=["GET"])
 def get_user_followers(user_id):
-    """Get user followers"""
     try:
         user = UserService.get_user_by_id(user_id)
         if not user:
@@ -131,10 +118,8 @@ def get_user_followers(user_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @public_users_bp.route("/<user_id>/following", methods=["GET"])
 def get_user_following(user_id):
-    """Get users that a user is following"""
     try:
         user = UserService.get_user_by_id(user_id)
         if not user:
@@ -160,14 +145,12 @@ def get_user_following(user_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @public_users_bp.route("/me", methods=["GET"])
 @token_required
 def get_current_user(current_user):
-    """Get current authenticated user's profile"""
     try:
         user_data = user_schema.dump(current_user)
-        # Remove sensitive information
+
         restricted_fields = ['password_hash', 'api_key', 'refresh_token']
         for field in restricted_fields:
             user_data.pop(field, None)
@@ -176,13 +159,11 @@ def get_current_user(current_user):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @public_users_bp.route("/me", methods=["PUT"])
 @token_required
-# 20 profile updates per hour per user
+
 @rate_limit(limit=20, window=3600, per_user=True)
 def update_current_user(current_user):
-    """Update current authenticated user's profile"""
     try:
         data = request.get_json() or {}
 
@@ -213,7 +194,7 @@ def update_current_user(current_user):
             return jsonify({"error": error}), 400
 
         user_data = user_schema.dump(updated_user)
-        # Remove sensitive information
+
         restricted_fields = ['password_hash', 'api_key', 'refresh_token']
         for field in restricted_fields:
             user_data.pop(field, None)
@@ -222,13 +203,11 @@ def update_current_user(current_user):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @public_users_bp.route("/<user_id>/follow", methods=["POST"])
 @token_required
-# 50 follow actions per hour per user
+
 @rate_limit(limit=50, window=3600, per_user=True)
 def follow_user(current_user, user_id):
-    """Follow a user"""
     try:
         target_user = UserService.get_user_by_id(user_id)
         if not target_user:
@@ -245,13 +224,11 @@ def follow_user(current_user, user_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @public_users_bp.route("/<user_id>/unfollow", methods=["POST"])
 @token_required
-# 50 unfollow actions per hour per user
+
 @rate_limit(limit=50, window=3600, per_user=True)
 def unfollow_user(current_user, user_id):
-    """Unfollow a user"""
     try:
         target_user = UserService.get_user_by_id(user_id)
         if not target_user:

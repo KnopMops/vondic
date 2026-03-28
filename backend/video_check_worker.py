@@ -10,54 +10,30 @@ from app import create_app
 from app.core.extensions import db
 from sqlalchemy import text
 
-
 def ensure_checks_table():
     try:
-        if db.engine.dialect.name == "sqlite":
-            db.session.execute(
-                text("""
-                CREATE TABLE IF NOT EXISTS video_checks (
-                    id TEXT PRIMARY KEY,
-                    video_url TEXT,
-                    file_path TEXT,
-                    status TEXT,
-                    result_json TEXT,
-                    error TEXT,
-                    created_at TEXT,
-                    updated_at TEXT
-                )
-            """)
+        db.session.execute(
+            text("""
+            CREATE TABLE IF NOT EXISTS video_checks (
+                id TEXT PRIMARY KEY,
+                video_url TEXT,
+                file_path TEXT,
+                status TEXT,
+                result_json TEXT,
+                error TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-            db.session.execute(
-                text(
-                    "CREATE INDEX IF NOT EXISTS idx_video_checks_status ON video_checks(status)"
-                )
+        """)
+        )
+        db.session.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_video_checks_status ON video_checks(status)"
             )
-            db.session.commit()
-        else:
-            db.session.execute(
-                text("""
-                CREATE TABLE IF NOT EXISTS video_checks (
-                    id TEXT PRIMARY KEY,
-                    video_url TEXT,
-                    file_path TEXT,
-                    status TEXT,
-                    result_json TEXT,
-                    error TEXT,
-                    created_at TEXT,
-                    updated_at TEXT
-                )
-            """)
-            )
-            db.session.execute(
-                text(
-                    "CREATE INDEX IF NOT EXISTS idx_video_checks_status ON video_checks(status)"
-                )
-            )
-            db.session.commit()
+        )
+        db.session.commit()
     except Exception:
         pass
-
 
 def _clean_text(value: str | None):
     if value is None:
@@ -66,14 +42,12 @@ def _clean_text(value: str | None):
         return value.replace("\x00", "")
     return value
 
-
 def _trim_text(value: str | None, limit: int = 800):
     if value is None:
         return None
     if len(value) <= limit:
         return value
     return value[:limit]
-
 
 def update_job(
         job_id: str,
@@ -96,7 +70,6 @@ def update_job(
         },
     )
     db.session.commit()
-
 
 def run_checker(file_path: str):
     script_path = os.path.abspath(
@@ -145,13 +118,11 @@ def run_checker(file_path: str):
     except Exception:
         return None, "Checker вернул некорректный JSON"
 
-
 def _purge_queue(ch):
     try:
         ch.queue_purge(queue="video_checks")
     except Exception:
         pass
-
 
 def handle_message(ch, method, properties, body, app):
     try:
@@ -168,7 +139,17 @@ def handle_message(ch, method, properties, body, app):
         try:
             ensure_checks_table()
             update_job(job_id, "processing")
-            if not file_path or not os.path.isfile(file_path):
+            if not file_path:
+                update_job(job_id, "error", None, "Video file path not provided")
+                _purge_queue(ch)
+                ch.basic_ack(delivery_tag=method.delivery_tag)
+                return
+
+            if not os.path.isabs(file_path):
+                file_path = os.path.join(app.root_path, file_path)
+            if not os.path.isfile(file_path):
+
+                print(f"Video file not found: {file_path}")
                 update_job(job_id, "error", None, "Video file not found")
                 _purge_queue(ch)
                 ch.basic_ack(delivery_tag=method.delivery_tag)
@@ -185,12 +166,26 @@ def handle_message(ch, method, properties, body, app):
             _purge_queue(ch)
     ch.basic_ack(delivery_tag=method.delivery_tag)
 
-
 def _consume(app):
     rabbit_url = os.environ.get(
         "RABBITMQ_URL", "amqp://guest:guest@localhost:5672/%2F")
     params = pika.URLParameters(rabbit_url)
-    connection = pika.BlockingConnection(params)
+
+    max_retries = 10
+    retry_delay = 5
+
+    for attempt in range(max_retries):
+        try:
+            connection = pika.BlockingConnection(params)
+            break
+        except pika.exceptions.AMQPConnectionError as e:
+            if attempt < max_retries - 1:
+                print(f"RabbitMQ connection failed (attempt {attempt + 1}/{max_retries}), retrying in {retry_delay}s...")
+                time.sleep(retry_delay)
+            else:
+                print(f"RabbitMQ connection failed after {max_retries} attempts: {e}")
+                raise
+
     channel = connection.channel()
     channel.queue_declare(queue="video_checks", durable=True)
     channel.basic_qos(prefetch_count=1)
@@ -208,7 +203,6 @@ def _consume(app):
     )
     channel.start_consuming()
 
-
 def main():
     app = create_app()
     worker_count = int(os.environ.get("RABBITMQ_WORKERS", "2"))
@@ -220,7 +214,6 @@ def main():
         threads.append(t)
     for t in threads:
         t.join()
-
 
 if __name__ == "__main__":
     main()

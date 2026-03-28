@@ -7,7 +7,6 @@ from flask import Blueprint, jsonify, request
 
 groups_bp = Blueprint("groups", __name__, url_prefix="/api/v1/groups")
 
-
 @groups_bp.route("/", methods=["POST"])
 @token_required
 def create_group(current_user):
@@ -16,7 +15,6 @@ def create_group(current_user):
     if error:
         return jsonify({"error": error}), 400
     return jsonify(group_schema.dump(group)), 201
-
 
 @groups_bp.route("/join", methods=["POST"])
 @token_required
@@ -32,13 +30,11 @@ def join_group(current_user):
         return jsonify({"error": error}), 400
     return jsonify(group_schema.dump(group)), 200
 
-
 @groups_bp.route("/my", methods=["POST"])
 @token_required
 def get_my_groups(current_user):
     groups = GroupService.get_user_groups(current_user.id)
     return jsonify(groups_schema.dump(groups)), 200
-
 
 @groups_bp.route("/info", methods=["POST"])
 @token_required
@@ -53,7 +49,6 @@ def get_group(current_user):
     if not group:
         return jsonify({"error": "Group not found"}), 404
     return jsonify(group_schema.dump(group)), 200
-
 
 @groups_bp.route("/<group_id>/participants", methods=["GET", "POST"])
 @token_required
@@ -81,7 +76,6 @@ def participants(current_user, group_id):
 
     return jsonify(group_schema.dump(group)), 200
 
-
 @groups_bp.route("/<group_id>/messages", methods=["POST"])
 @token_required
 def send_message(current_user, group_id):
@@ -91,7 +85,6 @@ def send_message(current_user, group_id):
     if error:
         return jsonify({"error": error}), 400
     return jsonify(message_schema.dump(message)), 201
-
 
 @groups_bp.route("/<group_id>/messages", methods=["GET"])
 @token_required
@@ -124,19 +117,16 @@ def get_messages(current_user, group_id):
         }
     ), 200
 
-
 @groups_bp.route("/<group_id>/messages/<message_id>", methods=["DELETE"])
 @token_required
 def delete_group_message(current_user, group_id, message_id):
     from app.models.group import Group
     from app.models.message import Message
 
-    # Check if user is in the group
     group = Group.query.get(group_id)
     if not group or current_user not in group.participants:
         return jsonify({"error": "Group not found or access denied"}), 403
 
-    # Check if message belongs to this group
     message = Message.query.filter(
         Message.id == message_id,
         Message.group_id == group_id
@@ -148,13 +138,12 @@ def delete_group_message(current_user, group_id, message_id):
     if str(message.sender_id) != str(current_user.id):
         return jsonify({"error": "Forbidden"}), 403
 
-    # Mark message as deleted
     message.content = "Сообщение удалено"
     message.attachments = []
     if hasattr(message, 'is_deleted'):
         message.is_deleted = True
     else:
-        # If the field doesn't exist yet, add it
+
         from app.core.extensions import db
         from sqlalchemy import text
         try:
@@ -167,7 +156,6 @@ def delete_group_message(current_user, group_id, message_id):
 
     db.session.commit()
 
-    # Notify WebSocket server about the deletion
     try:
         print(
             f"Need to notify WebSocket server about deletion of message {message_id}")

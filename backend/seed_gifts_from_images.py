@@ -5,13 +5,11 @@ from app import create_app
 from app.core.extensions import db
 from app.models.gift_catalog import GiftCatalog
 
-
 def slugify(value: str) -> str:
     raw = (value or "").strip().lower()
     raw = re.sub(r"\s+", "_", raw)
     raw = re.sub(r"[^a-z0-9_]+", "", raw)
     return raw or "gift"
-
 
 KNOWN_GIFTS = {
     "firework.png": {
@@ -100,7 +98,6 @@ KNOWN_GIFTS = {
     },
 }
 
-
 def build_entries(gifts_dir: Path):
     entries = []
     for file_path in sorted(gifts_dir.iterdir()):
@@ -128,7 +125,6 @@ def build_entries(gifts_dir: Path):
         entries.append(entry)
     return entries
 
-
 def upsert_gifts(entries):
     created = 0
     updated = 0
@@ -154,7 +150,6 @@ def upsert_gifts(entries):
     db.session.commit()
     return created, updated
 
-
 def main():
     repo_root = Path(__file__).resolve().parents[1]
     gifts_dir = repo_root / "frontend" / "static" / "gifts"
@@ -166,7 +161,6 @@ def main():
         entries = build_entries(gifts_dir)
         created, updated = upsert_gifts(entries)
         print(f"Создано: {created}, обновлено: {updated}")
-
 
 if __name__ == "__main__":
     main()

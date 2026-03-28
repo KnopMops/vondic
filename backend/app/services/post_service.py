@@ -8,7 +8,6 @@ from app.models.post import Post
 from app.models.user import User
 from flask import current_app
 
-
 class PostService:
     @staticmethod
     def _sanitize_text(value):
@@ -93,10 +92,10 @@ class PostService:
     def update_post(post_id, data, user_id, is_admin=False):
         post = Post.query.filter_by(id=post_id, deleted=False).first()
         if not post:
-            return None, "Post not found"
+            return None, "Пост не найден"
 
         if post.posted_by != user_id and not is_admin:
-            return None, "Unauthorized"
+            return None, "Неавторизовано"
 
         if "content" in data:
             post.content = PostService._sanitize_text(data["content"])
@@ -104,7 +103,7 @@ class PostService:
             post.attachments = data["attachments"]
         if "is_blog" in data:
             if not is_admin:
-                return None, "Unauthorized"
+                return None, "Неавторизовано"
             post.is_blog = bool(data["is_blog"])
 
         try:
@@ -118,14 +117,14 @@ class PostService:
     def like_post(post_id, user_id):
         post = Post.query.filter_by(id=post_id, deleted=False).first()
         if not post:
-            return None, "Post not found"
+            return None, "Пост не найден"
         if post.is_blog:
-            return None, "Blog post is read-only"
+            return None, "Блог-пост только для чтения"
 
         existing_like = Like.query.filter_by(
             user_id=user_id, post_id=post_id).first()
         if existing_like:
-            return None, "Already liked"
+            return None, "Уже лайкнуто"
 
         new_like = Like(user_id=user_id, post_id=post_id)
         if post.likes is None:
@@ -144,14 +143,14 @@ class PostService:
     def unlike_post(post_id, user_id):
         post = Post.query.filter_by(id=post_id, deleted=False).first()
         if not post:
-            return None, "Post not found"
+            return None, "Пост не найден"
         if post.is_blog:
-            return None, "Blog post is read-only"
+            return None, "Блог-пост только для чтения"
 
         existing_like = Like.query.filter_by(
             user_id=user_id, post_id=post_id).first()
         if not existing_like:
-            return None, "Not liked"
+            return None, "Не лайкнуто"
 
         if post.likes and post.likes > 0:
             post.likes -= 1
@@ -168,10 +167,10 @@ class PostService:
     def delete_post_by_user(post_id, user_id):
         post = Post.query.filter_by(id=post_id, deleted=False).first()
         if not post:
-            return None, "Post not found"
+            return None, "Пост не найден"
 
         if post.posted_by != user_id:
-            return None, "Unauthorized"
+            return None, "Неавторизовано"
 
         freed_bytes = 0
         attachments = post.attachments or []
@@ -215,7 +214,7 @@ class PostService:
     def delete_post_by_admin(post_id, admin_id, reason=None):
         post = Post.query.filter_by(id=post_id, deleted=False).first()
         if not post:
-            return None, "Post not found"
+            return None, "Пост не найден"
 
         freed_bytes = 0
         attachments = post.attachments or []

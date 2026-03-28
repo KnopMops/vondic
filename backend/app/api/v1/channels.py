@@ -5,7 +5,6 @@ from flask import Blueprint, jsonify, request
 
 channels_bp = Blueprint("channels", __name__, url_prefix="/api/v1/channels")
 
-
 @channels_bp.route("/", methods=["POST"])
 @token_required
 def create_channel(current_user):
@@ -14,7 +13,6 @@ def create_channel(current_user):
     if error:
         return jsonify({"error": error}), 400
     return jsonify(channel_schema.dump(channel)), 201
-
 
 @channels_bp.route("/join", methods=["POST"])
 @token_required
@@ -30,13 +28,11 @@ def join_channel(current_user):
         return jsonify({"error": error}), 400
     return jsonify(channel_schema.dump(channel)), 200
 
-
 @channels_bp.route("/my", methods=["POST"])
 @token_required
 def get_my_channels(current_user):
     channels = ChannelService.get_user_channels(current_user.id)
     return jsonify(channels_schema.dump(channels)), 200
-
 
 @channels_bp.route("/<channel_id>", methods=["POST"])
 @token_required

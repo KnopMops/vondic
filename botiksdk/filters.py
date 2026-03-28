@@ -43,6 +43,27 @@ class Text(BaseFilter):
         return True
 
 
+class CallbackDataFilter(BaseFilter):
+    """Filter for callback queries by data pattern"""
+
+    def __init__(self, prefix: str = ""):
+        self.prefix = prefix
+
+    def __call__(self, obj) -> bool:
+        # Can be called with Message or CallbackQuery
+        callback_query = getattr(obj, "callback_query", None)
+        if callback_query:
+            data = callback_query.data
+        elif hasattr(obj, "data"):
+            data = obj.data
+        else:
+            return False
+
+        if not self.prefix:
+            return True
+        return data.startswith(self.prefix)
+
+
 class Regex(BaseFilter):
     def __init__(self, pattern: str, flags: int = 0):
         self.pattern = re.compile(pattern, flags=flags)

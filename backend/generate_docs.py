@@ -6,7 +6,6 @@ from app import create_app
 
 sys.path.append(os.getcwd())
 
-
 def generate_swagger_json():
     app = create_app()
 
@@ -28,7 +27,6 @@ def generate_swagger_json():
                 f"Failed to fetch documentation. Status code: {
                     response.status_code}")
             print(response.data.decode("utf-8"))
-
 
 if __name__ == "__main__":
     generate_swagger_json()

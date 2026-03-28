@@ -3,7 +3,6 @@
 import React from 'react'
 import { useCallStore } from '../../lib/stores/callStore'
 import { useToast } from '../../lib/ToastContext'
-import ActiveCall from './ActiveCall'
 import ActiveGroupCall from './ActiveGroupCall'
 import IncomingCallModal from './IncomingCallModal'
 
@@ -55,11 +54,6 @@ export const GlobalCallUI: React.FC = () => {
 		showToast('Звонок отклонен', 'info')
 	}
 
-	const handleEndCall = (targetSocketId: string) => {
-		endCall(targetSocketId)
-		showToast('Звонок завершен', 'info')
-	}
-
 	const handleLeaveGroupCall = (callId: string) => {
 		leaveGroupCall(callId)
 		showToast('Вы вышли из группового звонка', 'info')
@@ -107,27 +101,7 @@ export const GlobalCallUI: React.FC = () => {
 				/>
 			)}
 
-			{/* Active Individual Calls */}
-			{Array.from(activeCalls.values())
-				.filter(call => !call.isGroupCall)
-				.map(call => (
-					<ActiveCall
-						key={call.socketId}
-						callInfo={call}
-						onEndCall={handleEndCall}
-						onMuteToggle={handleMuteToggle}
-						onVideoToggle={handleVideoToggle}
-						isMuted={isMuted}
-						isVideoEnabled={isVideoEnabled()}
-						localStream={localStream}
-						screenStream={screenStream}
-						videoStream={webRTCService?.getVideoStream() || null}
-						remoteStream={remoteStreams.get(call.socketId) || null}
-						onScreenShareToggle={toggleScreenShare}
-						isScreenSharing={isScreenSharing}
-						isScreenShareSupported={isScreenShareSupported}
-					/>
-				))}
+			{/* Individual 1-on-1 calls are now shown in chat UI */}
 		</>
 	)
 }

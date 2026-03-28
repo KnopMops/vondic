@@ -30,3 +30,4 @@ safetext
 nudenetv2
 pika
 uvicorn
+prometheus-client

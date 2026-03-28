@@ -5,9 +5,7 @@ import requests
 
 DEFAULT_API_URL = "https://untortuously-hummel-arnoldo.ngrok-free.dev/ask"
 
-
 class RequestThread:
-    """Поток для выполнения API запросов"""
 
     def __init__(
         self,
@@ -16,13 +14,6 @@ class RequestThread:
         on_success: Optional[Callable[[str], None]] = None,
         on_error: Optional[Callable[[str], None]] = None,
     ):
-        """
-        Args:
-            api_url: URL API endpoint
-            question: Вопрос для отправки
-            on_success: Функция обратного вызова при успешном ответе
-            on_error: Функция обратного вызова при ошибке
-        """
         self.api_url = api_url
         self.question = question
         self.on_success = on_success
@@ -30,7 +21,6 @@ class RequestThread:
         self.thread = None
 
     def run(self):
-        """Основная логика выполнения запроса"""
         try:
             response = requests.post(
                 self.api_url, json={"question": self.question}, timeout=60
@@ -60,21 +50,14 @@ class RequestThread:
             return error_msg
 
     def start(self) -> threading.Thread:
-        """Запуск в отдельном потоке"""
         self.thread = threading.Thread(target=self.run)
         self.thread.start()
         return self.thread
 
     def execute(self):
-        """Синхронное выполнение (блокирующее)"""
         return self.run()
 
-
 def simple_request(api_url: str, question: str) -> str:
-    """
-    Простая синхронная функция для выполнения запроса
-    Возвращает строку с ответом или сообщение об ошибке
-    """
     try:
         response = requests.post(
             api_url, json={"question": question}, timeout=60)

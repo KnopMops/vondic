@@ -7,7 +7,6 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 backend_dir = os.path.join(basedir, "../../")
 load_dotenv(os.path.join(backend_dir, ".env.backend"))
 
-
 def _build_postgres_url() -> str | None:
     explicit = os.environ.get("POSTGRES_URL")
     if explicit:
@@ -28,7 +27,6 @@ def _build_postgres_url() -> str | None:
         url = f"{url}?sslmode={sslmode}"
     return url
 
-
 def _build_redis_url() -> str | None:
     explicit = os.environ.get("REDIS_URL")
     if explicit:
@@ -43,24 +41,19 @@ def _build_redis_url() -> str | None:
         return f"redis://:{quote_plus(password)}@{host}:{port}/{db}"
     return f"redis://{host}:{port}/{db}"
 
-
 def _is_redis_available(redis_url: str | None) -> bool:
-    """Check if Redis URL is configured."""
     return bool(redis_url)
-
 
 class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY") or "you-will-never-guess"
     BASE_DIR = os.path.abspath(os.path.join(
         os.path.dirname(__file__), "../../../"))
-    
-    # Только PostgreSQL - без SQLite fallback
+
     SQLALCHEMY_DATABASE_URI = (
         _build_postgres_url()
         or os.environ.get("DATABASE_URL")
     )
-    
-    # Проверяем что PostgreSQL настроен
+
     if not SQLALCHEMY_DATABASE_URI:
         raise ValueError(
             "PostgreSQL не настроен! Установите POSTGRES_* переменные или DATABASE_URL\n"
@@ -73,7 +66,7 @@ class Config:
             "Или:\n"
             "DATABASE_URL=postgresql://vondic:vondic123@localhost:5432/vondic"
         )
-    
+
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     MAIL_SERVER = os.environ.get("MAIL_SERVER")
     MAIL_PORT = int(os.environ.get("MAIL_PORT") or 587)
@@ -94,10 +87,9 @@ class Config:
         "OLLAMA_API_URL") or "http://localhost:11434"
     OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL") or "llama3.1"
     SESSION_TTL_SECONDS = int(os.environ.get("SESSION_TTL_SECONDS", "2592000"))
-    
-    # Redis configuration
+
     CACHE_REDIS_URL = _build_redis_url()
-    # Use Redis only if configured, otherwise fallback to SimpleCache
+
     if _is_redis_available(CACHE_REDIS_URL):
         CACHE_TYPE = os.environ.get("CACHE_TYPE") or "RedisCache"
     else:

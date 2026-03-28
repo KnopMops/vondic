@@ -71,7 +71,7 @@ export default function ShopSuccessPage() {
 										Оплата прошла успешно
 									</h1>
 									<p className='mt-2 text-gray-600 dark:text-gray-300'>
-										Спасибо за покупку Vondic Coins. Монеты зачисляются
+										Спасибо за покупку Вондик Coins. Монеты зачисляются
 										автоматически после подтверждения оплаты.
 									</p>
 									{confirming && (
