@@ -18,9 +18,6 @@ WORKDIR /app/bot
 # Use local botiksdk - PYTHONPATH should point to parent directory
 ENV PYTHONPATH=/app:$PYTHONPATH
 
-# Add hosts entries for internal DNS
-RUN echo "192.168.20.31 api.vondic.knopusmedia.ru webrtc.vondic.knopusmedia.ru in.api.vondic.knopusmedia.ru in.webrtc.vondic.knopusmedia.ru" >> /etc/hosts
-
 # Install curl for healthcheck
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
