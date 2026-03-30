@@ -61,6 +61,7 @@ run.py
 *.crt
 *.key
 
+Dockerfile*
 nginx/
 *.yaml
 prometheus.yml

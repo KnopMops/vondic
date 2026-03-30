@@ -2,14 +2,14 @@ from app.core.rate_limiter import check_spam_protection, rate_limit
 from app.schemas.message_schema import message_schema, messages_schema
 from app.services.message_service import MessageService
 from app.services.user_service import UserService
-from app.utils.decorators import token_required
+from app.utils.decorators import api_key_required
 from flask import Blueprint, jsonify, request
 
 public_messages_bp = Blueprint(
     "public_messages", __name__, url_prefix="/api/public/v1/messages")
 
 @public_messages_bp.route("/", methods=["GET"])
-@token_required
+@api_key_required
 def get_messages(current_user):
     try:
         page = request.args.get('page', 1, type=int)
@@ -40,7 +40,7 @@ def get_messages(current_user):
         return jsonify({"error": str(e)}), 500
 
 @public_messages_bp.route("/<message_id>", methods=["GET"])
-@token_required
+@api_key_required
 def get_message(current_user, message_id):
     try:
         message = MessageService.get_message_by_id(message_id)
@@ -55,7 +55,7 @@ def get_message(current_user, message_id):
         return jsonify({"error": str(e)}), 500
 
 @public_messages_bp.route("/", methods=["POST"])
-@token_required
+@api_key_required
 
 @rate_limit(limit=50, window=3600, per_user=True)
 def send_message(current_user):
@@ -99,7 +99,7 @@ def send_message(current_user):
         return jsonify({"error": str(e)}), 500
 
 @public_messages_bp.route("/<message_id>", methods=["PUT"])
-@token_required
+@api_key_required
 
 @rate_limit(limit=20, window=3600, per_user=True)
 def update_message(current_user, message_id):
@@ -140,7 +140,7 @@ def update_message(current_user, message_id):
         return jsonify({"error": str(e)}), 500
 
 @public_messages_bp.route("/<message_id>", methods=["DELETE"])
-@token_required
+@api_key_required
 def delete_message(current_user, message_id):
     try:
         message = MessageService.get_message_by_id(message_id)
@@ -159,7 +159,7 @@ def delete_message(current_user, message_id):
         return jsonify({"error": str(e)}), 500
 
 @public_messages_bp.route("/read/<message_id>", methods=["POST"])
-@token_required
+@api_key_required
 def mark_message_as_read(current_user, message_id):
     try:
         message = MessageService.get_message_by_id(message_id)
@@ -178,7 +178,7 @@ def mark_message_as_read(current_user, message_id):
         return jsonify({"error": str(e)}), 500
 
 @public_messages_bp.route("/unread", methods=["GET"])
-@token_required
+@api_key_required
 def get_unread_messages(current_user):
     try:
         page = request.args.get('page', 1, type=int)
@@ -202,7 +202,7 @@ def get_unread_messages(current_user):
         return jsonify({"error": str(e)}), 500
 
 @public_messages_bp.route("/threads", methods=["GET"])
-@token_required
+@api_key_required
 def get_message_threads(current_user):
     try:
         page = request.args.get('page', 1, type=int)

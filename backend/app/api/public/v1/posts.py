@@ -1,7 +1,7 @@
 from app.core.rate_limiter import check_spam_protection, rate_limit
 from app.schemas.post_schema import post_schema, posts_schema
 from app.services.post_service import PostService
-from app.utils.decorators import token_required
+from app.utils.decorators import api_key_required
 from flask import Blueprint, jsonify, request
 
 public_posts_bp = Blueprint(
@@ -14,8 +14,8 @@ def get_posts():
         limit = request.args.get('limit', 20, type=int)
         offset = (page - 1) * limit
 
-        posts = PostService.get_public_posts(limit=limit, offset=offset)
-        total_count = PostService.get_public_posts_count()
+        posts = PostService.get_posts_paginated(limit=limit, offset=offset)
+        total_count = PostService.get_all_posts().count()
 
         return jsonify({
             "posts": posts_schema.dump(posts),
@@ -44,7 +44,7 @@ def get_post(post_id):
         return jsonify({"error": str(e)}), 500
 
 @public_posts_bp.route("/", methods=["POST"])
-@token_required
+@api_key_required
 @rate_limit(limit=10, window=3600, per_user=True)
 def create_post(current_user):
     try:
@@ -88,7 +88,7 @@ def create_post(current_user):
         return jsonify({"error": str(e)}), 500
 
 @public_posts_bp.route("/<post_id>", methods=["PUT"])
-@token_required
+@api_key_required
 
 @rate_limit(limit=20, window=3600, per_user=True)
 def update_post(current_user, post_id):
@@ -134,7 +134,7 @@ def update_post(current_user, post_id):
         return jsonify({"error": str(e)}), 500
 
 @public_posts_bp.route("/<post_id>", methods=["DELETE"])
-@token_required
+@api_key_required
 def delete_post(current_user, post_id):
     try:
         post = PostService.get_post_by_id(post_id)
@@ -153,7 +153,7 @@ def delete_post(current_user, post_id):
         return jsonify({"error": str(e)}), 500
 
 @public_posts_bp.route("/<post_id>/like", methods=["POST"])
-@token_required
+@api_key_required
 def like_post(current_user, post_id):
     try:
         post = PostService.get_post_by_id(post_id)
@@ -172,7 +172,7 @@ def like_post(current_user, post_id):
         return jsonify({"error": str(e)}), 500
 
 @public_posts_bp.route("/<post_id>/unlike", methods=["POST"])
-@token_required
+@api_key_required
 def unlike_post(current_user, post_id):
     try:
         post = PostService.get_post_by_id(post_id)

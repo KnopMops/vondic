@@ -1744,6 +1744,7 @@ export default function MessengerPage() {
 
 			if (socket) {
 				socket.emit('send_message', {
+					group_id: selectedGroup.id,
 					target_user_id: userId,
 					content: `Привет! Присоединяйся к моей группе "${selectedGroup.name}"!\nКод приглашения: ${details.invite_code}`,
 					attachments: [],
@@ -2664,7 +2665,7 @@ export default function MessengerPage() {
 			}
 			try {
 				const res = await fetch(
-					`${apiUrl()}/api/v1/bots/${selectedFriend?.id}/updates/push`,
+					`/api/v1/bots/${selectedFriend?.id}/updates/push`,
 					{
 						method: 'POST',
 						headers: {

@@ -7,14 +7,14 @@ services:
       POSTGRES_PASSWORD: vondic
       POSTGRES_DB: vondic
     ports:
-      - '5432:5432'
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - app-network
     restart: unless-stopped
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U vondic -d vondic']
+      test: ["CMD-SHELL", "pg_isready -U vondic -d vondic"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -28,10 +28,10 @@ services:
     networks:
       - app-network
     ports:
-      - '6379:6379'
+      - "6379:6379"
     restart: unless-stopped
     healthcheck:
-      test: ['CMD', 'redis-cli', 'ping']
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -44,15 +44,15 @@ services:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
     ports:
-      - '5672:5672'
-      - '15672:15672'
+      - "5672:5672"
+      - "15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - app-network
     restart: unless-stopped
     healthcheck:
-      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -74,7 +74,7 @@ services:
       - SERVER_RESET_QUERY="DISCARD ALL"
       - ADMIN_USERS=postgres,admin
     ports:
-      - '6432:6432'
+      - "6432:6432"
     networks:
       - app-network
     depends_on:
@@ -99,7 +99,7 @@ services:
       rabbitmq:
         condition: service_healthy
     ports:
-      - '5050:5050'
+      - "5050:5050"
     networks:
       - app-network
     restart: unless-stopped
@@ -137,7 +137,7 @@ services:
     networks:
       - app-network
     ports:
-      - '5000:5000'
+      - "5000:5000"
     restart: unless-stopped
 
   frontend:
@@ -153,7 +153,12 @@ services:
     networks:
       - app-network
     ports:
-      - '3000:3000'
+      - "3000:3000"
+    extra_hosts:
+      - "api.vondic.knopusmedia.ru:192.168.20.31"
+      - "webrtc.vondic.knopusmedia.ru:192.168.20.31"
+      - "in.api.vondic.knopusmedia.ru:192.168.20.31"
+      - "in.webrtc.vondic.knopusmedia.ru:192.168.20.31"
     restart: unless-stopped
 
   bot:
@@ -178,8 +183,8 @@ services:
     build: ./nginx
     container_name: nginx
     ports:
-      - '80:80'
-      - '443:443'
+      - "80:80"
+      - "443:443"
     volumes:
       - ./nginx/ssl:/etc/nginx/ssl:ro
     depends_on:
@@ -194,16 +199,18 @@ services:
     image: coturn/coturn
     container_name: turn
     restart: unless-stopped
+    env_file:
+      - .env.turn
     ports:
-      - '3478:3478'
-      - '3478:3478/udp'
-      - '50000-50050:50000-50050'
-      - '50000-50050:50000-50050/udp'
+      - "3478:3478"
+      - "3478:3478/udp"
+      - "50000-50050:50000-50050"
+      - "50000-50050:50000-50050/udp"
     command: >
       -n --log-file=stdout
       --min-port=50000 --max-port=50050
-      --user=vondic:свой пароль
-      --realm=домен
+      --user=vondic:Dim4566212Len
+      --realm=vondic.knopusmedia.ru
       --listening-port=3478
       --listening-ip=0.0.0.0
       --fingerprint

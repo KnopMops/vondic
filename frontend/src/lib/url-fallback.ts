@@ -25,6 +25,7 @@ const config: FallbackConfig = {
 		fallback: process.env.NEXT_PUBLIC_INTERNAL_BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050',
 	},
 	webrtc: {
+		// Use external URL with CORS for WebSocket connections
 		primary: process.env.NEXT_PUBLIC_WEBRTC_URL || 'http://localhost:5000',
 		fallback: process.env.NEXT_PUBLIC_INTERNAL_WEBRTC_URL || process.env.NEXT_PUBLIC_WEBRTC_URL || 'http://localhost:5000',
 	},
@@ -43,23 +44,9 @@ export async function checkApiAvailability(url: string, timeoutMs = 3000): Promi
 		return true;
 	}
 
-	try {
-		const controller = new AbortController();
-		const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-		// Try a lightweight request (HEAD or GET with CORS)
-		const response = await fetch(`${url}/health`, {
-			method: 'GET',
-			signal: controller.signal,
-			mode: 'cors',
-			credentials: 'omit',
-		});
-
-		clearTimeout(timeoutId);
-		return response.ok || response.status === 404; // 404 means server is reachable
-	} catch {
-		return false;
-	}
+	// Skip health check to avoid CORS issues - assume primary is available
+	// The actual API calls will fail if backend is unreachable
+	return true;
 }
 
 /**

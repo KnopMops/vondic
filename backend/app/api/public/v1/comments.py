@@ -2,7 +2,7 @@ from app.core.rate_limiter import check_spam_protection, rate_limit
 from app.schemas.comment_schema import comment_schema, comments_schema
 from app.services.comment_service import CommentService
 from app.services.post_service import PostService
-from app.utils.decorators import token_required
+from app.utils.decorators import api_key_required
 from flask import Blueprint, jsonify, request
 
 public_comments_bp = Blueprint(
@@ -47,7 +47,7 @@ def get_comment(comment_id):
         return jsonify({"error": str(e)}), 500
 
 @public_comments_bp.route("/", methods=["POST"])
-@token_required
+@api_key_required
 
 @rate_limit(limit=15, window=3600, per_user=True)
 def create_comment(current_user):
@@ -90,7 +90,7 @@ def create_comment(current_user):
         return jsonify({"error": str(e)}), 500
 
 @public_comments_bp.route("/<comment_id>", methods=["PUT"])
-@token_required
+@api_key_required
 
 @rate_limit(limit=10, window=3600, per_user=True)
 def update_comment(current_user, comment_id):
@@ -125,7 +125,7 @@ def update_comment(current_user, comment_id):
         return jsonify({"error": str(e)}), 500
 
 @public_comments_bp.route("/<comment_id>", methods=["DELETE"])
-@token_required
+@api_key_required
 def delete_comment(current_user, comment_id):
     try:
         comment = CommentService.get_comment_by_id(comment_id)
@@ -144,7 +144,7 @@ def delete_comment(current_user, comment_id):
         return jsonify({"error": str(e)}), 500
 
 @public_comments_bp.route("/<comment_id>/like", methods=["POST"])
-@token_required
+@api_key_required
 def like_comment(current_user, comment_id):
     try:
         comment = CommentService.get_comment_by_id(comment_id)
@@ -165,7 +165,7 @@ def like_comment(current_user, comment_id):
         return jsonify({"error": str(e)}), 500
 
 @public_comments_bp.route("/<comment_id>/unlike", methods=["POST"])
-@token_required
+@api_key_required
 def unlike_comment(current_user, comment_id):
     try:
         comment = CommentService.get_comment_by_id(comment_id)

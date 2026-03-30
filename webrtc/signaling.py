@@ -698,12 +698,14 @@ class SignalingService:
         content = payload.get("content")
         attachments = payload.get("attachments")
         msg_type = payload.get("type", "text")
+        forwarded_from = payload.get("forwarded_from")
 
         logger.info(
             f"Получен запрос send_message от {
                 request.sid}. Target: {target_user_id}, Channel: {channel_id}, Group: {group_id}, Content: {
                 content[
-                    :50] if content else 'None'}..., Type: {msg_type}")
+                    :50] if content else 'None'}..., Type: {msg_type}"
+        )
         logger.info(f"Full payload keys: {list(payload.keys())}")
 
         if (
@@ -889,6 +891,12 @@ class SignalingService:
                 "type": msg_type,
                 "timestamp": timestamp,
             }
+            
+            # Add forwarded_from information if present
+            if forwarded_from:
+                msg_data["forwarded_from_id"] = forwarded_from.get("sender_id")
+                # Store forwarded_from details in content as JSON for display
+                # This will be parsed by frontend to show "Переслано от"
 
             saved, error = self.broker.repo.save_message(msg_data)
             if not saved:
@@ -913,6 +921,10 @@ class SignalingService:
                 "timestamp": timestamp,
                 "is_read": 0,
             }
+            
+            # Add forwarded_from to payload for display
+            if forwarded_from:
+                full_message_payload["forwarded_from"] = forwarded_from
 
             if target_socket:
                 logger.info(

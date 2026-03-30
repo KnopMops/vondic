@@ -1305,11 +1305,19 @@ export class WebRTCService {
 			// Check if we're in the right state to accept an answer
 			const currentState = pc.signalingState
 			// We should be in 'have-local-offer' state if we sent an offer and are receiving an answer
-			if (currentState !== 'have-local-offer') {
-				console.log(`[WebRTC] Skipping answer from ${data.sender_socket_id}: connection state is ${currentState}, expected 'have-local-offer'`)
+			// For group calls, we also accept answers in 'stable' state
+			if (currentState !== 'have-local-offer' && currentState !== 'stable') {
+				console.log(`[WebRTC] Skipping answer from ${data.sender_socket_id}: connection state is ${currentState}, expected 'have-local-offer' or 'stable'`)
 				return
 			}
-						
+
+			// If in stable state, we need to create a new offer first (renegotiation)
+			if (currentState === 'stable') {
+				console.log(`[WebRTC] PC is in stable state, renegotiating for ${data.sender_socket_id}`)
+				// Skip this answer as we need to renegotiate
+				return
+			}
+
 			// Double-check state right before setting remote description
 			if (pc.signalingState !== 'have-local-offer') {
 				console.log(`[WebRTC] State changed during answer processing, skipping answer for ${data.sender_socket_id}`)

@@ -1,3 +1,4 @@
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from app.core.extensions import db
 from app.models.channel import Channel
 from app.models.user import User
@@ -5,25 +6,55 @@ from app.models.user import User
 class ChannelService:
     @staticmethod
     def create_channel(data, user_id):
+        """
+        Create a new channel.
+        
+        Args:
+            data: Dictionary with 'name' and optional 'description'
+            user_id: ID of the user creating the channel
+            
+        Returns:
+            Tuple of (channel, error_message)
+        """
         name = data.get("name")
         description = data.get("description")
 
         if not name:
             return None, "Channel name is required"
 
+        # Validate name length
+        if len(name) > 100:
+            return None, "Channel name must not exceed 100 characters"
+
+        # Validate description length if provided
+        if description and len(description) > 500:
+            return None, "Description must not exceed 500 characters"
+
+        # Check if user exists
+        owner = User.query.get(user_id)
+        if not owner:
+            return None, "User not found"
+
         new_channel = Channel(
             name=name, description=description, owner_id=user_id)
-        owner = User.query.get(user_id)
-        if owner:
-            new_channel.participants.append(owner)
+        new_channel.participants.append(owner)
 
         try:
             db.session.add(new_channel)
             db.session.commit()
             return new_channel, None
+        except IntegrityError as e:
+            db.session.rollback()
+            error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
+            if 'unique' in error_msg.lower() or 'duplicate' in error_msg.lower():
+                return None, "Channel with this name already exists"
+            return None, f"Database integrity error: {error_msg}"
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            return None, f"Database error: {str(e)}"
         except Exception as e:
             db.session.rollback()
-            return None, str(e)
+            return None, f"Unexpected error: {str(e)}"
 
     @staticmethod
     def join_channel(invite_code, user_id):

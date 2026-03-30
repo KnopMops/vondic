@@ -666,13 +666,12 @@ export const useChat = (
 				}
 
 				// Handle REST API History (Direct & Channels)
-				let endpoint = '/api/messages/history'
+				const endpoint = channelId ? '/api/channels/history' : '/api/messages/history'
 				const body: any = {
 					limit: 50,
 					offset: 0,
 				}
 				if (channelId) {
-					endpoint = '/api/channels/history'
 					body.channel_id = channelId
 				} else if (targetUserId) {
 					body.target_id = targetUserId
@@ -797,13 +796,12 @@ export const useChat = (
 			}
 
 			// Handle REST Load More
-			let endpoint = '/api/messages/history'
+			const endpoint = channelId ? '/api/channels/history' : '/api/messages/history'
 			const body: any = {
 				limit: 50,
 				offset: offset,
 			}
 			if (channelId) {
-				endpoint = '/api/channels/history'
 				body.channel_id = channelId
 			} else if (targetUserId) {
 				body.target_id = targetUserId

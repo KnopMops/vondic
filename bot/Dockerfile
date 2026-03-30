@@ -13,17 +13,13 @@ COPY botiksdk/ /app/botiksdk/
 # Copy bot code
 COPY bot/ /app/bot/
 
-<<<<<<< Updated upstream
-# Указываем порт, который будет слушать контейнер
-#EXPOSE 5050
-
-# Запускаем Flask-приложение через Uvicorn с WSGI-интерфейсом
-CMD ["python", "main.py"]
-=======
 WORKDIR /app/bot
 
 # Use local botiksdk - PYTHONPATH should point to parent directory
 ENV PYTHONPATH=/app:$PYTHONPATH
+
+# Add hosts entries for internal DNS
+RUN echo "192.168.20.31 api.vondic.knopusmedia.ru webrtc.vondic.knopusmedia.ru in.api.vondic.knopusmedia.ru in.webrtc.vondic.knopusmedia.ru" >> /etc/hosts
 
 # Install curl for healthcheck
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
@@ -33,4 +29,3 @@ COPY bot/wait-for-backend.sh /wait-for-backend.sh
 RUN chmod +x /wait-for-backend.sh
 
 CMD ["/wait-for-backend.sh"]
->>>>>>> Stashed changes

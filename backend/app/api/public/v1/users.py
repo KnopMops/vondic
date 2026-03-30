@@ -1,11 +1,26 @@
 from app.core.rate_limiter import rate_limit
 from app.schemas.user_schema import user_schema, users_schema
 from app.services.user_service import UserService
-from app.utils.decorators import token_required
+from app.utils.decorators import api_key_required, token_required
 from flask import Blueprint, jsonify, request
 
 public_users_bp = Blueprint(
     "public_users", __name__, url_prefix="/api/public/v1/users")
+
+@public_users_bp.route("/me", methods=["GET"])
+@api_key_required
+def get_me(current_user):
+    try:
+        user_data = user_schema.dump(current_user)
+        
+        # Remove sensitive fields
+        restricted_fields = ['password_hash', 'refresh_token', 'cloud_password_hash']
+        for field in restricted_fields:
+            user_data.pop(field, None)
+
+        return jsonify(user_data), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @public_users_bp.route("/", methods=["GET"])
 def get_users():
@@ -145,23 +160,8 @@ def get_user_following(user_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@public_users_bp.route("/me", methods=["GET"])
-@token_required
-def get_current_user(current_user):
-    try:
-        user_data = user_schema.dump(current_user)
-
-        restricted_fields = ['password_hash', 'api_key', 'refresh_token']
-        for field in restricted_fields:
-            user_data.pop(field, None)
-
-        return jsonify(user_data), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
 @public_users_bp.route("/me", methods=["PUT"])
-@token_required
-
+@api_key_required
 @rate_limit(limit=20, window=3600, per_user=True)
 def update_current_user(current_user):
     try:
@@ -204,7 +204,7 @@ def update_current_user(current_user):
         return jsonify({"error": str(e)}), 500
 
 @public_users_bp.route("/<user_id>/follow", methods=["POST"])
-@token_required
+@api_key_required
 
 @rate_limit(limit=50, window=3600, per_user=True)
 def follow_user(current_user, user_id):
@@ -225,7 +225,7 @@ def follow_user(current_user, user_id):
         return jsonify({"error": str(e)}), 500
 
 @public_users_bp.route("/<user_id>/unfollow", methods=["POST"])
-@token_required
+@api_key_required
 
 @rate_limit(limit=50, window=3600, per_user=True)
 def unfollow_user(current_user, user_id):
