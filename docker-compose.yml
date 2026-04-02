@@ -3,9 +3,9 @@ services:
     image: postgres:15
     container_name: postgres
     environment:
-      POSTGRES_USER: vondic
-      POSTGRES_PASSWORD: vondic
-      POSTGRES_DB: vondic
+      POSTGRES_USER: ...
+      POSTGRES_PASSWORD: ...
+      POSTGRES_DB: ...
     ports:
       - "5432:5432"
     volumes:
@@ -65,9 +65,9 @@ services:
     environment:
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_USER=vondic
-      - DB_PASSWORD=vondic
-      - DB_NAME=vondic
+      - DB_USER=...
+      - DB_PASSWORD=...
+      - DB_NAME=...
       - POOL_MODE=transaction
       - MAX_CLIENT_CONN=100
       - DEFAULT_POOL_SIZE=20
@@ -154,11 +154,6 @@ services:
       - app-network
     ports:
       - "3000:3000"
-    extra_hosts:
-      - "api.vondic.knopusmedia.ru:192.168.20.31"
-      - "webrtc.vondic.knopusmedia.ru:192.168.20.31"
-      - "in.api.vondic.knopusmedia.ru:192.168.20.31"
-      - "in.webrtc.vondic.knopusmedia.ru:192.168.20.31"
     restart: unless-stopped
 
   bot:
