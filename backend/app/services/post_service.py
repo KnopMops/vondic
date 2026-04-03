@@ -5,6 +5,7 @@ from datetime import datetime
 from app.core.extensions import db
 from app.models.like import Like
 from app.models.post import Post
+from app.models.subscription import Subscription
 from app.models.user import User
 from flask import current_app
 
@@ -32,15 +33,30 @@ class PostService:
 
     @staticmethod
     def get_posts_paginated(
-        page=1, per_page=5, user_id=None, is_blog: bool | None = False
+        page=1, per_page=5, user_id=None, is_blog: bool | None = False, filter_mode: str | None = None
     ):
         query = Post.query.join(User, Post.posted_by == User.id).filter(
             Post.deleted.is_(False),
             User.is_blocked == 0,
             Post.is_blog.is_(True) if is_blog else Post.is_blog.is_(False),
         )
-        if user_id:
+
+        if filter_mode == "subscriptions" and user_id:
+            subscriptions = Subscription.query.filter_by(
+                subscriber_id=user_id
+            ).all()
+            target_ids = [sub.target_id for sub in subscriptions]
+            if target_ids:
+                query = query.filter(User.id.in_(target_ids))
+            else:
+
+                return Post.query.filter(Post.id.is_(None)).paginate(
+                    page=page, per_page=per_page, error_out=False
+                )
+
+        if user_id and filter_mode != "subscriptions":
             query = query.filter(User.id == user_id)
+
         return query.order_by(Post.created_at.desc()).paginate(
             page=page, per_page=per_page, error_out=False
         )

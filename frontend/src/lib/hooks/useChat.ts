@@ -3,8 +3,8 @@ import { Message } from '@/lib/types'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Socket } from 'socket.io-client'
 
-// Check if Web Crypto API is available (requires secure context)
-const hasCryptoSubtle = typeof crypto !== 'undefined' && typeof crypto.subtle !== 'undefined'
+const hasCryptoSubtle =
+	typeof crypto !== 'undefined' && typeof crypto.subtle !== 'undefined'
 
 const base64FromBytes = (bytes: Uint8Array) => {
 	let binary = ''
@@ -427,12 +427,20 @@ export const useChat = (
 	const decryptMessage = useCallback(
 		(msg: any) => {
 			const next = { ...msg }
-			
+
 			// Try to decrypt content if it looks encrypted
-			if (typeof next.content === 'string' && next.content.startsWith('e2e:')) {
+			if (
+				next.content &&
+				typeof next.content === 'string' &&
+				next.content.startsWith('e2e:')
+			) {
 				// Get current e2eKeyId from ref or state
-				const currentE2eKeyId = e2eKeyId || (targetUserId && currentUserId ? [currentUserId, targetUserId].sort().join(':') : null)
-				
+				const currentE2eKeyId =
+					e2eKeyId ||
+					(targetUserId && currentUserId
+						? [currentUserId, targetUserId].sort().join(':')
+						: null)
+
 				if (currentE2eKeyId) {
 					const key = e2eKeysRef.current.get(currentE2eKeyId)
 					if (key) {
@@ -442,7 +450,9 @@ export const useChat = (
 						} else {
 							// If decryption fails, strip e2e: prefix and show base64-decoded
 							try {
-								next.content = decodeURIComponent(escape(atob(next.content.slice(4))))
+								next.content = decodeURIComponent(
+									escape(atob(next.content.slice(4))),
+								)
 							} catch {
 								next.content = next.content.slice(4)
 							}
@@ -453,19 +463,25 @@ export const useChat = (
 				} else {
 					// No e2eKeyId - strip prefix as fallback
 					try {
-						next.content = decodeURIComponent(escape(atob(next.content.slice(4))))
+						next.content = decodeURIComponent(
+							escape(atob(next.content.slice(4))),
+						)
 					} catch {
 						next.content = next.content.slice(4)
 					}
 				}
 			}
-			
+
 			// Try to decrypt attachments if they look encrypted
 			if (
 				typeof next.attachments === 'string' &&
 				next.attachments.startsWith('e2e:')
 			) {
-				const currentE2eKeyId = e2eKeyId || (targetUserId && currentUserId ? [currentUserId, targetUserId].sort().join(':') : null)
+				const currentE2eKeyId =
+					e2eKeyId ||
+					(targetUserId && currentUserId
+						? [currentUserId, targetUserId].sort().join(':')
+						: null)
 				if (currentE2eKeyId) {
 					const key = e2eKeysRef.current.get(currentE2eKeyId)
 					if (key) {
@@ -486,7 +502,7 @@ export const useChat = (
 					next.attachments = undefined
 				}
 			}
-			
+
 			return next
 		},
 		[e2eKeyId, targetUserId, currentUserId],
@@ -549,7 +565,7 @@ export const useChat = (
 			const derived = await deriveKey(shared, e2eKeyId)
 			console.log('[E2E] Derived key, storing for:', e2eKeyId)
 			storeKey(e2eKeyId, derived)
-			
+
 			// Re-decrypt ALL messages with the new key
 			console.log('[E2E] Re-decrypting all messages with new key')
 			setMessages(prev => {
@@ -558,12 +574,17 @@ export const useChat = (
 					const decrypted = decryptMessage(m)
 					// Log if content changed
 					if (decrypted.content !== m.content) {
-						console.log('[E2E] Decrypted message:', m.content.substring(0, 30) + '...', '->', decrypted.content.substring(0, 30) + '...')
+						console.log(
+							'[E2E] Decrypted message:',
+							m.content.substring(0, 30) + '...',
+							'->',
+							decrypted.content.substring(0, 30) + '...',
+						)
 					}
 					return decrypted
 				})
 			})
-			
+
 			const pending = e2ePendingRef.current.get(e2eKeyId)
 			if (pending && pending.length) {
 				console.log('[E2E] Sending pending messages:', pending.length)
@@ -666,7 +687,9 @@ export const useChat = (
 				}
 
 				// Handle REST API History (Direct & Channels)
-				const endpoint = channelId ? '/api/channels/history' : '/api/messages/history'
+				const endpoint = channelId
+					? '/api/channels/history'
+					: '/api/messages/history'
 				const body: any = {
 					limit: 50,
 					offset: 0,
@@ -701,6 +724,7 @@ export const useChat = (
 								channel_id: msg.channel_id,
 								reply_to: msg.reply_to,
 								type: msg.type || 'text',
+								pinned_by: msg.pinned_by,
 								attachments: msg.is_deleted ? undefined : msg.attachments,
 							}))
 						: []
@@ -796,7 +820,9 @@ export const useChat = (
 			}
 
 			// Handle REST Load More
-			const endpoint = channelId ? '/api/channels/history' : '/api/messages/history'
+			const endpoint = channelId
+				? '/api/channels/history'
+				: '/api/messages/history'
 			const body: any = {
 				limit: 50,
 				offset: offset,
@@ -831,6 +857,7 @@ export const useChat = (
 							channel_id: msg.channel_id,
 							reply_to: msg.reply_to,
 							type: msg.type || 'text',
+							pinned_by: msg.pinned_by,
 							attachments: msg.is_deleted
 								? undefined
 								: Array.isArray(msg.attachments)
@@ -887,6 +914,7 @@ export const useChat = (
 					channel_id: data.channel_id,
 					reply_to: data.reply_to,
 					type: data.type || 'text',
+					pinned_by: data.pinned_by,
 					attachments: data.attachments,
 				}
 				const decrypted = decryptMessage(newMessage)
@@ -907,6 +935,7 @@ export const useChat = (
 					group_id: data.group_id,
 					reply_to: data.reply_to,
 					type: data.type || 'text',
+					pinned_by: data.pinned_by,
 					attachments: data.attachments,
 				}
 				const decrypted = decryptMessage(newMessage)
@@ -922,7 +951,9 @@ export const useChat = (
 				targetUserId &&
 				!data.channel_id &&
 				!data.group_id &&
-				(data.sender_id === targetUserId || data.target_id === targetUserId || data.target_user_id === targetUserId)
+				(data.sender_id === targetUserId ||
+					data.target_id === targetUserId ||
+					data.target_user_id === targetUserId)
 			) {
 				const newMessage: Message = {
 					id: data.id || Date.now().toString() + Math.random().toString(),
@@ -934,6 +965,7 @@ export const useChat = (
 					is_deleted: !!data.is_deleted,
 					reply_to: data.reply_to,
 					type: data.type || 'text',
+					pinned_by: data.pinned_by,
 					attachments: data.attachments,
 				}
 				const decrypted = decryptMessage(newMessage)
@@ -957,6 +989,7 @@ export const useChat = (
 					channel_id: msg.channel_id,
 					reply_to: msg.reply_to,
 					type: msg.type || 'text',
+					pinned_by: msg.pinned_by,
 					attachments: msg.attachments,
 				}
 				const decrypted = decryptMessage(newMessage)

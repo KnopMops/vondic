@@ -4,7 +4,7 @@ import { useAuth } from '@/lib/AuthContext'
 import { setUser } from '@/lib/features/authSlice'
 import { useAppDispatch } from '@/lib/hooks'
 import { User } from '@/lib/types'
-import { getAttachmentUrl } from '@/lib/utils'
+import { getAttachmentUrl, getAvatarUrl } from '@/lib/utils'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Coffee, Crown, Flame, Flower, Gift, Heart, Star } from 'lucide-react'
 import Link from 'next/link'
@@ -84,7 +84,6 @@ export default function UserProfile({ user, currentUser }: Props) {
 		gold_star: 'Золотая звезда',
 	}
 
-	// Edit Profile Modal State
 	const [isEditModalOpen, setIsEditModalOpen] = useState(false)
 	const [avatarUrl, setAvatarUrl] = useState(user.avatar_url || '')
 	const [usernameEdit, setUsernameEdit] = useState(user.username || '')
@@ -95,7 +94,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 	)
 	const [uploadingBgImage, setUploadingBgImage] = useState(false)
 	const [linkKey, setLinkKey] = useState<string | null>(null)
-	// Gift modal
+
 	const [isGiftModalOpen, setIsGiftModalOpen] = useState(false)
 	const [giftError, setGiftError] = useState<string | null>(null)
 	const [giftLoading, setGiftLoading] = useState(false)
@@ -775,10 +774,9 @@ export default function UserProfile({ user, currentUser }: Props) {
 			transition={{ duration: 0.5 }}
 			className='mx-auto max-w-3xl space-y-6'
 		>
-			{/* Cover Image */}
 			<div
 				className={`relative h-48 rounded-2xl overflow-hidden shadow-lg ${
-					user.premium ? 'ring-2 ring-amber-400/30' : activeTheme.class
+					user.premium ? '' : activeTheme.class
 				}`}
 				style={
 					user.premium && !user.profile_bg_image && activeGradient
@@ -802,17 +800,12 @@ export default function UserProfile({ user, currentUser }: Props) {
 				)}
 			</div>
 
-			{/* User Info Section */}
 			<div className='flex flex-col sm:flex-row items-end gap-6 px-4'>
 				<motion.div
 					initial={{ scale: 0.8, opacity: 0 }}
 					animate={{ scale: 1, opacity: 1 }}
 					transition={{ delay: 0.2 }}
-					className={`-mt-20 flex h-32 w-32 items-center justify-center rounded-full bg-gray-900 ring-4 ${
-						user.premium
-							? 'ring-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.35)]'
-							: 'ring-black'
-					} overflow-hidden shadow-xl z-10`}
+					className={`-mt-20 flex h-32 w-32 items-center justify-center rounded-full bg-gray-900 overflow-hidden shadow-xl z-10`}
 				>
 					{user.avatar_url && (!isBlocked || isAdmin) ? (
 						<img
@@ -834,7 +827,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 								{user.username}
 								{user.premium && <span className='ml-2 text-amber-400'>★</span>}
 							</h1>
-							{!user.email?.endsWith('@telegram.bot') && (
+							{(isMe || user.privacy_settings?.show_email !== false) && (
 								<p className='text-sm text-gray-400'>{user.email}</p>
 							)}
 							<p
@@ -856,7 +849,6 @@ export default function UserProfile({ user, currentUser }: Props) {
 							)}
 						</div>
 
-						{/* Actions */}
 						{isMe && (
 							<motion.button
 								whileHover={{ scale: 1.05 }}
@@ -868,7 +860,6 @@ export default function UserProfile({ user, currentUser }: Props) {
 							</motion.button>
 						)}
 
-						{/* Edit Modal */}
 						<AnimatePresence>
 							{isEditModalOpen && (
 								<motion.div
@@ -1100,7 +1091,6 @@ export default function UserProfile({ user, currentUser }: Props) {
 
 						{!isMe && currentUser && !checkingStatus && (
 							<div className='flex flex-wrap gap-3'>
-								{/* Friend Button */}
 								{isFriend ? (
 									<motion.button
 										whileHover={{ scale: 1.05 }}
@@ -1123,7 +1113,6 @@ export default function UserProfile({ user, currentUser }: Props) {
 									</motion.button>
 								)}
 
-								{/* Subscribe Button */}
 								{isSubscribed ? (
 									<motion.button
 										whileHover={{ scale: 1.05 }}
@@ -1243,7 +1232,6 @@ export default function UserProfile({ user, currentUser }: Props) {
 				)}
 			</AnimatePresence>
 
-			{/* Content Tabs */}
 			<div className='rounded-3xl bg-white/5 border border-white/10 backdrop-blur-md p-1'>
 				<div className='flex flex-wrap'>
 					<button
@@ -1561,10 +1549,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 										className='flex items-center gap-3 rounded-xl bg-white/5 p-3 hover:bg-white/10 transition-colors'
 									>
 										<img
-											src={
-												getAttachmentUrl(friend.avatar_url) ||
-												'/placeholder-user.jpg'
-											}
+											src={getAvatarUrl(friend.avatar_url)}
 											alt={friend.username}
 											className='h-12 w-12 rounded-full object-cover'
 										/>
@@ -1572,7 +1557,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 											<p className='font-medium text-white'>
 												{friend.username}
 											</p>
-											{!friend.email.endsWith('@telegram.bot') && (
+											{friend.privacy_settings?.show_email !== false && (
 												<p className='text-xs text-gray-400'>{friend.email}</p>
 											)}
 										</div>

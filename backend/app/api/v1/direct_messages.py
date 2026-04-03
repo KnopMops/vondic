@@ -9,37 +9,28 @@ dm_bp = Blueprint("direct_messages", __name__, url_prefix="/api/v1/dm")
 @dm_bp.route("/recent", methods=["GET", "OPTIONS"])
 def get_recent_contacts():
     from app.services.auth_service import AuthService
-    
-    # Handle CORS preflight first (before auth check)
-    if request.method == 'OPTIONS':
-        response = make_response()
-        response.headers.add("Access-Control-Allow-Origin", "https://vondic.knopusmedia.ru")
-        response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
-        response.headers.add("Access-Control-Allow-Methods", "GET,OPTIONS")
-        response.headers.add("Access-Control-Allow-Credentials", "true")
-        return response
 
-    # For GET, require authentication
     token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
     if not token:
         return jsonify({"error": "Требуется авторизация"}), 401
-    
+
     current_user, error = AuthService.get_user_by_token(token)
     if error or not current_user:
         return jsonify({"error": "Не авторизовано"}), 401
 
-    limit = request.args.get("limit", 30, type=int)
-    if limit < 1:
-        limit = 1
-    if limit > 100:
-        limit = 100
-    contacts = MessageService.get_recent_contacts(current_user.id, limit=limit)
-    response = make_response(jsonify({"items": contacts}), 200)
-    response.headers.add("Access-Control-Allow-Origin", "https://vondic.knopusmedia.ru")
-    response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
-    response.headers.add("Access-Control-Allow-Methods", "GET,OPTIONS")
-    response.headers.add("Access-Control-Allow-Credentials", "true")
-    return response
+    try:
+        limit = request.args.get("limit", 30, type=int)
+        if limit < 1:
+            limit = 1
+        if limit > 100:
+            limit = 100
+        contacts = MessageService.get_recent_contacts(current_user.id, limit=limit)
+        return jsonify({"items": contacts}), 200
+    except Exception as e:
+        import traceback
+        print(f"Error in get_recent_contacts: {e}")
+        print(traceback.format_exc())
+        return jsonify({"error": str(e)}), 500
 
 @dm_bp.route("/<target_id>/messages", methods=["POST"])
 @token_required
@@ -94,21 +85,11 @@ def get_dm_history(current_user, target_id):
 def delete_message(target_id, message_id):
     from app.services.auth_service import AuthService
     from app.models.message import Message
-    
-    # Handle CORS preflight first (before auth check)
-    if request.method == "OPTIONS":
-        response = make_response()
-        response.headers.add("Access-Control-Allow-Origin", "https://vondic.knopusmedia.ru")
-        response.headers.add("Access-Control-Allow-Methods", "DELETE, OPTIONS")
-        response.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization")
-        response.headers.add("Access-Control-Allow-Credentials", "true")
-        return response, 200
 
-    # For DELETE, require authentication
     token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
     if not token:
         return jsonify({"error": "Требуется авторизация"}), 401
-    
+
     current_user, error = AuthService.get_user_by_token(token)
     if error or not current_user:
         return jsonify({"error": "Не авторизовано"}), 401
@@ -131,9 +112,4 @@ def delete_message(target_id, message_id):
     message.is_deleted = True
     db.session.commit()
 
-    response = make_response(jsonify({"message": "Сообщение успешно удалено"}), 200)
-    response.headers.add("Access-Control-Allow-Origin", "https://vondic.knopusmedia.ru")
-    response.headers.add("Access-Control-Allow-Methods", "DELETE, OPTIONS")
-    response.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization")
-    response.headers.add("Access-Control-Allow-Credentials", "true")
-    return response
+    return jsonify({"message": "Сообщение успешно удалено"}), 200

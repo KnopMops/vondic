@@ -10,7 +10,7 @@ interface IntegratedCallPanelProps {
 export const IntegratedCallPanel: React.FC<IntegratedCallPanelProps> = ({
     onClose,
 }) => {
-    // IntegratedCallPanel теперь использует CallPanel с возможностью изменения размера
-    // Это упрощённая версия для интеграции
+    
+    
     return <CallPanel onClose={onClose} />
 }

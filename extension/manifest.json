@@ -1,19 +1,27 @@
 {
 	"manifest_version": 3,
-	"name": "Proxy Receiver",
+	"name": "Вондик - Кастомизация интерфейса",
 	"version": "1.0.0",
+	"description": "Расширение для кастомизации интерфейса социальной сети Вондик",
 	"permissions": [
-		"proxy",
 		"storage",
-		"declarativeNetRequest",
-		"declarativeNetRequestWithHostAccess"
+		"scripting"
 	],
-	"host_permissions": ["<all_urls>"],
+	"host_permissions": [
+		"<all_urls>"
+	],
 	"background": {
 		"service_worker": "service_worker.js"
 	},
 	"action": {
 		"default_popup": "popup.html",
-		"default_title": "Proxy Receiver"
-	}
+		"default_title": "Кастомизация Вондик"
+	},
+	"content_scripts": [
+		{
+			"matches": ["<all_urls>"],
+			"js": ["popup.js"],
+			"run_at": "document_end"
+		}
+	]
 }

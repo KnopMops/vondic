@@ -69,7 +69,7 @@ export const GlobalCallUI: React.FC = () => {
 
 	return (
 		<>
-			{/* Incoming Call Modal */}
+			
 			{incomingCall && (
 				<IncomingCallModal
 					callerInfo={incomingCall}
@@ -79,7 +79,7 @@ export const GlobalCallUI: React.FC = () => {
 				/>
 			)}
 
-			{/* Active Group Call */}
+			
 			{activeGroupCallId && (
 				<ActiveGroupCall
 					callId={activeGroupCallId}
@@ -101,7 +101,7 @@ export const GlobalCallUI: React.FC = () => {
 				/>
 			)}
 
-			{/* Individual 1-on-1 calls are now shown in chat UI */}
+			
 		</>
 	)
 }

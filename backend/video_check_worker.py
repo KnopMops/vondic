@@ -13,18 +13,7 @@ from sqlalchemy import text
 def ensure_checks_table():
     try:
         db.session.execute(
-            text("""
-            CREATE TABLE IF NOT EXISTS video_checks (
-                id TEXT PRIMARY KEY,
-                video_url TEXT,
-                file_path TEXT,
-                status TEXT,
-                result_json TEXT,
-                error TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
+            text("""""")
         )
         db.session.execute(
             text(
@@ -56,11 +45,7 @@ def update_job(
         error: str | None = None):
     ts = time.strftime("%Y-%m-%dT%H:%M:%S")
     db.session.execute(
-        text("""
-        UPDATE video_checks
-        SET status = :status, result_json = :result_json, error = :error, updated_at = :ts
-        WHERE id = :id
-    """),
+        text(""""""),
         {
             "status": status,
             "result_json": _clean_text(result_json),

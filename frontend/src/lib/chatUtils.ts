@@ -1,4 +1,4 @@
-// Chat pinning utilities - available for all users
+
 
 export function canPinChats(user: any): boolean {
     return true
@@ -18,11 +18,11 @@ export function togglePinChat(
 
     setPinnedChatIds(newPinnedIds)
 
-    // Save to backend if function provided
+    
     if (saveToBackend) {
         saveToBackend(newPinnedIds).catch(err => {
             console.error('Failed to save pinned chats:', err)
-            // Revert on error
+            
             setPinnedChatIds(pinnedChatIds)
         })
     }

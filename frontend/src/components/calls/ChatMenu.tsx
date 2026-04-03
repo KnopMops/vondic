@@ -51,7 +51,7 @@ export const ChatMenu: React.FC<ChatMenuProps> = ({
 
     return (
         <div className='relative' ref={menuRef}>
-            {/* Three Dots Button */}
+            
             <button
                 onClick={(e) => {
                     e.preventDefault()
@@ -66,10 +66,10 @@ export const ChatMenu: React.FC<ChatMenuProps> = ({
                 <MoreVertical className='w-4 h-4' />
             </button>
 
-            {/* Dropdown Menu */}
+            
             {isOpen && (
                 <div className='absolute right-0 top-full mt-1 w-56 bg-[#2b2d31] border border-[#1e1f22] rounded-xl shadow-2xl py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200'>
-                    {/* Pin/Unpin */}
+                    
                     <button
                         onClick={(e) => {
                             e.preventDefault()
@@ -95,7 +95,7 @@ export const ChatMenu: React.FC<ChatMenuProps> = ({
                         )}
                     </button>
 
-                    {/* Mute/Unmute */}
+                    
                     <button
                         onClick={(e) => {
                             e.preventDefault()
@@ -121,10 +121,10 @@ export const ChatMenu: React.FC<ChatMenuProps> = ({
                         )}
                     </button>
 
-                    {/* Divider */}
+                    
                     <div className='my-2 border-t border-[#1e1f22]' />
 
-                    {/* Call Actions (for users) */}
+                    
                     {chatType === 'user' && (
                         <>
                             <button
@@ -159,7 +159,7 @@ export const ChatMenu: React.FC<ChatMenuProps> = ({
                         </>
                     )}
 
-                    {/* Archive */}
+                    
                     <button
                         onClick={(e) => {
                             e.preventDefault()
@@ -174,7 +174,7 @@ export const ChatMenu: React.FC<ChatMenuProps> = ({
                         <span>Архивировать</span>
                     </button>
 
-                    {/* Delete */}
+                    
                     <button
                         onClick={(e) => {
                             e.preventDefault()
@@ -189,7 +189,7 @@ export const ChatMenu: React.FC<ChatMenuProps> = ({
                         <span>Удалить чат</span>
                     </button>
 
-                    {/* Online Status Indicator */}
+                    
                     {chatType === 'user' && (
                         <>
                             <div className='my-2 border-t border-[#1e1f22]' />

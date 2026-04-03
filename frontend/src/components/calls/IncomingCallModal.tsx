@@ -1,6 +1,7 @@
 'use client'
 
 import { getAttachmentUrl } from '@/lib/utils'
+import { HelpCircle, Settings2 } from 'lucide-react'
 import React, { useEffect, useRef, useState } from 'react'
 import { CallState } from '../../lib/services/WebRTCService'
 
@@ -26,7 +27,6 @@ const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
 
 	const ringtoneRef = useRef<HTMLAudioElement | null>(null)
 
-	// Initialize position to center
 	useEffect(() => {
 		if (isVisible && modalRef.current) {
 			const rect = modalRef.current.getBoundingClientRect()
@@ -37,7 +37,6 @@ const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
 		}
 	}, [isVisible])
 
-	// Dragging logic
 	useEffect(() => {
 		const handleMouseMove = (e: MouseEvent) => {
 			if (isDragging && modalRef.current) {
@@ -45,7 +44,6 @@ const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
 				let newX = e.clientX - dragOffset.x
 				let newY = e.clientY - dragOffset.y
 
-				// Runtime boundary calculation
 				const maxX = window.innerWidth - rect.width
 				const maxY = window.innerHeight - rect.height
 
@@ -84,7 +82,6 @@ const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
 		}
 	}
 
-	// Handle window resize and orientation change
 	useEffect(() => {
 		const handleResize = () => {
 			if (modalRef.current) {
@@ -176,8 +173,23 @@ const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
 				}}
 				onMouseDown={handleMouseDown}
 			>
-				<div className='modal-header'>
+				<div
+					className='modal-header'
+					style={{
+						display: 'flex',
+						justifyContent: 'between',
+						alignItems: 'center',
+					}}
+				>
 					<h2>Входящий звонок</h2>
+					<div className='header-icons' style={{ display: 'flex', gap: '8px' }}>
+						<button className='icon-button' title='Помощь'>
+							<HelpCircle size={18} color='gray' />
+						</button>
+						<button className='icon-button' title='Настройки'>
+							<Settings2 size={18} color='gray' />
+						</button>
+					</div>
 				</div>
 
 				<div className='caller-info'>

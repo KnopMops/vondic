@@ -40,9 +40,9 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 				return
 			}
 
-			// Avoid reconnecting if already connected with same user (conceptually)
-			// But socket depends on token, which might refresh.
-			// For simplicity, we reconnect if user changes or mounts.
+			
+			
+			
 
 			try {
 				const res = await fetch('/api/auth/socket-token')
@@ -53,7 +53,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 					return
 				}
 
-				// Use fallback-aware URL
+				
 				const socketUrlRaw = getWebRtcUrl()
 				const socketPath = process.env.NEXT_PUBLIC_SOCKET_PATH || '/socket.io'
 				const isSecure =
@@ -131,6 +131,12 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 					if (data.socket_id) {
 						dispatch(setSocketId(data.socket_id))
 					}
+				})
+
+				socketInstance.on('user_status_changed', (data: { user_id: string, status: string }) => {
+					console.log(`User status changed: ${data.user_id} is now ${data.status}`)
+					// Here you can dispatch an action to update friends status in store
+					// if you had a friends slice.
 				})
 
 				setSocket(socketInstance)

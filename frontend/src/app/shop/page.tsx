@@ -3,14 +3,15 @@ import Header from '@/components/social/Header'
 import Sidebar from '@/components/social/Sidebar'
 import { useAuth } from '@/lib/AuthContext'
 import {
-	Coffee,
 	Coins,
-	Crown,
 	Flame,
 	Flower,
 	Gift,
 	Heart,
 	Star,
+	Coffee,
+	Crown,
+	HelpCircle,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
@@ -18,8 +19,6 @@ export default function ShopPage() {
 	const { user } = useAuth()
 	const [loading, setLoading] = useState(false)
 	const [error, setError] = useState<string | null>(null)
-	const [storageLoading, setStorageLoading] = useState(false)
-	const [storageError, setStorageError] = useState<string | null>(null)
 	const [balanceOverride, setBalanceOverride] = useState<number | null>(null)
 	const [isModalOpen, setIsModalOpen] = useState(false)
 	const [selectedGift, setSelectedGift] = useState<any | null>(null)
@@ -33,6 +32,7 @@ export default function ShopPage() {
 	const [friendsError, setFriendsError] = useState<string | null>(null)
 	const [recipientId, setRecipientId] = useState<string | null>(null)
 	const [giftComment, setGiftComment] = useState('')
+	const [showHowToModal, setShowHowToModal] = useState(false)
 
 	const backendUrl =
 		process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
@@ -201,40 +201,6 @@ export default function ShopPage() {
 		}
 	}
 
-	const buyStorage = async (quantity = 1) => {
-		setStorageLoading(true)
-		setStorageError(null)
-		try {
-			const meRes = await fetch('/api/auth/me', { method: 'GET' })
-			if (!meRes.ok) {
-				throw new Error('Требуется авторизация')
-			}
-			const meData = await meRes.json()
-			const token = meData?.user?.access_token || meData?.access_token
-			if (!token) throw new Error('Требуется авторизация')
-			const res = await fetch(`${backendUrl}/api/v1/users/purchase-storage`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					access_token: token,
-					quantity,
-				}),
-			})
-			if (!res.ok) {
-				const text = await res.text()
-				throw new Error(text || 'Ошибка покупки места')
-			}
-			const data = await res.json()
-			if (typeof data?.balance === 'number') {
-				setBalanceOverride(data.balance)
-			}
-		} catch (e: any) {
-			setStorageError(e.message || 'Не удалось купить место')
-		} finally {
-			setStorageLoading(false)
-		}
-	}
-
 	return (
 		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white overflow-x-hidden relative'>
 			<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
@@ -271,19 +237,13 @@ export default function ShopPage() {
 										Вондик Coins
 									</div>
 								</div>
-								<div className='flex items-center gap-3'>
-									<a
-										href='https://t.me/vondic_bot'
-										target='_blank'
-										rel='noopener noreferrer'
-										className='rounded-xl bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700'
-									>
-										Пополнить через Telegram
-									</a>
-									<span className='text-xs text-gray-400'>
-										Пополнение происходит через Telegram-бота @vondic_bot
-									</span>
-								</div>
+								<button
+									onClick={() => setShowHowToModal(true)}
+									className='flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/20 transition-colors'
+								>
+									<HelpCircle className='h-4 w-4' />
+									Как пополнить?
+								</button>
 							</div>
 						</div>
 
@@ -373,39 +333,6 @@ export default function ShopPage() {
 									>
 										Все подарки
 									</button>
-								</div>
-							</div>
-							<div className='rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800'>
-								<div className='text-lg font-semibold text-gray-900 dark:text-white'>
-									Хранилище
-								</div>
-								<div className='mt-1 text-sm text-gray-500 dark:text-gray-400'>
-									Расширьте место для обычных файлов
-								</div>
-								<div className='mt-4 flex flex-col gap-3'>
-									<div className='rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:text-gray-200'>
-										1 ТБ = 6500 коинов
-									</div>
-									<div className='flex flex-wrap gap-2'>
-										<button
-											onClick={() => buyStorage(1)}
-											disabled={storageLoading}
-											className='rounded-xl bg-gray-900 px-4 py-2 text-white hover:bg-black dark:bg-gray-700 dark:hover:bg-gray-600 disabled:opacity-60'
-										>
-											Купить 1 ТБ за 6500
-										</button>
-										<a
-											href='https://t.me/vondic_bot'
-											target='_blank'
-											rel='noopener noreferrer'
-											className='rounded-xl border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-700'
-										>
-											Купить в Telegram за 495 ₽
-										</a>
-									</div>
-									{storageError && (
-										<div className='text-sm text-red-500'>{storageError}</div>
-									)}
 								</div>
 							</div>
 						</div>
@@ -581,6 +508,48 @@ export default function ShopPage() {
 											className='rounded-xl border border-gray-300 px-4 py-2 text-gray-900 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-white/10'
 										>
 											Отмена
+										</button>
+									</div>
+								</div>
+							</div>
+						)}
+
+						{showHowToModal && (
+							<div className='fixed inset-0 z-[1000] flex items-center justify-center bg-black/50'>
+								<div className='w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-800'>
+									<div className='flex items-center gap-3'>
+										<div className='h-10 w-10 rounded-xl bg-indigo-500/20 flex items-center justify-center'>
+											<HelpCircle className='h-5 w-5 text-indigo-300' />
+										</div>
+										<div className='text-lg font-semibold text-gray-900 dark:text-white'>
+											Как пополнить баланс?
+										</div>
+									</div>
+									<div className='mt-4 space-y-3 text-sm text-gray-700 dark:text-gray-300'>
+										<p>
+											Для пополнения баланса вам нужно:
+										</p>
+										<ol className='list-decimal list-inside space-y-2'>
+											<li>
+												Зайдите во вкладку <strong>Мессенджер</strong>
+											</li>
+											<li>
+												В поиске чатов напишите <strong className='text-indigo-500'>Вондик BOT</strong>
+											</li>
+											<li>
+												Напишите ему команду <code className='rounded bg-gray-100 px-1.5 py-0.5 text-xs font-mono dark:bg-gray-700'>/start</code>
+											</li>
+										</ol>
+										<p className='text-xs text-gray-500 dark:text-gray-400'>
+											После этого бот поможет вам пополнить баланс удобным способом.
+										</p>
+									</div>
+									<div className='mt-6'>
+										<button
+											onClick={() => setShowHowToModal(false)}
+											className='w-full rounded-xl bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700'
+										>
+											Понятно
 										</button>
 									</div>
 								</div>

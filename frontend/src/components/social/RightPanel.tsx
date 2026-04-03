@@ -2,43 +2,87 @@
 
 import { useAuth } from '@/lib/AuthContext'
 import { useNotificationStore } from '@/lib/stores/notificationStore'
+import { User } from '@/lib/types'
+import { getAvatarUrl } from '@/lib/utils'
 import { motion } from 'framer-motion'
 import { Sparkles, Zap } from 'lucide-react'
+import Link from 'next/link'
+import { useEffect, useState } from 'react'
 
 export default function RightPanel() {
 	const { user } = useAuth()
 	const { notifications } = useNotificationStore()
 	const items = notifications.slice(0, 3)
+	const [friends, setFriends] = useState<User[]>([])
+	const [isLoading, setIsLoading] = useState(false)
+
+	useEffect(() => {
+		const fetchFriends = async () => {
+			if (!user) return
+			setIsLoading(true)
+			try {
+				const res = await fetch('/api/friends/list', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ user_id: user.id }),
+				})
+				if (res.ok) {
+					const data = await res.json()
+					setFriends(Array.isArray(data) ? data.slice(0, 10) : [])
+				}
+			} catch (e) {
+				console.error(e)
+			} finally {
+				setIsLoading(false)
+			}
+		}
+		fetchFriends()
+	}, [user?.id])
 
 	return (
 		<aside className='space-y-6'>
 			<div className='rounded-2xl border border-gray-800 bg-gray-900/60 p-4 text-gray-200'>
 				<div className='text-sm font-semibold text-white mb-2'>
-					Уведомления
+					Друзья
 				</div>
-				{items.length === 0 ? (
-					<div className='text-xs text-gray-400'>
-						Нет новых уведомлений
-					</div>
+				{isLoading ? (
+					<div className='text-xs text-gray-400'>Загрузка...</div>
+				) : friends.length === 0 ? (
+					<div className='text-xs text-gray-400'>Нет друзей</div>
 				) : (
 					<div className='space-y-2'>
-						{items.map(item => (
-							<div
-								key={item.id}
-								className='rounded-lg border border-gray-800 bg-gray-900 px-3 py-2'
+						{friends.map(friend => (
+							<Link
+								key={friend.id}
+								href={`/feed/profile/${friend.id}`}
+								className='flex items-center gap-3 rounded-lg p-2 hover:bg-white/5 transition-colors'
 							>
-								<div className='text-xs font-medium text-white'>
-									{item.title}
+								<img
+									src={getAvatarUrl(friend.avatar_url)}
+									alt={friend.username}
+									className='h-10 w-10 rounded-full object-cover ring-2 ring-gray-800'
+								/>
+								<div className='flex-1 min-w-0'>
+									<div className='text-sm font-medium text-white truncate'>
+										{friend.username}
+									</div>
+									{friend.privacy_settings?.show_email !== false && (
+										<div className='text-xs text-gray-500 truncate'>
+											{friend.email}
+										</div>
+									)}
 								</div>
-								{item.message && (
-									<div className='text-xs text-gray-300'>{item.message}</div>
-								)}
-								<div className='text-[10px] text-gray-500'>
-									{new Date(item.createdAt).toLocaleTimeString()}
-								</div>
-							</div>
+							</Link>
 						))}
 					</div>
+				)}
+				{friends.length > 0 && (
+					<Link
+						href='/feed/friends'
+						className='block mt-2 text-xs text-indigo-400 hover:text-indigo-300 transition-colors'
+					>
+						Показать всех друзей →
+					</Link>
 				)}
 			</div>
 			{!user?.premium && (
@@ -48,7 +92,6 @@ export default function RightPanel() {
 					transition={{ duration: 0.5 }}
 					className='rounded-3xl bg-gradient-to-br from-indigo-900/40 to-purple-900/40 backdrop-blur-xl border border-white/10 p-6 shadow-xl relative overflow-hidden group'
 				>
-					{/* Decorative elements */}
 					<div className='absolute -top-10 -right-10 w-32 h-32 bg-indigo-500/20 rounded-full blur-3xl group-hover:bg-indigo-500/30 transition-all duration-500' />
 					<div className='absolute -bottom-10 -left-10 w-32 h-32 bg-purple-500/20 rounded-full blur-3xl group-hover:bg-purple-500/30 transition-all duration-500' />
 
@@ -63,8 +106,9 @@ export default function RightPanel() {
 						</div>
 
 						<p className='text-sm text-gray-300 mb-6 leading-relaxed'>
-							Получите доступ к эксклюзивным функциям: 5 ГБ хранилища, загрузка файлов до 100 МБ, GIF-аватарки и многое другое.
-							уникальным стикерам.
+							Получите доступ к эксклюзивным функциям: 5 ГБ хранилища, загрузка
+							файлов до 100 МБ, GIF-аватарки и многое другое. уникальным
+							стикерам.
 						</p>
 
 						<button className='w-full py-3 px-4 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 hover:border-white/20 text-white text-sm font-semibold transition-all duration-300 flex items-center justify-center gap-2 group/btn'>

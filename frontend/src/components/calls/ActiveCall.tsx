@@ -4,6 +4,7 @@ import { getAttachmentUrl } from '@/lib/utils'
 import {
 	ChevronDown,
 	ChevronUp,
+	HelpCircle,
 	Maximize2,
 	Mic,
 	MicOff,
@@ -11,8 +12,10 @@ import {
 	Monitor,
 	MonitorOff,
 	PhoneOff,
+	Settings2,
 	Video,
 	VideoOff,
+	Volume2,
 	X,
 } from 'lucide-react'
 import React, { useEffect, useRef, useState } from 'react'
@@ -64,16 +67,16 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 	const [iceConnState, setIceConnState] = useState<string>('')
 	const [wasDisconnected, setWasDisconnected] = useState(false)
 
-	// Draggable state
+	
 	const [isDragging, setIsDragging] = useState(false)
 	const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
 	const [position, setPosition] = useState({ x: 0, y: 0 })
-	const [windowSize, setWindowSize] = useState({ width: 320, height: 400 })
+	const [windowSize, setWindowSize] = useState({ width: 400, height: 500 })
 
-	// Fullscreen state
+	
 	const [isFullscreen, setIsFullscreen] = useState(false)
 
-	// Resizing state
+	
 	const [isResizing, setIsResizing] = useState(false)
 	const [resizeDirection, setResizeDirection] = useState<string>('')
 	const [resizeStart, setResizeStart] = useState({
@@ -84,13 +87,24 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 	})
 	const [lastResizeTime, setLastResizeTime] = useState(0)
 
-	// Expanded video state
+	
 	const [expandedVideo, setExpandedVideo] = useState<
 		'local' | 'remote' | 'screen' | null
 	>(null)
 	const [hoverVideo, setHoverVideo] = useState<
 		'local' | 'remote' | 'screen' | null
 	>(null)
+
+	
+	const [remoteVolume, setRemoteVolume] = useState<number>(1)
+	const [localVolume, setLocalVolume] = useState<number>(1)
+	const [showVolumeSettings, setShowVolumeSettings] = useState(false)
+
+	const [showHelpTooltip, setShowHelpTooltip] = useState(false)
+	const [showSettingsPanel, setShowSettingsPanel] = useState(false)
+	const [participantVolumes, setParticipantVolumes] = useState<Map<string, number>>(new Map())
+	const [showHeaderHelpTooltip, setShowHeaderHelpTooltip] = useState(false)
+	const [showHeaderSettingsPanel, setShowHeaderSettingsPanel] = useState(false)
 
 	const isFullscreenSupported =
 		typeof document !== 'undefined' &&
@@ -99,7 +113,7 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 			(document.documentElement as any).mozRequestFullScreen ||
 			(document.documentElement as any).msRequestFullscreen)
 
-	// Initialize position
+	
 	useEffect(() => {
 		if (typeof window !== 'undefined') {
 			setPosition({
@@ -109,7 +123,7 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 		}
 	}, [])
 
-	// Handle visibility change
+	
 	useEffect(() => {
 		const handleVisibilityChange = () => {
 			if (document.visibilityState === 'visible') {
@@ -137,7 +151,7 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 		}
 	}, [wasDisconnected, callInfo.status, remoteStream])
 
-	// Monitor connection state
+	
 	useEffect(() => {
 		if (callInfo.status === 'connected') {
 			setWasDisconnected(false)
@@ -146,7 +160,7 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 		}
 	}, [callInfo.status])
 
-	// Duration timer
+	
 	useEffect(() => {
 		if (callInfo.status === 'connected' && callInfo.startTime) {
 			const interval = setInterval(() => {
@@ -159,14 +173,20 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 		}
 	}, [callInfo.status, callInfo.startTime])
 
-	// Audio setup with noise suppression
+	
+	useEffect(() => {
+		if (remoteAudioRef.current) {
+			remoteAudioRef.current.volume = remoteVolume
+		}
+	}, [remoteVolume])
+
 	useEffect(() => {
 		const el = remoteAudioRef.current
 		if (!el) return
 		if (remoteStream) {
 			el.srcObject = remoteStream
 			el.muted = false
-			el.volume = 1
+			el.volume = remoteVolume
 			const audioTracks = remoteStream.getAudioTracks()
 			audioTracks.forEach(track => {
 				try {
@@ -174,6 +194,8 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 						echoCancellation: true,
 						noiseSuppression: true,
 						autoGainControl: true,
+						noiseSuppressionLevel: 'high',
+						echoCancellationLevel: 'high',
 					}
 					track.applyConstraints({ advanced: [settings] }).catch(() => {})
 				} catch (e) {
@@ -189,7 +211,7 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 		}
 	}, [remoteStream, callInfo.status, iceConnState])
 
-	// Local audio setup
+	
 	useEffect(() => {
 		if (localAudioRef.current && localStream) {
 			localAudioRef.current.srcObject = localStream
@@ -214,7 +236,7 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 		}
 	}, [localStream])
 
-	// Video setups
+	
 	useEffect(() => {
 		const el = localVideoRef.current
 		if (!el) return
@@ -263,7 +285,7 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 		}
 	}, [screenStream])
 
-	// Ping polling
+	
 	useEffect(() => {
 		let timer: any
 		const poll = async () => {
@@ -302,7 +324,7 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 		return () => clearInterval(timer)
 	}, [callInfo.peerConnection])
 
-	// Drag and Resize handlers
+	
 	useEffect(() => {
 		const handleMouseMove = (e: MouseEvent) => {
 			if (isDragging) {
@@ -324,7 +346,7 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 			}
 
 			if (isResizing) {
-				// Throttle resize updates to 16ms (~60fps)
+				
 				const now = Date.now()
 				if (now - lastResizeTime < 16) return
 				setLastResizeTime(now)
@@ -394,7 +416,7 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 		windowSize,
 	])
 
-	// Fullscreen change listener
+	
 	useEffect(() => {
 		const handleFullscreenChange = () => {
 			setIsFullscreen(!!document.fullscreenElement)
@@ -604,7 +626,7 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 				}
 				onClick={handleUserInteraction}
 			>
-				{/* Resize handles */}
+				
 				{!isFullscreen && (
 					<>
 						<div
@@ -642,7 +664,7 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 					</>
 				)}
 
-				{/* Header - draggable area */}
+				
 				<div
 					className='p-4 border-b border-[#1e1f22] cursor-grab active:cursor-grabbing select-none'
 					onMouseDown={handleDragStart}
@@ -685,6 +707,82 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 							</div>
 						</div>
 						<div className='flex items-center gap-1'>
+							<div className='relative group'>
+								<button
+									onMouseEnter={() => setShowHeaderHelpTooltip(true)}
+									onMouseLeave={() => setShowHeaderHelpTooltip(false)}
+									className='p-2 text-gray-400 hover:text-white hover:bg-[#35373c] rounded-lg transition-colors'
+									title='Информация о подключении'
+								>
+									<HelpCircle className='w-4 h-4' />
+								</button>
+								<div className={`absolute right-0 top-full mt-2 w-64 bg-[#1e1f22] border border-[#35373c] rounded-lg shadow-2xl z-50 p-3 transition-opacity duration-200 ${showHeaderHelpTooltip ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+									<h4 className='text-xs font-semibold text-white mb-2'>Информация о подключении</h4>
+									<div className='space-y-2 text-xs'>
+										<div className='flex justify-between'>
+											<span className='text-gray-400'>Статус:</span>
+											<span className='text-green-400 font-medium'>{statusLabel}</span>
+										</div>
+										<div className='flex justify-between'>
+											<span className='text-gray-400'>Пинг:</span>
+											<span className='text-white font-medium'>{pingMs > 0 ? `${pingMs} мс` : 'N/A'}</span>
+										</div>
+										<div className='flex justify-between'>
+											<span className='text-gray-400'>Соединение:</span>
+											<span className='text-white font-medium'>{connState || 'N/A'}</span>
+										</div>
+										<div className='flex justify-between'>
+											<span className='text-gray-400'>ICE:</span>
+											<span className='text-white font-medium'>{iceConnState || 'N/A'}</span>
+										</div>
+										<div className='flex justify-between'>
+											<span className='text-gray-400'>Длительность:</span>
+											<span className='text-white font-medium'>{formatDuration(duration)}</span>
+										</div>
+									</div>
+								</div>
+							</div>
+							<div className='relative group'>
+								<button
+									onMouseEnter={() => setShowHeaderSettingsPanel(true)}
+									onMouseLeave={() => setShowHeaderSettingsPanel(false)}
+									className='p-2 text-gray-400 hover:text-white hover:bg-[#35373c] rounded-lg transition-colors'
+									title='Настройки звука'
+								>
+									<Settings2 className='w-4 h-4' />
+								</button>
+								<div className={`absolute right-0 top-full mt-2 w-72 bg-[#1e1f22] border border-[#35373c] rounded-lg shadow-2xl z-50 p-3 transition-opacity duration-200 ${showHeaderSettingsPanel ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+									<h4 className='text-xs font-semibold text-white mb-2'>Громкость участников</h4>
+									<div className='space-y-2'>
+										<div className='text-xs'>
+											<div className='flex items-center justify-between text-xs mb-1'>
+												<span className='text-gray-400'>{callInfo.userName || 'Собеседник'}</span>
+												<span className='text-white font-medium'>
+													{Math.round(remoteVolume * 100)}%
+												</span>
+											</div>
+											<input
+												type='range'
+												min='0'
+												max='100'
+												value={Math.round(remoteVolume * 100)}
+												onChange={e => {
+													const value = Number(e.target.value) / 100
+													setRemoteVolume(value)
+													if (remoteAudioRef.current) {
+														remoteAudioRef.current.volume = value
+													}
+												}}
+												onClick={e => e.stopPropagation()}
+												className='w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-indigo-500'
+											/>
+										</div>
+									</div>
+									<p className='text-[10px] text-gray-500 mt-2'>
+										Громкость микрофона настраивается в системных настройках
+									</p>
+								</div>
+							</div>
 							{!isFullscreen && (
 								<button
 									onClick={e => {
@@ -723,7 +821,7 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 					</div>
 				</div>
 
-				{/* Video section */}
+				
 				{(hasScreenVideo || videoStream?.getVideoTracks().length) && (
 					<div
 						className='p-4 space-y-3'
@@ -906,15 +1004,15 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 					</div>
 				)}
 
-				{/* Controls */}
+				
 				<div className='absolute bottom-0 left-0 right-0 p-4 bg-[#2b2d31] border-t border-[#1e1f22]'>
-					<div className='flex items-center justify-center gap-2'>
+					<div className='flex items-center justify-center gap-2 flex-wrap'>
 						<button
 							onClick={e => {
 								e.stopPropagation()
 								handleMuteToggle()
 							}}
-							className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg transition-colors ${isMuted ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-[#1e1f22] text-gray-300 hover:bg-[#35373c]'}`}
+							className={`flex items-center justify-center p-3 rounded-lg transition-colors min-w-[60px] ${isMuted ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-[#1e1f22] text-gray-300 hover:bg-[#35373c]'}`}
 							title={isMuted ? 'Включить микрофон' : 'Выключить микрофон'}
 						>
 							{isMuted ? (
@@ -929,7 +1027,7 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 								e.stopPropagation()
 								onVideoToggle()
 							}}
-							className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg transition-colors ${!isVideoEnabled ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-[#1e1f22] text-gray-300 hover:bg-[#35373c]'}`}
+							className={`flex items-center justify-center p-3 rounded-lg transition-colors min-w-[60px] ${!isVideoEnabled ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-[#1e1f22] text-gray-300 hover:bg-[#35373c]'}`}
 							title={!isVideoEnabled ? 'Включить камеру' : 'Выключить камеру'}
 						>
 							{!isVideoEnabled ? (
@@ -945,7 +1043,7 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 									e.stopPropagation()
 									onScreenShareToggle()
 								}}
-								className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg transition-colors ${isScreenSharing ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30' : 'bg-[#1e1f22] text-gray-300 hover:bg-[#35373c]'}`}
+								className={`flex items-center justify-center p-3 rounded-lg transition-colors min-w-[60px] ${isScreenSharing ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30' : 'bg-[#1e1f22] text-gray-300 hover:bg-[#35373c]'}`}
 								title={
 									isScreenSharing
 										? 'Остановить демонстрацию'
@@ -959,6 +1057,88 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 								)}
 							</button>
 						)}
+
+						<div className='relative group'>
+							<button
+								onMouseEnter={() => setShowHelpTooltip(true)}
+								onMouseLeave={() => setShowHelpTooltip(false)}
+								className={`flex items-center justify-center p-3 rounded-lg transition-colors min-w-[60px] ${showHelpTooltip ? 'bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30' : 'bg-[#1e1f22] text-gray-300 hover:bg-[#35373c]'}`}
+								title='Информация о подключении'
+							>
+								<HelpCircle className='w-5 h-5' />
+							</button>
+							<div
+								className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-[#1e1f22] border border-[#35373c] rounded-lg shadow-2xl z-50 p-3 transition-opacity duration-200 ${showHelpTooltip ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+								onMouseEnter={() => setShowHelpTooltip(true)}
+								onMouseLeave={() => setShowHelpTooltip(false)}
+							>
+								<h4 className='text-xs font-semibold text-white mb-2'>Информация о подключении</h4>
+								<div className='space-y-2 text-xs'>
+									<div className='flex justify-between'>
+										<span className='text-gray-400'>Статус:</span>
+										<span className='text-green-400 font-medium'>{statusLabel}</span>
+									</div>
+									<div className='flex justify-between'>
+										<span className='text-gray-400'>Пинг:</span>
+										<span className='text-white font-medium'>{pingMs > 0 ? `${pingMs} мс` : 'N/A'}</span>
+									</div>
+									<div className='flex justify-between'>
+										<span className='text-gray-400'>Соединение:</span>
+										<span className='text-white font-medium'>{connState || 'N/A'}</span>
+									</div>
+									<div className='flex justify-between'>
+										<span className='text-gray-400'>ICE:</span>
+										<span className='text-white font-medium'>{iceConnState || 'N/A'}</span>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<div className='relative group'>
+							<button
+								onMouseEnter={() => setShowSettingsPanel(true)}
+								onMouseLeave={() => setShowSettingsPanel(false)}
+								className={`flex items-center justify-center p-3 rounded-lg transition-colors min-w-[60px] ${showSettingsPanel ? 'bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30' : 'bg-[#1e1f22] text-gray-300 hover:bg-[#35373c]'}`}
+								title='Настройки звука'
+							>
+								<Settings2 className='w-5 h-5' />
+							</button>
+							<div
+								className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 bg-[#1e1f22] border border-[#35373c] rounded-lg shadow-2xl z-50 p-3 transition-opacity duration-200 ${showSettingsPanel ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+								onMouseEnter={() => setShowSettingsPanel(true)}
+								onMouseLeave={() => setShowSettingsPanel(false)}
+							>
+								<h4 className='text-xs font-semibold text-white mb-2'>Громкость участников</h4>
+								<div className='space-y-2'>
+									<div className='text-xs'>
+										<div className='flex items-center justify-between text-xs mb-1'>
+											<span className='text-gray-400'>{callInfo.userName || 'Собеседник'}</span>
+											<span className='text-white font-medium'>
+												{Math.round(remoteVolume * 100)}%
+											</span>
+										</div>
+										<input
+											type='range'
+											min='0'
+											max='100'
+											value={Math.round(remoteVolume * 100)}
+											onChange={e => {
+												const value = Number(e.target.value) / 100
+												setRemoteVolume(value)
+												if (remoteAudioRef.current) {
+													remoteAudioRef.current.volume = value
+												}
+											}}
+											onClick={e => e.stopPropagation()}
+											className='w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-indigo-500'
+										/>
+									</div>
+								</div>
+								<p className='text-[10px] text-gray-500 mt-2'>
+									Громкость микрофона настраивается в системных настройках
+								</p>
+							</div>
+						</div>
 
 						<button
 							onClick={e => {
@@ -1022,7 +1202,7 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 				<audio ref={localAudioRef} autoPlay playsInline muted />
 			</div>
 
-			{/* Expanded video modal */}
+			
 			{expandedVideo && (
 				<div className='fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex items-center justify-center p-4'>
 					<div className='relative w-full max-w-6xl aspect-video'>

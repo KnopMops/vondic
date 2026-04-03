@@ -6,11 +6,13 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { sidebarItems } from './sidebar.items'
+import MemoryModal from './MemoryModal'
 
 export default function Sidebar() {
 	const [isExpanded, setIsExpanded] = useState(false)
 	const { user } = useAuth()
 	const pathname = usePathname()
+	const [isMemoryModalOpen, setIsMemoryModalOpen] = useState(false)
 
 	useEffect(() => {
 		const saved = localStorage.getItem('sidebar_expanded')
@@ -123,33 +125,39 @@ export default function Sidebar() {
 
 				{isExpanded && user && (
 					<div className='mt-auto w-full'>
-						<div className='rounded-xl bg-white/5 border border-white/10 p-3'>
-							<div className='flex justify-between text-[10px] mb-1.5'>
-								<span className='text-gray-400'>Память</span>
-								<span className='text-white font-mono'>
-									{formatBytes(user.disk_usage || 0)}
-								</span>
-							</div>
-							<div className='h-1.5 bg-gray-700/50 rounded-full overflow-hidden mb-1.5'>
-								<div
-									className='h-full bg-gradient-to-r from-indigo-500 to-purple-500'
-									style={{
-										width: `${Math.min(
-											((user.disk_usage || 0) /
-												(user.disk_limit || 1073741824)) *
+						<button
+							onClick={() => setIsMemoryModalOpen(true)}
+							className='w-full'
+						>
+							<div className='rounded-xl bg-white/5 border border-white/10 p-3 hover:bg-white/10 transition-colors cursor-pointer'>
+								<div className='flex justify-between text-[10px] mb-1.5'>
+									<span className='text-gray-400'>Память</span>
+									<span className='text-white font-mono'>
+										{formatBytes(user.disk_usage || 0)}
+									</span>
+								</div>
+								<div className='h-1.5 bg-gray-700/50 rounded-full overflow-hidden mb-1.5'>
+									<div
+										className='h-full bg-gradient-to-r from-indigo-500 to-purple-500'
+										style={{
+											width: `${Math.min(
+												((user.disk_usage || 0) /
+													(user.disk_limit || 1073741824)) *
+													100,
 												100,
-											100,
-										)}%`,
-									}}
-								/>
+											)}%`,
+										}}
+									/>
+								</div>
+								<p className='text-[10px] text-gray-500 leading-tight'>
+									{user.premium ? 'Доступно 5 ГБ' : 'Лимит 1 ГБ'}
+								</p>
 							</div>
-							<p className='text-[10px] text-gray-500 leading-tight'>
-								{user.premium ? 'Доступно 5 ГБ' : 'Лимит 1 ГБ'}
-							</p>
-						</div>
+						</button>
 					</div>
 				)}
 			</div>
+			<MemoryModal isOpen={isMemoryModalOpen} onClose={() => setIsMemoryModalOpen(false)} />
 		</aside>
 	)
 }

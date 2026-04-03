@@ -39,10 +39,9 @@ def rate_limit(key_prefix: str, limit: int, window_seconds: int):
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        # Skip authentication for OPTIONS requests (CORS preflight)
         if request.method == 'OPTIONS':
             return f(*args, **kwargs)
-        
+
         data = request.get_json(silent=True) or {}
         token = data.get("access_token")
         if not token:

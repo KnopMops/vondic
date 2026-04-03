@@ -1,10 +1,5 @@
 'use client'
 
-/**
- * URL Fallback Provider - initializes URL fallback mode at app startup
- * Wrap this around your app in layout.tsx or _app.tsx
- */
-
 import { useEffect, useState, ReactNode } from 'react'
 import { initializeUrlFallback, restoreFallbackMode } from '../lib/url-fallback'
 
@@ -16,16 +11,16 @@ export function UrlFallbackProvider({ children }: UrlFallbackProviderProps) {
 	const [isReady, setIsReady] = useState(false)
 
 	useEffect(() => {
-		// Restore saved fallback mode from localStorage
+		
 		restoreFallbackMode()
 
-		// Initialize URL fallback check
+		
 		initializeUrlFallback()
 			.then(() => setIsReady(true))
-			.catch(() => setIsReady(true)) // Continue even on error
+			.catch(() => setIsReady(true)) 
 	}, [])
 
-	// Show loading state while checking URL availability
+	
 	if (!isReady) {
 		return (
 			<div style={{

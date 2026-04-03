@@ -109,11 +109,8 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
-    allowed_origins = _build_allowed_origins()
-    CORS(app,
-         resources={r"/*": {"origins": allowed_origins}},
-         supports_credentials=True)
 
+    allowed_origins = _build_allowed_origins()
     socketio = SocketIO(
         app,
         cors_allowed_origins=allowed_origins,

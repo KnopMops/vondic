@@ -1,9 +1,10 @@
 'use client'
 
+import { Heart, MessageCircle, Share2, MoreHorizontal, Send, Image, Video, File, Download, Upload, Calendar, Clock, Star, Lock, Unlock, Eye, EyeOff, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ArrowLeft, ArrowRight, MoreVertical, Bell, Search, Home, User, Settings, Menu, X, Check, Plus, Trash2, Edit2 } from 'lucide-react';
 import { useAppSelector } from '@/lib/hooks'
 import { useSocket } from '@/lib/SocketContext'
 import { User } from '@/lib/types'
-import { getAttachmentUrl, formatMskDateTime } from '@/lib/utils'
+import { getAttachmentUrl, getAvatarUrl, formatMskDateTime } from '@/lib/utils'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import BrandLogo from './BrandLogo'
@@ -23,7 +24,7 @@ export default function Header({ email, onLogout }: Props) {
 	const { isConnected } = useSocket()
 	const [isDropdownOpen, setIsDropdownOpen] = useState(false)
 
-	// Search state
+	
 	const [searchQuery, setSearchQuery] = useState('')
 	const [searchResults, setSearchResults] = useState<SearchResult | null>(null)
 	const [isSearching, setIsSearching] = useState(false)
@@ -50,8 +51,8 @@ export default function Header({ email, onLogout }: Props) {
 			return
 		}
 
-		// Only search if starts with @ or # and has more content
-		// if (query.length < 2) return
+		
+		
 
 		setIsSearching(true)
 		try {
@@ -77,10 +78,6 @@ export default function Header({ email, onLogout }: Props) {
 			<div className='mx-auto flex max-w-7xl items-center justify-between px-4 py-3'>
 				<div className='flex items-center gap-3'>
 					<BrandLogo size={28} />
-					<div
-						className={`h-2.5 w-2.5 rounded-full ${isConnected ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-red-500'} transition-colors duration-300`}
-						title={isConnected ? 'Socket подключён' : 'Socket отключён'}
-					/>
 				</div>
 
 				<div className='flex flex-1 justify-center px-4'>
@@ -115,14 +112,14 @@ export default function Header({ email, onLogout }: Props) {
 							</div>
 						</div>
 
-						{/* Search Results Dropdown */}
+						
 						{showResults && searchResults && (
 							<div className='absolute mt-2 w-full rounded-xl bg-gray-900/90 backdrop-blur-xl p-2 shadow-2xl ring-1 ring-white/10 z-50 max-h-96 overflow-y-auto custom-scrollbar'>
 								{isSearching ? (
 									<div className='p-4 text-center text-gray-400'>Поиск...</div>
 								) : (
 									<>
-										{/* Users Results */}
+										
 										{searchResults.type === 'users' && (
 											<div className='space-y-1'>
 												{searchResults.results.length === 0 ? (
@@ -138,10 +135,7 @@ export default function Header({ email, onLogout }: Props) {
 															onClick={() => setShowResults(false)}
 														>
 															<img
-																src={
-																	getAttachmentUrl(u.avatar_url) ||
-																	'/placeholder-user.jpg'
-																}
+																src={getAvatarUrl(u.avatar_url)}
 																alt={u.username}
 																className='h-10 w-10 rounded-full object-cover ring-2 ring-gray-800'
 															/>
@@ -164,7 +158,7 @@ export default function Header({ email, onLogout }: Props) {
 											</div>
 										)}
 
-										{/* Posts Results */}
+										
 										{searchResults.type === 'posts' && (
 											<div className='space-y-1'>
 												{searchResults.results.length === 0 ? (
@@ -178,10 +172,7 @@ export default function Header({ email, onLogout }: Props) {
 															className='flex items-start gap-3 rounded-lg p-3 hover:bg-white/5 cursor-pointer transition-colors'
 														>
 															<img
-																src={
-																	getAttachmentUrl(post.author?.avatar_url) ||
-																	'/placeholder-user.jpg'
-																}
+																src={getAvatarUrl(post.author?.avatar_url)}
 																alt={post.author?.username || 'User'}
 																className='h-8 w-8 rounded-full object-cover flex-shrink-0 ring-2 ring-gray-800'
 															/>
@@ -237,6 +228,20 @@ export default function Header({ email, onLogout }: Props) {
 										{user?.username || 'Гость'}
 									</div>
 								</div>
+								<Link
+									href={`/feed/profile/${user?.id}`}
+									className='block w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors'
+									onClick={() => setIsDropdownOpen(false)}
+								>
+									Моя страница
+								</Link>
+								<Link
+									href='/feed/settings'
+									className='block w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors'
+									onClick={() => setIsDropdownOpen(false)}
+								>
+									Настройки
+								</Link>
 								<button
 									onClick={onLogout}
 									className='block w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors'
@@ -246,7 +251,7 @@ export default function Header({ email, onLogout }: Props) {
 							</div>
 						)}
 					</div>
-					{/* Overlay to close dropdown when clicking outside */}
+					
 					{isDropdownOpen && (
 						<div
 							className='fixed inset-0 z-40'

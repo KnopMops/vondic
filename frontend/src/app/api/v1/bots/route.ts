@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
 		const botId = searchParams.get('bot_id')
 		const backendUrl = getBackendUrl()
 		
-		// Если есть bot_id - возвращаем конкретного бота
+		
 		if (botId) {
 			const mode = searchParams.get('mode')
 			if (mode === 'outbox') {

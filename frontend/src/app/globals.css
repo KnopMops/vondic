@@ -3,6 +3,7 @@
 :root {
 	--background: #ffffff;
 	--foreground: #171717;
+	--app-radius: 12px;
 }
 
 :root[data-theme='light'] {

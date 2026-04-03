@@ -23,6 +23,7 @@ type Props = {
 	title?: string
 	ownerId: string
 	onUpdateStories?: (items: Item[]) => void
+	onViewed?: (storyId: string) => void
 }
 
 const REACTIONS = ['❤️', '😂', '🔥', '😮', '😢', '👍']
@@ -34,6 +35,7 @@ export default function StoriesModal({
 	title,
 	ownerId,
 	onUpdateStories,
+	onViewed,
 }: Props) {
 	const { user } = useAppSelector(state => state.auth)
 	const [mounted, setMounted] = useState(false)
@@ -89,6 +91,12 @@ export default function StoriesModal({
 			setProgress(0)
 		}
 	}, [items, isOpen])
+
+	useEffect(() => {
+		if (isOpen && current?.id && onViewed) {
+			onViewed(current.id)
+		}
+	}, [isOpen, current?.id, onViewed])
 
 	useEffect(() => {
 		pausedRef.current = isPaused
@@ -199,49 +207,57 @@ export default function StoriesModal({
 				initial={{ opacity: 0 }}
 				animate={{ opacity: 1 }}
 				exit={{ opacity: 0 }}
-				className='fixed inset-0 z-[99999] flex items-center justify-center'
+				className='fixed inset-0 z-[99999] flex items-center justify-center bg-black/90'
+				style={{ pointerEvents: 'auto' }}
 			>
-				<div className='absolute inset-0'>
-					<div
-						className='absolute inset-0 bg-center bg-cover'
-						style={{
-							backgroundImage: backgroundUrl ? `url(${backgroundUrl})` : undefined,
-							filter: 'blur(24px)',
-							transform: 'scale(1.1)',
-						}}
-					/>
-					<div className='absolute inset-0 bg-black/60' />
-				</div>
 				<motion.div
 					initial={{ opacity: 0, scale: 0.9, y: 40 }}
 					animate={{ opacity: 1, scale: 1, y: 0 }}
 					exit={{ opacity: 0, scale: 0.9, y: 40 }}
 					transition={{ duration: 0.18 }}
-					className='relative z-10 flex w-full max-w-md items-center justify-center px-3 md:px-0'
+					className='relative z-10 w-full max-w-md px-4'
+					style={{ pointerEvents: 'auto' }}
 				>
-					<div className='relative w-full aspect-[9/16] max-h-[90vh] rounded-3xl bg-black/80 overflow-hidden'>
-						<div className='absolute inset-0'>
-							{mediaUrl
-								? isVideo
-									? (
-										<video
-											ref={videoRef}
-											src={mediaUrl}
-											className='h-full w-full object-cover'
-											autoPlay
-											playsInline
-											muted={false}
-											onEnded={next}
-										/>
-									)
-									: (
-										<img
-											src={mediaUrl}
-											alt='story'
-											className='h-full w-full object-cover'
-										/>
-									)
-								: null}
+					<div
+						className='relative w-full aspect-[9/16] max-h-[90vh] rounded-3xl overflow-hidden shadow-2xl'
+						style={{ background: 'rgb(17, 24, 39)' }}
+					>
+						{backgroundUrl && (
+							<div
+								className='absolute inset-0 bg-center bg-cover'
+								style={{
+									backgroundImage: `url(${backgroundUrl})`,
+									filter: 'blur(20px)',
+									transform: 'scale(1.2)',
+									opacity: 0.3,
+								}}
+							/>
+						)}
+
+						<div className='relative h-full w-full p-3'>
+							{mediaUrl ? (
+								isVideo ? (
+									<video
+										ref={videoRef}
+										src={mediaUrl}
+										className='h-full w-full object-contain'
+										autoPlay
+										playsInline
+										muted={false}
+										onEnded={next}
+									/>
+								) : (
+									<img
+										src={mediaUrl}
+										alt='story'
+										className='h-full w-full object-contain'
+									/>
+								)
+							) : (
+								<div className='flex h-full w-full items-center justify-center bg-gray-900'>
+									<div className='text-gray-500'>Нет контента</div>
+								</div>
+							)}
 							<div className='absolute inset-0 flex'>
 								<button
 									type='button'
@@ -276,9 +292,7 @@ export default function StoriesModal({
 								))}
 							</div>
 							<div className='flex items-center justify-between px-1'>
-								<div className='text-sm text-gray-200'>
-									{title || 'Сторис'}
-								</div>
+								<div className='text-sm text-gray-200'>{title || 'Сторис'}</div>
 								<div className='flex items-center gap-2'>
 									{isOwner && (
 										<button

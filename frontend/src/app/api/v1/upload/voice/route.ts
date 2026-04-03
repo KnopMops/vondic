@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
 			return NextResponse.json({ error: 'No file provided' }, { status: 400 })
 		}
 
-		// Convert file to base64
+		
 		const bytes = await file.arrayBuffer()
 		const base64 = Buffer.from(bytes).toString('base64')
 

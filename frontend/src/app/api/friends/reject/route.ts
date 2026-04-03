@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const backendUrl = getBackendUrl();
 
-    // Add access_token to body as per new requirement
+    
     const payload = { ...body, access_token: token };
 
     const response = await fetch(`${backendUrl}/api/v1/friends/reject`, {

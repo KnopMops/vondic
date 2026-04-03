@@ -13,7 +13,10 @@ export async function POST(req: NextRequest) {
 
 		const res = await fetch(`${backendUrl}/api/public/v1/account/api-key`, {
 			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${token}`,
+			},
 			body: JSON.stringify({ access_token: token }),
 		})
 

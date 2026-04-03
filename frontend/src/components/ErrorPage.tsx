@@ -45,7 +45,7 @@ export const ErrorPage: React.FC<ErrorPageProps> = ({
     return (
         <div className="min-h-screen bg-[#0b0c0d] flex flex-col items-center justify-center p-4 text-white">
             <div className="max-w-md w-full text-center space-y-8 animate-in fade-in zoom-in duration-500">
-                {/* Mascot / Illustration */}
+                
                 <div className="relative inline-block">
                     <div className="w-32 h-32 bg-indigo-500/20 rounded-full flex items-center justify-center animate-pulse">
                         <BrandLogo size={64} />

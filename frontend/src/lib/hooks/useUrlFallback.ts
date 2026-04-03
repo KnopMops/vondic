@@ -1,10 +1,5 @@
 'use client'
 
-/**
- * React hook for URL fallback in NAT environments.
- * Automatically switches to internal URLs when external URLs are unavailable.
- */
-
 import { useEffect, useState } from 'react'
 import {
 	initializeUrlFallback,
@@ -30,10 +25,10 @@ export function useUrlFallback(): UseUrlFallbackReturn {
 	})
 
 	useEffect(() => {
-		// Restore saved fallback mode from localStorage
+		
 		restoreFallbackMode()
 
-		// Initialize and check availability
+		
 		initializeUrlFallback()
 			.then(() => {
 				setFallbackModeState(isFallbackMode())
@@ -44,7 +39,7 @@ export function useUrlFallback(): UseUrlFallbackReturn {
 				setIsInitialized(true)
 			})
 			.catch(() => {
-				// On error, use fallback mode
+				
 				setFallbackModeState(true)
 				setUrls({
 					backend: getBackendUrl(),
@@ -62,9 +57,6 @@ export function useUrlFallback(): UseUrlFallbackReturn {
 	}
 }
 
-/**
- * Simple hook to get URLs without initialization (uses current state)
- */
 export function useCurrentUrls(): { backendUrl: string; webrtcUrl: string } {
 	return {
 		backendUrl: getBackendUrl(),

@@ -25,14 +25,7 @@ def _ensure_video_likes_table():
                 text("PRAGMA table_info(video_likes)")).fetchall()
             if not cols:
                 db.session.execute(
-                    text("""
-                    CREATE TABLE video_likes (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        video_id TEXT NOT NULL,
-                        user_id TEXT NOT NULL,
-                        created_at TEXT
-                    )
-                """)
+                    text("""""")
                 )
                 db.session.execute(
                     text(
@@ -47,14 +40,7 @@ def _ensure_video_likes_table():
                 db.session.commit()
         else:
             db.session.execute(
-                text("""
-                CREATE TABLE IF NOT EXISTS video_likes (
-                    id BIGSERIAL PRIMARY KEY,
-                    video_id TEXT NOT NULL,
-                    user_id TEXT NOT NULL,
-                    created_at TEXT
-                )
-            """)
+                text("""""")
             )
             db.session.execute(
                 text(
@@ -77,16 +63,7 @@ def _ensure_video_views_table():
                 text("PRAGMA table_info(video_views)")).fetchall()
             if not cols:
                 db.session.execute(
-                    text("""
-                    CREATE TABLE video_views (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        video_id TEXT NOT NULL,
-                        user_id TEXT,
-                        ip TEXT,
-                        count INTEGER DEFAULT 0,
-                        last_viewed_at TEXT
-                    )
-                """)
+                    text("""""")
                 )
                 db.session.execute(
                     text(
@@ -101,16 +78,7 @@ def _ensure_video_views_table():
                 db.session.commit()
         else:
             db.session.execute(
-                text("""
-                CREATE TABLE IF NOT EXISTS video_views (
-                    id BIGSERIAL PRIMARY KEY,
-                    video_id TEXT NOT NULL,
-                    user_id TEXT,
-                    ip TEXT,
-                    count INTEGER DEFAULT 0,
-                    last_viewed_at TEXT
-                )
-            """)
+                text("""""")
             )
             db.session.execute(
                 text(
@@ -173,18 +141,7 @@ def _ensure_video_checks_table():
     try:
         if db.engine.dialect.name == "sqlite":
             db.session.execute(
-                text("""
-                CREATE TABLE IF NOT EXISTS video_checks (
-                    id TEXT PRIMARY KEY,
-                    video_url TEXT,
-                    file_path TEXT,
-                    status TEXT,
-                    result_json TEXT,
-                    error TEXT,
-                    created_at TEXT,
-                    updated_at TEXT
-                )
-            """)
+                text("""""")
             )
             db.session.execute(
                 text(
@@ -194,18 +151,7 @@ def _ensure_video_checks_table():
             db.session.commit()
         else:
             db.session.execute(
-                text("""
-                CREATE TABLE IF NOT EXISTS video_checks (
-                    id TEXT PRIMARY KEY,
-                    video_url TEXT,
-                    file_path TEXT,
-                    status TEXT,
-                    result_json TEXT,
-                    error TEXT,
-                    created_at TEXT,
-                    updated_at TEXT
-                )
-            """)
+                text("""""")
             )
             db.session.execute(
                 text(
@@ -256,16 +202,12 @@ def _publish_video_check(job_id: str, file_path: str, video_url: str):
 def _sync_video_views(video_id: str):
     _ensure_video_views_table()
     row = db.session.execute(
-        text("""
-        SELECT COALESCE(SUM(count), 0) FROM video_views WHERE video_id = :vid
-    """),
+        text(""""""),
         {"vid": video_id},
     ).fetchone()
     views = int(row[0] or 0) if row else 0
     db.session.execute(
-        text("""
-        UPDATE videos SET views = :views, updated_at = :ts WHERE id = :vid
-    """),
+        text(""""""),
         {"views": views, "ts": datetime.utcnow().isoformat(), "vid": video_id},
     )
     return views
@@ -273,16 +215,12 @@ def _sync_video_views(video_id: str):
 def _sync_video_likes(video_id: str):
     _ensure_video_likes_table()
     row = db.session.execute(
-        text("""
-        SELECT COUNT(1) FROM video_likes WHERE video_id = :vid
-    """),
+        text(""""""),
         {"vid": video_id},
     ).fetchone()
     likes = int(row[0] or 0) if row else 0
     db.session.execute(
-        text("""
-        UPDATE videos SET likes = :likes, updated_at = :ts WHERE id = :vid
-    """),
+        text(""""""),
         {"likes": likes, "ts": datetime.utcnow().isoformat(), "vid": video_id},
     )
     return likes
@@ -323,19 +261,7 @@ def list_videos():
         order_field = "views_calc"
     elif sort == "likes":
         order_field = "likes_calc"
-    sql = f"""
-        SELECT v.*,
-               u.username AS author_name,
-               u.avatar_url AS author_avatar,
-               u.premium AS author_premium,
-               (SELECT COALESCE(SUM(count), 0) FROM video_views vv WHERE vv.video_id = v.id) AS views_calc,
-               (SELECT COUNT(1) FROM video_likes vl WHERE vl.video_id = v.id) AS likes_calc
-        FROM videos v
-        LEFT JOIN users u ON u.id = v.author_id
-        WHERE {where}
-        ORDER BY {order_field} {order.upper()}
-        LIMIT :limit OFFSET :offset
-    """
+    sql = f""""""
     rows = db.session.execute(text(sql), params).fetchall()
     items = []
     for r in rows:
@@ -351,17 +277,7 @@ def get_video(video_id):
     _ensure_video_likes_table()
     _ensure_video_columns()
     row = db.session.execute(
-        text(f"""
-        SELECT v.*,
-               u.username AS author_name,
-               u.avatar_url AS author_avatar,
-               u.premium AS author_premium,
-               (SELECT COALESCE(SUM(count), 0) FROM video_views vv WHERE vv.video_id = v.id) AS views_calc,
-               (SELECT COUNT(1) FROM video_likes vl WHERE vl.video_id = v.id) AS likes_calc
-        FROM videos v
-        LEFT JOIN users u ON u.id = v.author_id
-        WHERE v.id = :id AND {_cond_is_deleted("v.")} AND {_cond_is_published("v.")}
-    """),
+        text(f""""""),
         {"id": video_id},
     ).fetchone()
     if not row:
@@ -390,19 +306,7 @@ def list_my_videos(current_user):
         order_field = "views_calc"
     elif sort == "likes":
         order_field = "likes_calc"
-    sql = f"""
-        SELECT v.*,
-               u.username AS author_name,
-               u.avatar_url AS author_avatar,
-               u.premium AS author_premium,
-               (SELECT COALESCE(SUM(count), 0) FROM video_views vv WHERE vv.video_id = v.id) AS views_calc,
-               (SELECT COUNT(1) FROM video_likes vl WHERE vl.video_id = v.id) AS likes_calc
-        FROM videos v
-        LEFT JOIN users u ON u.id = v.author_id
-        WHERE {_cond_is_deleted("v.")} AND v.author_id = :author_id
-        ORDER BY {order_field} {order.upper()}
-        LIMIT :limit OFFSET :offset
-    """
+    sql = f""""""
     rows = db.session.execute(
         text(sql),
         {
@@ -429,23 +333,14 @@ def update_video(current_user, video_id):
     if title is not None and not str(title).strip():
         return jsonify({"error": "title cannot be empty"}), 400
     row = db.session.execute(
-        text(f"""
-        SELECT id FROM videos WHERE id = :id AND author_id = :author_id AND {_cond_is_deleted()}
-    """),
+        text(f""""""),
         {"id": video_id, "author_id": current_user.id},
     ).fetchone()
     if not row:
         return jsonify({"error": "Video not found"}), 404
     _ensure_video_columns()
     db.session.execute(
-        text("""
-        UPDATE videos
-        SET title = COALESCE(:title, title),
-            description = COALESCE(:description, description),
-            is_published = COALESCE(:is_published, is_published),
-            updated_at = :ts
-        WHERE id = :id
-    """),
+        text(""""""),
         {
             "title": title,
             "description": description,
@@ -456,17 +351,7 @@ def update_video(current_user, video_id):
     )
     db.session.commit()
     row = db.session.execute(
-        text("""
-        SELECT v.*,
-               u.username AS author_name,
-               u.avatar_url AS author_avatar,
-               u.premium AS author_premium,
-               (SELECT COALESCE(SUM(count), 0) FROM video_views vv WHERE vv.video_id = v.id) AS views_calc,
-               (SELECT COUNT(1) FROM video_likes vl WHERE vl.video_id = v.id) AS likes_calc
-        FROM videos v
-        LEFT JOIN users u ON u.id = v.author_id
-        WHERE v.id = :id AND v.is_deleted = 0
-    """),
+        text(""""""),
         {"id": video_id},
     ).fetchone()
     if not row:
@@ -480,17 +365,13 @@ def update_video(current_user, video_id):
 @token_required
 def delete_video(current_user, video_id):
     row = db.session.execute(
-        text(f"""
-        SELECT id FROM videos WHERE id = :id AND author_id = :author_id AND {_cond_is_deleted()}
-    """),
+        text(f""""""),
         {"id": video_id, "author_id": current_user.id},
     ).fetchone()
     if not row:
         return jsonify({"error": "Video not found"}), 404
     db.session.execute(
-        text("""
-        UPDATE videos SET is_deleted = 1, updated_at = :ts WHERE id = :id
-    """),
+        text(""""""),
         {"id": video_id, "ts": datetime.utcnow().isoformat()},
     )
     db.session.commit()
@@ -528,10 +409,7 @@ def create_video(current_user):
     try:
         _ensure_video_columns()
         db.session.execute(
-            text("""
-            INSERT INTO videos (id, author_id, title, description, url, poster, duration, created_at, updated_at, views, likes, is_deleted, tags, allow_comments, is_nsfw, has_profanity, is_published)
-            VALUES (:id, :author_id, :title, :description, :url, :poster, :duration, :created_at, :updated_at, 0, 0, 0, :tags, :allow_comments, :is_nsfw, :has_profanity, :is_published)
-        """),
+            text(""""""),
             {
                 "id": v_id,
                 "author_id": current_user.id,
@@ -602,10 +480,7 @@ def check_video(current_user):
         job_id = str(uuid.uuid4())
         ts = datetime.utcnow().isoformat()
         db.session.execute(
-            text("""
-            INSERT INTO video_checks (id, video_url, file_path, status, result_json, error, created_at, updated_at)
-            VALUES (:id, :video_url, :file_path, :status, NULL, NULL, :ts, :ts)
-        """),
+            text(""""""),
             {
                 "id": job_id,
                 "video_url": str(video_url),
@@ -619,10 +494,7 @@ def check_video(current_user):
             _publish_video_check(job_id, file_path, str(video_url))
         except Exception as e:
             db.session.execute(
-                text("""
-                UPDATE video_checks SET status = :status, error = :error, updated_at = :ts
-                WHERE id = :id
-            """),
+                text(""""""),
                 {
                     "status": "error",
                     "error": str(e),
@@ -641,11 +513,7 @@ def check_video(current_user):
 def check_video_status(current_user, job_id):
     _ensure_video_checks_table()
     row = db.session.execute(
-        text("""
-        SELECT id, status, result_json, error
-        FROM video_checks
-        WHERE id = :id
-    """),
+        text(""""""),
         {"id": job_id},
     ).fetchone()
     if not row:
@@ -694,10 +562,7 @@ def register_view(current_user):
     try:
 
         db.session.execute(
-            text("""
-            INSERT INTO video_views (video_id, user_id, ip, count, last_viewed_at)
-            VALUES (:vid, :uid, :ip, 1, :ts)
-        """),
+            text(""""""),
             {
                 "vid": video_id,
                 "uid": current_user.id,
@@ -802,10 +667,7 @@ def like_toggle(current_user):
         else:
             if db.engine.dialect.name == "sqlite":
                 db.session.execute(
-                    text("""
-                    INSERT OR IGNORE INTO video_likes (video_id, user_id, created_at)
-                    VALUES (:vid, :uid, :ts)
-                """),
+                    text(""""""),
                     {
                         "vid": video_id,
                         "uid": current_user.id,
@@ -814,11 +676,7 @@ def like_toggle(current_user):
                 )
             else:
                 db.session.execute(
-                    text("""
-                    INSERT INTO video_likes (video_id, user_id, created_at)
-                    VALUES (:vid, :uid, :ts)
-                    ON CONFLICT (video_id, user_id) DO NOTHING
-                """),
+                    text(""""""),
                     {
                         "vid": video_id,
                         "uid": current_user.id,
@@ -839,9 +697,7 @@ def like_toggle(current_user):
 def liked_list(current_user):
     _ensure_video_likes_table()
     rows = db.session.execute(
-        text("""
-        SELECT video_id FROM video_likes WHERE user_id = :uid ORDER BY created_at DESC
-    """),
+        text(""""""),
         {"uid": current_user.id},
     ).fetchall()
     ids = [str(r[0]) for r in rows] if rows else []
@@ -849,12 +705,7 @@ def liked_list(current_user):
         return jsonify([]), 200
     placeholders = ",".join([":id" + str(i) for i in range(len(ids))])
     params = {("id" + str(i)): ids[i] for i in range(len(ids))}
-    sql = f"""
-        SELECT v.*, u.username AS author_name, u.avatar_url AS author_avatar, u.premium AS author_premium
-        FROM videos v
-        LEFT JOIN users u ON u.id = v.author_id
-        WHERE v.id IN ({placeholders})
-    """
+    sql = f""""""
     rows = db.session.execute(text(sql), params).fetchall()
     by_id = {r._mapping["id"]: dict(r._mapping) for r in rows}
     result = [by_id[i] for i in ids if i in by_id]
@@ -900,12 +751,7 @@ def later_list(current_user):
         return jsonify([]), 200
     placeholders = ",".join([":id" + str(i) for i in range(len(ids))])
     params = {("id" + str(i)): ids[i] for i in range(len(ids))}
-    sql = f"""
-        SELECT v.*, u.username AS author_name, u.avatar_url AS author_avatar, u.premium AS author_premium
-        FROM videos v
-        LEFT JOIN users u ON u.id = v.author_id
-        WHERE v.id IN ({placeholders})
-    """
+    sql = f""""""
     rows = db.session.execute(text(sql), params).fetchall()
     items = [dict(r._mapping) for r in rows]
     return jsonify(items), 200
@@ -934,12 +780,7 @@ def history_list(current_user):
         return jsonify([]), 200
     placeholders = ",".join([":id" + str(i) for i in range(len(ids))])
     params = {("id" + str(i)): ids[i] for i in range(len(ids))}
-    sql = f"""
-        SELECT v.*, u.username AS author_name, u.avatar_url AS author_avatar, u.premium AS author_premium
-        FROM videos v
-        LEFT JOIN users u ON u.id = v.author_id
-        WHERE v.id IN ({placeholders})
-    """
+    sql = f""""""
     rows = db.session.execute(text(sql), params).fetchall()
     by_id = {r._mapping["id"]: dict(r._mapping) for r in rows}
 
@@ -954,32 +795,12 @@ def _ensure_video_comments_table():
             ).fetchall()
             if not cols:
                 db.session.execute(
-                    text("""
-                    CREATE TABLE video_comments (
-                        id TEXT PRIMARY KEY,
-                        video_id TEXT NOT NULL,
-                        posted_by TEXT NOT NULL,
-                        content TEXT NOT NULL,
-                        created_at TEXT,
-                        likes INTEGER DEFAULT 0,
-                        deleted INTEGER DEFAULT 0
-                    )
-                """)
+                    text("""""")
                 )
                 db.session.commit()
         else:
             db.session.execute(
-                text("""
-                CREATE TABLE IF NOT EXISTS video_comments (
-                    id TEXT PRIMARY KEY,
-                    video_id TEXT NOT NULL,
-                    posted_by TEXT NOT NULL,
-                    content TEXT NOT NULL,
-                    created_at TEXT,
-                    likes INTEGER DEFAULT 0,
-                    deleted INTEGER DEFAULT 0
-                )
-            """)
+                text("""""")
             )
             db.session.commit()
     except Exception:
@@ -989,13 +810,7 @@ def _ensure_video_comments_table():
 def get_video_comments(video_id):
     _ensure_video_comments_table()
     rows = db.session.execute(
-        text("""
-        SELECT vc.*, u.username AS author_name, u.avatar_url AS author_avatar
-        FROM video_comments vc
-        LEFT JOIN users u ON u.id = vc.posted_by
-        WHERE vc.video_id = :vid AND vc.deleted = 0
-        ORDER BY vc.created_at ASC
-    """),
+        text(""""""),
         {"vid": video_id},
     ).fetchall()
     items = [dict(r._mapping) for r in rows]
@@ -1022,9 +837,7 @@ def create_video_comment(current_user):
     )
     try:
         row = db.session.execute(
-            text("""
-            SELECT allow_comments FROM videos WHERE id = :vid
-        """),
+            text(""""""),
             {"vid": video_id},
         ).fetchone()
         if not row:
@@ -1040,10 +853,7 @@ def create_video_comment(current_user):
         if not allow_comments_enabled:
             return jsonify({"error": "Comments are disabled"}), 403
         db.session.execute(
-            text("""
-            INSERT INTO video_comments (id, video_id, posted_by, content, created_at, likes, deleted)
-            VALUES (:id, :vid, :uid, :content, :ts, 0, 0)
-        """),
+            text(""""""),
             {
                 "id": cid,
                 "vid": video_id,

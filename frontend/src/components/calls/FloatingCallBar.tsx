@@ -34,7 +34,7 @@ export const FloatingCallBar: React.FC<FloatingCallBarProps> = ({ onReturnToCall
 		<div className='fixed bottom-6 right-6 z-[9999] animate-in slide-in-from-bottom-4 duration-300'>
 			<div className='bg-gray-900/95 backdrop-blur-xl border border-gray-800 rounded-2xl shadow-2xl p-4 min-w-[280px]'>
 				<div className='flex items-center justify-between gap-3'>
-					{/* Call Info */}
+					
 					<div className='flex items-center gap-3 flex-1 min-w-0' onClick={onReturnToCall}>
 						<div className='w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 cursor-pointer'>
 							{call.userName.charAt(0).toUpperCase()}
@@ -57,9 +57,9 @@ export const FloatingCallBar: React.FC<FloatingCallBarProps> = ({ onReturnToCall
 						</div>
 					</div>
 
-					{/* Controls */}
+					
 					<div className='flex items-center gap-2'>
-						{/* Quick Mute */}
+						
 						<button
 							onClick={(e) => {
 								e.stopPropagation()
@@ -79,7 +79,7 @@ export const FloatingCallBar: React.FC<FloatingCallBarProps> = ({ onReturnToCall
 							)}
 						</button>
 
-						{/* Return to Chat */}
+						
 						<button
 							onClick={onReturnToCall}
 							className='p-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors'
@@ -88,7 +88,7 @@ export const FloatingCallBar: React.FC<FloatingCallBarProps> = ({ onReturnToCall
 							<MessageSquareIcon className='w-4 h-4' />
 						</button>
 
-						{/* End Call */}
+						
 						<button
 							onClick={handleEndCall}
 							className='p-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition-colors'

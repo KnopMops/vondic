@@ -36,12 +36,8 @@ class UserService:
         return User.query.filter_by(email=email).first()
 
     @staticmethod
-    def get_user_by_telegram_id(telegram_id):
-        return User.query.filter_by(telegram_id=telegram_id).first()
-
-    @staticmethod
     def search_users(query_str):
-        if not query_str or "@telegram.bot" in query_str:
+        if not query_str:
             return []
 
         search = f"%{query_str}%"
@@ -49,7 +45,6 @@ class UserService:
             User.query.filter(
                 or_(User.username.ilike(search), User.email.ilike(search))
             )
-            .filter(~User.email.like("%@telegram.bot"))
             .all()
         )
 
@@ -111,6 +106,9 @@ class UserService:
             else:
                 return None, "Неверный статус"
 
+        if "privacy_settings" in data:
+            user.privacy_settings = data["privacy_settings"]
+
         if current_user.role == "Admin":
             if "role" in data:
                 user.role = data["role"]
@@ -123,21 +121,6 @@ class UserService:
         except IntegrityError:
             db.session.rollback()
             return None, "Username already taken"
-        except Exception as e:
-            db.session.rollback()
-            return None, str(e)
-
-    @staticmethod
-    def generate_link_key(user_id):
-        user = User.query.get(user_id)
-        if not user:
-            return None, "User not found"
-
-        try:
-            key = "".join(secrets.choice("0123456789") for _ in range(6))
-            user.link_key = key
-            db.session.commit()
-            return key, None
         except Exception as e:
             db.session.rollback()
             return None, str(e)
@@ -297,9 +280,7 @@ class UserService:
                             delete_local_file(a.get("url"))
 
             shared_db_path = os.path.join(Config.BASE_DIR, "database.db")
-            result = db.session.execute(text("""
-                SELECT attachments FROM post_reports WHERE reporter_id = :user_id
-            """), {"user_id": user_id})
+            result = db.session.execute(text(""""""), {"user_id": user_id})
             report_rows = result.fetchall()
             for row in report_rows:
                 try:
@@ -319,7 +300,7 @@ class UserService:
                 placeholders = ",".join(f":id{i}" for i in range(len(esc_ids)))
                 params = {f"id{i}": esc_id for i, esc_id in enumerate(esc_ids)}
                 db.session.execute(text(f"""
-                    DELETE FROM escalation_messages WHERE escalation_id IN ({placeholders})
+                    DELETE FROM support_chat_messages WHERE escalation_id IN ({placeholders})
                 """), params)
 
             db.session.execute(text("DELETE FROM escalations WHERE user_id = :user_id"), {"user_id": user_id})
@@ -327,7 +308,7 @@ class UserService:
             db.session.execute(text("DELETE FROM post_reports WHERE reporter_id = :user_id"), {"user_id": user_id})
             db.session.commit()
             webrtc_result = db.session.execute(text("""
-                SELECT attachments FROM messages WHERE sender_id = :user_id OR target_id = :user_id
+                SELECT payload FROM messages WHERE (sender_id = :user_id OR target_id = :user_id) AND payload IS NOT NULL
             """), {"user_id": user_id})
             webrtc_rows = webrtc_result.fetchall()
             for row in webrtc_rows:
@@ -458,9 +439,7 @@ class UserService:
                 channel_ids = [c.id for c in channels]
                 placeholders = ",".join(f":id{i}" for i in range(len(channel_ids)))
                 params = {f"id{i}": channel_id for i, channel_id in enumerate(channel_ids)}
-                channel_result = db.session.execute(text(f"""
-                    SELECT attachments FROM messages WHERE channel_id IN ({placeholders})
-                """), params)
+                channel_result = db.session.execute(text(f""""""), params)
                 channel_rows = channel_result.fetchall()
                 for row in channel_rows:
                     try:

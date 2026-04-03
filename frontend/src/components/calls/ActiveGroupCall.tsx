@@ -44,10 +44,10 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 	const screenShareVideoRef = useRef<HTMLVideoElement | null>(null)
 	const primaryVideoRef = useRef<HTMLVideoElement | null>(null)
 
-	// Calculate duration based on the earliest start time or just a local timer since mount
-	// Since group calls are dynamic, maybe just show how long *I* have been in the call?
-	// Or we can track the start time of the group call session if we had it.
-	// For now, let's track duration since this component mounted (joined call).
+	
+	
+	
+	
 	useEffect(() => {
 		const startTime = Date.now()
 		const interval = setInterval(() => {
@@ -190,17 +190,17 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 				</button>
 			</div>
 
-			{/* Display participants list */}
+			
 			<div className='mt-3 max-h-32 overflow-y-auto'>
 				<div className='grid grid-cols-6 gap-2'>
-					{/* Current user */}
+					
 					<div className='text-center'>
 						<div className='mx-auto mb-1 h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-semibold'>
 							{localStream ? '🎤' : '🔇'}
 						</div>
 						<p className='text-[8px] truncate'>Вы</p>
 					</div>
-					{/* Other participants */}
+					
 					{participants.map(participant => (
 						<div key={participant.socketId} className='text-center'>
 							<div className='mx-auto mb-1 h-8 w-8 rounded-full bg-gray-700 flex items-center justify-center text-xs font-semibold'>
@@ -272,8 +272,27 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 					</p>
 					<audio
 						ref={ref => {
-							if (ref && localStream) ref.srcObject = localStream
+							if (ref && localStream) {
+								ref.srcObject = localStream
+								// Apply audio quality settings
+								const audioTracks = localStream.getAudioTracks()
+								audioTracks.forEach(track => {
+									try {
+										const settings: any = {
+											echoCancellation: true,
+											noiseSuppression: true,
+											autoGainControl: true,
+											noiseSuppressionLevel: 'high',
+											echoCancellationLevel: 'high',
+										}
+										track.applyConstraints({ advanced: [settings] }).catch(() => {})
+									} catch (e) {
+										console.log('[GroupCall] Could not apply local audio constraints:', e)
+									}
+								})
+							}
 							if (ref) {
+								ref.muted = true
 								const p = ref.play()
 								if (p && typeof p.catch === 'function') p.catch(() => {})
 							}
@@ -310,6 +329,24 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 								if (!ref) return
 								if (participant.status === 'connected' && stream) {
 									ref.srcObject = stream
+									// Apply audio quality settings for remote audio
+									const audioTracks = stream.getAudioTracks()
+									audioTracks.forEach(track => {
+										try {
+											const settings: any = {
+												echoCancellation: true,
+												noiseSuppression: true,
+												autoGainControl: true,
+												noiseSuppressionLevel: 'high',
+												echoCancellationLevel: 'high',
+											}
+											track.applyConstraints({ advanced: [settings] }).catch(() => {})
+										} catch (e) {
+											console.log('[GroupCall] Could not apply remote audio constraints:', e)
+										}
+									})
+									ref.muted = false
+									ref.volume = 1
 									const p = ref.play()
 									if (p && typeof p.catch === 'function') p.catch(() => {})
 								} else {

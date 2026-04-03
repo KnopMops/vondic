@@ -16,9 +16,9 @@ public_v1_bp.register_blueprint(public_users_bp)
 public_v1_bp.register_blueprint(public_messages_bp)
 public_v1_bp.register_blueprint(public_comments_bp)
 
+
 @public_v1_bp.before_request
 def rate_limit_middleware():
-
     identifier = get_client_ip(request)
     is_limited, time_left = rate_limiter.is_rate_limited(
         identifier, 100, 60)

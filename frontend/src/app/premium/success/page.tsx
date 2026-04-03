@@ -7,7 +7,7 @@ import Link from 'next/link'
 export default function PremiumSuccessPage() {
 	return (
 		<div className='min-h-screen bg-black flex items-center justify-center p-4 overflow-hidden relative'>
-			{/* Background Gradients */}
+			
 			<div className='absolute inset-0 pointer-events-none'>
 				<div className='absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,_rgba(79,70,229,0.15),transparent_50%)]' />
 				<div className='absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-indigo-500/10 rounded-full blur-3xl' />

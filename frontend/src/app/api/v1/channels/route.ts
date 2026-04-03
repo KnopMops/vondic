@@ -2,7 +2,7 @@ import { withAccessTokenRefresh } from '@/lib/auth.utils'
 import { NextRequest, NextResponse } from 'next/server'
 import { getBackendUrl } from '@/lib/server-urls'
 
-// Error messages mapping for user-friendly output
+
 const ERROR_MESSAGES: Record<number, string> = {
   400: 'Неверные данные. Проверьте название и описание канала',
   401: 'Требуется авторизация. Пожалуйста, войдите в аккаунт',

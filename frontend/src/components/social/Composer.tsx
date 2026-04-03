@@ -5,15 +5,19 @@ import { Attachment } from '@/lib/types'
 import { useRef, useState } from 'react'
 
 type Props = {
-	onCreate: (text: string, attachments?: Attachment[]) => void
+	onCreate: (text: string, attachments?: Attachment[], isBlog?: boolean) => void
+	mode?: 'feed' | 'blog'
 }
 
-export default function Composer({ onCreate }: Props) {
+export default function Composer({ onCreate, mode = 'feed' }: Props) {
 	const [text, setText] = useState('')
 	const [files, setFiles] = useState<File[]>([])
 	const [isUploading, setIsUploading] = useState(false)
 	const fileInputRef = useRef<HTMLInputElement>(null)
 	const { user } = useAppSelector(state => state.auth)
+
+	
+	const isBlogPost = user?.role === 'Admin' && (text.trim().startsWith('# ') || text.trim().startsWith('#'))
 
 	const fileToDataUrl = (file: File) =>
 		new Promise<string>((resolve, reject) => {
@@ -87,7 +91,8 @@ export default function Composer({ onCreate }: Props) {
 					attachments = list
 				}
 			}
-			onCreate(text.trim(), attachments)
+			// Pass is_blog flag for admin posts starting with #
+			onCreate(text.trim(), attachments, isBlogPost)
 			setText('')
 			setFiles([])
 		} finally {
@@ -125,9 +130,16 @@ export default function Composer({ onCreate }: Props) {
 			<input
 				value={text}
 				onChange={e => setText(e.target.value)}
-				placeholder='Что у вас нового?'
+				placeholder={isBlogPost ? '# Пост для блога разработчика...' : 'Что у вас нового?'}
 				className='w-full rounded-xl border border-gray-700/50 bg-gray-800/50 px-4 py-3 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all'
 			/>
+
+			{isBlogPost && (
+				<div className='mt-2 flex items-center gap-2 text-amber-400 text-xs'>
+					<span>📝</span>
+					<span>Пост будет опубликован как <strong>блог разработчика</strong> (только пересылка)</span>
+				</div>
+			)}
 
 			{files.length > 0 && (
 				<div className='mt-3 flex flex-wrap gap-2'>

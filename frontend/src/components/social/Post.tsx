@@ -4,7 +4,7 @@ import { useAppSelector } from '@/lib/hooks'
 import { useComments } from '@/lib/hooks/useComments'
 import { useToast } from '@/lib/ToastContext'
 import { Attachment } from '@/lib/types'
-import { getAttachmentUrl } from '@/lib/utils'
+import { getAttachmentUrl, getAvatarUrl } from '@/lib/utils'
 import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -352,10 +352,7 @@ export default function Post({
 				<div className='flex gap-3 mb-3'>
 					<Link href={`/feed/profile/${comment.user_id}`}>
 						<img
-							src={
-								getAttachmentUrl(comment.author_avatar) ||
-								'/placeholder-user.jpg'
-							}
+							src={getAvatarUrl(comment.author_avatar)}
 							alt={comment.author_name || 'User'}
 							className='h-8 w-8 rounded-full object-cover'
 						/>
@@ -617,9 +614,16 @@ export default function Post({
 								</button>
 							</>
 						)}
+						{isBlogPost && (
+							<div className='flex items-center gap-2 text-amber-400 text-xs'>
+								<span>📝</span>
+								<span>Только пересылка</span>
+							</div>
+						)}
 						<button
 							onClick={() => setIsShareModalOpen(true)}
 							className='flex items-center gap-2 text-gray-500 transition-all hover:text-indigo-400 hover:scale-105'
+							title={isBlogPost ? 'Поделиться (переслать)' : 'Поделиться'}
 						>
 							<svg
 								xmlns='http://www.w3.org/2000/svg'
@@ -727,6 +731,7 @@ export default function Post({
 						author_avatar,
 						text,
 						image,
+						isBlog: isBlogPost,
 					}}
 				/>
 			)}

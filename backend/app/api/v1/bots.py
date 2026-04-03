@@ -176,18 +176,16 @@ def get_bot_outbox(current_user, bot_id):
 @bots_bp.route("/<bot_id>/verify", methods=["POST"])
 @token_required
 def verify_bot(current_user, bot_id):
-    """Admin endpoint to verify/unverify a bot"""
-    # Check if user is admin
     if current_user.role not in ["Admin", "admin"]:
         return jsonify({"error": "Admin access required"}), 403
-    
+
     data = request.get_json() or {}
     is_verified = data.get("is_verified", 1)
-    
+
     bot = BotService.get_bot_by_id(bot_id)
     if not bot:
         return jsonify({"error": "Bot not found"}), 404
-    
+
     try:
         from app.core.extensions import db
         bot.is_verified = 1 if is_verified else 0

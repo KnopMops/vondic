@@ -1,8 +1,9 @@
 'use client'
 
+import { Heart, MessageCircle, Share2, MoreHorizontal, Send, Image, Video, File, Download, Upload, Calendar, Clock, Star, Lock, Unlock, Eye, EyeOff, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ArrowLeft, ArrowRight, MoreVertical, Bell, Search, Home, User, Settings, Menu, X, Check, Plus, Trash2, Edit2 } from 'lucide-react';
 import { useSocket } from '@/lib/SocketContext'
 import { User } from '@/lib/types'
-import { getAttachmentUrl } from '@/lib/utils'
+import { getAttachmentUrl, getAvatarUrl } from '@/lib/utils'
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 
@@ -15,6 +16,7 @@ interface ShareModalProps {
 		author_avatar?: string | null
 		text: string
 		image?: string
+		isBlog?: boolean
 	}
 }
 
@@ -70,16 +72,16 @@ export default function ShareModal({ isOpen, onClose, post }: ShareModalProps) {
 
 		const messageContent = JSON.stringify(payload)
 
-		// Emit socket event
+		
 		socket.emit('send_message', {
 			target_user_id: friend.id,
 			content: messageContent,
 			attachments: [],
 		})
 
-		// Simulate success (since we don't wait for ack here easily without callback in this setup,
-		// though useChat handles it via events. We assume success for UI feedback)
-		// Better: Listen for 'message_sent' or just show "Sent" after a small timeout
+		
+		
+		
 
 		setTimeout(() => {
 			setSendingTo(prev => {
@@ -97,7 +99,9 @@ export default function ShareModal({ isOpen, onClose, post }: ShareModalProps) {
 		<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4'>
 			<div className='flex h-[60vh] w-full max-w-md flex-col rounded-lg border border-white/10 bg-black/80 backdrop-blur shadow-xl'>
 				<div className='flex items-center justify-between border-b border-white/10 px-4 py-3'>
-					<h3 className='text-lg font-semibold text-white'>Поделиться</h3>
+					<h3 className='text-lg font-semibold text-white'>
+						{post.isBlog ? 'Переслать пост' : 'Поделиться'}
+					</h3>
 					<button
 						onClick={onClose}
 						className='rounded-full p-1 text-gray-300 hover:bg-white/10 hover:text-white'
@@ -119,6 +123,14 @@ export default function ShareModal({ isOpen, onClose, post }: ShareModalProps) {
 					</button>
 				</div>
 
+				{post.isBlog && (
+					<div className='px-4 py-2 bg-amber-900/20 border-b border-amber-500/20'>
+						<p className='text-xs text-amber-400'>
+							📝 Это пост из блога разработчика. Его можно только переслать друзьям.
+						</p>
+					</div>
+				)}
+
 				<div className='flex-1 overflow-y-auto px-4 py-3'>
 					{isLoading ? (
 						<div className='flex h-full items-center justify-center text-gray-300'>
@@ -137,10 +149,7 @@ export default function ShareModal({ isOpen, onClose, post }: ShareModalProps) {
 								>
 									<div className='flex items-center gap-3'>
 										<img
-											src={
-												getAttachmentUrl(friend.avatar_url) ||
-												'/placeholder-user.jpg'
-											}
+											src={getAvatarUrl(friend.avatar_url)}
 											alt={friend.username}
 											className='h-10 w-10 rounded-full object-cover'
 										/>

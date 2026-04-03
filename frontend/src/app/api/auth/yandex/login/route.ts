@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
 		const { searchParams } = new URL(req.url)
 		const cid = searchParams.get('cid')
 
-		// Use internal URL for server-side requests (Docker network)
+		
 		const backendUrl = getBackendUrl()
 
 		const response = await fetch(`${backendUrl}/api/v1/auth/yandex/login`, {

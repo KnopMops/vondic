@@ -36,7 +36,12 @@ type PostsResponse = {
 export function usePosts({
 	perPage = 5,
 	kind = 'feed',
-}: { perPage?: number; kind?: 'feed' | 'blog' } = {}) {
+	filter = 'all',
+}: {
+	perPage?: number
+	kind?: 'feed' | 'blog'
+	filter?: 'all' | 'subscriptions' | 'blog'
+} = {}) {
 	const dispatch = useAppDispatch()
 	const queryClient = useQueryClient()
 	const { socket } = useSocket()
@@ -45,10 +50,9 @@ export function usePosts({
 		PostsResponse,
 		Error,
 		PostsResponse,
-		(string | number)[],
-		number
+		(string | number)[]
 	>({
-		queryKey: ['posts', perPage, kind],
+		queryKey: ['posts', perPage, kind, filter],
 		initialPageParam: 1,
 		queryFn: async ({ pageParam = 1 }) => {
 			const params = new URLSearchParams({
@@ -57,6 +61,9 @@ export function usePosts({
 			})
 			if (kind === 'blog') {
 				params.set('kind', 'blog')
+			}
+			if (filter && filter !== 'all') {
+				params.set('filter', filter)
 			}
 			const res = await fetch(`/api/posts?${params.toString()}`)
 			if (!res.ok) throw new Error('Failed to fetch posts')
@@ -82,7 +89,7 @@ export function usePosts({
 
 	useEffect(() => {
 		if (!socket) return
-		const key = ['posts', perPage, kind] as const
+		const key = ['posts', perPage, kind, filter] as const
 
 		const handlePostCreated = (payload: any) => {
 			queryClient.setQueryData<any>(key, (prev: any) => {
@@ -145,9 +152,11 @@ export function usePosts({
 		mutationFn: async ({
 			text,
 			attachments,
+			is_blog,
 		}: {
 			text: string
 			attachments?: Attachment[]
+			is_blog?: boolean
 		}) => {
 			const res = await fetch('/api/posts', {
 				method: 'POST',
@@ -156,7 +165,7 @@ export function usePosts({
 					title: 'New Post',
 					content: text,
 					attachments,
-					is_blog: kind === 'blog',
+					is_blog: is_blog || kind === 'blog',
 				}),
 			})
 			if (!res.ok) throw new Error('Failed to create post')

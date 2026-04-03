@@ -21,60 +21,7 @@ FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 
 def ensure_support_tables():
 
-    db.session.execute(text("""
-        CREATE TABLE IF NOT EXISTS escalations (
-            id SERIAL PRIMARY KEY,
-            user_id TEXT NOT NULL,
-            question TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            status TEXT DEFAULT 'pending',
-            answer TEXT,
-            answered_at TIMESTAMP,
-            delivered_user BOOLEAN DEFAULT FALSE
-        )
-    """))
-
-    db.session.execute(text("""
-        CREATE TABLE IF NOT EXISTS escalation_messages (
-            id SERIAL PRIMARY KEY,
-            escalation_id INTEGER NOT NULL REFERENCES escalations(id),
-            content TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            delivered_user BOOLEAN DEFAULT FALSE,
-            sender TEXT DEFAULT 'admin',
-            delivered_admin BOOLEAN DEFAULT FALSE
-        )
-    """))
-
-    db.session.execute(text("""
-        CREATE TABLE IF NOT EXISTS notifications (
-            id SERIAL PRIMARY KEY,
-            user_id TEXT NOT NULL,
-            title TEXT,
-            type TEXT,
-            message TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            notification_hash TEXT,
-            delivered BOOLEAN DEFAULT FALSE
-        )
-    """))
-
-    db.session.execute(text("""
-        CREATE TABLE IF NOT EXISTS post_reports (
-            id SERIAL PRIMARY KEY,
-            reporter_id TEXT NOT NULL,
-            reporter_login TEXT,
-            post_id TEXT NOT NULL,
-            post_author_login TEXT,
-            description TEXT,
-            attachments JSONB,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            status TEXT DEFAULT 'open',
-            verdict_at TIMESTAMP
-        )
-    """))
-
-    db.session.commit()
+    pass
 
 def is_escalation(text: str) -> bool:
     t = (text or "").casefold()
@@ -115,7 +62,7 @@ def ask_rag(question: str) -> Tuple[str, Optional[str]]:
 def save_escalation(user_id: str, question: str) -> int:
     result = db.session.execute(text("""
         INSERT INTO escalations (user_id, question, created_at, status)
-        VALUES (:user_id, :question, CURRENT_TIMESTAMP, 'pending')
+        VALUES (:user_id, :question, NOW(), 'open')
         RETURNING id
     """), {"user_id": user_id, "question": question})
     esc_id = result.scalar()
@@ -130,8 +77,8 @@ def notify_admin(
     content_hash = hashlib.sha256(
         f"{user_id}|{msg}|{time.time()}".encode("utf-8")).hexdigest()
     db.session.execute(text("""
-        INSERT INTO notifications (user_id, title, type, message, created_at, delivered, notification_hash)
-        VALUES (:user_id, :title, :type, :message, CURRENT_TIMESTAMP, FALSE, :notification_hash)
+        INSERT INTO notifications (user_id, title, type, message, created_at, notification_hash)
+        VALUES (:user_id, :title, :type, :message, NOW(), :notification_hash)
     """), {
         "user_id": user_id,
         "title": title,
@@ -149,8 +96,8 @@ def notify_user(
     content_hash = hashlib.sha256(
         f"{user_id}|{msg}|{time.time()}".encode("utf-8")).hexdigest()
     db.session.execute(text("""
-        INSERT INTO notifications (user_id, title, type, message, created_at, delivered, notification_hash)
-        VALUES (:user_id, :title, :type, :message, CURRENT_TIMESTAMP, FALSE, :notification_hash)
+        INSERT INTO notifications (user_id, title, type, message, created_at, notification_hash)
+        VALUES (:user_id, :title, :type, :message, NOW(), :notification_hash)
     """), {
         "user_id": user_id,
         "title": title,
@@ -169,7 +116,7 @@ def set_post_report_status(
         """), {"status": status, "id": report_id})
     else:
         db.session.execute(text("""
-            UPDATE post_reports SET status = :status, verdict_at = TO_TIMESTAMP(:verdict_at) WHERE id = :id
+            UPDATE post_reports SET status = :status, verdict_at = :verdict_at WHERE id = :id
         """), {"status": status, "verdict_at": verdict_at, "id": report_id})
     db.session.commit()
 
@@ -206,8 +153,8 @@ def chat_send(current_user):
         if (status or "").lower() == "closed":
             return jsonify({"ok": False, "error": "Чат закрыт"}), 400
         db.session.execute(text("""
-            INSERT INTO escalation_messages (escalation_id, content, created_at, delivered_user, sender, delivered_admin)
-            VALUES (:escalation_id, :content, CURRENT_TIMESTAMP, TRUE, 'user', FALSE)
+            INSERT INTO support_chat_messages (escalation_id, sender, content, created_at)
+            VALUES (:escalation_id, 'user', :content, NOW())
         """), {"escalation_id": esc_id_val, "content": question})
         db.session.commit()
         return jsonify(
@@ -228,17 +175,17 @@ def chat_send(current_user):
         esc_id = save_escalation(current_user.id, question)
         notify_admin(current_user.id, f"Новая заявка #{esc_id}: {question}")
         db.session.execute(text("""
-            INSERT INTO escalation_messages (escalation_id, content, created_at, delivered_user, sender, delivered_admin)
-            VALUES (:escalation_id, :content, CURRENT_TIMESTAMP, TRUE, 'user', FALSE)
+            INSERT INTO support_chat_messages (escalation_id, sender, content, created_at)
+            VALUES (:escalation_id, 'user', :content, NOW())
         """), {"escalation_id": esc_id, "content": question})
         db.session.execute(text("""
-            INSERT INTO escalation_messages (escalation_id, content, created_at, delivered_user, sender, delivered_admin)
-            VALUES (:escalation_id, :content, CURRENT_TIMESTAMP, FALSE, 'bot', FALSE)
+            INSERT INTO support_chat_messages (escalation_id, sender, content, created_at)
+            VALUES (:escalation_id, 'support', :content, NOW())
         """), {"escalation_id": esc_id, "content": "Перевожу на оператора. Ожидайте ответа."})
         db.session.execute(text("""
-            INSERT INTO escalation_messages (escalation_id, content, created_at, delivered_user, sender, delivered_admin)
-            VALUES (:escalation_id, :content, CURRENT_TIMESTAMP, FALSE, 'bot', FALSE)
-        """), {"escalation_id": esc_id, "content": f"Новая заявка #{esc_id}: {question}"})
+            INSERT INTO notifications (user_id, title, message, created_at, type)
+            VALUES (:user_id, :title, :message, NOW(), 'system')
+        """), {"user_id": current_user.id, "title": f"Новая заявка #{esc_id}", "message": f"Новая заявка #{esc_id}: {question}"})
         db.session.commit()
         return jsonify(
             {
@@ -249,14 +196,15 @@ def chat_send(current_user):
         )
 
     result = db.session.execute(text("""
-        SELECT id FROM escalations WHERE user_id = :user_id AND status != 'closed' ORDER BY created_at DESC LIMIT 1
+        SELECT id FROM escalations WHERE user_id = :user_id AND status != 'closed'
+        ORDER BY created_at DESC LIMIT 1
     """), {"user_id": current_user.id})
     row = result.fetchone()
     if row:
         esc_id = int(row[0])
         db.session.execute(text("""
-            INSERT INTO escalation_messages (escalation_id, content, created_at, delivered_user, sender, delivered_admin)
-            VALUES (:escalation_id, :content, CURRENT_TIMESTAMP, TRUE, 'user', FALSE)
+            INSERT INTO support_chat_messages (escalation_id, sender, content, created_at)
+            VALUES (:escalation_id, 'user', :content, NOW())
         """), {"escalation_id": esc_id, "content": question})
         db.session.commit()
         return jsonify(
@@ -284,17 +232,17 @@ def chat_send(current_user):
         esc_id = save_escalation(current_user.id, question)
         notify_admin(current_user.id, f"Новая заявка #{esc_id}: {question}")
         db.session.execute(text("""
-            INSERT INTO escalation_messages (escalation_id, content, created_at, delivered_user, sender, delivered_admin)
-            VALUES (:escalation_id, :content, CURRENT_TIMESTAMP, TRUE, 'user', FALSE)
+            INSERT INTO support_chat_messages (escalation_id, sender, content, created_at)
+            VALUES (:escalation_id, 'user', :content, NOW())
         """), {"escalation_id": esc_id, "content": question})
         db.session.execute(text("""
-            INSERT INTO escalation_messages (escalation_id, content, created_at, delivered_user, sender, delivered_admin)
-            VALUES (:escalation_id, :content, CURRENT_TIMESTAMP, FALSE, 'bot', FALSE)
+            INSERT INTO support_chat_messages (escalation_id, sender, content, created_at)
+            VALUES (:escalation_id, 'support', :content, NOW())
         """), {"escalation_id": esc_id, "content": "Перевожу на оператора. Ожидайте ответа."})
         db.session.execute(text("""
-            INSERT INTO escalation_messages (escalation_id, content, created_at, delivered_user, sender, delivered_admin)
-            VALUES (:escalation_id, :content, CURRENT_TIMESTAMP, FALSE, 'bot', FALSE)
-        """), {"escalation_id": esc_id, "content": f"Новая заявка #{esc_id}: {question}"})
+            INSERT INTO notifications (user_id, title, message, created_at, type)
+            VALUES (:user_id, :title, :message, NOW(), 'system')
+        """), {"user_id": current_user.id, "title": f"Новая заявка #{esc_id}", "message": f"Новая заявка #{esc_id}: {question}"})
         db.session.commit()
         return jsonify(
             {
@@ -309,10 +257,10 @@ def chat_send(current_user):
 @token_required
 def chat_updates(current_user):
     result = db.session.execute(text("""
-        SELECT m.id, e.question, m.content, m.created_at, m.escalation_id, m.sender
-        FROM escalation_messages m
-        JOIN escalations e ON e.id = m.escalation_id
-        WHERE e.user_id = :user_id AND m.delivered_user = FALSE
+        SELECT m.id, e.question, m.content, m.created_at, e.id, m.sender
+        FROM support_chat_messages m
+        JOIN escalations e ON m.escalation_id = e.id
+        WHERE e.user_id = :user_id AND m.read = FALSE
         ORDER BY m.created_at ASC
     """), {"user_id": current_user.id})
     rows = result.fetchall()
@@ -329,9 +277,11 @@ def chat_updates(current_user):
     ]
     if rows:
         ids = [r[0] for r in rows]
-        db.session.execute(text("""
-            UPDATE escalation_messages SET delivered_user = TRUE WHERE id = ANY(:ids)
-        """), {"ids": ids})
+        placeholders = ",".join(f":id{i}" for i in range(len(ids)))
+        params = {f"id{i}": id_val for i, id_val in enumerate(ids)}
+        db.session.execute(text(f"""
+            UPDATE support_chat_messages SET read = TRUE WHERE id IN ({placeholders})
+        """), params)
         db.session.commit()
     return jsonify({"ok": True, "updates": updates})
 
@@ -341,8 +291,8 @@ def notifications_updates(current_user):
     result = db.session.execute(text("""
         SELECT id, title, type, message, created_at, notification_hash
         FROM notifications
-        WHERE user_id = :user_id AND delivered = FALSE
-        ORDER BY created_at ASC
+        WHERE user_id = :user_id AND "read" = 0
+        ORDER BY created_at DESC
     """), {"user_id": current_user.id})
     rows = result.fetchall()
     notifications = [
@@ -358,9 +308,11 @@ def notifications_updates(current_user):
     ]
     if rows:
         ids = [r[0] for r in rows]
-        db.session.execute(text("""
-            UPDATE notifications SET delivered = TRUE WHERE id = ANY(:ids)
-        """), {"ids": ids})
+        placeholders = ",".join(f":id{i}" for i in range(len(ids)))
+        params = {f"id{i}": id_val for i, id_val in enumerate(ids)}
+        db.session.execute(text(f"""
+            UPDATE notifications SET "read" = 1 WHERE id IN ({placeholders})
+        """), params)
         db.session.commit()
     return jsonify({"ok": True, "notifications": notifications})
 
@@ -369,10 +321,11 @@ def notifications_updates(current_user):
 def chat_history(current_user):
     result = db.session.execute(text("""
         SELECT m.id, m.sender, m.content, m.created_at, m.escalation_id
-        FROM escalation_messages m
-        JOIN escalations e ON e.id = m.escalation_id
+        FROM support_chat_messages m
+        JOIN escalations e ON m.escalation_id = e.id
         WHERE e.user_id = :user_id
-        ORDER BY m.created_at ASC, m.id ASC
+        ORDER BY m.created_at DESC
+        LIMIT 50
     """), {"user_id": current_user.id})
     rows = result.fetchall()
     messages = [
@@ -394,7 +347,10 @@ def admin_escalations(current_user):
     if role not in ("support", "admin"):
         return jsonify({"error": "Доступ запрещён"}), 403
     result = db.session.execute(text("""
-        SELECT id, user_id, question, created_at FROM escalations WHERE status != 'closed' ORDER BY created_at DESC
+        SELECT id, user_id, question, created_at
+        FROM escalations
+        WHERE status != 'closed'
+        ORDER BY created_at DESC
     """))
     escalations = [
         {"id": r[0], "user_id": r[1], "question": r[2], "created_at": r[3]}
@@ -413,11 +369,11 @@ def admin_answer(current_user, esc_id: int):
     if not answer:
         return jsonify({"error": "Пустой ответ"}), 400
     db.session.execute(text("""
-        INSERT INTO escalation_messages (escalation_id, content, created_at, delivered_user, sender, delivered_admin)
-        VALUES (:escalation_id, :content, CURRENT_TIMESTAMP, FALSE, 'admin', FALSE)
+        INSERT INTO support_chat_messages (escalation_id, sender, content, created_at)
+        VALUES (:escalation_id, 'support', :content, NOW())
     """), {"escalation_id": esc_id, "content": answer})
     db.session.execute(text("""
-        UPDATE escalations SET status = COALESCE(NULLIF(status, ''), 'open'), answer = :answer, answered_at = CURRENT_TIMESTAMP WHERE id = :id
+        UPDATE escalations SET status = 'answered', answered_at = NOW() WHERE id = :id
     """), {"answer": answer, "id": esc_id})
     db.session.commit()
     return jsonify({"ok": True})
@@ -429,7 +385,10 @@ def admin_escalation_messages(current_user, esc_id: int):
     if role not in ("support", "admin"):
         return jsonify({"error": "Доступ запрещён"}), 403
     result = db.session.execute(text("""
-        SELECT id, sender, content, created_at FROM escalation_messages WHERE escalation_id = :esc_id ORDER BY created_at ASC, id ASC
+        SELECT id, sender, content, created_at
+        FROM support_chat_messages
+        WHERE escalation_id = :esc_id
+        ORDER BY created_at ASC
     """), {"esc_id": esc_id})
     rows = result.fetchall()
     messages = [
@@ -448,13 +407,17 @@ def admin_escalation_updates(current_user, esc_id: int):
     since_id = int(request.args.get("since_id", "0") or "0")
     if since_id > 0:
         result = db.session.execute(text("""
-            SELECT id, sender, content, created_at FROM escalation_messages
-            WHERE escalation_id = :esc_id AND id > :since_id AND sender = 'user' ORDER BY id ASC
+            SELECT id, sender, content, created_at
+            FROM support_chat_messages
+            WHERE escalation_id = :esc_id AND id > :since_id
+            ORDER BY created_at ASC
         """), {"esc_id": esc_id, "since_id": since_id})
     else:
         result = db.session.execute(text("""
-            SELECT id, sender, content, created_at FROM escalation_messages
-            WHERE escalation_id = :esc_id AND sender = 'user' ORDER BY id ASC
+            SELECT id, sender, content, created_at
+            FROM support_chat_messages
+            WHERE escalation_id = :esc_id
+            ORDER BY created_at ASC
         """), {"esc_id": esc_id})
     rows = result.fetchall()
     messages = [
@@ -471,7 +434,7 @@ def admin_escalation_close(current_user, esc_id: int):
     if role not in ("support", "admin"):
         return jsonify({"error": "Доступ запрещён"}), 403
     db.session.execute(text("""
-        UPDATE escalations SET status = 'closed' WHERE id = :id
+        UPDATE escalations SET status = 'closed', closed_at = NOW() WHERE id = :id
     """), {"id": esc_id})
     result = db.session.execute(text("""
         SELECT user_id FROM escalations WHERE id = :id
@@ -483,12 +446,12 @@ def admin_escalation_close(current_user, esc_id: int):
             f"{user_id}|Оператор закрыл обращение|{time.time()}".encode("utf-8")
         ).hexdigest()
         db.session.execute(text("""
-            INSERT INTO notifications (user_id, message, created_at, delivered, notification_hash)
-            VALUES (:user_id, :message, CURRENT_TIMESTAMP, FALSE, :notification_hash)
+            INSERT INTO notifications (user_id, message, notification_hash, created_at, type)
+            VALUES (:user_id, :message, :notification_hash, NOW(), 'system')
         """), {"user_id": user_id, "message": "Оператор закрыл обращение", "notification_hash": content_hash})
         db.session.execute(text("""
-            INSERT INTO escalation_messages (escalation_id, content, created_at, delivered_user, sender, delivered_admin)
-            VALUES (:escalation_id, :content, CURRENT_TIMESTAMP, FALSE, 'bot', FALSE)
+            INSERT INTO support_chat_messages (escalation_id, sender, content, created_at)
+            VALUES (:escalation_id, 'support', :content, NOW())
         """), {"escalation_id": esc_id, "content": "Оператор закрыл обращение"})
     db.session.commit()
     return jsonify({"ok": True})
@@ -497,7 +460,10 @@ def admin_escalation_close(current_user, esc_id: int):
 @token_required
 def user_chats(current_user):
     result = db.session.execute(text("""
-        SELECT id, question, status, created_at FROM escalations WHERE user_id = :user_id ORDER BY created_at DESC
+        SELECT id, question, status, created_at
+        FROM escalations
+        WHERE user_id = :user_id
+        ORDER BY created_at DESC
     """), {"user_id": current_user.id})
     rows = result.fetchall()
     chats = [
@@ -522,7 +488,7 @@ def user_chat_delete(current_user, esc_id: int):
     if (status or "").lower() != "closed":
         return jsonify({"error": "Чат должен быть закрыт перед удалением"}), 400
     db.session.execute(text("""
-        DELETE FROM escalation_messages WHERE escalation_id = :esc_id
+        DELETE FROM support_chat_messages WHERE escalation_id = :esc_id
     """), {"esc_id": esc_id})
     db.session.execute(text("""
         DELETE FROM escalations WHERE id = :id
@@ -544,7 +510,7 @@ def create_post_report(current_user):
         attachments = []
     result = db.session.execute(text("""
         INSERT INTO post_reports (reporter_id, reporter_login, post_id, post_author_login, description, attachments, created_at, status)
-        VALUES (:reporter_id, :reporter_login, :post_id, :post_author_login, :description, :attachments, CURRENT_TIMESTAMP, 'open')
+        VALUES (:reporter_id, :reporter_login, :post_id, :post_author_login, :description, :attachments, NOW(), 'pending')
         RETURNING id
     """), {
         "reporter_id": str(current_user.id),
@@ -565,7 +531,9 @@ def admin_post_reports(current_user):
     if role not in ("support", "admin"):
         return jsonify({"error": "Доступ запрещён"}), 403
     result = db.session.execute(text("""
-        SELECT id, reporter_id, reporter_login, post_id, post_author_login, description, attachments, created_at, status, verdict_at FROM post_reports ORDER BY created_at DESC
+        SELECT id, reporter_id, reporter_login, post_id, post_author_login, description, attachments, created_at, status, verdict_at
+        FROM post_reports
+        ORDER BY created_at DESC
     """))
     rows = result.fetchall()
     reports = []
@@ -578,7 +546,7 @@ def admin_post_reports(current_user):
         verdict_at = r[9]
         if status in ("no_violation", "deleted", "legal_deleted", "closed"):
             db.session.execute(text("""
-                DELETE FROM post_reports WHERE id = :id
+                UPDATE post_reports SET status = 'closed' WHERE id = :id
             """), {"id": report_id})
             updated = True
             continue
@@ -586,7 +554,7 @@ def admin_post_reports(current_user):
             post = Post.query.filter_by(id=post_id).first()
             if not post or post.deleted:
                 db.session.execute(text("""
-                    DELETE FROM post_reports WHERE id = :id
+                    UPDATE post_reports SET status = 'deleted' WHERE id = :id
                 """), {"id": report_id})
                 updated = True
                 continue

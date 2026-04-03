@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
         const { searchParams } = new URL(req.url)
         const limit = searchParams.get('limit') || '50'
         
-        // Получаем токен
+        
         let token = await getAccessToken(req)
         if (!token) {
             const authHeader = req.headers.get('authorization') || ''

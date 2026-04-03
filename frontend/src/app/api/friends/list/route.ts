@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
 		try {
 			body = await req.json()
 		} catch (e) {
-			// Body is optional
+			
 		}
 
 		const payload = { ...body, access_token: token }
@@ -50,7 +50,6 @@ export async function POST(req: NextRequest) {
 			method: 'GET',
 			headers: {
 				'Content-Type': 'application/json',
-				Authorization: `Bearer ${token}`,
 			},
 		})
 

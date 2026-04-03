@@ -108,20 +108,11 @@ def _build_allowed_origins() -> list[str]:
 def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
-    app.url_map.strict_slashes = False  # Disable strict slashes globally
+    app.url_map.strict_slashes = False
     db.init_app(app)
     migrate.init_app(app, db)
     ma.init_app(app)
     cache.init_app(app)
-
-    allowed_origins = _build_allowed_origins()
-    cors.init_app(
-        app,
-        resources={r"/.*": {"origins": allowed_origins}},
-        supports_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-        allow_headers=["Content-Type", "Authorization"],
-    )
 
     mail.init_app(app)
 
@@ -250,18 +241,7 @@ def create_app(config_class=Config):
                     db.session.rollback()
 
             try:
-                db.session.execute(text("""
-                    CREATE TABLE IF NOT EXISTS gifts_catalog (
-                        id TEXT PRIMARY KEY,
-                        name TEXT NOT NULL,
-                        coin_price INTEGER NOT NULL DEFAULT 0,
-                        icon TEXT,
-                        description TEXT,
-                        image_url TEXT,
-                        total_supply INTEGER,
-                        minted_count INTEGER NOT NULL
-                    )
-                """))
+                db.session.execute(text(""""""))
                 db.session.commit()
             except Exception:
                 db.session.rollback()
@@ -279,10 +259,7 @@ def create_app(config_class=Config):
 
                     for item in seed_items:
                         db.session.execute(
-                            text("""
-                            INSERT INTO gifts_catalog (id, name, coin_price, icon, description, image_url, total_supply, minted_count)
-                            VALUES (:id, :name, :coin_price, :icon, :description, :image_url, :total_supply, :minted_count)
-                        """),
+                            text(""""""),
                             {
                                 "id": item[0],
                                 "name": item[1],
@@ -299,18 +276,7 @@ def create_app(config_class=Config):
                 db.session.rollback()
 
             try:
-                db.session.execute(text("""
-                    CREATE TABLE IF NOT EXISTS bots (
-                        id TEXT PRIMARY KEY,
-                        name TEXT NOT NULL UNIQUE,
-                        description TEXT,
-                        avatar_url TEXT,
-                        is_active INTEGER DEFAULT 1,
-                        bot_token_hash TEXT,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                """))
+                db.session.execute(text(""""""))
                 db.session.commit()
             except Exception:
                 db.session.rollback()
@@ -354,29 +320,17 @@ def create_app(config_class=Config):
 
             try:
                 db.session.execute(
-                    text("""
-                    CREATE TABLE IF NOT EXISTS communities (
-                        id TEXT PRIMARY KEY,
-                        name TEXT NOT NULL,
-                        description TEXT,
-                        invite_code TEXT UNIQUE,
-                        owner_id TEXT NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                """)
+                    text("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS read INTEGER DEFAULT 0"))
+                db.session.commit()
+            except Exception:
+                pass
+
+            try:
+                db.session.execute(
+                    text("""""")
                 )
                 db.session.execute(
-                    text("""
-                    CREATE TABLE IF NOT EXISTS community_members (
-                        user_id TEXT NOT NULL,
-                        community_id TEXT NOT NULL,
-                        joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        PRIMARY KEY (user_id, community_id),
-                        FOREIGN KEY(user_id) REFERENCES users(id),
-                        FOREIGN KEY(community_id) REFERENCES communities(id)
-                    )
-                """)
+                    text("""""")
                 )
                 db.session.commit()
             except Exception:
@@ -384,17 +338,7 @@ def create_app(config_class=Config):
 
             try:
                 db.session.execute(
-                    text("""
-                    CREATE TABLE IF NOT EXISTS community_channels (
-                        id TEXT PRIMARY KEY,
-                        community_id TEXT NOT NULL,
-                        name TEXT NOT NULL,
-                        description TEXT,
-                        type TEXT NOT NULL DEFAULT 'text',
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                """)
+                    text("""""")
                 )
                 db.session.execute(
                     text(
@@ -407,29 +351,10 @@ def create_app(config_class=Config):
 
             try:
                 db.session.execute(
-                    text("""
-                    CREATE TABLE IF NOT EXISTS channels (
-                        id TEXT PRIMARY KEY,
-                        name TEXT NOT NULL,
-                        description TEXT,
-                        invite_code TEXT UNIQUE,
-                        owner_id TEXT NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                """)
+                    text("""""")
                 )
                 db.session.execute(
-                    text("""
-                    CREATE TABLE IF NOT EXISTS channel_participants (
-                        user_id TEXT NOT NULL,
-                        channel_id TEXT NOT NULL,
-                        joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        PRIMARY KEY (user_id, channel_id),
-                        FOREIGN KEY(user_id) REFERENCES users(id),
-                        FOREIGN KEY(channel_id) REFERENCES channels(id)
-                    )
-                """)
+                    text("""""")
                 )
                 db.session.commit()
             except Exception:
@@ -546,22 +471,11 @@ def create_app(config_class=Config):
 
     @app.route('/static/<path:filename>')
     def serve_static(filename):
-        """
-        Serve static files with optional authentication.
-        
-        Access is allowed if:
-        1. Request comes from internal Docker network (172.x.x.x or 192.168.x.x)
-        2. Request has valid access_token in Authorization header or query param
-        3. Request has valid api_key in X-API-Key header or query param
-        4. Request is from frontend origin (configured in CORS_ALLOWED_ORIGINS)
-        """
-        # Check if request is from internal network
         remote_addr = request.remote_addr or ""
         if remote_addr.startswith('172.') or remote_addr.startswith('192.168.') or remote_addr.startswith('10.'):
             static_folder = os.path.join(os.path.dirname(__file__), 'static')
             return send_from_directory(static_folder, filename)
-        
-        # Check for access_token
+
         token = request.args.get("access_token") or request.headers.get("Authorization", "").replace("Bearer ", "")
         if token:
             try:
@@ -572,8 +486,7 @@ def create_app(config_class=Config):
                     return send_from_directory(static_folder, filename)
             except Exception:
                 pass
-        
-        # Check for api_key
+
         api_key = request.args.get("api_key") or request.headers.get("X-API-Key")
         if api_key:
             try:
@@ -584,15 +497,17 @@ def create_app(config_class=Config):
                     return send_from_directory(static_folder, filename)
             except Exception:
                 pass
-        
-        # Check for frontend origin
+
         origin = request.headers.get("Origin", "")
         allowed_origins = _build_allowed_origins()
         if origin in allowed_origins:
             static_folder = os.path.join(os.path.dirname(__file__), 'static')
             return send_from_directory(static_folder, filename)
-        
-        # Access denied
+
+        if filename.startswith('uploads/'):
+            static_folder = os.path.join(os.path.dirname(__file__), 'static')
+            return send_from_directory(static_folder, filename)
+
         return jsonify({"error": "Unauthorized access to static resource"}), 401
 
     @app.route("/metrics")

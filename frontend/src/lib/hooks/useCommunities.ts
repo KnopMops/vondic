@@ -1,18 +1,17 @@
 import { useAuth } from '@/lib/AuthContext'
 import { useEffect, useState } from 'react'
 
-// Утилита для получения токена доступа с повторными попытками
 const getAccessToken = (user?: any, retries = 3): string | null => {
 	for (let i = 0; i < retries; i++) {
-		// Сначала пробуем получить из user объекта (как в messages/page.tsx)
+		
 		let token = user?.access_token
 		
-		// Если нет в user, пробуем localStorage
+		
 		if (!token) {
 			token = localStorage.getItem('access_token')
 		}
 		
-		// Если токена в localStorage нет, пробуем получить из cookie
+		
 		if (!token) {
 			const cookies = document.cookie.split(';')
 			const accessTokenCookie = cookies.find(cookie => 
@@ -25,12 +24,12 @@ const getAccessToken = (user?: any, retries = 3): string | null => {
 		
 		if (token) return token
 		
-		// Если токен не найден и есть попытки, ждем немного
+		
 		if (i < retries - 1) {
-			// Небольшая задержка для следующей попытки
+			
 			const start = Date.now()
 			while (Date.now() - start < 50) {
-				// Ждем 50ms
+				
 			}
 		}
 	}

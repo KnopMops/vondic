@@ -44,7 +44,7 @@ export const ScreenShareViewer: React.FC<ScreenShareViewerProps> = ({
 				setHasError(true)
 			})
 
-			// Get track settings
+			
 			const track = screenStream.getVideoTracks()[0]
 			if (track) {
 				const settings = track.getSettings()
@@ -54,7 +54,7 @@ export const ScreenShareViewer: React.FC<ScreenShareViewerProps> = ({
 				})
 				setFps(settings.frameRate || 0)
 
-				// Monitor FPS periodically
+				
 				const interval = setInterval(() => {
 					const currentSettings = track.getSettings()
 					setResolution({
@@ -109,7 +109,7 @@ export const ScreenShareViewer: React.FC<ScreenShareViewerProps> = ({
 			ref={containerRef}
 			className={`fixed inset-0 bg-[#1e1f22] z-[100] flex flex-col ${isFullscreen ? '' : ''}`}
 		>
-			{/* Header Bar */}
+			
 			<div className='flex items-center justify-between px-4 py-3 bg-[#2b2d31] border-b border-[#1e1f22]'>
 				<div className='flex items-center gap-3'>
 					<Monitor className='w-5 h-5 text-green-400' />
@@ -144,7 +144,7 @@ export const ScreenShareViewer: React.FC<ScreenShareViewerProps> = ({
 				</div>
 			</div>
 
-			{/* Video Container */}
+			
 			<div
 				className='flex-1 flex items-center justify-center p-4 bg-[#111214] relative overflow-hidden group'
 				onMouseEnter={() => setIsHover(true)}
@@ -175,7 +175,7 @@ export const ScreenShareViewer: React.FC<ScreenShareViewerProps> = ({
 							onError={() => setHasError(true)}
 						/>
 
-						{/* Fullscreen Overlay Button */}
+						
 						{isFullscreenSupported && (
 							<div
 								className={`absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity duration-300 ${isHover ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
@@ -215,7 +215,7 @@ export const ScreenShareViewer: React.FC<ScreenShareViewerProps> = ({
 				)}
 			</div>
 
-			{/* Info Bar */}
+			
 			<div className='px-4 py-2 bg-[#2b2d31] border-t border-[#1e1f22]'>
 				<div className='flex items-center justify-between text-xs text-gray-400'>
 					<div className='flex items-center gap-4'>

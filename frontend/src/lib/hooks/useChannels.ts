@@ -72,7 +72,7 @@ export const useChannels = () => {
 				setChannels(prev => [...prev, newChannel])
 				return newChannel
 			} catch (err: any) {
-				// Preserve error if already set, otherwise create new one
+				
 				if (!err.message) {
 					const networkError: ChannelError = {
 						message: 'Ошибка сети. Проверьте подключение к интернету',

@@ -4,7 +4,7 @@ import Header from '@/components/social/Header'
 import Sidebar from '@/components/social/Sidebar'
 import { useAuth } from '@/lib/AuthContext'
 import { User } from '@/lib/types'
-import { getAttachmentUrl } from '@/lib/utils'
+import { getAttachmentUrl, getAvatarUrl } from '@/lib/utils'
 import { motion } from 'framer-motion'
 import { Search, UserCheck, UserPlus, Users, UserX } from 'lucide-react'
 import Link from 'next/link'
@@ -28,7 +28,7 @@ export default function FriendsPage() {
 	const fetchData = async () => {
 		if (!user) return
 		try {
-			// 1. Requests
+			
 			const reqRes = await fetch('/api/friends/requests', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -39,7 +39,7 @@ export default function FriendsPage() {
 				setRequests(Array.isArray(data) ? data : [])
 			}
 
-			// 2. Friends
+			
 			const friendsRes = await fetch('/api/friends/list', {
 				method: 'POST',
 			})
@@ -48,7 +48,7 @@ export default function FriendsPage() {
 				setFriends(Array.isArray(data) ? data : [])
 			}
 
-			// 3. Following
+			
 			const followingRes = await fetch('/api/subscriptions/following', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -59,7 +59,7 @@ export default function FriendsPage() {
 				setFollowing(Array.isArray(data) ? data : [])
 			}
 
-			// 4. Followers
+			
 			const followersRes = await fetch('/api/subscriptions/followers', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -190,9 +190,7 @@ export default function FriendsPage() {
 						>
 							<div className='relative'>
 								<img
-									src={
-										getAttachmentUrl(u.avatar_url) || '/placeholder-user.jpg'
-									}
+									src={getAvatarUrl(u.avatar_url)}
 									alt={u.username}
 									className='h-12 w-12 rounded-full object-cover ring-2 ring-transparent group-hover:ring-indigo-500/50 transition-all'
 								/>
@@ -207,9 +205,7 @@ export default function FriendsPage() {
 									{u.username}
 									{u.premium && <span className='ml-1 text-amber-400'>★</span>}
 								</div>
-								{!u.email?.endsWith('@telegram.bot') && (
-									<div className='text-xs text-gray-400'>{u.email}</div>
-								)}
+								<div className='text-xs text-gray-400'>{u.email}</div>
 							</div>
 						</Link>
 						{isRequest ? (
@@ -274,7 +270,7 @@ export default function FriendsPage() {
 							</div>
 						</div>
 
-						{/* Tabs */}
+						
 						<div className='flex p-1 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm'>
 							{[
 								{ id: 'friends', label: 'Мои друзья', count: friends.length },
@@ -311,7 +307,7 @@ export default function FriendsPage() {
 							))}
 						</div>
 
-						{/* Content */}
+						
 						<div className='min-h-[400px]'>
 							{activeTab === 'friends' &&
 								renderUserList(friends, 'У вас пока нет друзей')}
@@ -323,7 +319,7 @@ export default function FriendsPage() {
 								renderUserList(followers, 'У вас нет подписчиков')}
 						</div>
 
-						{/* Search Results */}
+						
 						{searchResults.length > 0 && (
 							<motion.div
 								initial={{ opacity: 0, y: 20 }}
@@ -341,10 +337,7 @@ export default function FriendsPage() {
 										>
 											<div className='flex items-center gap-4'>
 												<img
-													src={
-														getAttachmentUrl(u.avatar_url) ||
-														'/placeholder-user.jpg'
-													}
+													src={getAvatarUrl(u.avatar_url)}
 													alt={u.username}
 													className='h-12 w-12 rounded-full'
 												/>

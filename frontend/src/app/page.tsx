@@ -55,7 +55,7 @@ export default function Home() {
 
 	return (
 		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white overflow-x-hidden'>
-			{/* Cursor-following glow */}
+			
 			<div
 				ref={cursorRef}
 				className='fixed top-0 left-0 z-[1] pointer-events-none'

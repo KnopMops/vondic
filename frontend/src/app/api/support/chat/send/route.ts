@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
 		return NextResponse.json({ error: 'Bad Request' }, { status: 400 })
 	}
 
-	// 1) Сначала пытаемся получить ответ от RAG
+	
 	try {
 		const supportUrl =
 			process.env.NEXT_PUBLIC_SUPPORT_API_URL || 'http://127.0.0.1:8000'

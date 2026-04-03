@@ -194,8 +194,6 @@ services:
     image: coturn/coturn
     container_name: turn
     restart: unless-stopped
-    env_file:
-      - .env.turn
     ports:
       - "3478:3478"
       - "3478:3478/udp"
@@ -208,6 +206,7 @@ services:
       --realm=vondic.knopusmedia.ru
       --listening-port=3478
       --listening-ip=0.0.0.0
+      --external-ip=192.168.20.31
       --fingerprint
       --lt-cred-mech
       --no-cli

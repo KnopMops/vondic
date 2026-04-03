@@ -1,12 +1,9 @@
-/**
- * Unit tests for useChannels hook.
- * Tests channel creation, error handling, and edge cases.
- */
+
 import { renderHook, act, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { useChannels } from '../hooks/useChannels'
 
-// Mock the Redux store
+
 const mockStoreState = {
   auth: {
     user: {
@@ -21,7 +18,7 @@ vi.mock('@/lib/hooks', () => ({
   useAppSelector: vi.fn((selector: any) => selector(mockStoreState)),
 }))
 
-// Mock fetch globally
+
 const mockFetch = vi.fn()
 global.fetch = mockFetch
 
@@ -33,7 +30,7 @@ describe('useChannels', () => {
 
   describe('createChannel', () => {
     it('should successfully create a channel', async () => {
-      // Arrange
+      
       const mockChannel = {
         id: 'channel-123',
         name: 'Test Channel',
@@ -47,7 +44,7 @@ describe('useChannels', () => {
 
       const { result } = renderHook(() => useChannels())
 
-      // Act
+      
       let createdChannel
       await act(async () => {
         createdChannel = await result.current.createChannel(
@@ -56,7 +53,7 @@ describe('useChannels', () => {
         )
       })
 
-      // Assert
+      
       expect(mockFetch).toHaveBeenCalledWith('/api/v1/channels', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -71,7 +68,7 @@ describe('useChannels', () => {
     })
 
     it('should handle 400 error with invalid input', async () => {
-      // Arrange
+      
       const errorResponse = {
         error: 'Название канала обязательно',
         code: 'INVALID_NAME',
@@ -85,7 +82,7 @@ describe('useChannels', () => {
 
       const { result } = renderHook(() => useChannels())
 
-      // Act & Assert
+      
       await expect(
         act(async () => {
           await result.current.createChannel('', 'Description')
@@ -100,7 +97,7 @@ describe('useChannels', () => {
     })
 
     it('should handle 401 unauthorized error', async () => {
-      // Arrange
+      
       const errorResponse = {
         error: 'Требуется авторизация',
         code: 'UNAUTHORIZED',
@@ -114,7 +111,7 @@ describe('useChannels', () => {
 
       const { result } = renderHook(() => useChannels())
 
-      // Act & Assert
+      
       await expect(
         act(async () => {
           await result.current.createChannel('Test', 'Desc')
@@ -125,7 +122,7 @@ describe('useChannels', () => {
     })
 
     it('should handle 405 method not allowed error', async () => {
-      // Arrange
+      
       const errorResponse = {
         error: 'Метод не поддерживается',
         code: 'METHOD_NOT_ALLOWED',
@@ -139,7 +136,7 @@ describe('useChannels', () => {
 
       const { result } = renderHook(() => useChannels())
 
-      // Act & Assert
+      
       await expect(
         act(async () => {
           await result.current.createChannel('Test', 'Desc')
@@ -150,7 +147,7 @@ describe('useChannels', () => {
     })
 
     it('should handle 409 conflict (channel already exists)', async () => {
-      // Arrange
+      
       const errorResponse = {
         error: 'Канал с таким названием уже существует',
         code: 'CHANNEL_EXISTS',
@@ -164,7 +161,7 @@ describe('useChannels', () => {
 
       const { result } = renderHook(() => useChannels())
 
-      // Act & Assert
+      
       await expect(
         act(async () => {
           await result.current.createChannel('Existing Channel', 'Desc')
@@ -175,12 +172,12 @@ describe('useChannels', () => {
     })
 
     it('should handle network error', async () => {
-      // Arrange
+      
       mockFetch.mockRejectedValueOnce(new Error('Network error'))
 
       const { result } = renderHook(() => useChannels())
 
-      // Act & Assert
+      
       await expect(
         act(async () => {
           await result.current.createChannel('Test', 'Desc')
@@ -191,7 +188,7 @@ describe('useChannels', () => {
     })
 
     it('should handle missing token', async () => {
-      // Arrange - mock state without token
+      
       vi.mocked(require('@/lib/hooks').useAppSelector).mockImplementation(
         (selector: any) =>
           selector({ auth: { user: { ...mockStoreState.auth.user, access_token: null } } })
@@ -199,7 +196,7 @@ describe('useChannels', () => {
 
       const { result } = renderHook(() => useChannels())
 
-      // Act & Assert
+      
       await expect(
         act(async () => {
           await result.current.createChannel('Test', 'Desc')
@@ -211,7 +208,7 @@ describe('useChannels', () => {
     })
 
     it('should update channels list after successful creation', async () => {
-      // Arrange
+      
       const mockChannel = {
         id: 'channel-456',
         name: 'New Channel',
@@ -225,17 +222,17 @@ describe('useChannels', () => {
 
       const { result } = renderHook(() => useChannels())
 
-      // Act
+      
       await act(async () => {
         await result.current.createChannel('New Channel', 'New Description')
       })
 
-      // Assert
+      
       expect(result.current.channels).toContainEqual(mockChannel)
     })
 
     it('should set loading state during channel creation', async () => {
-      // Arrange
+      
       let isLoadingDuringCall = false
 
       mockFetch.mockImplementationOnce(async () => {
@@ -248,24 +245,24 @@ describe('useChannels', () => {
 
       const { result } = renderHook(() => useChannels())
 
-      // Act
+      
       const createPromise = act(async () => {
         await result.current.createChannel('Test', 'Desc')
       })
 
-      // Wait for the fetch to start
+      
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalled()
       })
 
       await createPromise
 
-      // Assert
+      
       expect(result.current.isLoading).toBe(false)
     })
 
     it('should handle description as optional field', async () => {
-      // Arrange
+      
       const mockChannel = {
         id: 'channel-no-desc',
         name: 'Channel Without Description',
@@ -279,12 +276,12 @@ describe('useChannels', () => {
 
       const { result } = renderHook(() => useChannels())
 
-      // Act
+      
       await act(async () => {
         await result.current.createChannel('Channel Without Description', '')
       })
 
-      // Assert
+      
       expect(mockFetch).toHaveBeenCalledWith(
         '/api/v1/channels',
         expect.objectContaining({
@@ -296,7 +293,7 @@ describe('useChannels', () => {
 
   describe('fetchMyChannels', () => {
     it('should fetch user channels successfully', async () => {
-      // Arrange
+      
       const mockChannels = [
         { id: 'ch1', name: 'Channel 1' },
         { id: 'ch2', name: 'Channel 2' },
@@ -309,17 +306,17 @@ describe('useChannels', () => {
 
       const { result } = renderHook(() => useChannels())
 
-      // Act
+      
       await act(async () => {
         await result.current.fetchMyChannels()
       })
 
-      // Assert
+      
       expect(result.current.channels).toEqual(mockChannels)
     })
 
     it('should handle fetch error', async () => {
-      // Arrange
+      
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 500,
@@ -327,19 +324,19 @@ describe('useChannels', () => {
 
       const { result } = renderHook(() => useChannels())
 
-      // Act
+      
       await act(async () => {
         await result.current.fetchMyChannels()
       })
 
-      // Assert
+      
       expect(result.current.error).toBeTruthy()
     })
   })
 
   describe('joinChannel', () => {
     it('should join channel successfully', async () => {
-      // Arrange
+      
       const mockChannel = { id: 'ch-join', name: 'Joined Channel' }
 
       mockFetch.mockResolvedValueOnce({
@@ -349,17 +346,17 @@ describe('useChannels', () => {
 
       const { result } = renderHook(() => useChannels())
 
-      // Act
+      
       await act(async () => {
         await result.current.joinChannel('INVITE123')
       })
 
-      // Assert
+      
       expect(result.current.channels).toContainEqual(mockChannel)
     })
 
     it('should handle invalid invite code', async () => {
-      // Arrange
+      
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 400,
@@ -368,7 +365,7 @@ describe('useChannels', () => {
 
       const { result } = renderHook(() => useChannels())
 
-      // Act & Assert
+      
       await expect(
         act(async () => {
           await result.current.joinChannel('INVALID')

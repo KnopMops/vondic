@@ -356,7 +356,7 @@ class UserRepository:
         try:
             self._run(
                 self._execute(
-                    "UPDATE users SET socket_id = ?, status = 'online' WHERE id = ?",
+                    "UPDATE users SET socket_id = ?, status = 'Online' WHERE id = ?",
                     (socket_id, user_id),
                 )
             )
@@ -365,14 +365,33 @@ class UserRepository:
 
     def release_socket(self, socket_id):
         try:
-            self._run(
-                self._execute(
-                    "UPDATE users SET socket_id = NULL, status = 'offline' WHERE socket_id = ?",
+            row = self._run(
+                self._fetchrow(
+                    "UPDATE users SET socket_id = NULL, status = 'Offline' WHERE socket_id = ? RETURNING id",
                     (socket_id,),
                 )
             )
+            return row["id"] if row else None
         except Exception as e:
             logger.error(f"DB Error release_socket: {e}")
+            return None
+
+    def get_user_friends_sockets(self, user_id):
+        try:
+
+            query = """
+                SELECT socket_id FROM users
+                WHERE id IN (
+                    SELECT requester_id FROM friendships WHERE addressee_id = ? AND status = 'accepted'
+                    UNION
+                    SELECT addressee_id FROM friendships WHERE requester_id = ? AND status = 'accepted'
+                ) AND socket_id IS NOT NULL
+            """
+            rows = self._run(self._fetch(query, (user_id, user_id)))
+            return [row["socket_id"] for row in rows]
+        except Exception as e:
+            logger.error(f"DB Error get_user_friends_sockets: {e}")
+            return []
 
     def find_user_by_socket(self, socket_id):
         try:

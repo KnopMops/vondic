@@ -25,13 +25,14 @@ interface WebRTCProviderProps {
 }
 
 export const WebRTCProvider: React.FC<WebRTCProviderProps> = ({ children }) => {
-	const { socket } = useSocket()
+	const { socket, isConnected } = useSocket()
 	const { user } = useAuth()
 	const { isInitialized, isWebRTCSupported, initializeWebRTC, cleanup } = useCallStore()
 
 	useEffect(() => {
-		// Инициализация WebRTC при наличии сокета и пользователя
-		if (socket && user && isWebRTCSupported && !isInitialized) {
+		
+		if (socket && user && isWebRTCSupported && !isInitialized && isConnected) {
+			console.log('[WebRTCProvider] Initializing WebRTC...')
 			initializeWebRTC(socket, {
 				id: user.id,
 				name: user.username || user.name || 'Unknown',
@@ -41,15 +42,16 @@ export const WebRTCProvider: React.FC<WebRTCProviderProps> = ({ children }) => {
 			})
 		}
 
-		// Очистка при размонтировании
+		
 		return () => {
 			if (isInitialized) {
 				cleanup()
 			}
 		}
-	}, [socket, user, isWebRTCSupported, isInitialized, initializeWebRTC, cleanup])
+		
+	}, [socket, user, isWebRTCSupported, isInitialized, isConnected])
 
-	// Обработка закрытия вкладки/браузера
+	
 	useEffect(() => {
 		const handleBeforeUnload = () => {
 			if (isInitialized) {

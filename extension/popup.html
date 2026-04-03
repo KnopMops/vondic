@@ -7,44 +7,55 @@
 	</head>
 	<body>
 		<div class="app">
-			<div class="header">Proxy Receiver</div>
-			<label class="field">
-				<span>Хост</span>
-				<input id="host" type="text" placeholder="127.0.0.1" />
-			</label>
-			<label class="field">
-				<span>HTTP порт</span>
-				<input
-					id="httpPort"
-					type="number"
-					min="1"
-					max="65535"
-					placeholder="9000"
-				/>
-			</label>
-			<label class="field">
-				<span>HTTPS порт</span>
-				<input
-					id="httpsPort"
-					type="number"
-					min="1"
-					max="65535"
-					placeholder="9000"
-				/>
-			</label>
-			<label class="field">
-				<span>API ключ</span>
-				<input id="apiKey" type="password" placeholder="apikey" />
-			</label>
-			<label class="field">
-				<span>Домены</span>
-				<textarea
-					id="domains"
-					rows="3"
-					placeholder="example.com, api.example.com"
-				></textarea>
-			</label>
-			<button id="save" class="btn">Проксировать</button>
+			<div class="header">🎨 Вондик - Кастомизация</div>
+			
+			<div class="section">
+				<div class="section-title">Тема оформления</div>
+				<label class="toggle-field">
+					<span>Тёмная тема</span>
+					<input id="darkTheme" type="checkbox" />
+				</label>
+				<label class="toggle-field">
+					<span>Компактный режим</span>
+					<input id="compactMode" type="checkbox" />
+				</label>
+			</div>
+			
+			<div class="section">
+				<div class="section-title">Цвета</div>
+				<label class="field">
+					<span>Основной цвет</span>
+					<input id="primaryColor" type="color" value="#4f46e5" />
+				</label>
+				<label class="field">
+					<span>Цвет акцента</span>
+					<input id="accentColor" type="color" value="#ec4899" />
+				</label>
+			</div>
+			
+			<div class="section">
+				<div class="section-title">Шрифт</div>
+				<label class="field">
+					<span>Размер шрифта</span>
+					<input id="fontSize" type="range" min="12" max="20" value="14" />
+					<span id="fontSizeValue">14px</span>
+				</label>
+			</div>
+			
+			<div class="section">
+				<div class="section-title">Интерфейс</div>
+				<label class="toggle-field">
+					<span>Скрыть аватарки</span>
+					<input id="hideAvatars" type="checkbox" />
+				</label>
+				<label class="toggle-field">
+					<span>Скрыть уведомления</span>
+					<input id="hideNotifications" type="checkbox" />
+				</label>
+			</div>
+			
+			<button id="apply" class="btn">Применить</button>
+			<button id="reset" class="btn btn-secondary">Сбросить</button>
 			<div id="status" class="status"></div>
 		</div>
 		<script src="popup.js"></script>

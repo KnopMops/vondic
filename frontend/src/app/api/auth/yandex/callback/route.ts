@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
 
 		const backendUrl = getBackendUrl()
 
-		// Формируем URL для запроса к бэкенду
+		
 		const backendCallbackUrl = new URL(
 			`${backendUrl}/api/v1/auth/yandex/callback`,
 		)

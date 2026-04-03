@@ -6,6 +6,7 @@ from app.models.user import User
 from app.services.friendship_service import FriendshipService
 from app.utils.decorators import token_required
 from flask import Blueprint, jsonify, request
+from sqlalchemy.orm.attributes import flag_modified
 
 storis_bp = Blueprint("storis", __name__, url_prefix="/api/v1/storis")
 
@@ -103,6 +104,7 @@ def create_storis(current_user):
             item["text"] = text
         items.append(item)
         user.storis = items
+        flag_modified(user, "storis")
         db.session.commit()
         return jsonify({"success": True, "storis": user.storis}), 201
     except Exception as e:
@@ -125,6 +127,7 @@ def delete_storis(current_user):
         if len(new_items) == len(items):
             return jsonify({"error": "Story not found"}), 404
         user.storis = new_items
+        flag_modified(user, "storis")
         db.session.commit()
         return jsonify({"success": True, "storis": user.storis}), 200
     except Exception as e:
@@ -193,5 +196,6 @@ def react_storis(current_user):
         )
     target["reactions"] = reactions
     user.storis = items
+    flag_modified(user, "storis")
     db.session.commit()
     return jsonify({"story": target}), 200

@@ -9,14 +9,6 @@ from app.core.extensions import cache, db
 from app.models.user import User
 from app.services.email_service import EmailService
 
-bot_path = os.path.join(Config.BASE_DIR, "bot")
-if bot_path not in sys.path:
-    sys.path.append(bot_path)
-try:
-    from bcrypter.service import BCrypter
-except ImportError:
-    BCrypter = None
-
 class AuthService:
     @staticmethod
     def register_user(data):
@@ -56,25 +48,6 @@ class AuthService:
         except Exception as e:
             db.session.rollback()
             return (None, str(e))
-
-    @staticmethod
-    def link_telegram(link_key, telegram_id):
-        user = User.query.filter_by(link_key=link_key).first()
-        if not user:
-            return None, "Invalid or expired link key"
-
-        existing = User.query.filter_by(telegram_id=str(telegram_id)).first()
-        if existing and existing.id != user.id:
-            return None, "Telegram account already linked to another user"
-
-        try:
-            user.telegram_id = str(telegram_id)
-            user.link_key = None
-            db.session.commit()
-            return user, None
-        except Exception as e:
-            db.session.rollback()
-            return None, str(e)
 
     @staticmethod
     def get_user_by_token(access_token):
@@ -299,73 +272,11 @@ class AuthService:
             return (None, str(e))
 
     @staticmethod
-    def login_telegram_user(data):
-        if BCrypter is None:
-            return (None, "BCrypter module not available")
-        user_id = str(data.get("user_id"))
-        secret_key = data.get("secret_key")
-        if not user_id or not secret_key:
-            return (None, "Missing user_id or secret_key")
-        try:
-            bcrypter = BCrypter()
-            if not bcrypter.validate_key(user_id, secret_key):
-                return (None, "Invalid user_id or secret_key")
-        except Exception as e:
-            return (None, f"Auth verification error: {str(e)}")
-        email = f"{user_id}@telegram.bot"
-        user = User.query.filter_by(email=email).first()
-        if not user:
-            username = data.get("username") or f"tg_{user_id}"
-            if User.query.filter_by(username=username).first():
-                username = f"tg_{user_id}_{secrets.token_hex(4)}"
-            user = User(email=email, username=username, is_verified=1)
-            user.set_password(secrets.token_hex(16))
-            user.access_token = secrets.token_hex(32)
-            user.refresh_token = secrets.token_hex(32)
-            db.session.add(user)
-        else:
-            if user.is_blocked:
-                return (None, "User is blocked")
-            user.access_token = secrets.token_hex(32)
-            user.refresh_token = secrets.token_hex(32)
-        try:
-            db.session.commit()
-
-            try:
-                from app.services.ollama_service import OllamaService
-
-                OllamaService.ensure_chat_with_ai(user.id)
-            except Exception as e:
-                print(f"Failed to create AI chat: {e}")
-
-            if (
-                user.login_alert_enabled
-                and user.email
-                and not user.email.endswith("@telegram.bot")
-            ):
-                EmailService.send_login_alert(user.email)
-            return (
-                {
-                    "user": user,
-                    "access_token": user.access_token,
-                    "refresh_token": user.refresh_token,
-                },
-                None,
-            )
-        except Exception as e:
-            db.session.rollback()
-            return (None, str(e))
-            db.session.rollback()
-            return (None, str(e))
-
-    @staticmethod
     def setup_2fa(current_user, method, enable):
         email = current_user.email or ""
         if enable and email.endswith("@yandex.ru"):
             return None, "для yandex аккаунта это не недоступно"
         if enable:
-            if method == "totp" and email.endswith("@telegram.bot"):
-                return None, "TOTP is unavailable for Telegram accounts"
             current_user.two_factor_enabled = 1
             current_user.two_factor_method = method
             if method == "totp":

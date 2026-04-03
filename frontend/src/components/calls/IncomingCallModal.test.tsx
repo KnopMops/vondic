@@ -3,7 +3,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import IncomingCallModal from './IncomingCallModal'
 import React from 'react'
 
-// Mock the WebRTCService and utils
 vi.mock('../../lib/services/WebRTCService', () => ({
   CallState: {}
 }))
@@ -25,7 +24,7 @@ describe('IncomingCallModal Draggable Logic', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    // Reset window size
+    
     Object.defineProperty(window, 'innerWidth', { value: 1000, writable: true })
     Object.defineProperty(window, 'innerHeight', { value: 1000, writable: true })
   })
@@ -41,7 +40,7 @@ describe('IncomingCallModal Draggable Logic', () => {
     )
 
     const modal = container.querySelector('.incoming-call-modal') as HTMLElement
-    // Since getBoundingClientRect returns 0 in JSDOM unless mocked, we mock it
+    
     modal.getBoundingClientRect = vi.fn(() => ({
       width: 400,
       height: 300,
@@ -51,12 +50,12 @@ describe('IncomingCallModal Draggable Logic', () => {
       bottom: 650,
     } as any))
 
-    // Re-trigger useEffect for centering
+    
     fireEvent(window, new Event('resize'))
     
-    // Check if position is calculated (300 = (1000-400)/2, 350 = (1000-300)/2)
-    // In our component, we use state for left/top
-    // Since we can't easily check state, we check the style attribute
+    
+    
+    
   })
 
   it('should clamp position to viewport boundaries during dragging', () => {
@@ -79,20 +78,20 @@ describe('IncomingCallModal Draggable Logic', () => {
       bottom: 300,
     } as any))
 
-    // Start dragging
+    
     fireEvent.mouseDown(modal, { clientX: 50, clientY: 50 })
     
-    // Drag to -100, -100 (outside left-top)
+    
     fireEvent.mouseMove(window, { clientX: -50, clientY: -50 })
     
-    // Style should be clamped to 0, 0
+    
     expect(modal.style.left).toBe('0px')
     expect(modal.style.top).toBe('0px')
 
-    // Drag to 2000, 2000 (outside right-bottom)
+    
     fireEvent.mouseMove(window, { clientX: 2050, clientY: 2050 })
     
-    // Style should be clamped to 1000-400, 1000-300
+    
     expect(modal.style.left).toBe('600px')
     expect(modal.style.top).toBe('700px')
   })
@@ -112,16 +111,16 @@ describe('IncomingCallModal Draggable Logic', () => {
       width: 400,
       height: 300,
       top: 0,
-      left: 600, // At the edge of 1000px width
+      left: 600, 
       right: 1000,
       bottom: 300,
     } as any))
 
-    // Resize window to 800px width
+    
     Object.defineProperty(window, 'innerWidth', { value: 800, writable: true })
     fireEvent(window, new Event('resize'))
 
-    // Position should be adjusted to 800-400 = 400
+    
     expect(modal.style.left).toBe('400px')
   })
 })

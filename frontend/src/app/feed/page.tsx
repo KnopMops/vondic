@@ -7,12 +7,11 @@ import { useAppDispatch } from '@/lib/hooks'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
-// Generate UUID fallback for non-secure contexts
 function generateUUID(): string {
 	if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
 		return crypto.randomUUID()
 	}
-	// Fallback UUID generator
+	
 	return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
 		const r = (Math.random() * 16) | 0
 		const v = c === 'x' ? r : (r & 0x3) | 0x8
@@ -78,5 +77,5 @@ export default function FeedPage() {
 		)
 	}
 
-	return <SocialFeed email={user.email} onLogout={logout} />
+	return <SocialFeed email={user.email} onLogout={logout} mode='feed' />
 }

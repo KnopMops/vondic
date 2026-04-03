@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
       console.log('Join community request body:', body)
       console.log('Token available:', !!token)
 
-      // Используем новый endpoint /api/v1/communities/join
+      
       const response = await fetch(`${backendUrl}/api/v1/communities/join`, {
         method: 'POST',
         headers: {

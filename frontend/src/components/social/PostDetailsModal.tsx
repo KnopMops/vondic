@@ -1,5 +1,6 @@
 'use client'
 
+import { Heart, MessageCircle, Share2, MoreHorizontal, Send, Image, Video, File, Download, Upload, Calendar, Clock, Star, Lock, Unlock, Eye, EyeOff, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ArrowLeft, ArrowRight, MoreVertical, Bell, Search, Home, User, Settings, Menu, X, Check, Plus, Trash2, Edit2 } from 'lucide-react';
 import { useAppSelector } from '@/lib/hooks'
 import { Attachment } from '@/lib/types'
 import { formatMskDateTime, getAttachmentUrl } from '@/lib/utils'
@@ -98,7 +99,7 @@ export default function PostDetailsModal(props: Props) {
 	return createPortal(
 		<div className='fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4'>
 			<div className='flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-white/10 bg-black/80 backdrop-blur shadow-xl'>
-				{/* Header */}
+				
 				<div className='flex items-center justify-between border-b border-white/10 px-4 py-3'>
 					<h2 className='text-lg font-bold text-white'>Просмотр поста</h2>
 					<button
@@ -122,7 +123,7 @@ export default function PostDetailsModal(props: Props) {
 					</button>
 				</div>
 
-				{/* Content */}
+				
 				<div className='overflow-y-auto p-6 text-gray-200'>
 					{loading ? (
 						<div className='flex justify-center py-10'>
@@ -132,7 +133,7 @@ export default function PostDetailsModal(props: Props) {
 						<div className='text-center text-red-400 py-10'>{error}</div>
 					) : post ? (
 						<div className='space-y-4'>
-							{/* Author Info */}
+							
 							<div className='flex items-center gap-3'>
 								<Link
 									href={`/feed/profile/${post.posted_by || post.id}`}
@@ -163,12 +164,12 @@ export default function PostDetailsModal(props: Props) {
 								</Link>
 							</div>
 
-							{/* Post Text */}
+							
 							<div className='text-lg text-gray-200 whitespace-pre-wrap'>
 								{post.content}
 							</div>
 
-							{/* Image */}
+							
 							{post.image && (
 								<div className='mt-4 overflow-hidden rounded-lg'>
 									<img
@@ -211,7 +212,7 @@ export default function PostDetailsModal(props: Props) {
 								</div>
 							)}
 
-							{/* Stats */}
+							
 							<div className='mt-6 flex items-center gap-6 border-t border-white/10 pt-4 text-gray-400'>
 								<div className='flex items-center gap-2'>
 									<svg

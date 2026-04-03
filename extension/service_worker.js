@@ -1,123 +1,131 @@
 const DEFAULTS = {
-	enabled: false,
-	host: '127.0.0.1',
-	httpPort: 9000,
-	httpsPort: 9000,
-	apiKey: '',
-	domains: '',
+	darkTheme: true,
+	compactMode: false,
+	primaryColor: '#4f46e5',
+	accentColor: '#ec4899',
+	fontSize: 14,
+	hideAvatars: false,
+	hideNotifications: false,
 }
 
 async function getSettings() {
 	const stored = await chrome.storage.local.get(DEFAULTS)
-	const settings = { ...DEFAULTS, ...stored }
-	if (!settings.httpPort && settings.port) {
-		settings.httpPort = settings.port
-	}
-	if (!settings.httpsPort && settings.port) {
-		settings.httpsPort = settings.port
-	}
-	return settings
+	return { ...DEFAULTS, ...stored }
 }
 
-function normalizeDomains(input) {
-	return input
-		.split(',')
-		.map(part => part.trim())
-		.filter(Boolean)
+function generateCustomCSS(settings) {
+	const rules = []
+	
+	if (settings.darkTheme) {
+		rules.push(`
+			:root {
+				--bg-primary: #0b0f14;
+				--bg-secondary: #1a1f2e;
+				--text-primary: #f5f5f5;
+				--text-secondary: #9ca3af;
+			}
+		`)
+	}
+	
+	if (settings.compactMode) {
+		rules.push(`
+			* {
+				line-height: 1.4 !important;
+			}
+			[class*="post"], [class*="card"], [class*="item"] {
+				padding: 8px !important;
+				margin-bottom: 8px !important;
+			}
+			[class*="avatar"] {
+				width: 32px !important;
+				height: 32px !important;
+			}
+		`)
+	}
+	
+	if (settings.primaryColor !== '#4f46e5') {
+		rules.push(`
+			:root {
+				--primary-color: ${settings.primaryColor};
+			}
+			[class*="primary"], [class*="indigo"] {
+				background-color: ${settings.primaryColor} !important;
+			}
+		`)
+	}
+	
+	if (settings.accentColor !== '#ec4899') {
+		rules.push(`
+			:root {
+				--accent-color: ${settings.accentColor};
+			}
+		`)
+	}
+	
+	if (settings.fontSize !== 14) {
+		rules.push(`
+			body {
+				font-size: ${settings.fontSize}px !important;
+			}
+		`)
+	}
+	
+	if (settings.hideAvatars) {
+		rules.push(`
+			[class*="avatar"], [class*="profile-pic"] {
+				display: none !important;
+			}
+		`)
+	}
+	
+	if (settings.hideNotifications) {
+		rules.push(`
+			[class*="notification"], [class*="toast"], [class*="alert"] {
+				display: none !important;
+			}
+		`)
+	}
+	
+	return rules.join('\n')
 }
 
-function buildPacScript(host, httpPort, httpsPort, domains) {
-	const httpProxy = `PROXY ${host}:${httpPort}`
-	const httpsProxy = `PROXY ${host}:${httpsPort}`
-	if (domains.length === 0) {
-		return `function FindProxyForURL(url, host) { if (url.substring(0, 6) === "https:") return "${httpsProxy}"; return "${httpProxy}"; }`
+async function applyCustomization(settings) {
+	if (!settings) {
+		settings = await getSettings()
 	}
-	const domainChecks = domains
-		.map(
-			domain =>
-				`if (dnsDomainIs(host, "${domain}")) { if (url.substring(0, 6) === "https:") return "${httpsProxy}"; return "${httpProxy}"; }`,
-		)
-		.join('')
-	return `function FindProxyForURL(url, host) { ${domainChecks} return "DIRECT"; }`
-}
-
-async function applyProxySettings() {
-	const settings = await getSettings()
-	if (!settings.enabled) {
-		await chrome.proxy.settings.set({
-			value: { mode: 'direct' },
-			scope: 'regular',
-		})
-		await chrome.declarativeNetRequest.updateDynamicRules({
-			removeRuleIds: [1],
-		})
-		return
-	}
-
-	const domains = normalizeDomains(settings.domains)
-	const pacScript = buildPacScript(
-		settings.host,
-		settings.httpPort,
-		settings.httpsPort,
-		domains,
-	)
-	await chrome.proxy.settings.set({
-		value: {
-			mode: 'pac_script',
-			pacScript: { data: pacScript },
-		},
-		scope: 'regular',
-	})
-
-	if (settings.apiKey) {
-		const rule = {
-			id: 1,
-			priority: 1,
-			action: {
-				type: 'modifyHeaders',
-				requestHeaders: [
-					{
-						header: 'X-Proxy-Api-Key',
-						operation: 'set',
-						value: settings.apiKey,
-					},
-					{
-						header: 'Proxy-Authorization',
-						operation: 'set',
-						value: `ApiKey ${settings.apiKey}`,
-					},
-				],
-			},
-			condition: {
-				urlFilter: '*',
-				resourceTypes: ['main_frame', 'sub_frame', 'xmlhttprequest'],
-			},
+	
+	const css = generateCustomCSS(settings)
+	
+	// Inject CSS into all tabs
+	const tabs = await chrome.tabs.query({})
+	for (const tab of tabs) {
+		try {
+			await chrome.scripting.insertCSS({
+				target: { tabId: tab.id },
+				css,
+				origin: 'USER',
+			})
+		} catch (e) {
+			// Tab might not support CSS injection
 		}
-		if (domains.length) {
-			rule.condition.domains = domains
-		}
-		await chrome.declarativeNetRequest.updateDynamicRules({
-			removeRuleIds: [1],
-			addRules: [rule],
-		})
-	} else {
-		await chrome.declarativeNetRequest.updateDynamicRules({
-			removeRuleIds: [1],
-		})
 	}
 }
 
 chrome.runtime.onInstalled.addListener(() => {
-	applyProxySettings()
+	applyCustomization()
 })
 
 chrome.runtime.onStartup.addListener(() => {
-	applyProxySettings()
+	applyCustomization()
 })
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 	if (message && message.type === 'apply') {
-		applyProxySettings().then(() => sendResponse({ ok: true }))
+		applyCustomization(message.settings).then(() => sendResponse({ ok: true }))
+		return true
+	}
+	if (message && message.type === 'reset') {
+		applyCustomization().then(() => sendResponse({ ok: true }))
 		return true
 	}
 	return false

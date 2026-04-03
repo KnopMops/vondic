@@ -5,7 +5,6 @@ import { useAuth } from '@/lib/AuthContext'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 
-// Generate UUID fallback for non-secure contexts
 function generateUUID(): string {
 	if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
 		return crypto.randomUUID()

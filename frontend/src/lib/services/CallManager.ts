@@ -25,8 +25,9 @@ export class CallManager {
 	private activeGroupCallId: string | null = null
 	private currentUser: { id: string; name: string; avatar?: string } | null =
 		null
+	private listenersInitialized = false
 
-	// Callbacks
+	
 	public onIncomingCall?: (call: CallState) => void
 	public onCallAccepted?: (call: CallState, oldSocketId?: string) => void
 	public onCallRejected?: (call: CallState, reason?: string) => void
@@ -43,18 +44,46 @@ export class CallManager {
 		this.setupWebRTCCallbacks()
 	}
 
+	
+	public static getInstance(webRTCService: WebRTCService, socket: Socket): CallManager {
+		if (typeof window !== 'undefined' && (window as any).__CALL_MANAGER_INSTANCE__) {
+			console.warn('[CallManager] Instance already exists, returning existing instance')
+			return (window as any).__CALL_MANAGER_INSTANCE__
+		}
+		
+		const instance = new CallManager(webRTCService, socket)
+		if (typeof window !== 'undefined') {
+			(window as any).__CALL_MANAGER_INSTANCE__ = instance
+		}
+		return instance
+	}
+
+	public static resetInstance(): void {
+		if (typeof window !== 'undefined') {
+			(window as any).__CALL_MANAGER_INSTANCE__ = null
+		}
+	}
+
 	public setCurrentUser(user: { id: string; name: string; avatar?: string }) {
 		this.currentUser = user
 	}
 
 	private setupSocketListeners(): void {
-		// --- Group Call Listeners ---
+		
+		if (this.listenersInitialized) {
+			console.warn('[CallManager] Listeners already initialized, skipping')
+			return
+		}
+		this.listenersInitialized = true
+		console.log('[CallManager] Initializing socket listeners')
+		
+		
 		this.socket.on('group_call_started', (data: any) => {
 			console.log('Group call started:', data)
 			this.activeGroupCallId = data.call_id
 			if (this.onGroupCallIdChange) this.onGroupCallIdChange(data.call_id)
 
-			// If caller_participant is provided, add it to currentCalls
+			
 			if (data.caller_participant) {
 				const { user_id, socket_id, username, avatar_url } = data.caller_participant
 				if (socket_id !== this.socket.id) {
@@ -99,7 +128,10 @@ export class CallManager {
 				this.activeGroupCallId = call_id
 				if (this.onGroupCallIdChange) this.onGroupCallIdChange(call_id)
 			}
-			if (this.activeGroupCallId !== call_id) return
+			if (this.activeGroupCallId !== call_id) {
+				console.log(`[GroupCall] Skipping - activeGroupCallId (${this.activeGroupCallId}) !== call_id (${call_id})`)
+				return
+			}
 			if (socket_id === this.socket.id) return
 
 			// Check if we already have a connection to this participant
@@ -109,107 +141,119 @@ export class CallManager {
 				return
 			}
 
-			// Initialize local stream only once when first participant joins
-			if (!this.webRTCService.getLocalStream()) {
-				try {
-					await this.webRTCService.initializeLocalStream()
-				} catch (error) {
-					console.error('Failed to initialize local stream:', error)
-					return
-				}
-			}
-
-			const mySocketId = this.socket.id
-			if (!mySocketId) {
-				console.error('Socket ID is not available')
+			// Use a Set to track pending connections and prevent duplicates
+			const pendingKey = `pending_${socket_id}`
+			if ((this as any)[pendingKey]) {
+				console.log(`Already connecting to ${socket_id}, skipping duplicate event`)
 				return
 			}
-			const iCreateOffer = mySocketId < socket_id
+			(this as any)[pendingKey] = true  // Mark as pending
 
-			if (iCreateOffer) {
-				console.log(`I (${mySocketId}) am creating offer for ${socket_id}`)
-				const pc = this.webRTCService.getPeerConnection(socket_id) || this.webRTCService.createPeerConnection(socket_id)
+			try {
+				// Initialize local stream only once when first participant joins
+				if (!this.webRTCService.getLocalStream()) {
+					try {
+						await this.webRTCService.initializeLocalStream()
+					} catch (error) {
+						console.error('Failed to initialize local stream:', error)
+						return
+					}
+				}
 
-				// Check state before creating offer
-				if (pc.signalingState !== 'stable') {
-					console.log(`Cannot create offer: PC state is ${pc.signalingState}`)
+				const mySocketId = this.socket.id
+				if (!mySocketId) {
+					console.error('Socket ID is not available')
 					return
 				}
+				const iCreateOffer = mySocketId < socket_id
 
-				// Ensure local audio track is present (same as direct calls)
-				const localStream = this.webRTCService.getLocalStream()
-				if (localStream) {
-					const audioTrack = localStream.getAudioTracks()[0]
-					if (audioTrack) {
-						const existingSender = pc.getSenders().find(s => s.track?.kind === 'audio')
-						if (!existingSender) {
-							pc.addTrack(audioTrack, localStream)
-							console.log(`[GroupCall] Added audio track for ${socket_id}`)
-						} else if (existingSender.track !== audioTrack) {
-							await existingSender.replaceTrack(audioTrack)
-							console.log(`[GroupCall] Replaced audio track for ${socket_id}`)
+				if (iCreateOffer) {
+					console.log(`I (${mySocketId}) am creating offer for ${socket_id}`)
+					const pc = this.webRTCService.getPeerConnection(socket_id) || this.webRTCService.createPeerConnection(socket_id)
+
+					// Check state before creating offer
+					if (pc.signalingState !== 'stable') {
+						console.log(`Cannot create offer: PC state is ${pc.signalingState}`)
+						return
+					}
+
+					// Ensure local audio track is present (same as direct calls)
+					const localStream = this.webRTCService.getLocalStream()
+					if (localStream) {
+						const audioTrack = localStream.getAudioTracks()[0]
+						if (audioTrack) {
+							const existingSender = pc.getSenders().find(s => s.track?.kind === 'audio')
+							if (!existingSender) {
+								pc.addTrack(audioTrack, localStream)
+								console.log(`[GroupCall] Added audio track for ${socket_id}`)
+							} else if (existingSender.track !== audioTrack) {
+								await existingSender.replaceTrack(audioTrack)
+								console.log(`[GroupCall] Replaced audio track for ${socket_id}`)
+							}
 						}
 					}
-				}
 
-				const offer = await pc.createOffer()
-				await pc.setLocalDescription(offer)
+					const offer = await pc.createOffer()
+					await pc.setLocalDescription(offer)
 
-				this.socket.emit('offer', {
-					target_socket_id: socket_id,
-					offer: offer,
-					caller_user_id: this.currentUser?.id,
-					caller_username: this.currentUser?.name,
-					caller_avatar_url: this.currentUser?.avatar,
-				})
+					this.socket.emit('offer', {
+						target_socket_id: socket_id,
+						offer: offer,
+						caller_user_id: this.currentUser?.id,
+						caller_username: this.currentUser?.name,
+						caller_avatar_url: this.currentUser?.avatar,
+					})
 
-				// Only add call state after successfully sending offer
-				const callState: CallState = {
-					socketId: socket_id,
-					userId: user_id,
-					userName: username,
-					avatarUrl: avatar_url,
-					status: 'calling',
-					startTime: new Date(),
-					isGroupCall: true,
-					callId: call_id,
-				}
-				this.currentCalls.set(socket_id, callState)
-				this.updateCallState(socket_id, callState)
-			} else {
-				console.log(`I (${mySocketId}) am waiting for offer from ${socket_id}`)
-				// Just prepare the peer connection but don't create an offer
-				const pc = this.webRTCService.getPeerConnection(socket_id) || this.webRTCService.createPeerConnection(socket_id)
+					// Only add call state after successfully sending offer
+					const callState: CallState = {
+						socketId: socket_id,
+						userId: user_id,
+						userName: username,
+						avatarUrl: avatar_url,
+						status: 'calling',
+						startTime: new Date(),
+						isGroupCall: true,
+						callId: call_id,
+					}
+					this.currentCalls.set(socket_id, callState)
+					this.updateCallState(socket_id, callState)
+				} else {
+					console.log(`I (${mySocketId}) am waiting for offer from ${socket_id} (mySocketId > theirSocketId)`)
+					// Just prepare the peer connection but don't create an offer
+					const pc = this.webRTCService.getPeerConnection(socket_id) || this.webRTCService.createPeerConnection(socket_id)
 
-				// Ensure local audio track is present (same as direct calls)
-				const localStream = this.webRTCService.getLocalStream()
-				if (localStream) {
-					const audioTrack = localStream.getAudioTracks()[0]
-					if (audioTrack) {
-						const existingSender = pc.getSenders().find(s => s.track?.kind === 'audio')
-						if (!existingSender) {
-							pc.addTrack(audioTrack, localStream)
-							console.log(`[GroupCall] Added audio track for ${socket_id} (answerer)`)
-						} else if (existingSender.track !== audioTrack) {
-							await existingSender.replaceTrack(audioTrack)
-							console.log(`[GroupCall] Replaced audio track for ${socket_id} (answerer)`)
+					// Ensure local audio track is present (same as direct calls)
+					const localStream = this.webRTCService.getLocalStream()
+					if (localStream) {
+						const audioTrack = localStream.getAudioTracks()[0]
+						if (audioTrack) {
+							const existingSender = pc.getSenders().find(s => s.track?.kind === 'audio')
+							if (!existingSender) {
+								pc.addTrack(audioTrack, localStream)
+								console.log(`[GroupCall] Added audio track for ${socket_id} (answerer)`)
+							} else if (existingSender.track !== audioTrack) {
+								await existingSender.replaceTrack(audioTrack)
+								console.log(`[GroupCall] Replaced audio track for ${socket_id} (answerer)`)
+							}
 						}
 					}
-				}
 
-				// Add call state while waiting for offer
-				const callState: CallState = {
-					socketId: socket_id,
-					userId: user_id,
-					userName: username,
-					avatarUrl: avatar_url,
-					status: 'calling',
-					startTime: new Date(),
-					isGroupCall: true,
-					callId: call_id,
+					// Add call state while waiting for offer
+					const callState: CallState = {
+						socketId: socket_id,
+						userId: user_id,
+						userName: username,
+						avatarUrl: avatar_url,
+						status: 'calling',
+						startTime: new Date(),
+						isGroupCall: true,
+						callId: call_id,
+					}
+					this.currentCalls.set(socket_id, callState)
+					this.updateCallState(socket_id, callState)
 				}
-				this.currentCalls.set(socket_id, callState)
-				this.updateCallState(socket_id, callState)
+			} finally {
+				delete (this as any)[pendingKey]  // Clear pending flag
 			}
 		})
 

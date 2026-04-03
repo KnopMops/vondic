@@ -41,12 +41,12 @@ export const CallControlBar: React.FC<CallControlBarProps> = ({
 	const handleEndCall = () => {
 		const { activeGroupCallId } = useCallStore.getState()
 
-		// If it's a group call, end the group call
+		
 		if (isGroupCall && activeGroupCallId) {
 			const { leaveGroupCall } = useCallStore.getState()
 			leaveGroupCall(activeGroupCallId)
 		} else {
-			// For direct calls, end all active calls
+			
 			const calls = Array.from(activeCalls.values())
 			calls.forEach(call => {
 				endCall(call.socketId)
@@ -54,7 +54,7 @@ export const CallControlBar: React.FC<CallControlBarProps> = ({
 		}
 	}
 
-	// Fullscreen handlers
+	
 	const enterFullscreen = (element: 'remote' | 'local' | 'screen') => {
 		setFullscreenElement(element)
 	}
@@ -74,7 +74,7 @@ export const CallControlBar: React.FC<CallControlBarProps> = ({
 	const participantCount = activeCalls.size
 	const showParticipantCount = isGroupCall && participantCount > 1
 
-	// Timer
+	
 	useEffect(() => {
 		const interval = setInterval(() => {
 			setDuration(prev => prev + 1)
@@ -222,7 +222,7 @@ export const CallControlBar: React.FC<CallControlBarProps> = ({
 
 	return (
 		<div className={`w-full bg-gray-900/95 backdrop-blur-xl border border-gray-800 rounded-xl animate-in fade-in duration-300 ${isVideoExpanded ? 'p-6' : 'p-4'}`} ref={containerRef}>
-			{/* Video Section - Show when there's any video content */}
+			
 			{(hasRemoteVideo || hasLocalVideo || hasScreenShare) && (
 				<div className='mb-4 relative'>
 					<div className={`grid gap-3 ${
@@ -232,7 +232,7 @@ export const CallControlBar: React.FC<CallControlBarProps> = ({
 								? 'grid-cols-1'
 								: 'grid-cols-1'
 					}`}>
-						{/* Screen Share - Show first if active (takes priority) */}
+						
 						{hasScreenShare && screenStream && (
 							<div className='relative bg-gray-800 rounded-lg overflow-hidden aspect-video'>
 								<video
@@ -246,12 +246,12 @@ export const CallControlBar: React.FC<CallControlBarProps> = ({
 									<MonitorIcon className='w-3 h-3 text-emerald-400' />
 									Демонстрация экрана
 								</div>
-								{/* Screen share indicator badge */}
+								
 								<div className='absolute top-2 right-2 px-2 py-1 bg-emerald-600 rounded-full text-xs text-white font-medium flex items-center gap-1 animate-pulse'>
 									<span className='w-1.5 h-1.5 rounded-full bg-white' />
 									LIVE
 								</div>
-								{/* Fullscreen button */}
+								
 								<button
 									onClick={() => toggleFullscreen('screen')}
 									className='absolute top-2 right-2 p-2 bg-gray-800/80 hover:bg-gray-700 rounded-lg text-white transition-colors'
@@ -266,7 +266,7 @@ export const CallControlBar: React.FC<CallControlBarProps> = ({
 							</div>
 						)}
 
-						{/* Remote Video - Only if stream exists */}
+						
 						{hasRemoteVideo && remoteStreams.size > 0 && !hasScreenShare && (
 							<div className='relative bg-gray-800 rounded-lg overflow-hidden aspect-video'>
 								<video
@@ -278,7 +278,7 @@ export const CallControlBar: React.FC<CallControlBarProps> = ({
 								<div className='absolute bottom-2 left-2 px-2 py-1 bg-black/60 rounded text-xs text-white'>
 									{participantName}
 								</div>
-								{/* Fullscreen button */}
+								
 								<button
 									onClick={() => toggleFullscreen('remote')}
 									className='absolute top-2 right-2 p-2 bg-gray-800/80 hover:bg-gray-700 rounded-lg text-white transition-colors'
@@ -293,7 +293,7 @@ export const CallControlBar: React.FC<CallControlBarProps> = ({
 							</div>
 						)}
 
-						{/* Local Video - Only if stream exists and enabled */}
+						
 						{hasLocalVideo && localStream && !hasScreenShare && (
 							<div className='relative bg-gray-800 rounded-lg overflow-hidden aspect-video'>
 								<video
@@ -306,7 +306,7 @@ export const CallControlBar: React.FC<CallControlBarProps> = ({
 								<div className='absolute bottom-2 left-2 px-2 py-1 bg-black/60 rounded text-xs text-white'>
 									Вы
 								</div>
-								{/* Fullscreen button */}
+								
 								<button
 									onClick={() => toggleFullscreen('local')}
 									className='absolute top-2 right-2 p-2 bg-gray-800/80 hover:bg-gray-700 rounded-lg text-white transition-colors'
@@ -322,7 +322,7 @@ export const CallControlBar: React.FC<CallControlBarProps> = ({
 						)}
 					</div>
 
-					{/* Expand/Collapse Button */}
+					
 					<button
 						onClick={() => setIsVideoExpanded(!isVideoExpanded)}
 						className='absolute top-2 right-2 p-2 bg-gray-800/80 hover:bg-gray-700 rounded-lg text-white transition-colors'
@@ -337,10 +337,10 @@ export const CallControlBar: React.FC<CallControlBarProps> = ({
 				</div>
 			)}
 
-			{/* Fullscreen Video Overlay */}
+			
 			{fullscreenElement && (
 				<div className='fixed inset-0 bg-black/95 z-[100] flex items-center justify-center'>
-					{/* Close button */}
+					
 					<button
 						onClick={exitFullscreen}
 						className='absolute top-4 right-4 p-3 bg-gray-800/80 hover:bg-gray-700 rounded-full text-white transition-colors z-[101]'
@@ -349,7 +349,7 @@ export const CallControlBar: React.FC<CallControlBarProps> = ({
 						<MinimizeIcon className='w-6 h-6' />
 					</button>
 
-					{/* Video container */}
+					
 					<div className='w-full h-full flex items-center justify-center p-4'>
 						{fullscreenElement === 'screen' && screenStream && (
 							<video
@@ -394,7 +394,7 @@ export const CallControlBar: React.FC<CallControlBarProps> = ({
 						)}
 					</div>
 
-					{/* Label */}
+					
 					<div className='absolute bottom-4 left-1/2 transform -translate-x-1/2 px-4 py-2 bg-black/60 rounded-full text-white text-sm font-medium'>
 						{fullscreenElement === 'screen' && 'Демонстрация экрана'}
 						{fullscreenElement === 'remote' && participantName}
@@ -403,7 +403,7 @@ export const CallControlBar: React.FC<CallControlBarProps> = ({
 				</div>
 			)}
 
-			{/* Hidden audio element for remote audio - MUST be before video */}
+			
 			<audio
 				ref={remoteAudioRef}
 				autoPlay
@@ -412,7 +412,7 @@ export const CallControlBar: React.FC<CallControlBarProps> = ({
 				style={{ display: 'none' }}
 			/>
 
-			{/* Call Info Header */}
+			
 			<div className='flex items-center justify-between mb-4'>
 				<div className='flex items-center gap-4'>
 					<div className='w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-emerald-500/20'>
@@ -435,7 +435,7 @@ export const CallControlBar: React.FC<CallControlBarProps> = ({
 				</div>
 
 				<div className='flex items-center gap-2'>
-					{/* Connection Info Tooltip */}
+					
 					<div className='relative'>
 						<button
 							onMouseEnter={() => setShowConnectionInfo(true)}
@@ -497,7 +497,7 @@ export const CallControlBar: React.FC<CallControlBarProps> = ({
 						)}
 					</div>
 
-					{/* Call Duration */}
+					
 					<div className='flex items-center gap-2 px-3 py-1.5 bg-gray-800 rounded-lg'>
 						<ClockIcon className='w-3 h-3 text-emerald-500' />
 						<span className='text-xs text-gray-400 font-mono'>{formatDuration(duration)}</span>
@@ -505,12 +505,12 @@ export const CallControlBar: React.FC<CallControlBarProps> = ({
 				</div>
 			</div>
 
-			{/* Divider */}
+			
 			<div className='h-px bg-gray-800 mb-4' />
 
-			{/* Call Controls */}
+			
 			<div className='flex items-center justify-center gap-3'>
-				{/* Mute/Unmute */}
+				
 				<button
 					onClick={toggleMute}
 					className={`flex items-center gap-2 px-4 py-3 rounded-xl transition-all ${
@@ -530,7 +530,7 @@ export const CallControlBar: React.FC<CallControlBarProps> = ({
 					</span>
 				</button>
 
-				{/* Video On/Off */}
+				
 				<button
 					onClick={toggleVideo}
 					className={`flex items-center gap-2 px-4 py-3 rounded-xl transition-all ${
@@ -550,7 +550,7 @@ export const CallControlBar: React.FC<CallControlBarProps> = ({
 					</span>
 				</button>
 
-				{/* Screen Share */}
+				
 				{isScreenShareSupported && (
 					<button
 						onClick={toggleScreenShare}
@@ -572,7 +572,7 @@ export const CallControlBar: React.FC<CallControlBarProps> = ({
 					</button>
 				)}
 
-				{/* End Call */}
+				
 				<button
 					onClick={handleEndCall}
 					className='flex items-center gap-2 px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl transition-all hover:scale-105 shadow-lg shadow-rose-600/20'

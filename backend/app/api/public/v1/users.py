@@ -12,8 +12,7 @@ public_users_bp = Blueprint(
 def get_me(current_user):
     try:
         user_data = user_schema.dump(current_user)
-        
-        # Remove sensitive fields
+
         restricted_fields = ['password_hash', 'refresh_token', 'cloud_password_hash']
         for field in restricted_fields:
             user_data.pop(field, None)

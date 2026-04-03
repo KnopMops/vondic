@@ -38,7 +38,7 @@ export class WebRTCService {
 	private audioProcessor: AudioProcessor | null = null
 	private iceDisconnectTimeouts: Map<string, NodeJS.Timeout> = new Map()
 
-	// Callbacks
+	
 	public onRemoteStream?: (socketId: string, stream: MediaStream) => void
 	public onConnectionStateChange?: (
 		socketId: string,
@@ -78,12 +78,16 @@ export class WebRTCService {
 				typeof process !== 'undefined'
 					? (process.env.NEXT_PUBLIC_TURN_PASSWORD as string | undefined)
 					: undefined
+
 			
-			// Internal TURN fallback (192.168.20.31)
-			const internalTurnUrl = 'turn:192.168.20.31:3478?transport=udp'
+			const internalTurnHost =
+				typeof process !== 'undefined'
+					? (process.env.NEXT_PUBLIC_INTERNAL_TURN_HOST as string | undefined)
+					: undefined
+			const internalTurnUrl = `turn:${internalTurnHost || '192.168.20.31'}:3478?transport=udp`
 			const internalTurnUrls = [
-				'turn:192.168.20.31:3478?transport=udp',
-				'turn:192.168.20.31:3478?transport=tcp',
+				`turn:${internalTurnHost || '192.168.20.31'}:3478?transport=udp`,
+				`turn:${internalTurnHost || '192.168.20.31'}:3478?transport=tcp`,
 			]
 			
 			const turnRawList: string[] = []
@@ -172,12 +176,12 @@ export class WebRTCService {
 			// Apply audio processing for Discord-like quality
 			try {
 				this.audioProcessor = new AudioProcessor({
-					noiseSuppression: 3, // Maximum noise suppression for clean audio
+					noiseSuppression: 2, // Moderate noise suppression for clear, natural audio
 					echoCancellation: true,
 					autoGainControl: true,
-					highPassFilter: 100, // Remove low-frequency rumble
-					lowPassFilter: 8000, // Telephone quality - removes high-frequency hiss
-					gain: 1.5, // Moderate gain to avoid amplifying background noise
+					highPassFilter: 80, // Remove low-frequency rumble while preserving voice warmth
+					lowPassFilter: 12000, // Preserve voice clarity and natural sound
+					gain: 2.0, // Higher gain for clearer, louder audio
 					smoothing: true,
 				})
 
@@ -771,25 +775,41 @@ export class WebRTCService {
 			try {
 				const track = event.track
 				if (track) {
+					// Use a timeout to prevent premature track removal during renegotiation
+					let trackEndTimeout: any = null
+					
 					track.onended = () => {
-						console.log(`[WebRTC] Remote ${track.kind} track ended for ${targetSocketId}`)
-						// Remove the track from the stream
-						try {
-							if (stream && stream.getTracks().includes(track)) {
-								stream.removeTrack(track);
-								console.log(`[WebRTC] Removed ${track.kind} track from stream for ${targetSocketId}`);
+						console.log(`[WebRTC] Remote ${track.kind} track ended for ${targetSocketId}, waiting 2s before removal...`)
+						// Don't remove immediately - wait 2 seconds in case it's just renegotiation
+						trackEndTimeout = setTimeout(() => {
+							// Check if track is still in ended state
+							if (track.readyState === 'ended') {
+								console.log(`[WebRTC] Removing ended ${track.kind} track from stream for ${targetSocketId}`)
+								try {
+									if (stream && stream.getTracks().includes(track)) {
+										stream.removeTrack(track)
+										console.log(`[WebRTC] Removed ${track.kind} track from stream for ${targetSocketId}`)
+									}
+								} catch (e) {
+									console.error(`[WebRTC] Could not remove ended track:`, e)
+								}
+								assign()
+							} else {
+								console.log(`[WebRTC] Track ${track.kind} recovered for ${targetSocketId}, not removing`)
 							}
-						} catch (e) {
-							console.error(`[WebRTC] Could not remove ended track:`, e);
-						}
-						assign();
-					};
+						}, 2000)
+					}
 
 					// Check for mute/unmute events - debounce these too
 					let muteDebounceTimer: any = null
 					if (typeof (track as any).onunmute !== 'undefined') {
 						;(track as any).onunmute = () => {
 							console.log(`[WebRTC] Remote ${track.kind} track unmuted for ${targetSocketId}`)
+							// Clear pending removal if track comes back
+							if (trackEndTimeout) {
+								clearTimeout(trackEndTimeout)
+								trackEndTimeout = null
+							}
 							clearTimeout(muteDebounceTimer)
 							muteDebounceTimer = setTimeout(assign, 100)
 						}
@@ -807,17 +827,28 @@ export class WebRTCService {
 		// Обработка изменения состояния соединения
 		pc.onconnectionstatechange = () => {
 			console.log(`[WebRTC] Connection state changed for ${targetSocketId}: ${pc.connectionState}`)
+			console.log(`[WebRTC] ICE state: ${pc.iceConnectionState}, Signaling: ${pc.signalingState}`)
+			
 			if (this.onConnectionStateChange) {
 				this.onConnectionStateChange(targetSocketId, pc.connectionState)
 			}
+			
 			if (pc.connectionState === 'connected') {
+				console.log(`[WebRTC] ✅ Connection ESTABLISHED for ${targetSocketId}`)
 				// Sync remote stream tracks with current receivers
 				this.syncRemoteStreamTracks(targetSocketId);
 			} else if (pc.connectionState === 'failed') {
-				console.log(`[WebRTC] Connection failed for ${targetSocketId}, attempting ICE restart`)
-				this.attemptIceRestart(targetSocketId).catch(e => 
-					console.error('ICE restart failed:', e)
+				console.error(`[WebRTC] ❌ Connection FAILED for ${targetSocketId}`)
+				console.error(`[WebRTC] ICE: ${pc.iceConnectionState}, Signaling: ${pc.signalingState}`)
+				console.error(`[WebRTC] Local candidates: ${pc.localDescription ? JSON.parse(pc.localDescription).candidates?.length || 0 : 0}`)
+				
+				// Try ICE restart
+				console.log(`[WebRTC] Attempting ICE restart for ${targetSocketId}`)
+				this.attemptIceRestart(targetSocketId).catch(e =>
+					console.error('[WebRTC] ICE restart failed:', e)
 				)
+			} else if (pc.connectionState === 'disconnected') {
+				console.warn(`[WebRTC] ⚠️ Connection DISCONNECTED for ${targetSocketId}. Will attempt reconnect...`)
 			}
 		}
 		
@@ -1194,8 +1225,10 @@ export class WebRTCService {
 			this.socket.emit('answer', answerPayload)
 		} catch (error) {
 			console.error('Failed to accept call:', error)
-			// Handle failed ICE negotiation by forcing a renegotiation with TURN
+			// Handle failed ICE negotiation by forcing internal TURN and renegotiation
 			if (this.hasTurn) {
+				console.log(`[WebRTC] Accept call failed, forcing internal TURN (192.168.20.31) for ${callerSocketId}`)
+				this.useInternalTurnOnly = true
 				this.renegotiateWithRelay(callerSocketId).catch(err =>
 					console.error('Relay fallback failed:', err),
 				)
@@ -1377,6 +1410,8 @@ export class WebRTCService {
 									.getReceivers()
 									.some(r => r.track && r.track.kind === 'audio')
 								if (stillNoAudio) {
+									console.log(`[WebRTC] No audio receiver, forcing internal TURN (192.168.20.31) for ${data.sender_socket_id}`)
+									this.useInternalTurnOnly = true
 									this.renegotiateWithRelay(data.sender_socket_id).catch(err =>
 										console.error(
 											'Relay fallback (no audio receiver) failed:',
@@ -1396,6 +1431,8 @@ export class WebRTCService {
 							console.log(
 								`[WebRTC] Connection failed, attempting TURN relay fallback for ${data.sender_socket_id}`,
 							)
+							console.log(`[WebRTC] Connection failed, forcing internal TURN (192.168.20.31) for ${data.sender_socket_id}`)
+							this.useInternalTurnOnly = true
 							this.renegotiateWithRelay(data.sender_socket_id).catch(err =>
 								console.error('Relay fallback failed:', err),
 							)
@@ -1596,8 +1633,10 @@ export class WebRTCService {
 				console.log(`[WebRTC] ICE restart offer sent to ${targetSocketId}`)
 			} catch (e: any) {
 				console.error('[WebRTC] ICE restart failed:', e)
-				// Fall back to full reconnect with relay
+				// Fall back to full reconnect with internal TURN only
 				if (this.hasTurn) {
+					console.log(`[WebRTC] ICE restart failed, forcing internal TURN (192.168.20.31) for ${targetSocketId}`)
+					this.useInternalTurnOnly = true
 					await this.renegotiateWithRelay(targetSocketId)
 				}
 			}

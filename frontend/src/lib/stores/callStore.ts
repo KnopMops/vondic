@@ -4,7 +4,7 @@ import { CallManager, CallRecord, CallState } from '../services/CallManager'
 import { WebRTCService } from '../services/WebRTCService'
 
 interface CallStore {
-	// Состояния
+	
 	isInitialized: boolean
 	isWebRTCSupported: boolean
 	isScreenShareSupported: boolean
@@ -20,13 +20,13 @@ interface CallStore {
 	isVideoActive: boolean
 	callHistory: CallRecord[]
 
-	// Сервисы
+	
 	webRTCService: WebRTCService | null
 	callManager: CallManager | null
 	socket: Socket | null
 	currentUserId: string | null
 
-	// Действия
+	
 	initializeWebRTC: (
 		socket: Socket,
 		user: { id: string; name: string; avatar?: string },
@@ -50,7 +50,7 @@ interface CallStore {
 	toggleVideo: () => Promise<void>
 	isVideoEnabled: () => boolean
 
-	// Действия звонков
+	
 	initiateCall: (targetUserId: string, targetUserName: string) => Promise<void>
 	initiateGroupCall: (groupId: string) => Promise<void>
 	joinVoiceChannel: (channelId: string) => Promise<void>
@@ -65,7 +65,7 @@ interface CallStore {
 	endCall: (targetSocketId: string) => void
 	endAllCalls: () => void
 
-	// Геттеры
+	
 	getCallBySocketId: (socketId: string) => CallState | undefined
 	getCallByUserId: (userId: string) => CallState | undefined
 	getActiveCallsCount: () => number
@@ -73,7 +73,7 @@ interface CallStore {
 }
 
 export const useCallStore = create<CallStore>((set, get) => ({
-	// Начальные состояния
+	
 	isInitialized: false,
 	isWebRTCSupported:
 		typeof window !== 'undefined' && 'RTCPeerConnection' in window,
@@ -94,51 +94,72 @@ export const useCallStore = create<CallStore>((set, get) => ({
 	isScreenSharing: false,
 	callHistory: [],
 
-	// Сервисы
+	
 	webRTCService: null,
 	callManager: null,
 	socket: null,
 	currentUserId: null,
 
-	// Инициализация WebRTC
+	
 	initializeWebRTC: async (
 		socket: Socket,
 		user: { id: string; name: string; avatar?: string },
 	) => {
+		console.log('[CallStore] initializeWebRTC called, isInitialized:', get().isInitialized, 'has callManager:', !!get().callManager, 'has webRTCService:', !!get().webRTCService)
+		
+		
+		const state = get()
+		if (state.isInitialized || state.webRTCService || state.callManager) {
+			console.warn('[CallStore] Already initialized or initializing, skipping')
+			return Promise.resolve()
+		}
+
+		
+		if (typeof window !== 'undefined' && (window as any).__WEBRTC_INITIALIZING__) {
+			console.warn('[CallStore] Initialization in progress, skipping')
+			return Promise.resolve()
+		}
+
+		
+		if (typeof window !== 'undefined') {
+			(window as any).__WEBRTC_INITIALIZING__ = true
+			console.log('[CallStore] Set __WEBRTC_INITIALIZING__ = true')
+		}
+
 		try {
 			if (!get().isWebRTCSupported) {
 				throw new Error('WebRTC не поддерживается в этом браузере')
 			}
 
 			const webRTCService = new WebRTCService(socket, user.id)
-			const callManager = new CallManager(webRTCService, socket)
+			const callManager = CallManager.getInstance(webRTCService, socket)
 			callManager.setCurrentUser(user)
 
-			// Настройка callback'ов
+			
 			webRTCService.onLocalStream = (stream: MediaStream) => {
 				set({ localStream: stream })
 			}
 
-			// Debounced remote stream update to prevent flickering
+			
 			let streamUpdateTimeout: NodeJS.Timeout | null = null
 			callManager.onRemoteStream = (socketId: string, stream: MediaStream) => {
-				// Clear pending update
+				
 				if (streamUpdateTimeout) {
 					clearTimeout(streamUpdateTimeout)
 				}
 				
-				// Debounce updates by 150ms
+				
 				streamUpdateTimeout = setTimeout(() => {
 					const { activeCalls, remoteStreams } = get()
 					const call = activeCalls.get(socketId)
 
-					// Check if stream actually changed
+					
 					const existingStream = remoteStreams.get(socketId)
 					if (existingStream === stream) {
-						return // No change, skip update
+						return 
 					}
 
-					// Обновляем стримы
+					
 					const newStreams = new Map(remoteStreams)
 					newStreams.set(socketId, stream)
 
@@ -165,7 +186,7 @@ export const useCallStore = create<CallStore>((set, get) => ({
 
 				if (oldSocketId) {
 					newCalls.delete(oldSocketId)
-					// Migrate remote stream if exists
+					
 					const stream = newStreams.get(oldSocketId)
 					if (stream) {
 						newStreams.delete(oldSocketId)
@@ -211,7 +232,7 @@ export const useCallStore = create<CallStore>((set, get) => ({
 				set({ screenStream: stream, isScreenSharing: isSharing })
 			}
 
-			// Test TURN server and fallback to internal (192.168.20.31) if needed
+			
 			webRTCService.testTurnAndFallback().catch(err => {
 				console.warn('[CallStore] TURN test failed:', err)
 			})
@@ -224,7 +245,7 @@ export const useCallStore = create<CallStore>((set, get) => ({
 				const newStreams = new Map(remoteStreams)
 				newStreams.delete(call.socketId)
 
-				// Добавляем в историю
+				
 				const historyRecord: CallRecord = {
 					id: `${call.userId}-${Date.now()}`,
 					callerId: user.id,
@@ -283,7 +304,16 @@ export const useCallStore = create<CallStore>((set, get) => ({
 				screenStream: webRTCService.getScreenStream(),
 				isScreenSharing: webRTCService.isScreenSharing(),
 			})
+			
+			// Clear initialization flag
+			if (typeof window !== 'undefined') {
+				(window as any).__WEBRTC_INITIALIZING__ = false
+			}
 		} catch (error) {
+			// Clear initialization flag on error too
+			if (typeof window !== 'undefined') {
+				(window as any).__WEBRTC_INITIALIZING__ = false
+			}
 			console.error('Failed to initialize WebRTC:', error)
 			throw error
 		}
@@ -304,6 +334,12 @@ export const useCallStore = create<CallStore>((set, get) => ({
 		// Clear any pending stream update timeouts
 		if ((get() as any)._streamUpdateTimeout) {
 			clearTimeout((get() as any)._streamUpdateTimeout)
+		}
+
+		// Reset CallManager singleton instance
+		CallManager.resetInstance()
+		if (typeof window !== 'undefined') {
+			(window as any).__WEBRTC_INITIALIZING__ = false
 		}
 
 		set({
@@ -471,8 +507,11 @@ export const useCallStore = create<CallStore>((set, get) => ({
 	},
 
 	initiateGroupCall: async (groupId: string) => {
-		const { callManager } = get()
-		if (!callManager) throw new Error('CallManager not initialized')
+		const { callManager, isInitialized } = get()
+		if (!callManager) {
+			console.error('[CallStore] CallManager not initialized. isInitialized:', isInitialized)
+			throw new Error('CallManager not initialized. Please wait for WebRTC to initialize.')
+		}
 		await callManager.initiateGroupCall(groupId)
 	},
 

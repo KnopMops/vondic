@@ -41,9 +41,9 @@ import {
 	useRef,
 	useState,
 } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import MessageBubble from './MessageBubble'
 
-// --- Utility Functions ---
 const formatLastSeen = (lastSeen?: string | Date): string => {
 	if (!lastSeen) return 'Не в сети'
 
@@ -67,42 +67,50 @@ const formatLastSeen = (lastSeen?: string | Date): string => {
 
 const getLastMessage = (friendId: string, messages: Message[]): string => {
 	// Filter only direct messages (no channel_id or group_id) between current user and friend
-	const friendMessages = messages.filter(
+	const friendMessages = (messages || []).filter(
 		m =>
+			m &&
 			// Direct message: no channel or group
 			(m.channel_id === undefined || m.channel_id === null) &&
 			(m.group_id === undefined || m.group_id === null) &&
 			// Messages from or to this friend
-			(m.sender_id === friendId || (!m.isOwn && m.sender_id !== friendId))
+			(m.sender_id === friendId || (!m.isOwn && m.sender_id !== friendId)),
 	)
 	if (friendMessages.length === 0) return ''
 
 	const lastMessage = friendMessages[friendMessages.length - 1]
+	if (!lastMessage) return ''
 	if (lastMessage.type === 'voice') return '🎤 Голосовое сообщение'
 	if (lastMessage.type === 'image') return '🖼️ Фото'
 	if (lastMessage.type === 'file') return '📎 Файл'
 
-	const content = lastMessage.content
+	const content = lastMessage.content || ''
 	return content.length > 30 ? content.substring(0, 30) + '...' : content
 }
 
 const getLastMessageTime = (friendId: string, messages: Message[]): string => {
 	// Filter only direct messages (no channel_id or group_id) between current user and friend
-	const friendMessages = messages.filter(
+	const friendMessages = (messages || []).filter(
 		m =>
+			m &&
 			// Direct message: no channel or group
 			(m.channel_id === undefined || m.channel_id === null) &&
 			(m.group_id === undefined || m.group_id === null) &&
 			// Messages from or to this friend
-			(m.sender_id === friendId || (!m.isOwn && m.sender_id !== friendId))
+			(m.sender_id === friendId || (!m.isOwn && m.sender_id !== friendId)),
 	)
 	if (friendMessages.length === 0) return ''
 
 	const lastMessage = friendMessages[friendMessages.length - 1]
-	return new Date(lastMessage.timestamp).toLocaleTimeString('ru-RU', {
-		hour: '2-digit',
-		minute: '2-digit',
-	})
+	if (!lastMessage || !lastMessage.timestamp) return ''
+	try {
+		return new Date(lastMessage.timestamp).toLocaleTimeString('ru-RU', {
+			hour: '2-digit',
+			minute: '2-digit',
+		})
+	} catch {
+		return ''
+	}
 }
 
 // --- Icons Components ---
@@ -640,6 +648,10 @@ export default function MessengerPage() {
 	const [recentContacts, setRecentContacts] = useState<User[]>([])
 	const [selectedFriend, setSelectedFriend] = useState<User | null>(null)
 	const [isRagOpen, setIsRagOpen] = useState(false)
+	const [isUserProfileModalOpen, setIsUserProfileModalOpen] = useState(false)
+	const [selectedUserForModal, setSelectedUserForModal] = useState<User | null>(
+		null,
+	)
 	const [ragMessages, setRagMessages] = useState<
 		{
 			id: number
@@ -1839,6 +1851,16 @@ export default function MessengerPage() {
 	const messages = isBotChat ? botMessages : chatMessages
 	const isChatLoading = isBotChat ? false : isLoading
 	const isChatTyping = isBotChat ? false : isTyping
+
+	useEffect(() => {
+		if (messages.length > 0) {
+			const pinned = messages.filter(m => !!m.pinned_by).map(m => m.id)
+			setPinnedMessageIds(pinned)
+			if (pinned.length > 0) {
+				setPinnedMessageId(pinned[pinned.length - 1])
+			}
+		}
+	}, [messages])
 
 	useEffect(() => {
 		if (typeof window === 'undefined') return
@@ -3584,11 +3606,11 @@ export default function MessengerPage() {
 		label: string
 	}) => {
 		if (!socket || selectedMessageIds.size === 0) return
-		
-		const messagesToForward = messagesToDisplay.filter(m => 
-			selectedMessageIds.has(m.id) && !m.is_deleted
+
+		const messagesToForward = messagesToDisplay.filter(
+			m => selectedMessageIds.has(m.id) && !m.is_deleted,
 		)
-		
+
 		if (messagesToForward.length === 0) {
 			showToast('Нет сообщений для пересылки', 'error')
 			return
@@ -3613,7 +3635,8 @@ export default function MessengerPage() {
 			if (user && msg.sender_id !== user.id) {
 				payload.forwarded_from = {
 					sender_id: msg.sender_id,
-					sender_name: user.username || user.email?.split('@')[0] || 'Пользователь',
+					sender_name:
+						user.username || user.email?.split('@')[0] || 'Пользователь',
 					sender_avatar: user.avatar_url,
 				}
 			}
@@ -3627,7 +3650,10 @@ export default function MessengerPage() {
 
 		handleClearSelection()
 		setIsForwardOpen(false)
-		showToast(`Переслано ${sentCount} сообще${sentCount % 10 === 1 && sentCount % 100 !== 11 ? 'ние' : sentCount % 10 >= 2 && sentCount % 10 <= 4 && (sentCount % 100 < 12 || sentCount % 100 > 14) ? 'ния' : 'ний'} в ${target.label}`, 'success')
+		showToast(
+			`Переслано ${sentCount} сообще${sentCount % 10 === 1 && sentCount % 100 !== 11 ? 'ние' : sentCount % 10 >= 2 && sentCount % 10 <= 4 && (sentCount % 100 < 12 || sentCount % 100 > 14) ? 'ния' : 'ний'} в ${target.label}`,
+			'success',
+		)
 	}
 
 	const resolvePinnedForScroll = (scrollTop: number) => {
@@ -3776,8 +3802,15 @@ export default function MessengerPage() {
 			})
 		}
 
-		const handlePinnedUpdate = (data: { id?: string; pinned?: boolean }) => {
+		const handlePinnedUpdate = (data: {
+			id?: string
+			pinned?: boolean
+			pinned_by?: string
+		}) => {
 			if (!data?.id || typeof data.pinned !== 'boolean') return
+			updateMessage(data.id, {
+				pinned_by: data.pinned ? data.pinned_by || 'system' : null,
+			})
 			setPinnedMessageIds(prev => {
 				if (data.pinned) {
 					if (prev.includes(data.id!)) return prev
@@ -3835,7 +3868,7 @@ export default function MessengerPage() {
 
 		// 1. Add recent contacts sorted by backend (recency)
 		for (const contact of recentContacts) {
-			if (!addedIds.has(contact.id)) {
+			if (contact && contact.id && !addedIds.has(contact.id)) {
 				list.push(contact)
 				addedIds.add(contact.id)
 			}
@@ -3843,7 +3876,7 @@ export default function MessengerPage() {
 
 		// 2. Append friends who are NOT in recent contacts
 		for (const friend of otherFriends) {
-			if (!addedIds.has(friend.id)) {
+			if (friend && friend.id && !addedIds.has(friend.id)) {
 				list.push(friend)
 				addedIds.add(friend.id)
 			}
@@ -3911,7 +3944,8 @@ export default function MessengerPage() {
 	}
 
 	// Check if all selected messages are owned by current user
-	const allSelectedMessagesAreOwn = selectedMessageIds.size === 0 || 
+	const allSelectedMessagesAreOwn =
+		selectedMessageIds.size === 0 ||
 		messagesToDisplay.every(msg => !selectedMessageIds.has(msg.id) || msg.isOwn)
 
 	const pinnedMessage = pinnedMessageId
@@ -3952,13 +3986,11 @@ export default function MessengerPage() {
 
 	return (
 		<div className='flex h-[calc(100vh-4rem)] w-full overflow-hidden bg-gray-950 text-gray-100 font-sans'>
-			{/* Sidebar */}
 			<div
 				className={`w-80 border-r border-gray-800 bg-gray-950 flex-shrink-0 z-20 shadow-xl flex-col ${
 					hasActiveChat ? 'hidden md:flex' : 'flex'
 				}`}
 			>
-				{/* Header */}
 				<div className='p-4 border-b border-gray-800 bg-gray-900/50 backdrop-blur-sm'>
 					<div className='flex justify-between items-center mb-4'>
 						<div className='flex items-center gap-3'>
@@ -3974,15 +4006,8 @@ export default function MessengerPage() {
 								</span>
 							</h2>
 						</div>
-						<div
-							className={`w-2.5 h-2.5 rounded-full ring-2 ring-gray-900 transition-colors ${
-								isConnected ? 'bg-emerald-500' : 'bg-red-500'
-							}`}
-							title={isConnected ? 'Socket Connected' : 'Socket Disconnected'}
-						/>
 					</div>
 
-					{/* Segmented control */}
 					<div className='flex p-1 bg-gray-900 rounded-lg border border-gray-800 relative'>
 						<div
 							className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-gray-700/50 rounded-md transition-all duration-300 ease-out ${
@@ -4014,7 +4039,6 @@ export default function MessengerPage() {
 					</div>
 				</div>
 
-				{/* Search Bar */}
 				{activeTab !== 'community' && (
 					<div className='px-4 py-3'>
 						<div className='relative'>
@@ -4038,11 +4062,9 @@ export default function MessengerPage() {
 					</div>
 				)}
 
-				{/* List Area */}
 				<div className='flex-1 overflow-y-auto custom-scrollbar px-2 space-y-1 pb-4'>
 					{activeTab === 'direct' ? (
 						<>
-							{/* AI Assistant Chat */}
 							{aiFriend && !searchQuery && (
 								<div
 									onClick={() => {
@@ -4190,7 +4212,7 @@ export default function MessengerPage() {
 											}`}
 											alt={friend.username}
 										/>
-										{/* Status Indicator */}
+
 										{!friend.is_bot && (
 											<div className='absolute bottom-0 right-0 w-3.5 h-3.5 bg-gray-950 rounded-full flex items-center justify-center'>
 												<div
@@ -4228,7 +4250,7 @@ export default function MessengerPage() {
 											{getLastMessage(friend.id, messages)}
 										</span>
 									</div>
-									{/* Chat Menu (Three Dots) - Always visible on hover */}
+
 									<div className='opacity-0 group-hover:opacity-100 transition-opacity'>
 										<ChatMenu
 											chatId={friend.id}
@@ -4286,7 +4308,6 @@ export default function MessengerPage() {
 								</div>
 							))}
 
-							{/* Groups Section */}
 							{!searchQuery && (
 								<div className='mt-4 px-2'>
 									<div className='flex items-center justify-between mb-2 px-2'>
@@ -4522,7 +4543,9 @@ export default function MessengerPage() {
 															</span>
 														</div>
 														<span className='text-xs text-gray-500 truncate group-hover:text-gray-400 transition-colors'>
-															{comm.members_count && comm.members_count > 0 ? `${comm.members_count} участников` : ''}
+															{comm.members_count && comm.members_count > 0
+																? `${comm.members_count} участников`
+																: ''}
 														</span>
 													</div>
 												</div>
@@ -4537,7 +4560,6 @@ export default function MessengerPage() {
 								</div>
 							)}
 
-							{/* Selected Community Channels */}
 							{selectedCommunity && (
 								<div className='mt-2 px-2'>
 									<div className='flex items-center justify-between mb-2 px-2'>
@@ -4687,7 +4709,7 @@ export default function MessengerPage() {
 															<span className='text-xs text-gray-500 truncate group-hover:text-gray-400 transition-colors'>
 																Голосовой
 															</span>
-															{/* Display voice channel participants */}
+
 															{voiceChannelParticipants[ch.id] &&
 																Object.keys(voiceChannelParticipants[ch.id])
 																	.length > 0 && (
@@ -4725,11 +4747,9 @@ export default function MessengerPage() {
 				</div>
 			</div>
 
-			{/* Chat Area */}
 			<div
 				className={`flex-1 flex flex-col relative min-w-0 ${!hasActiveChat ? 'hidden md:flex' : ''}`}
 			>
-				{/* Chat Background Layer */}
 				<div
 					className={`absolute inset-0 transition-opacity duration-500 ${
 						chatBackgroundImage ? 'opacity-100' : 'opacity-30'
@@ -4745,20 +4765,18 @@ export default function MessengerPage() {
 							: undefined
 					}
 				/>
-				{/* Gradient/Color Background Layer */}
+
 				<div
 					className={`absolute inset-0 transition-colors duration-500 ${
 						chatBackgroundImage ? 'bg-gray-950/60' : currentBackground.class
 					}`}
 				/>
-				{/* Subtle Pattern Overlay */}
+
 				<div className='absolute inset-0 bg-grid-pattern pointer-events-none opacity-10' />
 
-				{/* Chat Content */}
 				<div className='relative z-10 flex flex-col flex-1 min-h-0'>
 					{selectedFriend || selectedChannel || selectedGroup ? (
 						<>
-							{/* Chat Header */}
 							<div className='h-16 px-6 border-b border-gray-800/50 flex items-center justify-between bg-gray-900/40 backdrop-blur-md z-10 sticky top-0'>
 								{isChatSearchOpen ? (
 									<div className='flex items-center gap-2 w-full animate-in fade-in slide-in-from-top-2 duration-200'>
@@ -4808,7 +4826,13 @@ export default function MessengerPage() {
 											</button>
 											{selectedFriend ? (
 												<>
-													<div className='relative'>
+													<div
+														className='relative cursor-pointer hover:opacity-80 transition-opacity'
+														onClick={() => {
+															setSelectedUserForModal(selectedFriend)
+															setIsUserProfileModalOpen(true)
+														}}
+													>
 														<img
 															src={getAvatarUrl(selectedFriend.avatar_url)}
 															className='w-10 h-10 rounded-full object-cover bg-gray-800 ring-2 ring-gray-800/50'
@@ -4907,7 +4931,10 @@ export default function MessengerPage() {
 														</span>
 														<span className='text-xs text-gray-500 font-medium flex items-center gap-1.5'>
 															<UsersIcon className='w-3 h-3' />
-															{selectedChannel.participants_count && selectedChannel.participants_count > 0 ? `${selectedChannel.participants_count} участников` : ''}
+															{selectedChannel.participants_count &&
+															selectedChannel.participants_count > 0
+																? `${selectedChannel.participants_count} участников`
+																: ''}
 														</span>
 													</button>
 													<button
@@ -4959,9 +4986,18 @@ export default function MessengerPage() {
 														</span>
 													</button>
 													<button
-														onClick={() => initiateGroupCall(selectedGroup.id)}
-														className='ml-2 p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors'
+														onClick={() => {
+															if (!isInitialized) {
+																console.warn(
+																	'[Group Call] WebRTC not initialized yet',
+																)
+																return
+															}
+															initiateGroupCall(selectedGroup.id)
+														}}
+														className='ml-2 p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
 														title='Начать групповой звонок'
+														disabled={!isInitialized}
 													>
 														<PhoneIcon className='w-4 h-4' />
 													</button>
@@ -4978,7 +5014,6 @@ export default function MessengerPage() {
 											) : null}
 										</div>
 
-										{/* Header Actions */}
 										<div className='flex items-center gap-2'>
 											{selectedFriend && !isAiChat && !isBotChat && (
 												<button
@@ -5098,7 +5133,6 @@ export default function MessengerPage() {
 													<MoreVerticalIcon className='w-5 h-5' />
 												</button>
 
-												{/* Settings Dropdown */}
 												{isSettingsOpen && (
 													<div className='absolute right-0 top-full mt-2 w-72 bg-gray-900/95 backdrop-blur-xl border border-gray-800 rounded-xl shadow-2xl p-4 z-50 animate-in fade-in zoom-in-95 duration-200'>
 														<h3 className='text-sm font-semibold text-gray-300 mb-3'>
@@ -5106,7 +5140,6 @@ export default function MessengerPage() {
 														</h3>
 
 														<div className='space-y-4 max-h-[70vh] overflow-y-auto custom-scrollbar'>
-															{/* Chat Background */}
 															<div>
 																<label className='text-xs text-gray-500 mb-2 block uppercase tracking-wider font-medium'>
 																	Фон чата
@@ -5183,7 +5216,6 @@ export default function MessengerPage() {
 																</div>
 															</div>
 
-															{/* Message Bubble Theme */}
 															<div className='pt-3 border-t border-gray-800'>
 																<label className='text-xs text-gray-500 mb-2 block uppercase tracking-wider font-medium'>
 																	Стиль сообщений
@@ -5286,7 +5318,6 @@ export default function MessengerPage() {
 								</div>
 							)}
 
-							{/* Selection Mode Toolbar */}
 							{isSelectionMode && (
 								<div className='px-6 py-3 border-b border-gray-800/60 bg-emerald-900/60 backdrop-blur-md animate-in slide-in-from-top-2 duration-200'>
 									<div className='max-w-4xl mx-auto flex items-center justify-between'>
@@ -5359,9 +5390,16 @@ export default function MessengerPage() {
 											</button>
 											<button
 												onClick={handleDeleteSelectedMessages}
-												disabled={selectedMessageIds.size === 0 || !allSelectedMessagesAreOwn}
+												disabled={
+													selectedMessageIds.size === 0 ||
+													!allSelectedMessagesAreOwn
+												}
 												className='flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed transition'
-												title={!allSelectedMessagesAreOwn ? 'Нельзя удалить чужие сообщения' : undefined}
+												title={
+													!allSelectedMessagesAreOwn
+														? 'Нельзя удалить чужие сообщения'
+														: undefined
+												}
 											>
 												<svg
 													className='w-4 h-4'
@@ -5377,14 +5415,17 @@ export default function MessengerPage() {
 													<line x1='10' y1='11' x2='10' y2='17'></line>
 													<line x1='14' y1='11' x2='14' y2='17'></line>
 												</svg>
-												Удалить{!allSelectedMessagesAreOwn && selectedMessageIds.size > 0 ? ' (только свои)' : ''}
+												Удалить
+												{!allSelectedMessagesAreOwn &&
+												selectedMessageIds.size > 0
+													? ' (только свои)'
+													: ''}
 											</button>
 										</div>
 									</div>
 								</div>
 							)}
 
-							{/* Message Filter Modal */}
 							{isFilterOpen && (
 								<div
 									className='fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-start justify-center pt-20 p-4'
@@ -5639,10 +5680,8 @@ export default function MessengerPage() {
 								</div>
 							)}
 
-							{/* Connecting Modal - Show until Socket.IO connects */}
 							{!isConnected && <ConnectingModal isVisible={!isConnected} />}
 
-							{/* Custom Background Modal */}
 							{isCustomBgOpen && (
 								<div
 									className='fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'
@@ -5682,7 +5721,6 @@ export default function MessengerPage() {
 											</button>
 										</div>
 										<div className='p-4 space-y-4'>
-											{/* URL Input */}
 											<div>
 												<label className='block text-sm font-medium text-gray-400 mb-2'>
 													URL изображения
@@ -5713,7 +5751,6 @@ export default function MessengerPage() {
 												</div>
 											</div>
 
-											{/* Divider */}
 											<div className='relative'>
 												<div className='absolute inset-0 flex items-center'>
 													<div className='w-full border-t border-gray-800'></div>
@@ -5725,7 +5762,6 @@ export default function MessengerPage() {
 												</div>
 											</div>
 
-											{/* File Upload */}
 											<div>
 												<label className='block text-sm font-medium text-gray-400 mb-2'>
 													Загрузить файл
@@ -5784,7 +5820,6 @@ export default function MessengerPage() {
 												</div>
 											</div>
 
-											{/* Preview */}
 											{customBgUrl && (
 												<div>
 													<label className='block text-sm font-medium text-gray-400 mb-2'>
@@ -5819,13 +5854,11 @@ export default function MessengerPage() {
 								</div>
 							)}
 
-							{/* Messages */}
 							<div
 								ref={containerRef}
 								onScroll={handleScroll}
 								className='flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar scroll-smooth'
 							>
-								{/* Loading State for History */}
 								{isChatLoading && messages.length > 0 && !isChatSearchOpen && (
 									<div className='flex justify-center py-4'>
 										<div
@@ -5837,7 +5870,6 @@ export default function MessengerPage() {
 									</div>
 								)}
 
-								{/* Date Divider (Mockup) */}
 								{!isChatSearchOpen && (
 									<div className='flex justify-center my-4'>
 										<span className='text-[10px] font-medium text-gray-500 bg-gray-900/60 px-3 py-1 rounded-full backdrop-blur-sm'>
@@ -5846,7 +5878,6 @@ export default function MessengerPage() {
 									</div>
 								)}
 
-								{/* Search Results Header */}
 								{isChatSearchOpen && chatSearchQuery && (
 									<div className='flex justify-center my-4'>
 										<span className='text-[10px] font-medium text-gray-400 bg-gray-900/80 px-4 py-1.5 rounded-full border border-gray-800'>
@@ -5940,7 +5971,6 @@ export default function MessengerPage() {
 									)
 								})}
 
-								{/* Typing Indicator */}
 								{isChatTyping && (
 									<div className='flex items-center gap-2 px-5 py-2 animate-in fade-in slide-in-from-bottom-2 duration-300'>
 										<div className='bg-gray-800/80 border border-gray-700 px-4 py-2 rounded-2xl rounded-tl-sm flex items-center gap-1.5'>
@@ -5955,7 +5985,6 @@ export default function MessengerPage() {
 								)}
 							</div>
 
-							{/* Input Area */}
 							<div className='p-4 bg-gray-900/40 backdrop-blur-md border-t border-gray-800/50'>
 								{replyToMessage && (
 									<div className='max-w-4xl mx-auto mb-2 flex items-center gap-3 rounded-2xl border border-gray-800/60 bg-gray-800/40 px-4 py-2 text-xs text-gray-200'>
@@ -6005,7 +6034,6 @@ export default function MessengerPage() {
 										</div>
 									) : (
 										<>
-											{/* Attach Button */}
 											<button
 												onClick={handlePickFiles}
 												className={`p-2.5 text-gray-400 hover:bg-gray-700/50 rounded-full transition-all ${currentBackground.accentColor.replace('text-', 'hover:text-')}`}
@@ -6072,13 +6100,11 @@ export default function MessengerPage() {
 												</div>
 											)}
 
-											{/* Unified Emoji/Sticker Picker */}
 											{isPickerOpen && (
 												<div
 													ref={pickerRef}
 													className='absolute bottom-full right-12 mb-2 w-80 rounded-2xl border border-gray-800 bg-gray-900/95 shadow-2xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200 flex flex-col'
 												>
-													{/* Picker Tabs */}
 													<div className='flex p-1 bg-gray-950/50 border-b border-gray-800'>
 														<button
 															onClick={() => setPickerTab('emoji')}
@@ -6102,7 +6128,6 @@ export default function MessengerPage() {
 														</button>
 													</div>
 
-													{/* Picker Content */}
 													<div className='h-72 overflow-y-auto custom-scrollbar p-3'>
 														{pickerTab === 'emoji' ? (
 															<div className='grid grid-cols-6 gap-1'>
@@ -6203,7 +6228,6 @@ export default function MessengerPage() {
 												}}
 											/>
 
-											{/* Unified Picker Button */}
 											<button
 												onClick={() => {
 													setIsPickerOpen(!isPickerOpen)
@@ -6218,7 +6242,6 @@ export default function MessengerPage() {
 												<SmileIcon className='w-6 h-6' />
 											</button>
 
-											{/* Send/Mic Button */}
 											{input.trim() ? (
 												<button
 													onClick={handleSendMessage}
@@ -6265,7 +6288,10 @@ export default function MessengerPage() {
 					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
 						<div className='flex items-center justify-between mb-4'>
 							<h3 className='text-xl font-bold text-white'>
-								Переслать {selectedMessageIds.size > 0 ? `${selectedMessageIds.size} сообще${selectedMessageIds.size % 10 === 1 && selectedMessageIds.size % 100 !== 11 ? 'ние' : selectedMessageIds.size % 10 >= 2 && selectedMessageIds.size % 10 <= 4 && (selectedMessageIds.size % 100 < 12 || selectedMessageIds.size % 100 > 14) ? 'ния' : 'ний'}` : 'сообщение'}
+								Переслать{' '}
+								{selectedMessageIds.size > 0
+									? `${selectedMessageIds.size} сообще${selectedMessageIds.size % 10 === 1 && selectedMessageIds.size % 100 !== 11 ? 'ние' : selectedMessageIds.size % 10 >= 2 && selectedMessageIds.size % 10 <= 4 && (selectedMessageIds.size % 100 < 12 || selectedMessageIds.size % 100 > 14) ? 'ния' : 'ний'}`
+									: 'сообщение'}
 							</h3>
 							<button
 								onClick={() => {
@@ -6329,15 +6355,24 @@ export default function MessengerPage() {
 								<div className='text-[10px] uppercase tracking-wider text-gray-500 mb-1'>
 									Выбрано сообщений
 								</div>
-								<div>{selectedMessageIds.size} сообще{selectedMessageIds.size % 10 === 1 && selectedMessageIds.size % 100 !== 11 ? 'ние' : selectedMessageIds.size % 10 >= 2 && selectedMessageIds.size % 10 <= 4 && (selectedMessageIds.size % 100 < 12 || selectedMessageIds.size % 100 > 14) ? 'ния' : 'ний'}</div>
+								<div>
+									{selectedMessageIds.size} сообще
+									{selectedMessageIds.size % 10 === 1 &&
+									selectedMessageIds.size % 100 !== 11
+										? 'ние'
+										: selectedMessageIds.size % 10 >= 2 &&
+											  selectedMessageIds.size % 10 <= 4 &&
+											  (selectedMessageIds.size % 100 < 12 ||
+													selectedMessageIds.size % 100 > 14)
+											? 'ния'
+											: 'ний'}
+								</div>
 							</div>
 						)}
 					</div>
 				</div>
 			)}
 
-			{/* Modals */}
-			{/* Create Channel Modal */}
 			{isCreateChannelOpen && (
 				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
 					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
@@ -6387,7 +6422,6 @@ export default function MessengerPage() {
 				</div>
 			)}
 
-			{/* Create Community Modal */}
 			{isCreateCommunityOpen && (
 				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
 					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
@@ -6439,7 +6473,6 @@ export default function MessengerPage() {
 				</div>
 			)}
 
-			{/* Create Community Channel Modal */}
 			{isCreateCommChannelOpen && (
 				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
 					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
@@ -6534,7 +6567,6 @@ export default function MessengerPage() {
 				</div>
 			)}
 
-			{/* Join Channel Modal */}
 			{isJoinChannelOpen && (
 				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
 					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
@@ -6573,7 +6605,6 @@ export default function MessengerPage() {
 				</div>
 			)}
 
-			{/* Create Group Modal */}
 			{isCreateGroupOpen && (
 				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
 					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
@@ -6623,7 +6654,6 @@ export default function MessengerPage() {
 				</div>
 			)}
 
-			{/* Join Group Modal */}
 			{isJoinGroupOpen && (
 				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
 					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
@@ -6664,7 +6694,6 @@ export default function MessengerPage() {
 				</div>
 			)}
 
-			{/* Join Community Modal */}
 			{isJoinCommunityOpen && (
 				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
 					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
@@ -6705,7 +6734,6 @@ export default function MessengerPage() {
 				</div>
 			)}
 
-			{/* Add Member Modal */}
 			{isAddMemberOpen && (
 				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
 					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
@@ -6761,7 +6789,6 @@ export default function MessengerPage() {
 				</div>
 			)}
 
-			{/* Community Invite Code Modal */}
 			{showInviteCode && (
 				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
 					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
@@ -6801,7 +6828,6 @@ export default function MessengerPage() {
 				</div>
 			)}
 
-			{/* Channel Info Modal */}
 			{isChannelInfoOpen && selectedChannel && (
 				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4'>
 					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
@@ -6826,7 +6852,10 @@ export default function MessengerPage() {
 										{selectedChannel.name}
 									</h4>
 									<p className='text-sm text-gray-500'>
-										{selectedChannel.participants_count && selectedChannel.participants_count > 0 ? `${selectedChannel.participants_count} участников` : ''}
+										{selectedChannel.participants_count &&
+										selectedChannel.participants_count > 0
+											? `${selectedChannel.participants_count} участников`
+											: ''}
 									</p>
 								</div>
 							</div>
@@ -6866,17 +6895,14 @@ export default function MessengerPage() {
 				</div>
 			)}
 
-			{/* Screen Share Viewer - Fullscreen */}
 			{isScreenViewerOpen && isScreenSharing && (
 				<ScreenShareViewer onClose={() => setIsScreenViewerOpen(false)} />
 			)}
 
-			{/* Integrated Call Panel - shown only when in chat with active call */}
 			{((hasActiveCall && selectedFriend) || activeGroupCallId) && (
 				<IntegratedCallPanel />
 			)}
 
-			{/* Floating Call Bar - Shows when navigating away from 1-on-1 call */}
 			{hasActiveCall && !selectedFriend && !activeGroupCallId && (
 				<FloatingCallBar
 					onReturnToCall={() => {
@@ -6895,7 +6921,6 @@ export default function MessengerPage() {
 				/>
 			)}
 
-			{/* Hidden file input for sticker upload */}
 			<input
 				ref={stickerUploadRef}
 				type='file'
@@ -6903,6 +6928,70 @@ export default function MessengerPage() {
 				onChange={handleStickerFileChange}
 				className='hidden'
 			/>
+
+			<AnimatePresence>
+				{isUserProfileModalOpen && selectedUserForModal && (
+					<div
+						className='fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200'
+						onClick={() => setIsUserProfileModalOpen(false)}
+					>
+						<motion.div
+							initial={{ scale: 0.9, opacity: 0 }}
+							animate={{ scale: 1, opacity: 1 }}
+							exit={{ scale: 0.9, opacity: 0 }}
+							className='w-full max-w-sm bg-gray-900 rounded-3xl overflow-hidden border border-white/10 shadow-2xl'
+							onClick={e => e.stopPropagation()}
+						>
+							<div className='relative h-32 bg-gradient-to-br from-indigo-600 to-purple-700'>
+								<div className='absolute -bottom-12 left-6'>
+									<img
+										src={getAvatarUrl(selectedUserForModal.avatar_url)}
+										className='w-24 h-24 rounded-full object-cover border-4 border-gray-900 shadow-xl'
+										alt={selectedUserForModal.username}
+									/>
+								</div>
+							</div>
+							<div className='pt-14 p-6'>
+								<div className='mb-6'>
+									<h2 className='text-2xl font-bold text-white flex items-center gap-2'>
+										{selectedUserForModal.username}
+										{selectedUserForModal.premium && (
+											<span className='text-amber-400 text-xl'>★</span>
+										)}
+									</h2>
+									<p className='text-gray-400 text-sm'>
+										{selectedUserForModal.email}
+									</p>
+									<div className='mt-2 flex items-center gap-2'>
+										<span
+											className={`w-2 h-2 rounded-full ${selectedUserForModal.status?.toLowerCase() === 'online' ? 'bg-emerald-500' : 'bg-gray-500'}`}
+										/>
+										<span className='text-xs font-medium text-gray-300'>
+											{selectedUserForModal.status?.toLowerCase() === 'online'
+												? 'В сети'
+												: formatLastSeen(selectedUserForModal.last_seen)}
+										</span>
+									</div>
+								</div>
+								<div className='flex flex-col gap-2'>
+									<Link
+										href={`/feed/profile/${selectedUserForModal.id}`}
+										className='w-full py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-center font-semibold transition-all shadow-lg shadow-indigo-500/20 active:scale-95'
+									>
+										Перейти к профилю
+									</Link>
+									<button
+										onClick={() => setIsUserProfileModalOpen(false)}
+										className='w-full py-3 px-4 rounded-xl bg-white/5 hover:bg-white/10 text-white text-center font-semibold transition-all active:scale-95'
+									>
+										Закрыть
+									</button>
+								</div>
+							</div>
+						</motion.div>
+					</div>
+				)}
+			</AnimatePresence>
 		</div>
 	)
 }

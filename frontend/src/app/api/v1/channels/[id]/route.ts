@@ -21,7 +21,7 @@ export async function POST(
 		try {
 			body = await req.json()
 		} catch (e) {
-			// ignore
+			
 		}
 
 		const response = await fetch(`${backendUrl}/api/v1/channels/${id}`, {

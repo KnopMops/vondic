@@ -116,19 +116,25 @@ class FriendshipService:
 
     @staticmethod
     def get_friends(user_id):
-        friendships = Friendship.query.filter(
-            or_(Friendship.requester_id == user_id,
-                Friendship.addressee_id == user_id),
-            Friendship.status == "accepted",
-        ).all()
+        try:
+            friendships = Friendship.query.filter(
+                or_(Friendship.requester_id == user_id,
+                    Friendship.addressee_id == user_id),
+                Friendship.status == "accepted",
+            ).all()
 
-        friends = []
-        for f in friendships:
-            friend_id = f.addressee_id if f.requester_id == user_id else f.requester_id
-            friend = User.query.get(friend_id)
-            if friend:
-                friends.append(friend.to_dict())
-        return friends
+            friends = []
+            for f in friendships:
+                friend_id = f.addressee_id if f.requester_id == user_id else f.requester_id
+                friend = User.query.get(friend_id)
+                if friend:
+                    friends.append(friend.to_dict())
+            return friends
+        except Exception as e:
+            print(f"Error in get_friends: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
 
     @staticmethod
     def get_pending_requests(user_id):

@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
 			try {
 				body = await req.json()
 			} catch (e) {
-				// ignore
+				
 			}
 
 			const response = await fetch(`${backendUrl}/api/v1/groups/my`, {

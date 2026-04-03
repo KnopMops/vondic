@@ -13,7 +13,6 @@ import { User } from './types'
 interface AuthContextType {
 	user: User | null
 	login: (email: string, password: string) => Promise<void>
-	loginWithTelegram: (key: string) => Promise<void>
 	loginWithYandex: () => Promise<void>
 	register: (email: string, username: string, password: string) => Promise<void>
 	logout: () => void
@@ -35,7 +34,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		const initAuth = async () => {
 			if (isInitialized) return
 
-			// 1. Пробуем восстановить из временной cookie (от social auth)
+			
 			const getCookie = (name: string) => {
 				const value = `; ${document.cookie}`
 				const parts = value.split(`; ${name}=`)
@@ -106,33 +105,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			localStorage.setItem('user', JSON.stringify(userData))
 
 			// Токены теперь в httpOnly cookies, не сохраняем их в localStorage
-
-			router.push('/feed')
-		} catch (error) {
-			alert(error instanceof Error ? error.message : 'Произошла ошибка')
-		}
-	}
-
-	const loginWithTelegram = async (key: string) => {
-		try {
-			const response = await fetch('/api/auth/telegram', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ key }),
-			})
-
-			const data = await response.json()
-
-			if (!response.ok) {
-				throw new Error(data.error || 'Вход через Telegram не выполнен')
-			}
-
-			const userData = data.user
-			if (data.access_token) {
-				userData.access_token = data.access_token
-			}
-			dispatch(setUser(userData))
-			localStorage.setItem('user', JSON.stringify(userData))
 
 			router.push('/feed')
 		} catch (error) {
@@ -234,7 +206,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			value={{
 				user,
 				login,
-				loginWithTelegram,
 				loginWithYandex,
 				register,
 				logout,

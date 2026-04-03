@@ -20,14 +20,14 @@ export default function ProfileIdPage() {
 		const fetchProfile = async () => {
 			if (isAuthLoading) return
 
-			// If visiting own profile
+			
 			if (currentUser && String(currentUser.id) === String(id)) {
 				setProfileUser(currentUser as unknown as User)
 				setIsLoading(false)
 				return
 			}
 
-			// Fetch other user
+			
 			try {
 				const res = await fetch(`/api/users/${id}`)
 				if (!res.ok) throw new Error('User not found')
@@ -78,7 +78,7 @@ export default function ProfileIdPage() {
 
 	return (
 		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white overflow-x-hidden relative'>
-			{/* Background Gradients */}
+			
 			<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
 				<div className='absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-indigo-900/20 blur-[120px]' />
 				<div className='absolute top-[40%] -right-[10%] w-[40%] h-[60%] rounded-full bg-purple-900/20 blur-[120px]' />

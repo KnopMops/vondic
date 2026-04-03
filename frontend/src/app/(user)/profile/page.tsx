@@ -26,7 +26,7 @@ export default function ProfilePage() {
 
 	return (
 		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white overflow-x-hidden relative'>
-			{/* Background Gradients */}
+			
 			<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
 				<div className='absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-indigo-900/20 blur-[120px]' />
 				<div className='absolute top-[40%] -right-[10%] w-[40%] h-[60%] rounded-full bg-purple-900/20 blur-[120px]' />
@@ -46,12 +46,12 @@ export default function ProfilePage() {
 						transition={{ duration: 0.5 }}
 						className='mx-auto max-w-3xl space-y-6'
 					>
-						{/* Cover Image */}
+						
 						<div className='relative h-48 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 overflow-hidden shadow-lg'>
 							<div className='absolute inset-0 bg-black/20' />
 						</div>
 
-						{/* User Info Section */}
+						
 						<div className='flex flex-col sm:flex-row items-end gap-6 px-4'>
 							<motion.div
 								initial={{ scale: 0.8, opacity: 0 }}
@@ -59,7 +59,7 @@ export default function ProfilePage() {
 								transition={{ delay: 0.2 }}
 								className='-mt-20 flex h-32 w-32 items-center justify-center rounded-full bg-gray-900 ring-4 ring-black overflow-hidden shadow-xl z-10'
 							>
-								{/* Placeholder for avatar since this page uses user.displayName which implies it might be a different user object structure or just basic info */}
+								
 								<div className='h-full w-full bg-yellow-300 text-5xl flex items-center justify-center'>
 									👨‍💻
 								</div>

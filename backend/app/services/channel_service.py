@@ -6,31 +6,18 @@ from app.models.user import User
 class ChannelService:
     @staticmethod
     def create_channel(data, user_id):
-        """
-        Create a new channel.
-        
-        Args:
-            data: Dictionary with 'name' and optional 'description'
-            user_id: ID of the user creating the channel
-            
-        Returns:
-            Tuple of (channel, error_message)
-        """
         name = data.get("name")
         description = data.get("description")
 
         if not name:
             return None, "Channel name is required"
 
-        # Validate name length
         if len(name) > 100:
             return None, "Channel name must not exceed 100 characters"
 
-        # Validate description length if provided
         if description and len(description) > 500:
             return None, "Description must not exceed 500 characters"
 
-        # Check if user exists
         owner = User.query.get(user_id)
         if not owner:
             return None, "User not found"

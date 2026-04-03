@@ -16,7 +16,7 @@ export const NotificationBell: React.FC = () => {
 	const audioRef = React.useRef<HTMLAudioElement | null>(null)
 	const [open, setOpen] = useState(false)
 	
-	// Check if user is admin
+	
 	const [isAdmin, setIsAdmin] = useState(false)
 	useEffect(() => {
 		const userData = localStorage.getItem('user_data')
@@ -392,7 +392,7 @@ export const NotificationBell: React.FC = () => {
 	const items = useMemo(() => notifications.slice(0, 10), [notifications])
 
 	return (
-		<div className='fixed bottom-4 left-4 z-50'>
+		<div className='fixed bottom-4 right-4 z-50'>
 			<button
 				onClick={() => {
 					setOpen(o => !o)

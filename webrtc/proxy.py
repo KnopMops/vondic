@@ -30,8 +30,9 @@ class ConnectionBroker:
         return user_data
 
     def close_session(self, socket_id):
-        self.repo.release_socket(socket_id)
-        logger.info(f"Брокер: Сессия сокета {socket_id} закрыта")
+        user_id = self.repo.release_socket(socket_id)
+        logger.info(f"Брокер: Сессия сокета {socket_id} закрыта (user_id: {user_id})")
+        return user_id
 
     def resolve_recipient(self, target_socket_id):
         recipient = self.repo.find_user_by_socket(target_socket_id)

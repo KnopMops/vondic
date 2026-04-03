@@ -6,10 +6,7 @@ import { getBackendUrl } from './url-fallback'
 const ACCESS_TOKEN_KEY = 'access_token'
 const REFRESH_TOKEN_KEY = 'refresh_token'
 
-/**
- * Извлекает access_token из cookies запроса.
- * Работает как в Middleware (NextRequest), так и в Server Components/API Routes (cookies()).
- */
+
 export async function getAccessToken(
 	req?: NextRequest,
 ): Promise<string | undefined> {
@@ -20,9 +17,7 @@ export async function getAccessToken(
 	return cookieStore.get(ACCESS_TOKEN_KEY)?.value
 }
 
-/**
- * Извлекает refresh_token из cookies запроса.
- */
+
 export async function getRefreshToken(
 	req?: NextRequest,
 ): Promise<string | undefined> {
@@ -33,15 +28,16 @@ export async function getRefreshToken(
 	return cookieStore.get(REFRESH_TOKEN_KEY)?.value
 }
 
-/**
- * Устанавливает токены в cookies с флагами secure и httpOnly.
- * Принимает NextResponse для установки cookies в ответе.
- */
+
 export function setTokens(
 	res: NextResponse,
 	accessToken: string,
 	refreshToken: string,
 ): NextResponse {
+	const domain = process.env.NEXT_PUBLIC_FRONTEND_URL
+		? new URL(process.env.NEXT_PUBLIC_FRONTEND_URL).hostname
+		: undefined
+
 	res.cookies.set({
 		name: ACCESS_TOKEN_KEY,
 		value: accessToken,
@@ -49,7 +45,8 @@ export function setTokens(
 		secure: process.env.NODE_ENV === 'production',
 		path: '/',
 		sameSite: 'lax',
-		maxAge: 24 * 60 * 60, // 24 часа
+		maxAge: 24 * 60 * 60, 
+		...(domain && { domain }),
 	})
 
 	res.cookies.set({
@@ -59,41 +56,35 @@ export function setTokens(
 		secure: process.env.NODE_ENV === 'production',
 		path: '/',
 		sameSite: 'lax',
-		maxAge: 30 * 24 * 60 * 60, // 30 дней
+		maxAge: 30 * 24 * 60 * 60, 
+		...(domain && { domain }),
 	})
 
 	return res
 }
 
-/**
- * Удаляет токены из cookies (при выходе).
- */
+
 export function clearTokens(res: NextResponse): NextResponse {
 	res.cookies.delete(ACCESS_TOKEN_KEY)
 	res.cookies.delete(REFRESH_TOKEN_KEY)
 	return res
 }
 
-/**
- * Проверяет, истек ли срок действия токена.
- */
+
 export function isTokenExpired(token: string): boolean {
 	try {
 		const decoded = decodeJwt(token)
-		if (!decoded.exp) return false // Если нет exp, считаем токен вечным или непрозрачным
-		// exp is in seconds, Date.now() is in ms
+		if (!decoded.exp) return false 
+		
 		return decoded.exp * 1000 < Date.now()
 	} catch {
-		// Если не удалось декодировать (не JWT), считаем токен валидным
-		// (пусть бэкенд разбирается с валидностью при запросе)
+		
+		
 		return false
 	}
 }
 
-/**
- * Обновляет access_token через refresh_token, делая запрос к бэкенду.
- * Возвращает новые токены или null, если обновление не удалось.
- */
+
 export async function refreshAccessToken(
 	refreshToken: string,
 ): Promise<{ access_token: string; refresh_token: string } | null> {

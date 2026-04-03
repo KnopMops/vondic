@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
 
     const payload = { ...body, access_token: token };
 
-    // 1. Fetch requests
+    
     const response = await fetch(`${backendUrl}/api/v1/friends/requests`, {
       method: "POST",
       headers: {

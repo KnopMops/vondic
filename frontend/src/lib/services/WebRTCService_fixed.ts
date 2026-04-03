@@ -21,7 +21,7 @@ export class WebRTCService {
 	private peerConnections: Map<string, RTCPeerConnection> = new Map()
 	private configuration: WebRTCConfig
 
-	// Callbacks
+	
 	public onRemoteStream?: (socketId: string, stream: MediaStream) => void
 	public onConnectionStateChange?: (socketId: string, state: RTCPeerConnectionState) => void
 	public onLocalStream?: (stream: MediaStream) => void
@@ -41,7 +41,7 @@ export class WebRTCService {
 		try {
 			this.localStream = await navigator.mediaDevices.getUserMedia({
 				audio: true,
-				video: false, // Только аудио для голосовых звонков
+				video: false, 
 			})
 			
 			if (this.onLocalStream) {
@@ -58,14 +58,14 @@ export class WebRTCService {
 	createPeerConnection(targetSocketId: string): RTCPeerConnection {
 		const pc = new RTCPeerConnection(this.configuration)
 
-		// Добавление локального стрима
+		
 		if (this.localStream) {
 			this.localStream.getTracks().forEach(track => {
 				pc.addTrack(track, this.localStream!)
 			})
 		}
 
-		// Обработка ICE кандидатов
+		
 		pc.onicecandidate = (event) => {
 			if (event.candidate) {
 				this.socket.emit('ice_candidate', {
@@ -75,7 +75,7 @@ export class WebRTCService {
 			}
 		}
 
-		// Обработка входящих стримов
+		
 		pc.ontrack = (event) => {
 			const stream = event.streams[0]
 			this.remoteStreams.set(targetSocketId, stream)
@@ -85,7 +85,7 @@ export class WebRTCService {
 			}
 		}
 
-		// Обработка изменения состояния соединения
+		
 		pc.onconnectionstatechange = () => {
 			if (this.onConnectionStateChange) {
 				this.onConnectionStateChange(targetSocketId, pc.connectionState)
@@ -99,20 +99,20 @@ export class WebRTCService {
 	async initiateCall(targetUserId: string): Promise<void> {
 		try {
 			console.log('Initiating call to user:', targetUserId)
-			const pc = this.createPeerConnection(targetUserId) // Используем userId как временный socketId
+			const pc = this.createPeerConnection(targetUserId) 
 			const offer = await pc.createOffer()
 			await pc.setLocalDescription(offer)
 			console.log('Created offer:', offer)
 
-			// Отправляем сигнал о звонке
+			
 			console.log('Emitting call_user event for user_id:', targetUserId)
 			this.socket.emit('call_user', { target_user_id: targetUserId })
 			
-			// Ждем немного и затем отправляем offer
+			
 			setTimeout(() => {
 				console.log('Emitting offer event with target_socket_id:', targetUserId)
 				this.socket.emit('offer', {
-					target_socket_id: targetUserId, // Используем user_id как target_socket_id
+					target_socket_id: targetUserId, 
 					offer: offer,
 				})
 			}, 100)
@@ -123,7 +123,7 @@ export class WebRTCService {
 	}
 
 	async handleIncomingCall(callerSocketId: string): Promise<void> {
-		// Создаем peer connection для входящего звонка
+		
 		this.createPeerConnection(callerSocketId)
 	}
 
@@ -134,11 +134,11 @@ export class WebRTCService {
 				throw new Error('Peer connection not found')
 			}
 
-			// Проверяем состояние соединения
+			
 			console.log('Current peer connection state:', pc.signalingState)
 			console.log('Current remote description:', pc.remoteDescription)
 			
-			// Ждем установки remote description
+			
 			if (!pc.remoteDescription) {
 				console.log('Waiting for remote description before creating answer...')
 				return new Promise((resolve, reject) => {
@@ -154,10 +154,10 @@ export class WebRTCService {
 								.then(() => {
 									console.log('Answer set as local description')
 									
-									// Отправляем сигнал о принятии звонка
+									
 									this.socket.emit('call_answer', { caller_socket_id: callerSocketId })
 									
-									// Отправляем WebRTC answer
+									
 									this.socket.emit('answer', {
 										target_socket_id: callerSocketId,
 										answer: new RTCSessionDescription(answer),
@@ -172,22 +172,22 @@ export class WebRTCService {
 						}
 					}, 100)
 					
-					// Таймаут на случай, если remote description не придет
+					
 					setTimeout(() => {
 						clearInterval(checkInterval)
 						reject(new Error('Timeout waiting for remote description'))
 					}, 10000)
 				})
 			} else {
-				// Если remote description уже установлено, создаем answer сразу
+				
 				const answer = await pc.createAnswer()
 				await pc.setLocalDescription(answer)
 				console.log('Answer created and set as local description')
 
-				// Отправляем сигнал о принятии звонка
+				
 				this.socket.emit('call_answer', { caller_socket_id: callerSocketId })
 				
-				// Отправляем WebRTC answer
+				
 				this.socket.emit('answer', {
 					target_socket_id: callerSocketId,
 					answer: new RTCSessionDescription(answer),
@@ -309,10 +309,10 @@ export class WebRTCService {
 	}
 
 	private async getSocketIdByUserId(userId: string): Promise<string | null> {
-		// Здесь должна быть логика получения socket ID по user ID
-		// Можно реализовать через API или через хранение маппинга на сервере
+		
+		
 		return new Promise((resolve) => {
-			// Временная реализация - в реальном приложении здесь будет запрос к API
+			
 			this.socket.emit('get_socket_id', { user_id: userId }, (response: { socket_id: string }) => {
 				resolve(response.socket_id || null)
 			})

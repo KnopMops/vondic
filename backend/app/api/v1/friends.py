@@ -8,10 +8,16 @@ friends_bp = Blueprint("friends", __name__, url_prefix="/api/v1/friends")
 @friends_bp.route("/list", methods=["POST"])
 @token_required
 def get_friends(current_user):
-    data = request.get_json() or {}
-    target_user_id = data.get("user_id") or current_user.id
-    friends = FriendshipService.get_friends(target_user_id)
-    return jsonify(friends), 200
+    try:
+        data = request.get_json() or {}
+        target_user_id = data.get("user_id") or current_user.id
+        friends = FriendshipService.get_friends(target_user_id)
+        return jsonify(friends), 200
+    except Exception as e:
+        import traceback
+        print(f"Error in get_friends: {e}")
+        print(traceback.format_exc())
+        return jsonify({"error": str(e)}), 500
 
 @friends_bp.route("/requests", methods=["POST"])
 @token_required

@@ -1,12 +1,14 @@
 'use client'
 
 import {
+	HelpCircle,
 	Mic,
 	MicOff,
 	Monitor,
 	MonitorOff,
 	PhoneOff,
 	ScreenShare,
+	Settings2,
 	Users,
 	Video,
 	VideoOff,
@@ -47,7 +49,6 @@ export const CallPanel: React.FC<CallPanelProps> = ({ onClose }) => {
 		Map<string, MediaStream>
 	>(new Map())
 
-	// Resizable panel state
 	const [panelHeight, setPanelHeight] = useState(400)
 	const [panelWidth, setPanelWidth] = useState(400)
 	const [panelPosition, setPanelPosition] = useState({ x: 0, y: 0 })
@@ -59,13 +60,15 @@ export const CallPanel: React.FC<CallPanelProps> = ({ onClose }) => {
 	const lastResizeTime = useRef(0)
 	const panelRef = useRef<HTMLDivElement>(null)
 
-	// Fullscreen state
 	const [isFullscreen, setIsFullscreen] = useState(false)
 
-	// Video refs to prevent re-creation
 	const localScreenVideoRef = useRef<HTMLVideoElement>(null)
 	const remoteScreenVideoRefs = useRef<Map<string, HTMLVideoElement>>(new Map())
 	const remoteVideoRefs = useRef<Map<string, HTMLVideoElement>>(new Map())
+
+	const [showHelpTooltip, setShowHelpTooltip] = useState(false)
+	const [showSettingsPanel, setShowSettingsPanel] = useState(false)
+	const [remoteVolume, setRemoteVolume] = useState<number>(1)
 
 	useEffect(() => {
 		try {
@@ -116,23 +119,12 @@ export const CallPanel: React.FC<CallPanelProps> = ({ onClose }) => {
 			}
 		})
 
-		// Only update if the screen shares actually changed
 		setRemoteScreenShares(prev => {
-			// Check if keys are the same
 			const prevKeys = Array.from(prev.keys())
 			const newKeys = Array.from(newRemoteScreenShares.keys())
-
-			if (prevKeys.length !== newKeys.length) {
-				return newRemoteScreenShares
-			}
-
-			// Check if all keys exist
+			if (prevKeys.length !== newKeys.length) return newRemoteScreenShares
 			const hasAllKeys = newKeys.every(key => prev.has(key))
-			if (!hasAllKeys) {
-				return newRemoteScreenShares
-			}
-
-			// Same keys, check if streams are the same references
+			if (!hasAllKeys) return newRemoteScreenShares
 			let changed = false
 			for (const [key, stream] of newRemoteScreenShares.entries()) {
 				if (prev.get(key) !== stream) {
@@ -140,7 +132,6 @@ export const CallPanel: React.FC<CallPanelProps> = ({ onClose }) => {
 					break
 				}
 			}
-
 			return changed ? newRemoteScreenShares : prev
 		})
 	}, [activeCalls, remoteStreams])
@@ -157,7 +148,7 @@ export const CallPanel: React.FC<CallPanelProps> = ({ onClose }) => {
 			if (audioEl) {
 				audioEl.srcObject = stream
 				audioEl.muted = false
-				audioEl.volume = 1
+				audioEl.volume = remoteVolume
 				audioEl.play().catch(() => {})
 			}
 		})
@@ -168,7 +159,7 @@ export const CallPanel: React.FC<CallPanelProps> = ({ onClose }) => {
 				remoteAudioRefs.current.delete(key)
 			}
 		})
-	}, [activeCalls.size, remoteStreams.size])
+	}, [activeCalls.size, remoteStreams.size, remoteVolume])
 
 	// Handle remote video (webcam)
 	useEffect(() => {
@@ -430,28 +421,26 @@ export const CallPanel: React.FC<CallPanelProps> = ({ onClose }) => {
 						}
 			}
 		>
-			{/* Resize Handle - Top Left */}
 			<div
 				className='absolute top-0 left-0 w-4 h-4 cursor-nwse-resize z-[10]'
 				onMouseDown={handleResizeStart}
 			/>
-			{/* Resize Handle - Top Right */}
+
 			<div
 				className='absolute top-0 right-0 w-4 h-4 cursor-nesw-resize z-[10]'
 				onMouseDown={handleResizeStart}
 			/>
-			{/* Resize Handle - Bottom Left */}
+
 			<div
 				className='absolute bottom-0 left-0 w-4 h-4 cursor-nesw-resize z-[10]'
 				onMouseDown={handleResizeStart}
 			/>
-			{/* Resize Handle - Bottom Right */}
+
 			<div
 				className='absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize z-[10]'
 				onMouseDown={handleResizeStart}
 			/>
 
-			{/* Resize Handle - Edges */}
 			<div
 				className='absolute top-0 left-0 right-0 h-1 cursor-ns-resize z-[10]'
 				onMouseDown={handleResizeStart}
@@ -470,7 +459,6 @@ export const CallPanel: React.FC<CallPanelProps> = ({ onClose }) => {
 			/>
 
 			<div className='h-full flex flex-col'>
-				{/* Header */}
 				<div
 					className='p-3 border-b border-[#1e1f22] flex-shrink-0 cursor-grab active:cursor-grabbing'
 					onMouseDown={handleDragStart}
@@ -511,19 +499,91 @@ export const CallPanel: React.FC<CallPanelProps> = ({ onClose }) => {
 								</div>
 							</div>
 						</div>
-						<button
-							onClick={handleEndCall}
-							className='p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors'
-							title='Завершить звонок'
-						>
-							<PhoneOff className='w-4 h-4' />
-						</button>
+						<div className='flex items-center gap-1'>
+							<div className='relative'>
+								<button
+									onMouseEnter={() => setShowHelpTooltip(true)}
+									onMouseLeave={() => setShowHelpTooltip(false)}
+									className='p-2 text-gray-400 hover:text-white hover:bg-[#35373c] rounded-lg transition-colors'
+									title='Информация о звонке'
+								>
+									<HelpCircle className='w-4 h-4' />
+								</button>
+								{showHelpTooltip && (
+									<div className='absolute right-0 top-full mt-2 w-48 bg-[#1e1f22] border border-[#35373c] rounded-lg shadow-2xl z-[100] p-3'>
+										<p className='text-[10px] text-gray-400 uppercase font-bold mb-1'>
+											Статус
+										</p>
+										<p className='text-xs text-green-400 mb-2'>
+											Соединение установлено
+										</p>
+										<p className='text-[10px] text-gray-400 uppercase font-bold mb-1'>
+											Длительность
+										</p>
+										<p className='text-xs text-white'>
+											{formatDuration(duration)}
+										</p>
+									</div>
+								)}
+							</div>
+							<div className='relative'>
+								<button
+									onMouseEnter={() => setShowSettingsPanel(true)}
+									onMouseLeave={() => setShowSettingsPanel(false)}
+									className='p-2 text-gray-400 hover:text-white hover:bg-[#35373c] rounded-lg transition-colors'
+									title='Настройки звука'
+								>
+									<Settings2 className='w-4 h-4' />
+								</button>
+								{showSettingsPanel && (
+									<div className='absolute right-0 top-full mt-2 w-56 bg-[#1e1f22] border border-[#35373c] rounded-lg shadow-2xl z-[100] p-3'>
+										<p className='text-[10px] text-gray-400 uppercase font-bold mb-2'>
+											Громкость собеседников
+										</p>
+										<input
+											type='range'
+											min='0'
+											max='100'
+											value={remoteVolume * 100}
+											onChange={e =>
+												setRemoteVolume(Number(e.target.value) / 100)
+											}
+											className='w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-indigo-500'
+										/>
+										<div className='flex justify-between mt-1'>
+											<span className='text-[10px] text-gray-500'>0%</span>
+											<span className='text-[10px] text-gray-500'>100%</span>
+										</div>
+									</div>
+								)}
+							</div>
+							<button
+								onClick={() => setIsFullscreen(!isFullscreen)}
+								className='p-2 text-gray-400 hover:text-white hover:bg-[#35373c] rounded-lg transition-colors'
+								title={
+									isFullscreen
+										? 'Выйти из полноэкранного режима'
+										: 'Во весь экран'
+								}
+							>
+								{isFullscreen ? (
+									<MonitorOff className='w-4 h-4' />
+								) : (
+									<Monitor className='w-4 h-4' />
+								)}
+							</button>
+							<button
+								onClick={handleEndCall}
+								className='p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors'
+								title='Завершить звонок'
+							>
+								<PhoneOff className='w-4 h-4' />
+							</button>
+						</div>
 					</div>
 				</div>
 
-				{/* Content Area - Scrollable */}
 				<div className='flex-1 overflow-y-auto p-3'>
-					{/* Screen Share Display */}
 					{hasScreenShare && (
 						<div className='mb-3'>
 							<div className='bg-[#1e1f22] rounded-lg overflow-hidden aspect-video relative'>
@@ -581,7 +641,6 @@ export const CallPanel: React.FC<CallPanelProps> = ({ onClose }) => {
 						</div>
 					)}
 
-					{/* Participants Grid - Discord Style */}
 					<div
 						className={`grid gap-2 mb-3 ${
 							participantCount === 1
@@ -599,7 +658,6 @@ export const CallPanel: React.FC<CallPanelProps> = ({ onClose }) => {
 								className='relative bg-[#1e1f22] rounded-lg overflow-hidden group hover:bg-[#35373c] transition-colors'
 								style={{ aspectRatio: participantCount <= 2 ? '16/9' : '1/1' }}
 							>
-								{/* Avatar/Video */}
 								<div className='absolute inset-0 flex items-center justify-center'>
 									{participant.hasVideo && !participant.isLocal ? (
 										<video
@@ -628,10 +686,8 @@ export const CallPanel: React.FC<CallPanelProps> = ({ onClose }) => {
 									)}
 								</div>
 
-								{/* Gradient Overlay */}
 								<div className='absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent' />
 
-								{/* Username Badge */}
 								<div className='absolute bottom-0 left-0 right-0 p-2 flex items-center gap-2'>
 									<div className='flex-1 min-w-0'>
 										<p className='text-white font-semibold text-xs truncate drop-shadow-lg'>
@@ -643,7 +699,6 @@ export const CallPanel: React.FC<CallPanelProps> = ({ onClose }) => {
 									</div>
 								</div>
 
-								{/* Status Icons */}
 								<div className='absolute top-2 right-2 flex flex-col gap-1'>
 									{participant.isLocal && isMuted && (
 										<div
@@ -683,7 +738,6 @@ export const CallPanel: React.FC<CallPanelProps> = ({ onClose }) => {
 					</div>
 				</div>
 
-				{/* Control Bar - Fixed at bottom */}
 				<div className='p-3 border-t border-[#1e1f22] flex-shrink-0'>
 					<div className='flex items-center justify-center gap-2'>
 						<button
@@ -751,7 +805,6 @@ export const CallPanel: React.FC<CallPanelProps> = ({ onClose }) => {
 				</div>
 			</div>
 
-			{/* Audio Elements */}
 			{Array.from(activeCalls.entries()).map(
 				([socketId, call]) =>
 					call.status === 'connected' && (

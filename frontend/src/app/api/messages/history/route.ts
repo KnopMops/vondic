@@ -17,11 +17,11 @@ export async function POST(req: NextRequest) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 		}
 
-		// The user mentioned "webrtc server/messages/history".
-        // Assuming the WebRTC server is running on port 5000 based on previous context (socket connection).
-        // If it's the main backend, it would be port 5050.
-        // Given "webrtc server" phrasing and socket usage, port 5000 is likely correct for this specific service.
-        // However, standard backend is 5050. Let's use 5000 as per "webrtc server" hint or fallback to env.
+		
+        
+        
+        
+        
 
         const socketUrl = getWebrtcUrl()
 

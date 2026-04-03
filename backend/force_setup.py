@@ -56,6 +56,7 @@ def force_setup():
                 ("is_developer", "INTEGER DEFAULT 0"),
                 ("api_key_hash", "TEXT"),
                 ("api_key", "TEXT"),
+                ("privacy_settings", "JSON DEFAULT '{\"show_email\": true}'::json"),
                 ("cloud_password_hash", "TEXT"),
                 ("cloud_password_reset_month", "INTEGER DEFAULT NULL"),
                 ("cloud_password_reset_count", "INTEGER DEFAULT 0"),
@@ -77,18 +78,7 @@ def force_setup():
                     db.session.rollback()
 
             try:
-                db.session.execute(text("""
-                    CREATE TABLE IF NOT EXISTS gifts_catalog (
-                        id TEXT PRIMARY KEY,
-                        name TEXT NOT NULL,
-                        coin_price INTEGER NOT NULL DEFAULT 0,
-                        icon TEXT,
-                        description TEXT,
-                        image_url TEXT,
-                        total_supply INTEGER,
-                        minted_count INTEGER NOT NULL DEFAULT 0
-                    )
-                """))
+                db.session.execute(text(""""""))
                 print("✅ Таблица gifts_catalog создана")
 
                 count = db.session.execute(text("SELECT COUNT(*) FROM gifts_catalog")).scalar()
@@ -102,10 +92,7 @@ def force_setup():
                     ]
 
                     for gift in gifts:
-                        db.session.execute(text("""
-                            INSERT INTO gifts_catalog (id, name, coin_price, icon, description, image_url, total_supply, minted_count)
-                            VALUES (:id, :name, :coin_price, :icon, :description, :image_url, :total_supply, :minted_count)
-                        """), {
+                        db.session.execute(text(""""""), {
                             "id": gift[0],
                             "name": gift[1],
                             "coin_price": gift[2],
@@ -123,55 +110,11 @@ def force_setup():
                 db.session.rollback()
 
             try:
-                db.session.execute(text("""
-                    CREATE TABLE IF NOT EXISTS communities (
-                        id TEXT PRIMARY KEY,
-                        name TEXT NOT NULL,
-                        description TEXT,
-                        invite_code TEXT UNIQUE,
-                        owner_id TEXT NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                """))
-                db.session.execute(text("""
-                    CREATE TABLE IF NOT EXISTS community_members (
-                        user_id TEXT NOT NULL,
-                        community_id TEXT NOT NULL,
-                        joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        PRIMARY KEY (user_id, community_id)
-                    )
-                """))
-                db.session.execute(text("""
-                    CREATE TABLE IF NOT EXISTS community_channels (
-                        id TEXT PRIMARY KEY,
-                        community_id TEXT NOT NULL,
-                        name TEXT NOT NULL,
-                        description TEXT,
-                        type TEXT NOT NULL DEFAULT 'text',
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                """))
-                db.session.execute(text("""
-                    CREATE TABLE IF NOT EXISTS channels (
-                        id TEXT PRIMARY KEY,
-                        name TEXT NOT NULL,
-                        description TEXT,
-                        invite_code TEXT UNIQUE,
-                        owner_id TEXT NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                """))
-                db.session.execute(text("""
-                    CREATE TABLE IF NOT EXISTS channel_participants (
-                        user_id TEXT NOT NULL,
-                        channel_id TEXT NOT NULL,
-                        joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        PRIMARY KEY (user_id, channel_id)
-                    )
-                """))
+                db.session.execute(text(""""""))
+                db.session.execute(text(""""""))
+                db.session.execute(text(""""""))
+                db.session.execute(text(""""""))
+                db.session.execute(text(""""""))
                 print("✅ Communities таблицы созданы")
                 db.session.commit()
             except Exception as e:

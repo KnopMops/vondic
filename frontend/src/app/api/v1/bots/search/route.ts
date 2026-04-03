@@ -6,15 +6,15 @@ export async function POST(req: NextRequest) {
 	try {
 		const body = await req.json().catch(() => ({}))
 		
-		// Сначала пробуем взять токен из тела запроса
+		
 		let token = body?.access_token
 		
-		// Если нет в теле, пробуем получить из cookie/header
+		
 		if (!token) {
 			token = await getAccessToken(req)
 		}
 		
-		// Если нет в cookie, пробуем из Authorization header
+		
 		if (!token) {
 			const authHeader = req.headers.get('authorization') || ''
 			if (authHeader.startsWith('Bearer ')) {

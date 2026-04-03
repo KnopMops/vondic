@@ -61,8 +61,8 @@ const authSlice = createSlice({
 			})
 			.addCase(fetchUser.fulfilled, (state, action) => {
 				state.isLoading = false
-				// Если пришел пользователь с сервера без socket_id, но у нас он уже есть (например, восстановлен из localStorage),
-				// сохраняем существующий socket_id.
+				
+				
 				if (
 					action.payload &&
 					!action.payload.socket_id &&

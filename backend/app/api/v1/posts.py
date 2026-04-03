@@ -20,23 +20,26 @@ def notify_all_users(
         message: str,
         notification_type: str = "system"):
     ts = int(time.time())
-    users = User.query.filter(User.is_blocked == 0).all()
+    users = User.query.filter(
+        User.is_blocked == 0,
+        User.status == 'online'
+    ).all()
     for u in users:
         content_hash = hashlib.sha256(
             f"{u.id}|{message}|{ts}".encode("utf-8")
         ).hexdigest()
-        db.session.execute(text("""
-            INSERT INTO notifications (user_id, title, type, message, created_at, delivered, notification_hash)
-            VALUES (:user_id, :title, :type, :message, :created_at, :delivered, :notification_hash)
-        """), {
-            "user_id": u.id,
-            "title": title,
-            "type": notification_type,
-            "message": message,
-            "created_at": ts,
-            "delivered": 0,
-            "notification_hash": content_hash
-        })
+        existing = db.session.execute(text(""""""), {"user_id": u.id, "hash": content_hash}).fetchone()
+
+        if not existing:
+            db.session.execute(text(""""""), {
+                "user_id": u.id,
+                "title": title,
+                "type": notification_type,
+                "message": message,
+                "created_at": ts,
+                "delivered": 0,
+                "notification_hash": content_hash
+            })
     db.session.commit()
 
 @posts_bp.route("/", methods=["GET"])
@@ -45,6 +48,7 @@ def get_posts():
     per_page = request.args.get("per_page", 5, type=int)
     user_id = request.args.get("user_id", type=str)
     kind = (request.args.get("kind") or "").strip().lower()
+    filter_mode = (request.args.get("filter") or "").strip().lower()
     is_blog = kind == "blog"
 
     if page < 1:
@@ -55,7 +59,7 @@ def get_posts():
         per_page = 50
 
     pagination = PostService.get_posts_paginated(
-        page=page, per_page=per_page, user_id=user_id, is_blog=is_blog
+        page=page, per_page=per_page, user_id=user_id, is_blog=is_blog, filter_mode=filter_mode
     )
     return jsonify(
         {
@@ -99,6 +103,13 @@ def create_post(current_user):
         return jsonify({"error": "attachments должен быть списком"}), 400
 
     is_blog = bool(data.get("is_blog"))
+    content = data.get("content") or ""
+    content_stripped = content.strip()
+
+    if current_user.role == "Admin" and content_stripped:
+        if content_stripped.startswith("# ") or content_stripped.startswith("#"):
+            is_blog = True
+
     if is_blog and current_user.role != "Admin":
         return jsonify({"error": "Неавторизовано"}), 403
 

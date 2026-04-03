@@ -56,6 +56,19 @@ class SignalingService:
         except Exception as e:
             logger.error(f"Error loading existing interactions: {e}")
 
+    def _broadcast_status(self, user_id, status):
+        try:
+            friends_sockets = self.broker.repo.get_user_friends_sockets(user_id)
+            if friends_sockets:
+                for socket_id in friends_sockets:
+                    self.io.emit(
+                        "user_status_changed",
+                        {"user_id": user_id, "status": status},
+                        room=socket_id
+                    )
+        except Exception as e:
+            logger.error(f"Error broadcasting status for {user_id}: {e}")
+
     def _bind_events(self):
         self.io.on_event("connect", self.on_connect)
         self.io.on_event("disconnect", self.on_disconnect)
@@ -146,6 +159,7 @@ class SignalingService:
                 "401 Unauthorized: Ошибка регистрации")
 
         session["user_id"] = user_info["id"]
+        self._broadcast_status(user_info["id"], 'Online')
 
         join_room(user_info["id"])
         logger.info(
@@ -162,7 +176,9 @@ class SignalingService:
         )
 
     def on_disconnect(self):
-        self.broker.close_session(request.sid)
+        user_id = self.broker.close_session(request.sid)
+        if user_id:
+            self._broadcast_status(user_id, 'Offline')
 
     def on_authenticate(self, payload):
         if not payload:
@@ -186,6 +202,7 @@ class SignalingService:
         session["user_id"] = user_info["id"]
 
         self.broker.repo.bind_socket(user_info["id"], request.sid)
+        self._broadcast_status(user_info["id"], 'Online')
 
         join_room(user_info["id"])
 
@@ -450,6 +467,37 @@ class SignalingService:
                 room=caller_socket_id,
             )
 
+
+        existing_participants = []
+
+
+        if caller_socket_id and self.broker.resolve_recipient(caller_socket_id):
+            existing_participants.append({
+                "user_id": caller_user_id,
+                "socket_id": caller_socket_id,
+                "username": caller_username,
+                "avatar_url": caller_avatar_url,
+            })
+            logger.info(f"[GroupCall] Added caller to existing_participants: {caller_user_id} ({caller_socket_id})")
+
+
+        for pid in call.get("participants", []):
+            if str(pid) in [str(sender_id), str(caller_user_id)]:
+                continue
+            pid_socket = self.broker.get_user_socket(pid)
+            if pid_socket and self.broker.resolve_recipient(pid_socket):
+                participant_info = self.broker.resolve_recipient(pid_socket)
+                existing_participants.append({
+                    "user_id": pid,
+                    "socket_id": pid_socket,
+                    "username": participant_info.get("username") if participant_info else None,
+                    "avatar_url": participant_info.get("avatar_url") if participant_info else None,
+                })
+                logger.info(f"[GroupCall] Added participant to existing_participants: {pid} ({pid_socket})")
+
+        logger.info(f"[GroupCall] Total existing_participants: {len(existing_participants)}")
+
+
         notify_payload = {
             "call_id": call_id,
             "user_id": sender_id,
@@ -459,59 +507,29 @@ class SignalingService:
         }
         if caller_socket_id and self.broker.resolve_recipient(
                 caller_socket_id):
+            logger.info(f"[GroupCall] Emitting participant_joined to caller {caller_socket_id}")
             emit("group_call_participant_joined",
                  notify_payload, room=caller_socket_id)
-        for pid in call.get("participants", []):
-            if str(pid) == str(sender_id):
-                continue
-            pid_socket = self.broker.get_user_socket(pid)
-            if pid_socket and self.broker.resolve_recipient(pid_socket):
+
+
+        for participant in existing_participants:
+            if participant["socket_id"] != caller_socket_id:
+                logger.info(f"[GroupCall] Emitting participant_joined to other participant {participant['socket_id']}")
                 emit("group_call_participant_joined",
-                     notify_payload, room=pid_socket)
+                     notify_payload, room=participant["socket_id"])
 
-        if caller_socket_id and caller_socket_id != request.sid:
-            emit(
-                "group_call_participant_joined",
-                {
-                    "call_id": call_id,
-                    "user_id": caller_user_id,
-                    "socket_id": caller_socket_id,
-                    "username": caller_username,
-                    "avatar_url": caller_avatar_url,
-                },
-                room=request.sid,
-            )
 
-        for pid in call.get("participants", []):
-            if str(pid) == str(sender_id):
-                continue
-            pid_socket = self.broker.get_user_socket(pid)
-            if pid_socket and self.broker.resolve_recipient(pid_socket):
-
-                participant_info = self.broker.resolve_recipient(pid_socket)
-                emit(
-                    "group_call_participant_joined",
-                    {
-                        "call_id": call_id,
-                        "user_id": pid,
-                        "socket_id": pid_socket,
-                        "username": participant_info.get("username") if participant_info else None,
-                        "avatar_url": participant_info.get("avatar_url") if participant_info else None,
-                    },
-                    room=request.sid,
-                )
-
-        emit(
-            "group_call_participant_joined",
-            {
-                "call_id": call_id,
-                "user_id": sender_id,
-                "socket_id": request.sid,
-                "username": sender.get("username") if sender else None,
-                "avatar_url": sender.get("avatar_url") if sender else None,
-            },
-            room=request.sid,
-        )
+        for participant in existing_participants:
+            logger.info(f"[GroupCall] Emitting participant_joined to new joiner {request.sid} about {participant['socket_id']}")
+            emit("group_call_participant_joined",
+                 {
+                     "call_id": call_id,
+                     "user_id": participant["user_id"],
+                     "socket_id": participant["socket_id"],
+                     "username": participant["username"],
+                     "avatar_url": participant["avatar_url"],
+                 },
+                 room=request.sid)
 
     def on_group_call_reject(self, payload):
         call_id = payload.get("call_id")
@@ -891,12 +909,11 @@ class SignalingService:
                 "type": msg_type,
                 "timestamp": timestamp,
             }
-            
-            # Add forwarded_from information if present
+
+
             if forwarded_from:
                 msg_data["forwarded_from_id"] = forwarded_from.get("sender_id")
-                # Store forwarded_from details in content as JSON for display
-                # This will be parsed by frontend to show "Переслано от"
+
 
             saved, error = self.broker.repo.save_message(msg_data)
             if not saved:
@@ -921,8 +938,8 @@ class SignalingService:
                 "timestamp": timestamp,
                 "is_read": 0,
             }
-            
-            # Add forwarded_from to payload for display
+
+
             if forwarded_from:
                 full_message_payload["forwarded_from"] = forwarded_from
 
@@ -1333,7 +1350,7 @@ class SignalingService:
         has_video = payload.get("has_video", False)
         user_id = payload.get("user_id") or sender_id
 
-        # Forward to group call participants
+
         call_id = payload.get("call_id")
         if call_id and call_id in self.group_calls:
             call = self.group_calls[call_id]
@@ -1354,7 +1371,7 @@ class SignalingService:
                         room=pid_socket,
                     )
 
-        # Forward to voice channel participants
+
         channel_id = payload.get("channel_id")
         if channel_id and channel_id in self.voice_channel_calls:
             channel_set = self.voice_channel_calls[channel_id]
@@ -1386,11 +1403,10 @@ class SignalingService:
         is_sharing = payload.get("is_sharing", False)
         user_id = payload.get("user_id") or sender_id
 
-        # Forward to all active peer connections for this user
-        # Get all active calls and forward to participants
+
         for call_id, call in list(self.group_calls.items()):
             participants = call.get("participants", [])
-            
+
             for pid in participants:
                 if str(pid) == str(sender_id):
                     continue
@@ -1406,7 +1422,7 @@ class SignalingService:
                         room=pid_socket,
                     )
 
-        # Forward to voice channel participants
+
         for channel_id, channel_set in list(self.voice_channel_calls.items()):
             for existing_sid in list(channel_set):
                 if existing_sid == socket_id:

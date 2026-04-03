@@ -35,7 +35,7 @@ const ApiDocumentationPage = () => {
 							<div className='bg-indigo-500/10 border-l-4 border-indigo-500 p-4 mb-4 backdrop-blur-sm border border-white/10 rounded-lg'>
 								<p className='font-semibold text-white'>Базовый URL:</p>
 								<code className='bg-gray-800/50 px-2 py-1 rounded text-indigo-300 border border-white/10'>
-									https://api.vondic.knopusmedia.ru/api/public/v1
+									https:
 								</code>
 							</div>
 							<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
@@ -1152,7 +1152,7 @@ client.delete_comment("comment123")`}
 
 	return (
 		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white overflow-x-hidden'>
-			{/* Background effects similar to main page */}
+			
 			<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
 				<div className='absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-indigo-900/20 blur-[120px]' />
 				<div className='absolute top-[40%] -right-[10%] w-[40%] h-[60%] rounded-full bg-purple-900/20 blur-[120px]' />

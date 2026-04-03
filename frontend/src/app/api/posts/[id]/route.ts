@@ -8,9 +8,9 @@ export async function GET(
 ) {
 	try {
 		const token = await getAccessToken(req)
-		// Allowing public access to posts if token is missing?
-		// Usually posts might be public, but let's send token if available.
-		// User didn't specify auth requirement for this GET, but usually needed for 'is_liked' status etc.
+		
+		
+		
 
 		const { id } = await params
 		const backendUrl = getBackendUrl()

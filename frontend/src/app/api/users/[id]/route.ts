@@ -10,7 +10,7 @@ export async function GET(
 		const { id } = await params
 		const token = await getAccessToken(req)
 
-		// New requirement: POST /api/v1/users/get with body { user_id, access_token }
+		
 		const body: any = { user_id: id }
 		if (token) {
 			body.access_token = token

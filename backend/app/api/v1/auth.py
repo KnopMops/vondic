@@ -234,24 +234,6 @@ def login():
         200,
     )
 
-@auth_bp.route("/telegram/link", methods=["POST"])
-def link_telegram_account():
-    data = request.get_json() or {}
-    link_key = data.get("link_key")
-    telegram_id = data.get("telegram_id")
-
-    if not link_key or not telegram_id:
-        return jsonify({"error": "Отсутствуют link_key или telegram_id"}), 400
-
-    user, error = AuthService.link_telegram(link_key, telegram_id)
-    if error:
-        return jsonify({"error": error}), 400
-
-    return jsonify(
-        {"message": "Аккаунт успешно привязан",
-            "user": user_schema.dump(user)}
-    ), 200
-
 @auth_bp.route("/me", methods=["POST"])
 def me():
     data = request.get_json() or {}
@@ -502,33 +484,6 @@ def terminate_session(current_user):
             "logout_current": logout_current,
         }
     ), 200
-
-@auth_bp.route("/telegram-login", methods=["POST"])
-@rate_limit("auth-telegram-login", limit=10, window_seconds=60)
-def telegram_login():
-    data = request.get_json()
-    if not data:
-        return (jsonify({"error": "Нет данных"}), 400)
-    result, error = AuthService.login_telegram_user(data)
-    if error:
-        return (jsonify({"error": error}), 401)
-    try:
-        _store_login_session(
-            result["user"], result["access_token"], result["refresh_token"]
-        )
-    except Exception:
-        pass
-    return (
-        jsonify(
-            {
-                "message": "Вход выполнен успешно",
-                "access_token": result["access_token"],
-                "refresh_token": result["refresh_token"],
-                "user": user_schema.dump(result["user"]),
-            }
-        ),
-        200,
-    )
 
 @auth_bp.route("/api-key-login", methods=["POST"])
 @rate_limit("auth-api-key-login", limit=20, window_seconds=60)

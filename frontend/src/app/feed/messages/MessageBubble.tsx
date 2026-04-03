@@ -1,3 +1,6 @@
+'use client'
+
+import { Heart, MessageCircle, Share2, MoreHorizontal, Send, Image, Video, File, Download, Upload, Calendar, Clock, Star, Lock, Unlock, Eye, EyeOff, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ArrowLeft, ArrowRight, MoreVertical, Bell, Search, Home, User, Settings, Menu, X, Check, Plus, Trash2, Edit2 } from 'lucide-react';
 import AudioPlayer from '@/components/social/AudioPlayer'
 import PostDetailsModal from '@/components/social/PostDetailsModal'
 import VideoPlayer from '@/components/social/VideoPlayer'
@@ -102,7 +105,7 @@ const MessageBubble = memo(
 
 		const getSharedPost = (content: string) => {
 			try {
-				if (!content.trim().startsWith('{')) return null
+				if (!content || typeof content !== 'string' || !content.trim().startsWith('{')) return null
 				const data = JSON.parse(content)
 				if (data && data.type === 'shared_post' && data.post) {
 					return data.post
@@ -115,7 +118,7 @@ const MessageBubble = memo(
 
 		const getStickerPayload = (content: string) => {
 			try {
-				if (!content.trim().startsWith('{')) return null
+				if (!content || typeof content !== 'string' || !content.trim().startsWith('{')) return null
 				const data = JSON.parse(content)
 				if (data && data.type === 'sticker' && typeof data.url === 'string') {
 					return data
@@ -568,7 +571,7 @@ const MessageBubble = memo(
 						</div>
 					)}
 					
-					{/* Inline Keyboard Buttons (for bot messages) */}
+					
 					{msg.reply_markup?.inline_keyboard && (
 						<div className='mt-3 flex flex-col gap-2'>
 							{msg.reply_markup.inline_keyboard.map((row, rowIndex) => (

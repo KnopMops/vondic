@@ -28,7 +28,6 @@ export interface User {
 	disk_usage?: number
 	disk_limit?: number
 	storage_bonus?: number
-	telegram_id?: string | null
 	profile_bg_theme?: string | null
 	profile_bg_gradient?: string | null
 	profile_bg_image?: string | null
@@ -41,7 +40,7 @@ export interface User {
 	video_likes?: string[]
 	video_watch_later?: string[]
 	video_history?: { video_id: string; last_watched_at?: string; position?: number }[]
-	pinned_chats?: string[] // Array of user_ids or group_ids
+	pinned_chats?: string[] 
 }
 
 export interface GiftItem {

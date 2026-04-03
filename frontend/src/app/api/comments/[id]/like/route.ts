@@ -10,7 +10,7 @@ export async function POST(
 ) {
   const { id } = await params
   
-  // Get token from cookies
+  
   const accessToken = await getAccessToken(request)
   if (!accessToken) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -18,7 +18,7 @@ export async function POST(
 
   try {
     const body = await request.json()
-    const { action } = body // 'like' or 'unlike'
+    const { action } = body 
     
     const endpoint = action === 'unlike' ? '/api/v1/comments/unlike' : '/api/v1/comments/like'
     

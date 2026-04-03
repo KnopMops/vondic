@@ -27,27 +27,12 @@ def get_user_detail():
         return jsonify({"error": "Пользователь не найден"}), 404
     return jsonify(user_schema.dump(user)), 200
 
-@users_bp.route("/by-telegram/<telegram_id>", methods=["GET"])
-def get_user_by_telegram(telegram_id):
-    user = UserService.get_user_by_telegram_id(telegram_id)
-    if not user:
-        return jsonify({"error": "Пользователь не найден"}), 404
-    return jsonify(user_schema.dump(user)), 200
-
 @users_bp.route("/by-email/<email>", methods=["GET"])
 def get_user_by_email(email):
     user = UserService.get_user_by_email(email)
     if not user:
         return jsonify({"error": "Пользователь не найден"}), 404
     return jsonify(user_schema.dump(user)), 200
-
-@users_bp.route("/link-key", methods=["POST"])
-@token_required
-def generate_link_key(current_user):
-    key, error = UserService.generate_link_key(current_user.id)
-    if error:
-        return jsonify({"error": error}), 500
-    return jsonify({"link_key": key}), 200
 
 @users_bp.route("/search", methods=["POST"])
 @token_required
@@ -361,13 +346,13 @@ def set_gift_display(current_user):
 @users_bp.route("/status", methods=["POST"])
 @token_required
 def set_user_status(current_user):
-    """Установить статус пользователя онлайн/офлайн"""
+
     data = request.get_json() or {}
     status = data.get("status")
 
     if not status or status not in ["online", "offline"]:
         return jsonify({"error": "Неверный статус. Должен быть 'online' или 'offline'"}), 400
-    
+
     try:
         current_user.status = status
         current_user.last_seen = datetime.utcnow()
@@ -380,22 +365,18 @@ def set_user_status(current_user):
 @users_bp.route("/pinned-chats", methods=["POST"])
 @token_required
 def set_pinned_chats(current_user):
-    """Закреплённые чаты пользователя (функция Premium)"""
     data = request.get_json() or {}
     pinned_chats = data.get("pinned_chats", [])
 
-    # Проверка наличия premium
     if not current_user.premium or (current_user.premium_expired_at and current_user.premium_expired_at < datetime.utcnow()):
         return jsonify({"error": "Требуется подписка Premium"}), 403
 
-    # Проверка что pinned_chats это список
     if not isinstance(pinned_chats, list):
         return jsonify({"error": "pinned_chats должен быть списком"}), 400
 
-    # Ограничение: максимум 5 закреплённых чатов
     if len(pinned_chats) > 5:
         return jsonify({"error": "Максимум 5 закреплённых чатов"}), 400
-    
+
     try:
         current_user.pinned_chats = pinned_chats
         db.session.commit()
@@ -403,4 +384,3 @@ def set_pinned_chats(current_user):
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
-

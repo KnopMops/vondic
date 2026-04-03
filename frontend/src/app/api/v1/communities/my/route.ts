@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
     const backendUrl = getBackendUrl()
 
     return await withAccessTokenRefresh(req, async token => {
-      // Используем POST как в других API routes для совместимости
+      
       const response = await fetch(`${backendUrl}/api/v1/communities/my`, {
         method: 'POST',
         headers: {

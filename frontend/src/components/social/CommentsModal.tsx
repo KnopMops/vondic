@@ -1,8 +1,9 @@
 'use client'
 
+import { Heart, MessageCircle, Share2, MoreHorizontal, Send, Image, Video, File, Download, Upload, Calendar, Clock, Star, Lock, Unlock, Eye, EyeOff, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ArrowLeft, ArrowRight, MoreVertical, Bell, Search, Home, User, Settings, Menu, X, Check, Plus, Trash2, Edit2 } from 'lucide-react';
 import { useAppSelector } from '@/lib/hooks'
 import { useComments } from '@/lib/hooks/useComments'
-import { getAttachmentUrl } from '@/lib/utils'
+import { getAvatarUrl, getAttachmentUrl } from '@/lib/utils'
 import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
@@ -26,7 +27,6 @@ interface CommentsModalProps {
 	onClose: () => void
 }
 
-// Icons
 const DotsVerticalIcon = ({ className }: { className?: string }) => (
 	<svg
 		xmlns='http://www.w3.org/2000/svg'
@@ -100,7 +100,7 @@ function CommentItem({
 	const [isSaving, setIsSaving] = useState(false)
 	const menuRef = useRef<HTMLDivElement>(null)
 
-	// Close menu when clicking outside
+	
 	useEffect(() => {
 		function handleClickOutside(event: MouseEvent) {
 			if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
@@ -213,9 +213,7 @@ function CommentItem({
 		<div className='flex gap-3'>
 			<Link href={`/feed/profile/${comment.user_id}`}>
 				<img
-					src={
-						getAttachmentUrl(comment.author_avatar) || '/placeholder-user.jpg'
-					}
+					src={getAvatarUrl(comment.author_avatar)}
 					alt={comment.author_name || 'User'}
 					className='h-8 w-8 rounded-full object-cover hover:opacity-80 transition-opacity'
 				/>
@@ -512,7 +510,7 @@ export default function CommentsModal({
 	return (
 		<div className='fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4'>
 			<div className='flex h-[80vh] w-full max-w-lg flex-col rounded-xl bg-white shadow-xl dark:bg-gray-800'>
-				{/* Header */}
+				
 				<div className='flex items-center justify-between border-b border-gray-200 p-4 dark:border-gray-700'>
 					<h3 className='text-lg font-semibold text-gray-900 dark:text-white'>
 						Комментарии
@@ -538,7 +536,7 @@ export default function CommentsModal({
 					</button>
 				</div>
 
-				{/* Comments List */}
+				
 				<div className='flex-1 overflow-y-auto p-4'>
 					{loading ? (
 						<div className='flex h-full items-center justify-center text-gray-500'>
@@ -564,7 +562,7 @@ export default function CommentsModal({
 					)}
 				</div>
 
-				{/* Input Area */}
+				
 				<div className='border-t border-gray-200 p-4 dark:border-gray-700'>
 					{replyTo && (
 						<div className='mb-2 flex items-center justify-between rounded-md bg-indigo-50 p-2 text-xs text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'>
@@ -608,7 +606,7 @@ export default function CommentsModal({
 				</div>
 			</div>
 
-			{/* Admin Delete Confirmation Modal */}
+			
 			{adminDeleteComment && (
 				<div className='fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4'>
 					<div className='w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800'>

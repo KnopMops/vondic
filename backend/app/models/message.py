@@ -24,9 +24,9 @@ class Message(db.Model):
     pinned_by = db.Column(TEXT, nullable=True)
 
     reactions = db.Column(JSON, nullable=True)
-    read_by = db.Column(JSON, nullable=True)  # [{user_id, read_at}]
-    reply_to_id = db.Column(TEXT, nullable=True)  # Reply to another message
-    forwarded_from_id = db.Column(TEXT, nullable=True)  # Forwarded message
+    read_by = db.Column(JSON, nullable=True)
+    reply_to_id = db.Column(TEXT, nullable=True)
+    forwarded_from_id = db.Column(TEXT, nullable=True)
 
     created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
     updated_at = db.Column(

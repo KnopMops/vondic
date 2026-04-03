@@ -37,27 +37,7 @@ class AuthRepository:
         conn = self._connect()
         cursor = conn.cursor()
         cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS users (
-                id TEXT PRIMARY KEY,
-                username TEXT UNIQUE NOT NULL,
-                email TEXT UNIQUE NOT NULL,
-                access_token TEXT,
-                refresh_token TEXT,
-                password_hash TEXT NOT NULL,
-                avatar_url TEXT DEFAULT NULL,
-                is_verified INTEGER DEFAULT 0,
-                socket_id TEXT,
-                is_blocked INTEGER DEFAULT 0,
-                is_blocked_at TIMESTAMP DEFAULT NULL,
-                role TEXT DEFAULT 'User',
-                status TEXT DEFAULT 'offline',
-                is_messaging INTEGER DEFAULT 0,
-                premium INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-            """
+
         )
         conn.commit()
         conn.close()
@@ -84,14 +64,7 @@ class AuthRepository:
         refresh_token = secrets.token_hex(32)
         try:
             cursor.execute(
-                """
-                INSERT INTO users (
-                    id, username, email, password_hash, is_verified,
-                    access_token, refresh_token,
-                    role, status, is_blocked, is_messaging, created_at, avatar_url
-                )
-                VALUES (%s, %s, %s, %s, 1, %s, %s, 'User', 'offline', 0, 0, %s, %s)
-                """,
+                ,
                 (
                     user_id,
                     username,
@@ -118,11 +91,7 @@ class AuthRepository:
         try:
             if avatar_url:
                 cursor.execute(
-                    """
-                UPDATE users
-                SET password_hash = %s, updated_at = %s, avatar_url = %s
-                WHERE id = %s
-            """,
+                    ,
                     (
                         password_hash,
                         datetime.now().isoformat(),
@@ -132,11 +101,7 @@ class AuthRepository:
                 )
             else:
                 cursor.execute(
-                    """
-                UPDATE users
-                SET password_hash = %s, updated_at = %s
-                WHERE id = %s
-            """,
+                    ,
                     (password_hash, datetime.now().isoformat(), user_id),
                 )
             conn.commit()

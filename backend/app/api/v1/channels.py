@@ -6,15 +6,13 @@ from flask import Blueprint, jsonify, request
 channels_bp = Blueprint("channels", __name__, url_prefix="/api/v1/channels")
 
 def validate_channel_input(data):
-    """Validate channel creation input data."""
     if not data:
         return None, "Request body is required"
-    
+
     name = data.get("name")
     description = data.get("description", "")
     errors = []
-    
-    # Validate name
+
     if not name:
         errors.append("Channel name is required")
     elif not isinstance(name, str):
@@ -23,16 +21,15 @@ def validate_channel_input(data):
         errors.append("Channel name cannot be empty")
     elif len(name) > 100:
         errors.append("Channel name must not exceed 100 characters")
-    
-    # Validate description if provided
+
     if description and not isinstance(description, str):
         errors.append("Description must be a string")
     elif description and len(description) > 500:
         errors.append("Description must not exceed 500 characters")
-    
+
     if errors:
         return None, "; ".join(errors)
-    
+
     return {
         "name": name.strip(),
         "description": description.strip() if description else None
@@ -41,40 +38,23 @@ def validate_channel_input(data):
 @channels_bp.route("/", methods=["POST"])
 @token_required
 def create_channel(current_user):
-    """
-    Create a new channel.
-    
-    Request body:
-        - name (required): Channel name (1-100 characters)
-        - description (optional): Channel description (max 500 characters)
-    
-    Returns:
-        - 201: Channel created successfully
-        - 400: Invalid input data
-        - 401: Unauthorized
-        - 409: Channel already exists
-        - 500: Internal server error
-    """
     try:
         data = request.get_json()
-        
-        # Validate input
+
         validated_data, error = validate_channel_input(data)
         if error:
             return jsonify({"error": error, "code": "INVALID_INPUT"}), 400
-        
-        # Create channel
+
         channel, error = ChannelService.create_channel(validated_data, current_user.id)
         if error:
-            # Handle specific error cases
             if "unique" in error.lower() or "already exists" in error.lower():
                 return jsonify({"error": "Channel with this name already exists", "code": "CHANNEL_EXISTS"}), 409
             if "database" in error.lower() or "sql" in error.lower():
                 return jsonify({"error": "Database error. Please try again later", "code": "DATABASE_ERROR"}), 500
             return jsonify({"error": error, "code": "CHANNEL_CREATE_FAILED"}), 400
-        
+
         return jsonify(channel_schema.dump(channel)), 201
-    
+
     except Exception as e:
         return jsonify({"error": f"Internal server error: {str(e)}", "code": "INTERNAL_ERROR"}), 500
 

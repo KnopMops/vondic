@@ -163,3 +163,40 @@ def delete_group_message(current_user, group_id, message_id):
         print(f"Error notifying WebSocket server: {e}")
 
     return jsonify({"message": "Message deleted successfully"}), 200
+
+@groups_bp.route("/history", methods=["DELETE"])
+@token_required
+def delete_group_history(current_user):
+    """Delete all messages in a group (only owner can do this)"""
+    data = request.get_json() or {}
+    group_id = data.get("group_id")
+
+    if not group_id:
+        return jsonify({"error": "Требуется group_id"}), 400
+
+    from app.models.group import Group
+    from app.models.message import Message
+    from sqlalchemy import text
+
+    group = Group.query.get(group_id)
+    if not group:
+        return jsonify({"error": "Группа не найдена"}), 404
+
+
+    if str(group.owner_id) != str(current_user.id):
+        return jsonify({"error": "Только владелец группы может удалить историю"}), 403
+
+    try:
+
+        deleted = db.session.execute(
+            text("""
+                DELETE FROM messages
+                WHERE group_id = :group_id
+            """),
+            {"group_id": group_id}
+        )
+        db.session.commit()
+        return jsonify({"deleted": deleted.rowcount}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
