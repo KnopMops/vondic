@@ -1,7 +1,15 @@
 'use client'
 
 import React, { useState, useRef, useEffect } from 'react'
-import { MoreVertical, Pin, PinOff, Bell, BellOff, Phone, Video, Archive, Trash2 } from 'lucide-react'
+import {
+	FiArchive as Archive,
+	FiBell as Bell,
+	FiMoreVertical as MoreVertical,
+	FiPhone as Phone,
+	FiTrash2 as Trash2,
+	FiVideo as Video,
+} from 'react-icons/fi'
+import { LuBellOff as BellOff, LuPin as Pin, LuPinOff as PinOff } from 'react-icons/lu'
 
 interface ChatMenuProps {
     chatId: string

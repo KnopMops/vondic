@@ -8,11 +8,44 @@ from app.core.config import Config
 from app.core.extensions import cache, db
 from app.models.user import User
 from app.services.email_service import EmailService
+from email_validator import EmailNotValidError, validate_email
+
 
 class AuthService:
     @staticmethod
+    def _validate_registration_email(email_raw):
+        email = (email_raw or "").strip()
+        if not email:
+            return None, "Missing required fields"
+        try:
+            parsed = validate_email(
+                email,
+                check_deliverability=True,
+            )
+            normalized = parsed.normalized
+        except EmailNotValidError as e:
+            return None, f"Некорректный email: {str(e)}"
+
+        blocked_domains = {
+            "example.com",
+            "example.org",
+            "example.net",
+            "test.com",
+            "invalid",
+            "localhost",
+        }
+        domain = normalized.split(
+            "@", 1)[1].lower() if "@" in normalized else ""
+        if domain in blocked_domains:
+            return None, "Укажите реальный почтовый адрес"
+        return normalized, None
+
+    @staticmethod
     def register_user(data):
-        email = data.get("email")
+        email, email_error = AuthService._validate_registration_email(
+            data.get("email"))
+        if email_error:
+            return (None, email_error)
         username = data.get("username")
         password = data.get("password")
         if not email or not username or (not password):

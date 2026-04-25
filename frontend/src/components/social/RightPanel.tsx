@@ -5,7 +5,7 @@ import { useNotificationStore } from '@/lib/stores/notificationStore'
 import { User } from '@/lib/types'
 import { getAvatarUrl } from '@/lib/utils'
 import { motion } from 'framer-motion'
-import { Sparkles, Zap } from 'lucide-react'
+import { LuSparkles as Sparkles, LuZap as Zap } from 'react-icons/lu'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 

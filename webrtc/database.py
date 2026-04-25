@@ -1,242 +1,148 @@
-import asyncio
 import base64
 import hashlib
 import json
 import logging
 import os
-import threading
+from contextlib import contextmanager
 from datetime import datetime
 
-import asyncpg
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from sqlalchemy import Integer, String, Text, create_engine, func, or_
+from sqlalchemy.orm import Mapped, Session, declarative_base, mapped_column, sessionmaker
 
 from config import Config
 
 logger = logging.getLogger(__name__)
+Base = declarative_base()
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    username: Mapped[str | None] = mapped_column(String, nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    access_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    socket_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    status: Mapped[str | None] = mapped_column(String, nullable=True)
+    is_blocked: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    role: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+class Message(Base):
+    __tablename__ = "messages"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    sender_id: Mapped[str] = mapped_column(String, nullable=False)
+    target_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    channel_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    group_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    reply_to: Mapped[str | None] = mapped_column(String, nullable=True)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    attachments: Mapped[str | None] = mapped_column(Text, nullable=True)
+    type: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    updated_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    is_read: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_deleted: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    pinned_by: Mapped[str | None] = mapped_column(String, nullable=True)
+    reactions: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class Video(Base):
+    __tablename__ = "videos"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    author_id: Mapped[str] = mapped_column(String, nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    poster: Mapped[str | None] = mapped_column(Text, nullable=True)
+    duration: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    updated_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    views: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    likes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_deleted: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tags: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class Friendship(Base):
+    __tablename__ = "friendships"
+
+    id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, autoincrement=True)
+    requester_id: Mapped[str] = mapped_column(String, nullable=False)
+    addressee_id: Mapped[str] = mapped_column(String, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class Channel(Base):
+    __tablename__ = "channels"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    owner_id: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class Group(Base):
+    __tablename__ = "groups"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    owner_id: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class ChannelParticipant(Base):
+    __tablename__ = "channel_participants"
+
+    id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, autoincrement=True)
+    channel_id: Mapped[str] = mapped_column(String, nullable=False)
+    user_id: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class GroupParticipant(Base):
+    __tablename__ = "group_participants"
+
+    id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, autoincrement=True)
+    group_id: Mapped[str] = mapped_column(String, nullable=False)
+    user_id: Mapped[str] = mapped_column(String, nullable=False)
+
 
 class UserRepository:
     def __init__(self):
         try:
+            if not Config.DATABASE_URL:
+                raise RuntimeError("DATABASE_URL is not configured")
             self.cipher = Fernet(Config.MESSAGE_ENCRYPTION_KEY)
             self.mt_key, self.mt_iv = self._derive_mtproto_key_iv(
                 Config.MESSAGE_ENCRYPTION_KEY
             )
-            self._loop = asyncio.new_event_loop()
-            self._loop_thread = threading.Thread(
-                target=self._loop.run_forever,
-                daemon=True,
-            )
-            self._loop_thread.start()
-            self._init_db()
+            self.engine = create_engine(
+                Config.DATABASE_URL, pool_pre_ping=True)
+            self.session_factory = sessionmaker(
+                bind=self.engine, expire_on_commit=False)
         except Exception as e:
             logger.error(f"Ошибка инициализации репозитория: {e}")
             raise
 
-    def _init_db(self):
+    @contextmanager
+    def _session(self):
+        session: Session = self.session_factory()
         try:
-            self._run(self._init_db_async())
-        except Exception as e:
-            logger.error(f"Ошибка инициализации БД: {e}")
-
-    async def _init_db_async(self):
-        conn = await self._connect()
-        try:
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS messages (
-                    id TEXT PRIMARY KEY,
-                    sender_id TEXT NOT NULL,
-                    target_id TEXT,
-                    channel_id TEXT,
-                    group_id TEXT,
-                    reply_to TEXT,
-                    content TEXT NOT NULL,
-                    attachments TEXT,
-                    type TEXT DEFAULT 'text',
-                    created_at TEXT,
-                    updated_at TEXT,
-                    is_read INTEGER DEFAULT 0,
-                    is_deleted INTEGER DEFAULT 0,
-                    pinned_by TEXT,
-                    reactions TEXT
-                )
-            """)
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS videos (
-                    id TEXT PRIMARY KEY,
-                    author_id TEXT NOT NULL,
-                    title TEXT NOT NULL,
-                    description TEXT,
-                    url TEXT NOT NULL,
-                    poster TEXT,
-                    duration INTEGER,
-                    created_at TEXT,
-                    updated_at TEXT,
-                    views INTEGER DEFAULT 0,
-                    likes INTEGER DEFAULT 0,
-                    is_deleted INTEGER DEFAULT 0,
-                    tags TEXT
-                )
-            """)
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    id TEXT PRIMARY KEY,
-                    username TEXT,
-                    email TEXT,
-                    access_token TEXT,
-                    refresh_token TEXT,
-                    password_hash TEXT,
-                    avatar_url TEXT,
-                    is_verified INTEGER DEFAULT 0,
-                    socket_id TEXT,
-                    is_blocked INTEGER DEFAULT 0,
-                    is_blocked_at TEXT,
-                    blocked_by_admin TEXT,
-                    role TEXT,
-                    status TEXT,
-                    balance REAL DEFAULT 0,
-                    premium INTEGER DEFAULT 0,
-                    premium_started_at TEXT,
-                    premium_expired_at TEXT,
-                    disk_usage INTEGER DEFAULT 0,
-                    is_messaging INTEGER DEFAULT 0,
-                    telegram_id TEXT,
-                    link_key TEXT,
-                    two_factor_enabled INTEGER DEFAULT 0,
-                    two_factor_method TEXT,
-                    two_factor_secret TEXT,
-                    two_factor_email_code TEXT,
-                    two_factor_email_code_expires TEXT,
-                    login_alert_enabled INTEGER DEFAULT 0,
-                    profile_bg_theme TEXT,
-                    profile_bg_gradient TEXT,
-                    profile_bg_image TEXT,
-                    gifts TEXT,
-                    storis TEXT,
-                    is_developer INTEGER DEFAULT 0,
-                    api_key_hash TEXT,
-                    api_key TEXT,
-                    cloud_password_hash TEXT,
-                    cloud_password_reset_month INTEGER DEFAULT NULL,
-                    cloud_password_reset_count INTEGER DEFAULT 0,
-                    created_at TEXT,
-                    updated_at TEXT,
-                    video_channel_id TEXT,
-                    video_subscribers INTEGER DEFAULT 0,
-                    video_count INTEGER DEFAULT 0,
-                    video_likes TEXT,
-                    video_watch_later TEXT,
-                    video_history TEXT
-                )
-            """)
-            await conn.execute(
-                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS channel_id TEXT"
-            )
-            await conn.execute(
-                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS group_id TEXT"
-            )
-            await conn.execute(
-                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to TEXT"
-            )
-            await conn.execute(
-                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS target_id TEXT"
-            )
-            await conn.execute(
-                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'text'"
-            )
-            await conn.execute(
-                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_read INTEGER DEFAULT 0"
-            )
-            await conn.execute(
-                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachments TEXT"
-            )
-            await conn.execute(
-                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_deleted INTEGER DEFAULT 0"
-            )
-            await conn.execute(
-                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS created_at TEXT"
-            )
-            await conn.execute(
-                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS updated_at TEXT"
-            )
-            await conn.execute(
-                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS pinned_by TEXT"
-            )
-            await conn.execute(
-                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS reactions TEXT"
-            )
-            await conn.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS socket_id TEXT"
-            )
-            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT")
-            await conn.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS premium INTEGER DEFAULT 0"
-            )
-            await conn.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS video_channel_id TEXT"
-            )
-            await conn.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS video_subscribers INTEGER DEFAULT 0"
-            )
-            await conn.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS video_count INTEGER DEFAULT 0"
-            )
-            await conn.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS video_likes TEXT"
-            )
-            await conn.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS video_watch_later TEXT"
-            )
-            await conn.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS video_history TEXT"
-            )
+            yield session
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
         finally:
-            await conn.close()
+            session.close()
 
-    async def _connect(self):
-        if not Config.DATABASE_URL:
-            raise RuntimeError("DATABASE_URL is not configured")
-        return await asyncpg.connect(Config.DATABASE_URL)
-
-    def _run(self, coro):
-        future = asyncio.run_coroutine_threadsafe(coro, self._loop)
-        return future.result()
-
-    def _prepare(self, query, params):
-        if not params:
-            return query, []
-        segments = query.split("?")
-        if len(segments) - 1 != len(params):
-            raise ValueError("Placeholder count does not match params")
-        parts = [segments[0]]
-        for i, segment in enumerate(segments[1:], start=1):
-            parts.append(f"${i}")
-            parts.append(segment)
-        return "".join(parts), list(params)
-
-    async def _execute(self, query, params=None):
-        conn = await self._connect()
-        try:
-            prepared, args = self._prepare(query, params or [])
-            return await conn.execute(prepared, *args)
-        finally:
-            await conn.close()
-
-    async def _fetch(self, query, params=None):
-        conn = await self._connect()
-        try:
-            prepared, args = self._prepare(query, params or [])
-            return await conn.fetch(prepared, *args)
-        finally:
-            await conn.close()
-
-    async def _fetchrow(self, query, params=None):
-        conn = await self._connect()
-        try:
-            prepared, args = self._prepare(query, params or [])
-            return await conn.fetchrow(prepared, *args)
-        finally:
-            await conn.close()
+    @staticmethod
+    def _model_to_dict(model):
+        return {column.name: getattr(model, column.name)
+                for column in model.__table__.columns}
 
     def _derive_mtproto_key_iv(self, key_value):
         if isinstance(key_value, str):
@@ -341,81 +247,90 @@ class UserRepository:
 
     def fetch_user_by_token(self, token):
         try:
-            row = self._run(
-                self._fetchrow(
-                    "SELECT * FROM users WHERE access_token = ?",
-                    (token,),
-                )
-            )
-            return dict(row) if row else None
+            with self._session() as session:
+                row = session.query(User).filter(
+                    User.access_token == token).first()
+                return self._model_to_dict(row) if row else None
         except Exception as e:
             logger.error(f"DB Error fetch_user_by_token: {e}")
             return None
 
     def bind_socket(self, user_id, socket_id):
         try:
-            self._run(
-                self._execute(
-                    "UPDATE users SET socket_id = ?, status = 'Online' WHERE id = ?",
-                    (socket_id, user_id),
-                )
-            )
+            with self._session() as session:
+                user = session.query(User).filter(
+                    User.id == str(user_id)).first()
+                if user:
+                    user.socket_id = socket_id
+                    user.status = "Online"
         except Exception as e:
             logger.error(f"DB Error bind_socket: {e}")
 
     def release_socket(self, socket_id):
         try:
-            row = self._run(
-                self._fetchrow(
-                    "UPDATE users SET socket_id = NULL, status = 'Offline' WHERE socket_id = ? RETURNING id",
-                    (socket_id,),
-                )
-            )
-            return row["id"] if row else None
+            with self._session() as session:
+                user = session.query(User).filter(
+                    User.socket_id == socket_id).first()
+                if not user:
+                    return None
+                user.socket_id = None
+                user.status = "Offline"
+                return user.id
         except Exception as e:
             logger.error(f"DB Error release_socket: {e}")
             return None
 
     def get_user_friends_sockets(self, user_id):
         try:
-
-            query = """
-                SELECT socket_id FROM users
-                WHERE id IN (
-                    SELECT requester_id FROM friendships WHERE addressee_id = ? AND status = 'accepted'
-                    UNION
-                    SELECT addressee_id FROM friendships WHERE requester_id = ? AND status = 'accepted'
-                ) AND socket_id IS NOT NULL
-            """
-            rows = self._run(self._fetch(query, (user_id, user_id)))
-            return [row["socket_id"] for row in rows]
+            with self._session() as session:
+                requester_rows = (
+                    session.query(Friendship.requester_id)
+                    .filter(
+                        Friendship.addressee_id == str(user_id),
+                        Friendship.status == "accepted",
+                    )
+                    .all()
+                )
+                addressee_rows = (
+                    session.query(Friendship.addressee_id)
+                    .filter(
+                        Friendship.requester_id == str(user_id),
+                        Friendship.status == "accepted",
+                    )
+                    .all()
+                )
+                friend_ids = {
+                    row[0] for row in requester_rows} | {
+                    row[0] for row in addressee_rows}
+                if not friend_ids:
+                    return []
+                sockets = (
+                    session.query(
+                        User.socket_id) .filter(
+                        User.id.in_(friend_ids),
+                        User.socket_id.isnot(None)) .all())
+                return [row[0] for row in sockets if row[0]]
         except Exception as e:
             logger.error(f"DB Error get_user_friends_sockets: {e}")
             return []
 
     def find_user_by_socket(self, socket_id):
         try:
-            row = self._run(
-                self._fetchrow(
-                    "SELECT * FROM users WHERE socket_id = ?",
-                    (socket_id,),
-                )
-            )
-            return dict(row) if row else None
+            with self._session() as session:
+                row = session.query(User).filter(
+                    User.socket_id == socket_id).first()
+                return self._model_to_dict(row) if row else None
         except Exception as e:
             logger.error(f"DB Error find_user_by_socket: {e}")
             return None
 
     def get_socket_by_user_id(self, user_id):
         try:
-            row = self._run(
-                self._fetchrow(
-                    "SELECT socket_id FROM users WHERE id = ?",
-                    (user_id,),
-                )
-            )
-            if row and row.get("socket_id"):
-                return row["socket_id"]
+            with self._session() as session:
+                row = session.query(User).filter(
+                    User.id == str(user_id)).first()
+                if row and row.socket_id:
+                    return row.socket_id
             return None
         except Exception as e:
             logger.error(f"DB Error get_socket_by_user_id: {e}")
@@ -453,69 +368,24 @@ class UserRepository:
             elif not isinstance(ts, datetime):
                 ts = datetime.now()
 
-            if channel_id:
-                query = """
-                    INSERT INTO messages (id, sender_id, channel_id, reply_to, content, attachments, type, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """
-                self._run(
-                    self._execute(
-                        query,
-                        (
-                            msg_data["id"],
-                            msg_data["sender_id"],
-                            channel_id,
-                            reply_to,
-                            encrypted_content,
-                            encrypted_attachments,
-                            msg_type,
-                            ts,
-                            ts,
-                        ),
-                    )
+            with self._session() as session:
+                message = Message(
+                    id=msg_data["id"],
+                    sender_id=str(
+                        msg_data["sender_id"]),
+                    target_id=str(
+                        msg_data.get("target_id")) if msg_data.get("target_id") else None,
+                    channel_id=str(channel_id) if channel_id else None,
+                    group_id=str(group_id) if group_id else None,
+                    reply_to=str(reply_to) if reply_to else None,
+                    content=encrypted_content,
+                    attachments=encrypted_attachments,
+                    type=msg_type,
+                    created_at=ts,
+                    updated_at=ts,
+                    is_read=0,
                 )
-            elif group_id:
-                query = """
-                    INSERT INTO messages (id, sender_id, group_id, reply_to, content, attachments, type, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """
-                self._run(
-                    self._execute(
-                        query,
-                        (
-                            msg_data["id"],
-                            msg_data["sender_id"],
-                            group_id,
-                            reply_to,
-                            encrypted_content,
-                            encrypted_attachments,
-                            msg_type,
-                            ts,
-                            ts,
-                        ),
-                    )
-                )
-            else:
-                query = """
-                    INSERT INTO messages (id, sender_id, target_id, reply_to, content, attachments, type, created_at, updated_at, is_read)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-                """
-                self._run(
-                    self._execute(
-                        query,
-                        (
-                            msg_data["id"],
-                            msg_data["sender_id"],
-                            msg_data.get("target_id"),
-                            reply_to,
-                            encrypted_content,
-                            encrypted_attachments,
-                            msg_type,
-                            ts,
-                            ts,
-                        ),
-                    )
-                )
+                session.add(message)
             return True, None
         except Exception as e:
             logger.error(f"DB Error save_message: {e}")
@@ -541,33 +411,26 @@ class UserRepository:
             elif not isinstance(updated_at, datetime):
                 updated_at = datetime.now()
 
-            query = """
-                INSERT INTO videos (id, author_id, title, description, url, poster, duration, created_at, updated_at, views, likes, is_deleted, tags)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """
             tags_json = None
             if video_data.get("tags") is not None:
                 tags_json = json.dumps(video_data["tags"], ensure_ascii=False)
-            self._run(
-                self._execute(
-                    query,
-                    (
-                        video_data["id"],
-                        video_data["author_id"],
-                        video_data["title"],
-                        video_data.get("description"),
-                        video_data["url"],
-                        video_data.get("poster"),
-                        video_data.get("duration"),
-                        created_at,
-                        updated_at,
-                        video_data.get("views", 0),
-                        video_data.get("likes", 0),
-                        video_data.get("is_deleted", 0),
-                        tags_json,
-                    ),
+            with self._session() as session:
+                video = Video(
+                    id=video_data["id"],
+                    author_id=str(video_data["author_id"]),
+                    title=video_data["title"],
+                    description=video_data.get("description"),
+                    url=video_data["url"],
+                    poster=video_data.get("poster"),
+                    duration=video_data.get("duration"),
+                    created_at=created_at,
+                    updated_at=updated_at,
+                    views=video_data.get("views", 0),
+                    likes=video_data.get("likes", 0),
+                    is_deleted=video_data.get("is_deleted", 0),
+                    tags=tags_json,
                 )
-            )
+                session.add(video)
             return True
         except Exception as e:
             logger.error(f"DB Error save_video: {e}")
@@ -575,49 +438,46 @@ class UserRepository:
 
     def update_video(self, video_id, updates):
         try:
-            set_parts = []
-            params = []
-            for key, value in updates.items():
-                if key == "tags":
-                    value = (
-                        json.dumps(value, ensure_ascii=False)
-                        if value is not None
-                        else None
-                    )
-                set_parts.append(f"{key} = ?")
-                params.append(value)
-            params.append(video_id)
-            query = f"UPDATE videos SET {', '.join(set_parts)} WHERE id = ?"
-            self._run(self._execute(query, params))
-            return True
+            with self._session() as session:
+                video = session.query(Video).filter(
+                    Video.id == str(video_id)).first()
+                if not video:
+                    return False
+                for key, value in updates.items():
+                    if not hasattr(video, key):
+                        continue
+                    if key == "tags":
+                        value = json.dumps(
+                            value, ensure_ascii=False) if value is not None else None
+                    setattr(video, key, value)
+                video.updated_at = datetime.now()
+                return True
         except Exception as e:
             logger.error(f"DB Error update_video: {e}")
             return False
 
     def delete_video(self, video_id):
         try:
-            self._run(
-                self._execute(
-                    "UPDATE videos SET is_deleted = 1 WHERE id = ?",
-                    (video_id,),
-                )
-            )
-            return True
+            with self._session() as session:
+                video = session.query(Video).filter(
+                    Video.id == str(video_id)).first()
+                if not video:
+                    return False
+                video.is_deleted = 1
+                video.updated_at = datetime.now()
+                return True
         except Exception as e:
             logger.error(f"DB Error delete_video: {e}")
             return False
 
     def get_video_by_id(self, video_id):
         try:
-            row = self._run(
-                self._fetchrow(
-                    "SELECT * FROM videos WHERE id = ?",
-                    (video_id,),
-                )
-            )
+            with self._session() as session:
+                row = session.query(Video).filter(
+                    Video.id == str(video_id)).first()
             if not row:
                 return None
-            data = dict(row)
+            data = self._model_to_dict(row)
             if data.get("tags"):
                 try:
                     data["tags"] = json.loads(data["tags"])
@@ -630,23 +490,20 @@ class UserRepository:
 
     def list_videos(self, limit=20, offset=0, author_id=None):
         try:
-            if author_id:
-                rows = self._run(
-                    self._fetch(
-                        "SELECT * FROM videos WHERE author_id = ? AND is_deleted = 0 ORDER BY created_at DESC LIMIT ? OFFSET ?",
-                        (author_id, limit, offset),
-                    )
-                )
-            else:
-                rows = self._run(
-                    self._fetch(
-                        "SELECT * FROM videos WHERE is_deleted = 0 ORDER BY created_at DESC LIMIT ? OFFSET ?",
-                        (limit, offset),
-                    )
+            with self._session() as session:
+                query = session.query(Video).filter(
+                    or_(Video.is_deleted == 0, Video.is_deleted.is_(None)))
+                if author_id:
+                    query = query.filter(Video.author_id == str(author_id))
+                rows = (
+                    query.order_by(Video.created_at.desc())
+                    .limit(limit)
+                    .offset(offset)
+                    .all()
                 )
             out = []
             for row in rows:
-                item = dict(row)
+                item = self._model_to_dict(row)
                 if item.get("tags"):
                     try:
                         item["tags"] = json.loads(item["tags"])
@@ -660,55 +517,51 @@ class UserRepository:
 
     def mark_messages_as_read(self, message_ids, reader_id):
         try:
-            placeholders = ",".join(["?"] * len(message_ids))
-            query = f"UPDATE messages SET is_read = 1 WHERE id IN ({placeholders}) AND target_id = ?"
-            args = list(message_ids) + [reader_id]
-            self._run(self._execute(query, args))
+            if not message_ids:
+                return
+            with self._session() as session:
+                session.query(Message).filter(
+                    Message.id.in_([str(mid) for mid in message_ids]),
+                    Message.target_id == str(reader_id),
+                ).update({"is_read": 1}, synchronize_session=False)
         except Exception as e:
             logger.error(f"DB Error mark_messages_as_read: {e}")
 
     def get_message_meta(self, message_id):
         try:
-            row = self._run(
-                self._fetchrow(
-                    "SELECT id, sender_id, target_id, channel_id, group_id, is_deleted, pinned_by, reactions FROM messages WHERE id = ?",
-                    (message_id,),
-                )
-            )
-            return dict(row) if row else None
+            with self._session() as session:
+                row = session.query(Message).filter(
+                    Message.id == str(message_id)).first()
+                if not row:
+                    return None
+                return {
+                    "id": row.id,
+                    "sender_id": row.sender_id,
+                    "target_id": row.target_id,
+                    "channel_id": row.channel_id,
+                    "group_id": row.group_id,
+                    "is_deleted": row.is_deleted,
+                    "pinned_by": row.pinned_by,
+                    "reactions": row.reactions,
+                }
         except Exception as e:
             logger.error(f"DB Error get_message_meta: {e}")
             return None
 
     def mark_message_deleted(self, message_id, sender_id):
         try:
-            row = self._run(
-                self._fetchrow(
-                    "SELECT id, sender_id FROM messages WHERE id = ?",
-                    (message_id,),
-                )
-            )
+            with self._session() as session:
+                row = session.query(Message).filter(
+                    Message.id == str(message_id)).first()
             if not row:
                 return False, "not_found"
-            if str(row["sender_id"]) != str(sender_id):
+            if str(row.sender_id) != str(sender_id):
                 return False, "forbidden"
-            column_rows = self._run(
-                self._fetch(
-                    "SELECT column_name FROM information_schema.columns WHERE table_name = 'messages'"
-                )
-            )
-            columns = [row["column_name"] for row in column_rows]
-            encrypted_content = self._encrypt_payload("Сообщение удалено")
-            set_clauses = ["content = ?",
-                           "attachments = NULL", "is_deleted = 1"]
-            params = [encrypted_content]
-            if "updated_at" in columns:
-                set_clauses.append("updated_at = ?")
-                params.append(datetime.utcnow().isoformat())
-            params.append(message_id)
-            query = f"UPDATE messages SET {
-                ', '.join(set_clauses)} WHERE id = ?"
-            self._run(self._execute(query, params))
+            with self._session() as session:
+                row = session.query(Message).filter(
+                    Message.id == str(message_id)).first()
+                if row:
+                    session.delete(row)
             return True, "ok"
         except Exception as e:
             logger.error(f"DB Error mark_message_deleted: {e}")
@@ -716,14 +569,11 @@ class UserRepository:
 
     def get_channel_owner(self, channel_id):
         try:
-            row = self._run(
-                self._fetchrow(
-                    "SELECT owner_id FROM channels WHERE id = ?",
-                    (channel_id,),
-                )
-            )
-            if row:
-                return row["owner_id"]
+            with self._session() as session:
+                row = session.query(Channel).filter(
+                    Channel.id == str(channel_id)).first()
+                if row:
+                    return row.owner_id
             return None
         except Exception as e:
             logger.error(f"DB Error get_channel_owner: {e}")
@@ -731,32 +581,33 @@ class UserRepository:
 
     def get_channel_participants(self, channel_id):
         try:
-            query = "SELECT user_id FROM channel_participants WHERE channel_id = ?"
-            rows = self._run(self._fetch(query, (channel_id,)))
-            return [row["user_id"] for row in rows]
+            with self._session() as session:
+                rows = session.query(ChannelParticipant.user_id).filter(
+                    ChannelParticipant.channel_id == str(channel_id)
+                ).all()
+                return [row[0] for row in rows]
         except Exception as e:
             logger.error(f"DB Error get_channel_participants: {e}")
             return []
 
     def get_group_participants(self, group_id):
         try:
-            query = "SELECT user_id FROM group_participants WHERE group_id = ?"
-            rows = self._run(self._fetch(query, (group_id,)))
-            return [row["user_id"] for row in rows]
+            with self._session() as session:
+                rows = session.query(GroupParticipant.user_id).filter(
+                    GroupParticipant.group_id == str(group_id)
+                ).all()
+                return [row[0] for row in rows]
         except Exception as e:
             logger.error(f"DB Error get_group_participants: {e}")
             return []
 
     def get_group_owner(self, group_id):
         try:
-            row = self._run(
-                self._fetchrow(
-                    "SELECT owner_id FROM groups WHERE id = ?",
-                    (group_id,),
-                )
-            )
-            if row:
-                return row["owner_id"]
+            with self._session() as session:
+                row = session.query(Group).filter(
+                    Group.id == str(group_id)).first()
+                if row:
+                    return row.owner_id
             return None
         except Exception as e:
             logger.error(f"DB Error get_group_owner: {e}")
@@ -764,17 +615,19 @@ class UserRepository:
 
     def get_channel_history(self, channel_id, limit=50, offset=0):
         try:
-            query = """
-                SELECT * FROM messages
-                WHERE channel_id = ?
-                ORDER BY created_at DESC
-                LIMIT ? OFFSET ?
-            """
-            rows = self._run(self._fetch(query, (channel_id, limit, offset)))
+            with self._session() as session:
+                rows = (
+                    session.query(Message)
+                    .filter(Message.channel_id == str(channel_id))
+                    .order_by(Message.created_at.desc())
+                    .limit(limit)
+                    .offset(offset)
+                    .all()
+                )
 
             messages = []
             for row in rows:
-                msg = dict(row)
+                msg = self._model_to_dict(row)
                 if "created_at" in msg:
                     msg["timestamp"] = msg.pop("created_at")
                 try:
@@ -816,61 +669,60 @@ class UserRepository:
 
     def delete_messages_history(self, user_id, target_id):
         try:
-            query = """
-                DELETE FROM messages
-                WHERE (sender_id = ? AND target_id = ?)
-                   OR (sender_id = ? AND target_id = ?)
-            """
-            result = self._run(
-                self._execute(
-                    query,
-                    (user_id, target_id, target_id, user_id),
-                )
-            )
-            return int(result.split()[-1]) if isinstance(result, str) else 0
+            with self._session() as session:
+                deleted = (
+                    session.query(Message) .filter(
+                        or_(
+                            (Message.sender_id == str(user_id)) & (
+                                Message.target_id == str(target_id)), (Message.sender_id == str(target_id)) & (
+                                Message.target_id == str(user_id)), )) .delete(
+                        synchronize_session=False))
+                return deleted or 0
         except Exception as err:
             logger.error(f"Ошибка БД (удаление истории): {err}")
             return 0
 
     def delete_channel_history(self, channel_id):
         try:
-            result = self._run(
-                self._execute(
-                    "DELETE FROM messages WHERE channel_id = ?",
-                    (channel_id,),
+            with self._session() as session:
+                deleted = (
+                    session.query(Message)
+                    .filter(Message.channel_id == str(channel_id))
+                    .delete(synchronize_session=False)
                 )
-            )
-            return int(result.split()[-1]) if isinstance(result, str) else 0
+                return deleted or 0
         except Exception as err:
             logger.error(f"Ошибка БД (удаление истории канала): {err}")
             return 0
 
     def delete_group_history(self, group_id):
         try:
-            result = self._run(
-                self._execute(
-                    "DELETE FROM messages WHERE group_id = ?",
-                    (group_id,),
+            with self._session() as session:
+                deleted = (
+                    session.query(Message)
+                    .filter(Message.group_id == str(group_id))
+                    .delete(synchronize_session=False)
                 )
-            )
-            return int(result.split()[-1]) if isinstance(result, str) else 0
+                return deleted or 0
         except Exception as err:
             logger.error(f"Ошибка БД (удаление истории группы): {err}")
             return 0
 
     def get_group_history(self, group_id, limit=50, offset=0):
         try:
-            query = """
-                SELECT * FROM messages
-                WHERE group_id = ?
-                ORDER BY created_at DESC
-                LIMIT ? OFFSET ?
-            """
-            rows = self._run(self._fetch(query, (group_id, limit, offset)))
+            with self._session() as session:
+                rows = (
+                    session.query(Message)
+                    .filter(Message.group_id == str(group_id))
+                    .order_by(Message.created_at.desc())
+                    .limit(limit)
+                    .offset(offset)
+                    .all()
+                )
 
             messages = []
             for row in rows:
-                msg = dict(row)
+                msg = self._model_to_dict(row)
                 if "created_at" in msg:
                     msg["timestamp"] = msg.pop("created_at")
                 try:
@@ -916,54 +768,42 @@ class UserRepository:
 
     def get_online_users_count(self):
         try:
-            row = self._run(
-                self._fetchrow(
-                    "SELECT COUNT(*) as count FROM users WHERE status = 'online'"
-                )
-            )
-            return row["count"] if row else 0
+            with self._session() as session:
+                return session.query(func.count(User.id)).filter(
+                    func.lower(func.coalesce(User.status, "")) == "online"
+                ).scalar() or 0
         except Exception as e:
             logger.error(f"DB Error get_online_users_count: {e}")
             return 0
 
     def update_socket_id_for_user(self, user_id, socket_id):
         try:
-            self._run(
-                self._execute(
-                    "UPDATE users SET socket_id = ?, status = 'online' WHERE id = ?",
-                    (socket_id, user_id),
-                )
-            )
-            row = self._run(
-                self._fetchrow(
-                    "SELECT * FROM users WHERE id = ?",
-                    (user_id,),
-                )
-            )
-            return dict(row) if row else None
+            with self._session() as session:
+                row = session.query(User).filter(
+                    User.id == str(user_id)).first()
+                if not row:
+                    return None
+                row.socket_id = socket_id
+                row.status = "online"
+                return self._model_to_dict(row)
         except Exception as e:
             logger.error(f"DB Error update_socket_id_for_user: {e}")
             return None
 
     def get_messages_history(self, user_id, target_id, limit=50, offset=0):
         try:
-            query = """
-                SELECT * FROM messages
-                WHERE (sender_id = ? AND target_id = ?)
-                   OR (sender_id = ? AND target_id = ?)
-                ORDER BY created_at DESC
-                LIMIT ? OFFSET ?
-            """
-            rows = self._run(
-                self._fetch(
-                    query,
-                    (user_id, target_id, target_id, user_id, limit, offset),
-                )
-            )
+            with self._session() as session:
+                rows = (
+                    session.query(Message) .filter(
+                        or_(
+                            (Message.sender_id == str(user_id)) & (
+                                Message.target_id == str(target_id)), (Message.sender_id == str(target_id)) & (
+                                Message.target_id == str(user_id)), )) .order_by(
+                        Message.created_at.desc()) .limit(limit) .offset(offset) .all())
 
             messages = []
             for row in rows:
-                msg = dict(row)
+                msg = self._model_to_dict(row)
                 if "created_at" in msg:
                     msg["timestamp"] = msg.pop("created_at")
                 try:
@@ -1009,32 +849,40 @@ class UserRepository:
 
     def search_users(self, query_str):
         try:
-            query = "SELECT id, username, avatar_url, status FROM users WHERE username ILIKE ? LIMIT 20"
-            rows = self._run(self._fetch(query, (f"%{query_str}%",)))
-            return [dict(row) for row in rows]
+            with self._session() as session:
+                rows = (
+                    session.query(User)
+                    .filter(User.username.ilike(f"%{query_str}%"))
+                    .limit(20)
+                    .all()
+                )
+                return [
+                    {
+                        "id": row.id,
+                        "username": row.username,
+                        "avatar_url": row.avatar_url,
+                        "status": row.status,
+                    }
+                    for row in rows
+                ]
         except Exception as e:
             logger.error(f"DB Error search_users: {e}")
             return []
 
     def search_messages(self, user_id, target_id, query_str):
         try:
-            sql = """
-                SELECT * FROM messages
-                WHERE (sender_id = ? AND target_id = ?)
-                   OR (sender_id = ? AND target_id = ?)
-                ORDER BY created_at DESC
-                LIMIT 500
-            """
-            rows = self._run(
-                self._fetch(
-                    sql,
-                    (user_id, target_id, target_id, user_id),
-                )
-            )
+            with self._session() as session:
+                rows = (
+                    session.query(Message) .filter(
+                        or_(
+                            (Message.sender_id == str(user_id)) & (
+                                Message.target_id == str(target_id)), (Message.sender_id == str(target_id)) & (
+                                Message.target_id == str(user_id)), )) .order_by(
+                        Message.created_at.desc()) .limit(500) .all())
 
             results = []
             for row in rows:
-                msg = dict(row)
+                msg = self._model_to_dict(row)
                 try:
                     decrypted = self._decrypt_payload(msg["content"])
                     if decrypted and query_str.lower() in decrypted.lower():
@@ -1046,3 +894,57 @@ class UserRepository:
         except Exception as e:
             logger.error(f"DB Error search_messages: {e}")
             return []
+
+    def get_pinned_message_ids(self):
+        try:
+            with self._session() as session:
+                rows = (
+                    session.query(Message.id)
+                    .filter(Message.pinned_by.isnot(None))
+                    .all()
+                )
+                return [row[0] for row in rows]
+        except Exception as e:
+            logger.error(f"DB Error get_pinned_message_ids: {e}")
+            return []
+
+    def get_reactions_by_message(self):
+        try:
+            with self._session() as session:
+                rows = (
+                    session.query(Message.id, Message.reactions)
+                    .filter(Message.reactions.isnot(None))
+                    .all()
+                )
+                return [{"id": row[0], "reactions": row[1]} for row in rows]
+        except Exception as e:
+            logger.error(f"DB Error get_reactions_by_message: {e}")
+            return []
+
+    def update_message_reactions(self, message_id, reactions):
+        try:
+            with self._session() as session:
+                row = session.query(Message).filter(
+                    Message.id == str(message_id)).first()
+                if not row:
+                    return False
+                row.reactions = reactions
+                row.updated_at = datetime.now()
+                return True
+        except Exception as e:
+            logger.error(f"DB Error update_message_reactions: {e}")
+            return False
+
+    def update_message_pinned_by(self, message_id, pinned_by):
+        try:
+            with self._session() as session:
+                row = session.query(Message).filter(
+                    Message.id == str(message_id)).first()
+                if not row:
+                    return False
+                row.pinned_by = pinned_by
+                row.updated_at = datetime.now()
+                return True
+        except Exception as e:
+            logger.error(f"DB Error update_message_pinned_by: {e}")
+            return False

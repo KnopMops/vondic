@@ -5,6 +5,7 @@ from sqlalchemy import TEXT, TIMESTAMP
 
 from app.core.extensions import db
 
+
 class Like(db.Model):
     __tablename__ = "likes"
     id = db.Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))

@@ -5,14 +5,14 @@ import BrandLogo from '@/components/social/BrandLogo'
 import { useAuth } from '@/lib/AuthContext'
 import { motion } from 'framer-motion'
 import {
-    Github,
-    MessageCircle,
-    Monitor,
-    Share2,
-    Shield,
-    Smartphone,
-    Zap,
-} from 'lucide-react'
+	FiGithub as Github,
+	FiMessageCircle as MessageCircle,
+	FiMonitor as Monitor,
+	FiShare2 as Share2,
+	FiShield as Shield,
+	FiSmartphone as Smartphone,
+	FiZap as Zap,
+} from 'react-icons/fi'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 

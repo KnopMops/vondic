@@ -5,6 +5,7 @@ import { getAttachmentUrl } from '@/lib/utils'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { AppleEmoji } from '@/components/ui/AppleEmoji'
 
 type Reaction = { user_id: string; emoji: string; created_at?: string }
 type Item = {
@@ -325,7 +326,7 @@ export default function StoriesModal({
 											key={emoji}
 											className='flex items-center gap-1 rounded-full bg-black/40 px-2 py-1 text-sm text-gray-100'
 										>
-											<span>{emoji}</span>
+											<AppleEmoji emoji={emoji} size={18} />
 											<span className='text-xs text-gray-300'>{count}</span>
 										</div>
 									))}
@@ -344,7 +345,7 @@ export default function StoriesModal({
 													: 'bg-black/40 text-gray-100 hover:bg-black/60'
 											}`}
 										>
-											{emoji}
+											<AppleEmoji emoji={emoji} size={22} />
 										</button>
 									))}
 								</div>

@@ -2,7 +2,24 @@
 
 import React, { useRef, useEffect, useState } from 'react'
 import { useCallStore } from '../../lib/stores/callStore'
-import { PhoneOffIcon, MicIcon, MicOffIcon, VideoIcon, VideoOffIcon, MonitorIcon, MonitorOffIcon, UsersIcon, MaximizeIcon, MinimizeIcon, WifiIcon, WifiOffIcon, ActivityIcon, ClockIcon, Volume2Icon, VolumeXIcon, HelpCircleIcon } from 'lucide-react'
+import {
+	FiActivity as ActivityIcon,
+	FiClock as ClockIcon,
+	FiHelpCircle as HelpCircleIcon,
+	FiMaximize as MaximizeIcon,
+	FiMic as MicIcon,
+	FiMicOff as MicOffIcon,
+	FiMinimize as MinimizeIcon,
+	FiMonitor as MonitorIcon,
+	FiPhoneOff as PhoneOffIcon,
+	FiUsers as UsersIcon,
+	FiVideo as VideoIcon,
+	FiVideoOff as VideoOffIcon,
+	FiVolume2 as Volume2Icon,
+	FiVolumeX as VolumeXIcon,
+	FiWifi as WifiIcon,
+} from 'react-icons/fi'
+import { LuMonitorOff as MonitorOffIcon, LuWifiOff as WifiOffIcon } from 'react-icons/lu'
 
 interface CallControlBarProps {
 	participantName: string

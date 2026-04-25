@@ -3,6 +3,7 @@ import time
 from collections import defaultdict, deque
 from functools import wraps
 
+
 class RateLimiter:
 
     def __init__(self, redis_client=None):
@@ -96,13 +97,16 @@ class RateLimiter:
 
         return False
 
+
 rate_limiter = RateLimiter()
+
 
 def get_client_ip(request):
     forwarded_for = request.headers.get('X-Forwarded-For')
     if forwarded_for:
         return forwarded_for.split(',')[0].strip()
     return request.environ.get('REMOTE_ADDR')
+
 
 def rate_limit(limit: int, window: int, per_user: bool = False):
     def decorator(func):
@@ -139,6 +143,7 @@ def rate_limit(limit: int, window: int, per_user: bool = False):
             return func(*args, **kwargs)
         return wrapper
     return decorator
+
 
 def check_spam_protection(content: str) -> tuple[bool, str]:
     if rate_limiter.is_spam_content(content):

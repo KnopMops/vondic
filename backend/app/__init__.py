@@ -5,20 +5,20 @@ import time
 from flasgger import Swagger
 from flask import Flask, Response, request
 from prometheus_client import Counter, Gauge, Histogram, generate_latest
-from sqlalchemy import text
 
 from app.core.config import Config
 from app.core.extensions import cache, cors, db, ma, mail, migrate
 
 REQUEST_COUNT = Counter(
-    "http_requests_total", "Total HTTP requests", ["method", "endpoint", "status"]
-)
+    "http_requests_total", "Total HTTP requests", [
+        "method", "endpoint", "status"])
 REQUEST_LATENCY = Histogram(
-    "http_request_duration_seconds", "HTTP request latency", ["method", "endpoint"]
-)
+    "http_request_duration_seconds", "HTTP request latency", [
+        "method", "endpoint"])
 REQUEST_IN_PROGRESS = Gauge(
-    "http_requests_in_progress", "HTTP requests in progress", ["method", "endpoint"]
-)
+    "http_requests_in_progress", "HTTP requests in progress", [
+        "method", "endpoint"])
+
 
 def _tag_for_rule(rule: str) -> str:
     parts = [p for p in rule.split("/") if p]
@@ -48,6 +48,7 @@ def _tag_for_rule(rule: str) -> str:
         "health": "Health",
     }
     return mapping.get(key, key.replace("-", " ").title())
+
 
 def _build_swagger_paths(app: Flask):
     paths = {}
@@ -82,6 +83,7 @@ def _build_swagger_paths(app: Flask):
                 entry[method.lower()]["security"] = [{"Bearer": []}]
     return paths
 
+
 def _build_allowed_origins() -> list[str]:
     defaults = [
         "https://vondic.knopusmedia.ru",
@@ -105,6 +107,7 @@ def _build_allowed_origins() -> list[str]:
             seen.add(origin)
     return merged
 
+
 def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
@@ -120,135 +123,13 @@ def create_app(config_class=Config):
 
     with app.app_context():
         if not os.environ.get("SKIP_DB_BOOTSTRAP"):
-
+            db.create_all()
             db.session.rollback()
 
-            def _pg_table_exists(table_name: str) -> bool:
-                from sqlalchemy import inspect
-                return inspect(db.engine).has_table(table_name)
-
-            def _pg_column_exists(table_name: str, column_name: str) -> bool:
-                from sqlalchemy import inspect
-                if not inspect(db.engine).has_table(table_name):
-                    return False
-                columns = [col['name'] for col in db.engine.dialect.get_columns(db.engine.connect(), table_name)]
-                return column_name in columns
-
-            if _pg_table_exists("messages"):
-                message_columns = [
-                    ("attachments", "JSON"),
-                    ("pinned_by", "TEXT"),
-                    ("reactions", "JSON"),
-                    ("read_by", "JSON DEFAULT '[]'::json"),
-                    ("reply_to_id", "TEXT"),
-                    ("forwarded_from_id", "TEXT"),
-                    ("is_edited", "INTEGER DEFAULT 0"),
-                    ("edit_history", "JSON"),
-                    ("channel_id", "TEXT"),
-                    ("updated_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
-                    ("is_read", "INTEGER DEFAULT 0"),
-                    ("is_deleted", "INTEGER DEFAULT 0"),
-                ]
-
-                for column_name, column_def in message_columns:
-                    try:
-                        db.session.execute(
-                            text(f"ALTER TABLE messages ADD COLUMN IF NOT EXISTS {column_name} {column_def}"))
-                        db.session.commit()
-                    except Exception:
-                        db.session.rollback()
-
-            user_columns = [
-                ("access_token", "TEXT"),
-                ("refresh_token", "TEXT"),
-                ("is_verified", "INTEGER DEFAULT 0"),
-                ("socket_id", "TEXT"),
-                ("is_blocked", "INTEGER DEFAULT 0"),
-                ("is_blocked_at", "TIMESTAMP DEFAULT NULL"),
-                ("blocked_by_admin", "TEXT"),
-                ("role", "TEXT DEFAULT 'User'"),
-                ("status", "TEXT DEFAULT 'offline'"),
-                ("balance", "DOUBLE PRECISION DEFAULT 0.0"),
-                ("premium", "INTEGER DEFAULT 0"),
-                ("premium_started_at", "TIMESTAMP DEFAULT NULL"),
-                ("premium_expired_at", "TIMESTAMP DEFAULT NULL"),
-                ("disk_usage", "BIGINT DEFAULT 0"),
-                ("is_messaging", "INTEGER DEFAULT 0"),
-                ("telegram_id", "TEXT"),
-                ("link_key", "TEXT"),
-                ("two_factor_enabled", "INTEGER DEFAULT 0"),
-                ("two_factor_method", "TEXT"),
-                ("two_factor_secret", "TEXT"),
-                ("two_factor_email_code", "TEXT"),
-                ("two_factor_email_code_expires", "TIMESTAMP DEFAULT NULL"),
-                ("login_alert_enabled", "INTEGER DEFAULT 0"),
-                ("profile_bg_theme", "TEXT"),
-                ("profile_bg_gradient", "TEXT"),
-                ("profile_bg_image", "TEXT"),
-                ("gifts", "TEXT"),
-                ("storis", "TEXT"),
-                ("pinned_chats", "JSON DEFAULT '[]'::json"),
-                ("is_developer", "INTEGER DEFAULT 0"),
-                ("api_key_hash", "TEXT"),
-                ("api_key", "TEXT"),
-                ("cloud_password_hash", "TEXT"),
-                ("cloud_password_reset_month", "INTEGER DEFAULT NULL"),
-                ("cloud_password_reset_count", "INTEGER DEFAULT 0"),
-                ("storage_bonus", "BIGINT DEFAULT 0"),
-                ("video_channel_id", "TEXT"),
-                ("video_subscribers", "INTEGER DEFAULT 0"),
-                ("video_count", "INTEGER DEFAULT 0"),
-                ("video_likes", "TEXT"),
-                ("video_watch_later", "TEXT"),
-                ("video_history", "TEXT"),
-            ]
-
-            for column_name, column_def in user_columns:
-                try:
-                    db.session.execute(
-                        text(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {column_name} {column_def}"))
-                    db.session.commit()
-                except Exception:
-                    db.session.rollback()
-
-            post_columns = [
-                ("is_blog", "BOOLEAN DEFAULT FALSE"),
-                ("reports", "INTEGER DEFAULT 0"),
-            ]
-
-            for column_name, column_def in post_columns:
-                try:
-                    db.session.execute(
-                        text(f"ALTER TABLE posts ADD COLUMN IF NOT EXISTS {column_name} {column_def}"))
-                    db.session.commit()
-                except Exception:
-                    db.session.rollback()
-
-            comment_columns = [
-                ("deleted", "BOOLEAN DEFAULT FALSE"),
-                ("deleted_by", "TEXT"),
-                ("reason_for_deletion", "TEXT"),
-                ("deleted_at", "TIMESTAMP DEFAULT NULL"),
-                ("likes", "INTEGER DEFAULT 0"),
-            ]
-
-            for column_name, column_def in comment_columns:
-                try:
-                    db.session.execute(
-                        text(f"ALTER TABLE comments ADD COLUMN IF NOT EXISTS {column_name} {column_def}"))
-                    db.session.commit()
-                except Exception:
-                    db.session.rollback()
-
             try:
-                db.session.execute(text(""""""))
-                db.session.commit()
-            except Exception:
-                db.session.rollback()
+                from app.models.gift_catalog import GiftCatalog
 
-            try:
-                count_result = db.session.execute(text("SELECT COUNT(*) FROM gifts_catalog")).scalar()
-                if count_result == 0:
+                if GiftCatalog.query.count() == 0:
                     seed_items = [
                         ("newyear_fireworks", "Новогодний салют", 99, "Flame", "Праздничное настроение на Новый год"),
                         ("valentine_heart", "Валентинка", 39, "Heart", "Для Дня святого Валентина"),
@@ -256,107 +137,20 @@ def create_app(config_class=Config):
                         ("birthday_cake", "День рождения", 299, "Cake", "Поздравляем с днем рождения!"),
                         ("premium_crown", "Премиум корона", 999, "Crown", "Самая престижная награда"),
                     ]
-
                     for item in seed_items:
-                        db.session.execute(
-                            text(""""""),
-                            {
-                                "id": item[0],
-                                "name": item[1],
-                                "coin_price": item[2],
-                                "icon": item[3],
-                                "description": item[4],
-                                "image_url": None,
-                                "total_supply": None,
-                                "minted_count": 0,
-                            },
+                        db.session.add(
+                            GiftCatalog(
+                                id=item[0],
+                                name=item[1],
+                                coin_price=item[2],
+                                icon=item[3],
+                                description=item[4],
+                                image_url=None,
+                                total_supply=None,
+                                minted_count=0,
+                            )
                         )
                     db.session.commit()
-            except Exception:
-                db.session.rollback()
-
-            try:
-                db.session.execute(text(""""""))
-                db.session.commit()
-            except Exception:
-                db.session.rollback()
-
-            from app.api.v1.support import ensure_support_tables
-            ensure_support_tables()
-
-            try:
-                db.session.execute(
-                    text(
-                        "ALTER TABLE users ADD COLUMN IF NOT EXISTS storage_bonus BIGINT DEFAULT 0"
-                    )
-                )
-                db.session.commit()
-            except Exception:
-                pass
-            try:
-                db.session.execute(
-                    text("ALTER TABLE users ALTER COLUMN disk_usage TYPE BIGINT"))
-                db.session.commit()
-            except Exception:
-                pass
-            try:
-                db.session.execute(
-                    text("ALTER TABLE users ALTER COLUMN storage_bonus TYPE BIGINT"))
-                db.session.commit()
-            except Exception:
-                pass
-            try:
-                db.session.execute(
-                    text("ALTER TABLE bots ADD COLUMN IF NOT EXISTS bot_token_hash TEXT"))
-                db.session.commit()
-            except Exception:
-                pass
-            try:
-                db.session.execute(
-                    text("ALTER TABLE bots ADD COLUMN IF NOT EXISTS is_verified INTEGER DEFAULT 0"))
-                db.session.commit()
-            except Exception:
-                pass
-
-            try:
-                db.session.execute(
-                    text("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS read INTEGER DEFAULT 0"))
-                db.session.commit()
-            except Exception:
-                pass
-
-            try:
-                db.session.execute(
-                    text("""""")
-                )
-                db.session.execute(
-                    text("""""")
-                )
-                db.session.commit()
-            except Exception:
-                db.session.rollback()
-
-            try:
-                db.session.execute(
-                    text("""""")
-                )
-                db.session.execute(
-                    text(
-                        "CREATE UNIQUE INDEX IF NOT EXISTS uq_community_channel_name ON community_channels(community_id, name)"
-                    )
-                )
-                db.session.commit()
-            except Exception:
-                db.session.rollback()
-
-            try:
-                db.session.execute(
-                    text("""""")
-                )
-                db.session.execute(
-                    text("""""")
-                )
-                db.session.commit()
             except Exception:
                 db.session.rollback()
 
@@ -378,6 +172,7 @@ def create_app(config_class=Config):
     from app.api.v1.channels import channels_bp
     from app.api.v1.comments import comments_bp
     from app.api.v1.communities import communities_bp
+    from app.api.v1.e2e_keys import e2e_keys_bp
     from app.api.v1.direct_messages import dm_bp
     from app.api.v1.friends import friends_bp
     from app.api.v1.gifts import gifts_bp
@@ -389,9 +184,11 @@ def create_app(config_class=Config):
     from app.api.v1.storis import storis_bp
     from app.api.v1.subscriptions import subscriptions_bp
     from app.api.v1.support import support_bp
+    from app.api.v1.playlists import playlists_bp
     from app.api.v1.users import users_bp
     from app.api.v1.videos import videos_bp
     from app.api.v1.upload import upload_bp
+    from app.api.v1.files import files_bp
 
     app.register_blueprint(public_account_bp)
     app.register_blueprint(public_bots_bp)
@@ -404,6 +201,7 @@ def create_app(config_class=Config):
     app.register_blueprint(channels_bp)
     app.register_blueprint(comments_bp)
     app.register_blueprint(communities_bp)
+    app.register_blueprint(e2e_keys_bp)
     app.register_blueprint(dm_bp)
     app.register_blueprint(friends_bp)
     app.register_blueprint(gifts_bp)
@@ -415,9 +213,11 @@ def create_app(config_class=Config):
     app.register_blueprint(storis_bp)
     app.register_blueprint(subscriptions_bp)
     app.register_blueprint(support_bp)
+    app.register_blueprint(playlists_bp)
     app.register_blueprint(users_bp)
     app.register_blueprint(videos_bp)
     app.register_blueprint(upload_bp)
+    app.register_blueprint(files_bp)
 
     swagger_config = {
         "headers": [],
@@ -453,65 +253,165 @@ def create_app(config_class=Config):
     @app.before_request
     def before_request_metrics():
         endpoint = request.endpoint or "unknown"
-        REQUEST_IN_PROGRESS.labels(method=request.method, endpoint=endpoint).inc()
+        REQUEST_IN_PROGRESS.labels(
+            method=request.method,
+            endpoint=endpoint).inc()
         request.start_time = time.time()
 
     @app.after_request
     def after_request_metrics(response):
         endpoint = request.endpoint or "unknown"
         status = response.status_code
-        REQUEST_COUNT.labels(method=request.method, endpoint=endpoint, status=status).inc()
-        REQUEST_IN_PROGRESS.labels(method=request.method, endpoint=endpoint).dec()
+        REQUEST_COUNT.labels(
+            method=request.method,
+            endpoint=endpoint,
+            status=status).inc()
+        REQUEST_IN_PROGRESS.labels(
+            method=request.method,
+            endpoint=endpoint).dec()
         if hasattr(request, 'start_time') and request.start_time:
             latency = time.time() - request.start_time
-            REQUEST_LATENCY.labels(method=request.method, endpoint=endpoint).observe(latency)
+            REQUEST_LATENCY.labels(
+                method=request.method,
+                endpoint=endpoint).observe(latency)
         return response
 
-    from flask import send_from_directory, request, jsonify
+    from flask import send_from_directory, request, jsonify, Response
+    import requests as http_requests
+
+    STATIC_NGINX_URL = os.getenv('STATIC_NGINX_URL', 'http://static-nginx:80')
 
     @app.route('/static/<path:filename>')
     def serve_static(filename):
         remote_addr = request.remote_addr or ""
-        if remote_addr.startswith('172.') or remote_addr.startswith('192.168.') or remote_addr.startswith('10.'):
+
+        is_internal = remote_addr.startswith('172.') or remote_addr.startswith(
+            '192.168.') or remote_addr.startswith('10.')
+
+        is_authorized = False
+
+        if is_internal:
+            is_authorized = True
+        else:
+            token = request.args.get("access_token") or request.headers.get(
+                "Authorization", "").replace("Bearer ", "")
+            if token:
+                try:
+                    from app.services.auth_service import AuthService
+                    user, error = AuthService.get_user_by_token(token)
+                    if user:
+                        is_authorized = True
+                except Exception:
+                    pass
+
+            api_key = request.args.get(
+                "api_key") or request.headers.get("X-API-Key")
+            if api_key:
+                try:
+                    from app.services.user_service import UserService
+                    user = UserService.get_user_by_api_key(api_key)
+                    if user:
+                        is_authorized = True
+                except Exception:
+                    pass
+
+            origin = request.headers.get("Origin", "")
+            allowed_origins = _build_allowed_origins()
+            if origin in allowed_origins:
+                is_authorized = True
+
+        if not is_authorized:
+            return jsonify(
+                {"error": "Unauthorized access to static resource"}), 401
+
+        try:
+            if filename.startswith('uploads/'):
+                static_url = f"{STATIC_NGINX_URL}/{filename}"
+            else:
+                static_url = f"{STATIC_NGINX_URL}/static/{filename}"
+
+            if request.query_string:
+                static_url += f"?{request.query_string.decode('utf-8')}"
+
+            resp = http_requests.request(
+                method=request.method,
+                url=static_url,
+                headers={
+                    key: value for key,
+                    value in request.headers if key.lower() != 'host'},
+                data=request.get_data(),
+                cookies=request.cookies,
+                allow_redirects=False,
+                timeout=10)
+
+            excluded_headers = {
+                'content-encoding',
+                'content-length',
+                'transfer-encoding',
+                'connection'}
+            headers = [
+                (name, value)
+                for name, value in resp.raw.headers.items()
+                if name.lower() not in excluded_headers
+            ]
+
+            return Response(resp.content, resp.status_code, headers)
+        except http_requests.exceptions.ConnectionError:
+            static_folder = os.path.join(os.path.dirname(__file__), 'static')
+            return send_from_directory(static_folder, filename)
+        except http_requests.exceptions.Timeout:
+            return jsonify({"error": "Static service timeout"}), 504
+        except Exception as e:
+            import traceback
+            print(f"Error proxying to static nginx: {e}")
+            print(traceback.format_exc())
             static_folder = os.path.join(os.path.dirname(__file__), 'static')
             return send_from_directory(static_folder, filename)
 
-        token = request.args.get("access_token") or request.headers.get("Authorization", "").replace("Bearer ", "")
-        if token:
-            try:
-                from app.services.auth_service import AuthService
-                user, error = AuthService.get_user_by_token(token)
-                if user:
-                    static_folder = os.path.join(os.path.dirname(__file__), 'static')
-                    return send_from_directory(static_folder, filename)
-            except Exception:
-                pass
+    @app.route('/uploads/<path:filename>')
+    def serve_uploads(filename):
+        try:
+            uploads_url = f"{STATIC_NGINX_URL}/uploads/{filename}"
+            if request.query_string:
+                uploads_url += f"?{request.query_string.decode('utf-8')}"
 
-        api_key = request.args.get("api_key") or request.headers.get("X-API-Key")
-        if api_key:
-            try:
-                from app.services.user_service import UserService
-                user = UserService.get_user_by_api_key(api_key)
-                if user:
-                    static_folder = os.path.join(os.path.dirname(__file__), 'static')
-                    return send_from_directory(static_folder, filename)
-            except Exception:
-                pass
+            resp = http_requests.request(
+                method=request.method,
+                url=uploads_url,
+                headers={
+                    key: value for key,
+                    value in request.headers if key.lower() != 'host'},
+                data=request.get_data(),
+                cookies=request.cookies,
+                allow_redirects=False,
+                timeout=10)
 
-        origin = request.headers.get("Origin", "")
-        allowed_origins = _build_allowed_origins()
-        if origin in allowed_origins:
-            static_folder = os.path.join(os.path.dirname(__file__), 'static')
-            return send_from_directory(static_folder, filename)
+            excluded_headers = {
+                'content-encoding',
+                'content-length',
+                'transfer-encoding',
+                'connection'}
+            headers = [
+                (name, value)
+                for name, value in resp.raw.headers.items()
+                if name.lower() not in excluded_headers
+            ]
 
-        if filename.startswith('uploads/'):
-            static_folder = os.path.join(os.path.dirname(__file__), 'static')
-            return send_from_directory(static_folder, filename)
-
-        return jsonify({"error": "Unauthorized access to static resource"}), 401
+            return Response(resp.content, resp.status_code, headers)
+        except http_requests.exceptions.ConnectionError:
+            uploads_folder = os.getenv('UPLOADS_DIR', '/app/uploads')
+            return send_from_directory(uploads_folder, filename)
+        except http_requests.exceptions.Timeout:
+            return jsonify({"error": "Uploads service timeout"}), 504
+        except Exception as e:
+            print(f"Error proxying to static nginx for uploads: {e}")
+            uploads_folder = os.getenv('UPLOADS_DIR', '/app/uploads')
+            return send_from_directory(uploads_folder, filename)
 
     @app.route("/metrics")
     def metrics():
-        return Response(generate_latest(), mimetype="text/plain; charset=utf-8")
+        return Response(
+            generate_latest(),
+            mimetype="text/plain; charset=utf-8")
 
     return app

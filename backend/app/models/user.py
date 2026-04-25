@@ -6,6 +6,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from app.core.extensions import db
 
+
 class User(db.Model):
     __tablename__ = "users"
     id = db.Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -48,6 +49,9 @@ class User(db.Model):
     cloud_password_hash = db.Column(TEXT, default=None)
     cloud_password_reset_month = db.Column(INTEGER, default=None)
     cloud_password_reset_count = db.Column(INTEGER, default=0)
+    video_likes = db.Column(TEXT, default=None)
+    video_watch_later = db.Column(TEXT, default=None)
+    video_history = db.Column(TEXT, default=None)
     created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
     updated_at = db.Column(
         TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)

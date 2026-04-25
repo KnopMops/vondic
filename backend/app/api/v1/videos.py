@@ -5,180 +5,103 @@ from datetime import datetime
 from urllib.parse import urlparse
 
 from app.core.extensions import db
+from app.models.user import User
+from app.models.video import Video
+from app.models.video_check import VideoCheck
+from app.models.video_comment import VideoComment
+from app.models.video_like import VideoLike
+from app.models.video_view import VideoView
 from app.utils.decorators import token_required
 from flask import Blueprint, current_app, jsonify, request
-from sqlalchemy import text
 
 videos_bp = Blueprint("videos", __name__, url_prefix="/api/v1/videos")
 
+
 def _get_ip() -> str:
     ip = request.headers.get("X-Forwarded-For") or request.remote_addr or ""
-
     if isinstance(ip, str) and "," in ip:
         ip = ip.split(",", 1)[0].strip()
     return ip
 
-def _ensure_video_likes_table():
-    try:
-        if db.engine.dialect.name == "sqlite":
-            cols = db.session.execute(
-                text("PRAGMA table_info(video_likes)")).fetchall()
-            if not cols:
-                db.session.execute(
-                    text("""""")
-                )
-                db.session.execute(
-                    text(
-                        "CREATE UNIQUE INDEX IF NOT EXISTS uq_video_likes_vid_uid ON video_likes(video_id, user_id)"
-                    )
-                )
-                db.session.execute(
-                    text(
-                        "CREATE INDEX IF NOT EXISTS idx_video_likes_vid ON video_likes(video_id)"
-                    )
-                )
-                db.session.commit()
-        else:
-            db.session.execute(
-                text("""""")
-            )
-            db.session.execute(
-                text(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_video_likes_vid_uid ON video_likes(video_id, user_id)"
-                )
-            )
-            db.session.execute(
-                text(
-                    "CREATE INDEX IF NOT EXISTS idx_video_likes_vid ON video_likes(video_id)"
-                )
-            )
-            db.session.commit()
-    except Exception:
-        pass
 
-def _ensure_video_views_table():
-    try:
-        if db.engine.dialect.name == "sqlite":
-            cols = db.session.execute(
-                text("PRAGMA table_info(video_views)")).fetchall()
-            if not cols:
-                db.session.execute(
-                    text("""""")
-                )
-                db.session.execute(
-                    text(
-                        "CREATE INDEX IF NOT EXISTS idx_video_views_vid ON video_views(video_id)"
-                    )
-                )
-                db.session.execute(
-                    text(
-                        "CREATE INDEX IF NOT EXISTS idx_video_views_vid_ip ON video_views(video_id, ip)"
-                    )
-                )
-                db.session.commit()
-        else:
-            db.session.execute(
-                text("""""")
-            )
-            db.session.execute(
-                text(
-                    "CREATE INDEX IF NOT EXISTS idx_video_views_vid ON video_views(video_id)"
-                )
-            )
-            db.session.execute(
-                text(
-                    "CREATE INDEX IF NOT EXISTS idx_video_views_vid_ip ON video_views(video_id, ip)"
-                )
-            )
-            db.session.commit()
-    except Exception:
-        pass
+def _serialize_video(video: Video):
+    author = User.query.get(video.author_id)
+    return {
+        "id": video.id,
+        "author_id": video.author_id,
+        "title": video.title,
+        "description": video.description,
+        "url": video.url,
+        "poster": video.poster,
+        "duration": video.duration,
+        "created_at": video.created_at.isoformat() if video.created_at else None,
+        "updated_at": video.updated_at.isoformat() if video.updated_at else None,
+        "views": int(video.views or 0),
+        "likes": int(video.likes or 0),
+        "is_deleted": bool(video.is_deleted),
+        "tags": video.tags,
+        "allow_comments": bool(video.allow_comments),
+        "is_nsfw": bool(video.is_nsfw),
+        "has_profanity": bool(video.has_profanity),
+        "is_published": bool(video.is_published),
+        "author_name": getattr(author, "username", None),
+        "author_avatar": getattr(author, "avatar_url", None),
+        "author_premium": getattr(author, "premium", 0),
+    }
 
-def _ensure_video_columns():
-    try:
-        if db.engine.dialect.name == "sqlite":
-            cols = db.session.execute(
-                text("PRAGMA table_info(videos)")).fetchall()
-            col_names = [c[1] for c in cols] if cols else []
-            if "allow_comments" not in col_names:
-                db.session.execute(
-                    text("ALTER TABLE videos ADD COLUMN allow_comments INTEGER DEFAULT 1"))
-            if "is_nsfw" not in col_names:
-                db.session.execute(
-                    text("ALTER TABLE videos ADD COLUMN is_nsfw INTEGER DEFAULT 0"))
-            if "has_profanity" not in col_names:
-                db.session.execute(
-                    text("ALTER TABLE videos ADD COLUMN has_profanity INTEGER DEFAULT 0"))
-            if "is_published" not in col_names:
-                db.session.execute(
-                    text("ALTER TABLE videos ADD COLUMN is_published INTEGER DEFAULT 1"))
-        else:
-            db.session.execute(
-                text(
-                    "ALTER TABLE videos ADD COLUMN IF NOT EXISTS allow_comments BOOLEAN DEFAULT TRUE"
-                )
-            )
-            db.session.execute(
-                text(
-                    "ALTER TABLE videos ADD COLUMN IF NOT EXISTS is_nsfw BOOLEAN DEFAULT FALSE"
-                )
-            )
-            db.session.execute(
-                text(
-                    "ALTER TABLE videos ADD COLUMN IF NOT EXISTS has_profanity BOOLEAN DEFAULT FALSE"
-                )
-            )
-            db.session.execute(
-                text(
-                    "ALTER TABLE videos ADD COLUMN IF NOT EXISTS is_published BOOLEAN DEFAULT TRUE"
-                )
-            )
-        db.session.commit()
-    except Exception:
-        pass
 
-def _ensure_video_checks_table():
-    try:
-        if db.engine.dialect.name == "sqlite":
-            db.session.execute(
-                text("""""")
-            )
-            db.session.execute(
-                text(
-                    "CREATE INDEX IF NOT EXISTS idx_video_checks_status ON video_checks(status)"
-                )
-            )
-            db.session.commit()
-        else:
-            db.session.execute(
-                text("""""")
-            )
-            db.session.execute(
-                text(
-                    "CREATE INDEX IF NOT EXISTS idx_video_checks_status ON video_checks(status)"
-                )
-            )
-            db.session.commit()
-    except Exception:
-        pass
+def _sync_video_views(video_id: str):
+    views = VideoView.query.filter_by(video_id=video_id).count()
+    video = Video.query.get(video_id)
+    if video:
+        video.views = views
+    return views
 
-def _cond_is_deleted(prefix: str = "") -> str:
-    col = f"{prefix}is_deleted" if prefix else "is_deleted"
-    if db.engine.dialect.name == "sqlite":
-        return f"{col} = 0"
-    return f"COALESCE(CAST({col} AS INT), 0) = 0"
 
-def _cond_is_published(prefix: str = "") -> str:
-    col = f"{prefix}is_published" if prefix else "is_published"
-    if db.engine.dialect.name == "sqlite":
-        return f"{col} = 1"
-    return f"COALESCE(CAST({col} AS INT), 1) = 1"
+def _sync_video_likes(video_id: str):
+    likes = VideoLike.query.filter_by(video_id=video_id).count()
+    video = Video.query.get(video_id)
+    if video:
+        video.likes = likes
+    return likes
+
+
+def _toggle_user_list_column(
+        user_id: str,
+        column: str,
+        video_id: str,
+        add: bool):
+    user = User.query.get(user_id)
+    if not user:
+        return
+    payload = getattr(user, column, None)
+    arr = []
+    if payload:
+        try:
+            arr = json.loads(payload) or []
+        except Exception:
+            arr = []
+    if isinstance(arr, list):
+        arr = [
+            x["id"] if isinstance(
+                x, dict) and "id" in x else (
+                x if isinstance(
+                    x, str) else str(x)) for x in arr]
+    else:
+        arr = []
+    if add:
+        if video_id not in arr:
+            arr.insert(0, video_id)
+    else:
+        arr = [x for x in arr if x != video_id]
+    setattr(user, column, json.dumps(arr, ensure_ascii=False))
+
 
 def _publish_video_check(job_id: str, file_path: str, video_url: str):
     import pika
 
-    rabbit_url = os.environ.get(
-        "RABBITMQ_URL", "amqp://guest:guest@localhost:5672/%2F")
+    rabbit_url = os.environ.get("RABBITMQ_URL",
+                                "amqp://guest:guest@localhost:5672/%2F")
     params = pika.URLParameters(rabbit_url)
     connection = pika.BlockingConnection(params)
     channel = connection.channel()
@@ -199,37 +122,9 @@ def _publish_video_check(job_id: str, file_path: str, video_url: str):
     )
     connection.close()
 
-def _sync_video_views(video_id: str):
-    _ensure_video_views_table()
-    row = db.session.execute(
-        text(""""""),
-        {"vid": video_id},
-    ).fetchone()
-    views = int(row[0] or 0) if row else 0
-    db.session.execute(
-        text(""""""),
-        {"views": views, "ts": datetime.utcnow().isoformat(), "vid": video_id},
-    )
-    return views
-
-def _sync_video_likes(video_id: str):
-    _ensure_video_likes_table()
-    row = db.session.execute(
-        text(""""""),
-        {"vid": video_id},
-    ).fetchone()
-    likes = int(row[0] or 0) if row else 0
-    db.session.execute(
-        text(""""""),
-        {"likes": likes, "ts": datetime.utcnow().isoformat(), "vid": video_id},
-    )
-    return likes
 
 @videos_bp.route("/", methods=["GET"])
 def list_videos():
-    _ensure_video_views_table()
-    _ensure_video_likes_table()
-    _ensure_video_columns()
     sort = (request.args.get("sort") or "created_at").lower()
     order = (request.args.get("order") or "desc").lower()
     limit = int(request.args.get("limit") or 24)
@@ -237,91 +132,58 @@ def list_videos():
     user_id = request.args.get("user_id")
     shorts = request.args.get("shorts")
 
-    if sort not in ("likes", "views", "created_at"):
-        sort = "created_at"
-    if order not in ("asc", "desc"):
-        order = "desc"
-
-    where = f"{_cond_is_deleted()} AND {_cond_is_published()}"
-    params = {"limit": limit, "offset": offset}
+    query = Video.query.filter_by(is_deleted=False, is_published=True)
     if user_id:
-        where += " AND author_id = :author_id"
-        params["author_id"] = user_id
+        query = query.filter_by(author_id=user_id)
     if shorts in ("1", "true", "yes"):
-        where += " AND COALESCE(duration, 0) <= 60"
+        query = query.filter(
+            (Video.duration.is_(None)) | (
+                Video.duration <= 60))
     if sort == "views":
-        where += " AND (SELECT COALESCE(SUM(count), 0) FROM video_views vv WHERE vv.video_id = v.id) > 0"
-    if sort == "likes":
-        _ensure_video_likes_table()
-        where += (
-            " AND (SELECT COUNT(1) FROM video_likes vl WHERE vl.video_id = v.id) > 0"
-        )
-    order_field = "v.created_at"
-    if sort == "views":
-        order_field = "views_calc"
+        query = query.order_by(
+            Video.views.asc() if order == "asc" else Video.views.desc())
     elif sort == "likes":
-        order_field = "likes_calc"
-    sql = f""""""
-    rows = db.session.execute(text(sql), params).fetchall()
-    items = []
-    for r in rows:
-        d = dict(r._mapping)
-        d["views"] = int(d.get("views_calc") or 0)
-        d["likes"] = int(d.get("likes_calc") or 0)
-        items.append(d)
-    return jsonify(items), 200
+        query = query.order_by(
+            Video.likes.asc() if order == "asc" else Video.likes.desc())
+    else:
+        query = query.order_by(
+            Video.created_at.asc() if order == "asc" else Video.created_at.desc())
+
+    rows = query.offset(offset).limit(limit).all()
+    return jsonify([_serialize_video(v) for v in rows]), 200
+
 
 @videos_bp.route("/<video_id>", methods=["GET"])
 def get_video(video_id):
-    _ensure_video_views_table()
-    _ensure_video_likes_table()
-    _ensure_video_columns()
-    row = db.session.execute(
-        text(f""""""),
-        {"id": video_id},
-    ).fetchone()
-    if not row:
+    video = Video.query.get(video_id)
+    if not video or video.is_deleted:
         return jsonify({"error": "Video not found"}), 404
-    data = dict(row._mapping)
-    data["views"] = int(data.get("views_calc") or 0)
-    data["likes"] = int(data.get("likes_calc") or 0)
-    return jsonify(data), 200
+    if not video.is_published:
+        return jsonify({"error": "Video not found"}), 404
+    return jsonify(_serialize_video(video)), 200
+
 
 @videos_bp.route("/my", methods=["GET"])
 @token_required
 def list_my_videos(current_user):
-    _ensure_video_views_table()
-    _ensure_video_likes_table()
-    _ensure_video_columns()
     sort = (request.args.get("sort") or "created_at").lower()
     order = (request.args.get("order") or "desc").lower()
     limit = int(request.args.get("limit") or 100)
     offset = int(request.args.get("offset") or 0)
-    if sort not in ("likes", "views", "created_at"):
-        sort = "created_at"
-    if order not in ("asc", "desc"):
-        order = "desc"
-    order_field = "v.created_at"
+
+    query = Video.query.filter_by(author_id=current_user.id, is_deleted=False)
     if sort == "views":
-        order_field = "views_calc"
+        query = query.order_by(
+            Video.views.asc() if order == "asc" else Video.views.desc())
     elif sort == "likes":
-        order_field = "likes_calc"
-    sql = f""""""
-    rows = db.session.execute(
-        text(sql),
-        {
-            "author_id": current_user.id,
-            "limit": limit,
-            "offset": offset,
-        },
-    ).fetchall()
-    items = []
-    for r in rows:
-        d = dict(r._mapping)
-        d["views"] = int(d.get("views_calc") or 0)
-        d["likes"] = int(d.get("likes_calc") or 0)
-        items.append(d)
-    return jsonify(items), 200
+        query = query.order_by(
+            Video.likes.asc() if order == "asc" else Video.likes.desc())
+    else:
+        query = query.order_by(
+            Video.created_at.asc() if order == "asc" else Video.created_at.desc())
+    rows = query.offset(offset).limit(limit).all()
+    return jsonify([_serialize_video(v) for v in rows]), 200
+
 
 @videos_bp.route("/<video_id>", methods=["PATCH"])
 @token_required
@@ -332,50 +194,38 @@ def update_video(current_user, video_id):
     is_published = data.get("is_published")
     if title is not None and not str(title).strip():
         return jsonify({"error": "title cannot be empty"}), 400
-    row = db.session.execute(
-        text(f""""""),
-        {"id": video_id, "author_id": current_user.id},
-    ).fetchone()
-    if not row:
+
+    video = Video.query.filter_by(
+        id=video_id,
+        author_id=current_user.id,
+        is_deleted=False).first()
+    if not video:
         return jsonify({"error": "Video not found"}), 404
-    _ensure_video_columns()
-    db.session.execute(
-        text(""""""),
-        {
-            "title": title,
-            "description": description,
-            "is_published": is_published,
-            "ts": datetime.utcnow().isoformat(),
-            "id": video_id,
-        },
-    )
+    if title is not None:
+        video.title = title
+    if description is not None:
+        video.description = description
+    if is_published is not None:
+        video.is_published = bool(is_published)
+    video.updated_at = datetime.utcnow()
     db.session.commit()
-    row = db.session.execute(
-        text(""""""),
-        {"id": video_id},
-    ).fetchone()
-    if not row:
-        return jsonify({"error": "Video not found"}), 404
-    data = dict(row._mapping)
-    data["views"] = int(data.get("views_calc") or 0)
-    data["likes"] = int(data.get("likes_calc") or 0)
-    return jsonify(data), 200
+    return jsonify(_serialize_video(video)), 200
+
 
 @videos_bp.route("/<video_id>", methods=["DELETE"])
 @token_required
 def delete_video(current_user, video_id):
-    row = db.session.execute(
-        text(f""""""),
-        {"id": video_id, "author_id": current_user.id},
-    ).fetchone()
-    if not row:
+    video = Video.query.filter_by(
+        id=video_id,
+        author_id=current_user.id,
+        is_deleted=False).first()
+    if not video:
         return jsonify({"error": "Video not found"}), 404
-    db.session.execute(
-        text(""""""),
-        {"id": video_id, "ts": datetime.utcnow().isoformat()},
-    )
+    video.is_deleted = True
+    video.updated_at = datetime.utcnow()
     db.session.commit()
     return jsonify({"ok": True}), 200
+
 
 @videos_bp.route("/", methods=["POST"])
 @token_required
@@ -383,80 +233,45 @@ def create_video(current_user):
     data = request.get_json() or {}
     title = data.get("title")
     url = data.get("url")
-    description = data.get("description")
-    poster = data.get("poster")
-    duration = data.get("duration")
-    tags = data.get("tags")
-    allow_comments = data.get("allow_comments")
-    is_nsfw = data.get("is_nsfw") or False
-    has_profanity = data.get("has_profanity") or False
-    is_published = data.get("is_published")
-    if allow_comments is None:
-        allow_comments = True
-    if is_published is None:
-        is_published = True
     if not title or not url:
         return jsonify({"error": "title and url are required"}), 400
-    v_id = (
-        data.get("id")
-        or os.popen('powershell -NoProfile -Command "[guid]::NewGuid().ToString()"')
-        .read()
-        .strip()
-        or None
+    video = Video(
+        id=data.get("id") or str(
+            uuid.uuid4()),
+        author_id=current_user.id,
+        title=title,
+        description=data.get("description"),
+        url=url,
+        poster=data.get("poster"),
+        duration=data.get("duration"),
+        tags=None if data.get("tags") is None else (
+            data.get("tags") if isinstance(
+                data.get("tags"),
+                str) else str(
+                    data.get("tags"))),
+        allow_comments=bool(
+            data.get(
+                "allow_comments",
+                True)),
+        is_nsfw=bool(
+            data.get("is_nsfw") or False),
+        has_profanity=bool(
+            data.get("has_profanity") or False),
+        is_published=bool(
+            data.get(
+                "is_published",
+                True)),
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
     )
-    if not v_id:
-        v_id = os.urandom(16).hex()
     try:
-        _ensure_video_columns()
-        db.session.execute(
-            text(""""""),
-            {
-                "id": v_id,
-                "author_id": current_user.id,
-                "title": title,
-                "description": description,
-                "url": url,
-                "poster": poster,
-                "duration": duration,
-                "created_at": datetime.utcnow().isoformat(),
-                "updated_at": datetime.utcnow().isoformat(),
-                "tags": None
-                if tags is None
-                else (tags if isinstance(tags, str) else str(tags)),
-                "allow_comments": allow_comments,
-                "is_nsfw": is_nsfw,
-                "has_profanity": has_profanity,
-                "is_published": is_published,
-            },
-        )
+        db.session.add(video)
         db.session.commit()
-        return jsonify(
-            {
-                "id": v_id,
-                "author_id": current_user.id,
-                "title": title,
-                "description": description,
-                "url": url,
-                "poster": poster,
-                "duration": duration,
-                "created_at": datetime.utcnow().isoformat(),
-                "updated_at": datetime.utcnow().isoformat(),
-                "views": 0,
-                "likes": 0,
-                "is_deleted": 0,
-                "tags": tags,
-                "allow_comments": allow_comments,
-                "is_nsfw": is_nsfw,
-                "has_profanity": has_profanity,
-                "is_published": is_published,
-                "author_name": getattr(current_user, "username", None),
-                "author_avatar": getattr(current_user, "avatar_url", None),
-                "author_premium": getattr(current_user, "premium", 0),
-            }
-        ), 201
+        return jsonify(_serialize_video(video)), 201
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 400
+
 
 @videos_bp.route("/check", methods=["POST"])
 @token_required
@@ -470,183 +285,111 @@ def check_video(current_user):
     if not path.startswith("/static/"):
         return jsonify({"error": "Unsupported video path"}), 400
 
-    file_path = os.path.join(current_app.root_path, "static", path[len("/static/"):])
+    file_path = os.path.join(current_app.root_path,
+                             "static", path[len("/static/"):])
     if not os.path.isfile(file_path):
-
-        print(f"Video file not found: {file_path} (from URL: {video_url})")
         return jsonify({"error": "Video file not found"}), 404
     try:
-        _ensure_video_checks_table()
-        job_id = str(uuid.uuid4())
-        ts = datetime.utcnow().isoformat()
-        db.session.execute(
-            text(""""""),
-            {
-                "id": job_id,
-                "video_url": str(video_url),
-                "file_path": file_path,
-                "status": "queued",
-                "ts": ts,
-            },
+        job = VideoCheck(
+            id=str(uuid.uuid4()),
+            video_url=str(video_url),
+            file_path=file_path,
+            status="queued",
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
         )
+        db.session.add(job)
         db.session.commit()
         try:
-            _publish_video_check(job_id, file_path, str(video_url))
+            _publish_video_check(job.id, file_path, str(video_url))
         except Exception as e:
-            db.session.execute(
-                text(""""""),
-                {
-                    "status": "error",
-                    "error": str(e),
-                    "ts": datetime.utcnow().isoformat(),
-                    "id": job_id,
-                },
-            )
+            job.status = "error"
+            job.error = str(e)
+            job.updated_at = datetime.utcnow()
             db.session.commit()
             return jsonify({"error": str(e)}), 500
-        return jsonify({"job_id": job_id, "status": "queued"}), 202
+        return jsonify({"job_id": job.id, "status": "queued"}), 202
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 @videos_bp.route("/check/<job_id>", methods=["GET"])
 @token_required
 def check_video_status(current_user, job_id):
-    _ensure_video_checks_table()
-    row = db.session.execute(
-        text(""""""),
-        {"id": job_id},
-    ).fetchone()
+    row = VideoCheck.query.get(job_id)
     if not row:
         return jsonify({"error": "Job not found"}), 404
     payload = {
-        "job_id": row[0],
-        "status": row[1],
-        "error": row[3],
+        "job_id": row.id,
+        "status": row.status,
+        "error": row.error,
     }
-    if row[2]:
+    if row.result:
         try:
-            payload["result"] = json.loads(row[2])
+            payload["result"] = json.loads(row.result)
         except Exception:
-            payload["result"] = row[2]
+            payload["result"] = row.result
     return jsonify(payload), 200
+
 
 @videos_bp.route("/view", methods=["POST"])
 @token_required
 def register_view(current_user):
-    _ensure_video_views_table()
     data = request.get_json() or {}
     video_id = data.get("video_id")
     if not video_id:
         return jsonify({"error": "video_id is required"}), 400
 
     ip = _get_ip()
-
-    existing_user_row = db.session.execute(
-        text("SELECT id FROM video_views WHERE video_id = :vid AND user_id = :uid"), {
-            "vid": video_id, "uid": current_user.id}, ).fetchone()
+    existing_user_row = VideoView.query.filter_by(
+        video_id=video_id, user_id=current_user.id).first()
     if existing_user_row:
         return jsonify({"ok": True, "counted": False,
-                        "reason": "already_counted_for_user"}), 200
+                       "reason": "already_counted_for_user"}), 200
 
-    ip_total_row = db.session.execute(
-        text(
-            "SELECT SUM(count) as total FROM video_views WHERE video_id = :vid AND ip = :ip"
-        ),
-        {"vid": video_id, "ip": ip},
-    ).fetchone()
-    ip_total = int((ip_total_row[0] or 0)) if ip_total_row else 0
-    if ip_total >= 3:
+    ip_total = (
+        db.session.query(db.func.coalesce(db.func.sum(VideoView.count), 0))
+        .filter_by(video_id=video_id, ip=ip)
+        .scalar()
+    ) or 0
+    if int(ip_total) >= 3:
         return jsonify({"ok": True, "counted": False,
                        "reason": "ip_cap_reached"}), 200
 
     try:
-
-        db.session.execute(
-            text(""""""),
-            {
-                "vid": video_id,
-                "uid": current_user.id,
-                "ip": ip,
-                "ts": datetime.utcnow().isoformat(),
-            },
+        db.session.add(
+            VideoView(
+                video_id=video_id,
+                user_id=current_user.id,
+                ip=ip,
+                count=1,
+                created_at=datetime.utcnow(),
+            )
         )
-
         _sync_video_views(video_id)
-
         try:
-            hist_row = db.session.execute(
-                text("SELECT video_history FROM users WHERE id = :uid"),
-                {"uid": current_user.id},
-            ).fetchone()
-            payload = hist_row[0] if hist_row else None
+            payload = current_user.video_history
             items = []
             if payload:
                 try:
-                    import json
-
                     items = json.loads(payload) or []
                 except Exception:
                     items = []
-
-            items = [x for x in items if isinstance(
-                x, dict) and x.get("id") != video_id]
-
+            items = [
+                x for x in items if isinstance(
+                    x, dict) and x.get("id") != video_id]
             items.insert(
                 0, {"id": video_id, "ts": datetime.utcnow().isoformat()})
-
-            items = items[:200]
-            import json
-
-            db.session.execute(
-                text("UPDATE users SET video_history = :val WHERE id = :uid"),
-                {"val": json.dumps(items, ensure_ascii=False),
-                 "uid": current_user.id},
-            )
+            current_user.video_history = json.dumps(
+                items[:200], ensure_ascii=False)
         except Exception:
             pass
-
         db.session.commit()
         return jsonify({"ok": True, "counted": True}), 200
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 400
 
-def _toggle_user_list_column(
-        user_id: str,
-        column: str,
-        video_id: str,
-        add: bool):
-    import json
-
-    row = db.session.execute(
-        text(f"SELECT {column} FROM users WHERE id = :uid"), {"uid": user_id}
-    ).fetchone()
-    payload = row[0] if row else None
-    arr = []
-    if payload:
-        try:
-            arr = json.loads(payload) or []
-        except Exception:
-            arr = []
-
-    if isinstance(arr, list):
-        arr = [
-            x["id"]
-            if isinstance(x, dict) and "id" in x
-            else (x if isinstance(x, str) else str(x))
-            for x in arr
-        ]
-    else:
-        arr = []
-    if add:
-        if video_id not in arr:
-            arr.insert(0, video_id)
-    else:
-        arr = [x for x in arr if x != video_id]
-    db.session.execute(
-        text(f"UPDATE users SET {column} = :val WHERE id = :uid"),
-        {"val": json.dumps(arr, ensure_ascii=False), "uid": user_id},
-    )
 
 @videos_bp.route("/like", methods=["POST"])
 @token_required
@@ -657,31 +400,23 @@ def like_toggle(current_user):
     if not video_id:
         return jsonify({"error": "video_id is required"}), 400
     try:
-        _ensure_video_likes_table()
         if action == "unlike":
-            db.session.execute(
-                text("DELETE FROM video_likes WHERE video_id = :vid AND user_id = :uid"), {
-                    "vid": video_id, "uid": current_user.id}, )
+            VideoLike.query.filter_by(
+                video_id=video_id,
+                user_id=current_user.id).delete(
+                synchronize_session=False)
             _toggle_user_list_column(
                 current_user.id, "video_likes", video_id, False)
         else:
-            if db.engine.dialect.name == "sqlite":
-                db.session.execute(
-                    text(""""""),
-                    {
-                        "vid": video_id,
-                        "uid": current_user.id,
-                        "ts": datetime.utcnow().isoformat(),
-                    },
-                )
-            else:
-                db.session.execute(
-                    text(""""""),
-                    {
-                        "vid": video_id,
-                        "uid": current_user.id,
-                        "ts": datetime.utcnow().isoformat(),
-                    },
+            existing = VideoLike.query.filter_by(
+                video_id=video_id, user_id=current_user.id).first()
+            if not existing:
+                db.session.add(
+                    VideoLike(
+                        video_id=video_id,
+                        user_id=current_user.id,
+                        created_at=datetime.utcnow(),
+                    )
                 )
             _toggle_user_list_column(
                 current_user.id, "video_likes", video_id, True)
@@ -692,24 +427,20 @@ def like_toggle(current_user):
         db.session.rollback()
         return jsonify({"error": str(e)}), 400
 
+
 @videos_bp.route("/liked", methods=["GET"])
 @token_required
 def liked_list(current_user):
-    _ensure_video_likes_table()
-    rows = db.session.execute(
-        text(""""""),
-        {"uid": current_user.id},
-    ).fetchall()
-    ids = [str(r[0]) for r in rows] if rows else []
-    if not ids:
-        return jsonify([]), 200
-    placeholders = ",".join([":id" + str(i) for i in range(len(ids))])
-    params = {("id" + str(i)): ids[i] for i in range(len(ids))}
-    sql = f""""""
-    rows = db.session.execute(text(sql), params).fetchall()
-    by_id = {r._mapping["id"]: dict(r._mapping) for r in rows}
-    result = [by_id[i] for i in ids if i in by_id]
-    return jsonify(result), 200
+    rows = (
+        Video.query.join(
+            VideoLike,
+            VideoLike.video_id == Video.id) .filter(
+            VideoLike.user_id == current_user.id,
+            Video.is_deleted.is_(False),
+            Video.is_published.is_(True)) .order_by(
+                VideoLike.created_at.desc()) .all())
+    return jsonify([_serialize_video(v) for v in rows]), 200
+
 
 @videos_bp.route("/later", methods=["POST"])
 @token_required
@@ -721,24 +452,21 @@ def later_toggle(current_user):
         return jsonify({"error": "video_id is required"}), 400
     try:
         _toggle_user_list_column(
-            current_user.id, "video_watch_later", video_id, action != "remove"
-        )
+            current_user.id,
+            "video_watch_later",
+            video_id,
+            action != "remove")
         db.session.commit()
         return jsonify({"ok": True}), 200
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 400
 
+
 @videos_bp.route("/later", methods=["GET"])
 @token_required
 def later_list(current_user):
-    import json
-
-    row = db.session.execute(
-        text("SELECT video_watch_later FROM users WHERE id = :uid"),
-        {"uid": current_user.id},
-    ).fetchone()
-    payload = row[0] if row else None
+    payload = current_user.video_watch_later
     ids = []
     if payload:
         try:
@@ -749,123 +477,85 @@ def later_list(current_user):
             ids = []
     if not ids:
         return jsonify([]), 200
-    placeholders = ",".join([":id" + str(i) for i in range(len(ids))])
-    params = {("id" + str(i)): ids[i] for i in range(len(ids))}
-    sql = f""""""
-    rows = db.session.execute(text(sql), params).fetchall()
-    items = [dict(r._mapping) for r in rows]
+    rows = Video.query.filter(
+        Video.id.in_(ids),
+        Video.is_deleted.is_(False),
+        Video.is_published.is_(True)).all()
+    by_id = {r.id: r for r in rows}
+    items = [_serialize_video(by_id[i]) for i in ids if i in by_id]
     return jsonify(items), 200
+
 
 @videos_bp.route("/history", methods=["GET"])
 @token_required
 def history_list(current_user):
-    import json
-
-    row = db.session.execute(
-        text("SELECT video_history FROM users WHERE id = :uid"),
-        {"uid": current_user.id},
-    ).fetchone()
-    payload = row[0] if row else None
+    payload = current_user.video_history
     items = []
     if payload:
         try:
             data = json.loads(payload) or []
             if isinstance(data, list):
-                items = [x for x in data if isinstance(
-                    x, dict) and x.get("id")]
+                items = [
+                    x for x in data if isinstance(
+                        x, dict) and x.get("id")]
         except Exception:
             items = []
     ids = [x["id"] for x in items]
     if not ids:
         return jsonify([]), 200
-    placeholders = ",".join([":id" + str(i) for i in range(len(ids))])
-    params = {("id" + str(i)): ids[i] for i in range(len(ids))}
-    sql = f""""""
-    rows = db.session.execute(text(sql), params).fetchall()
-    by_id = {r._mapping["id"]: dict(r._mapping) for r in rows}
-
-    result = [by_id[i] for i in ids if i in by_id]
+    rows = Video.query.filter(
+        Video.id.in_(ids),
+        Video.is_deleted.is_(False),
+        Video.is_published.is_(True)).all()
+    by_id = {r.id: r for r in rows}
+    result = [_serialize_video(by_id[i]) for i in ids if i in by_id]
     return jsonify(result), 200
 
-def _ensure_video_comments_table():
-    try:
-        if db.engine.dialect.name == "sqlite":
-            cols = db.session.execute(
-                text("PRAGMA table_info(video_comments)")
-            ).fetchall()
-            if not cols:
-                db.session.execute(
-                    text("""""")
-                )
-                db.session.commit()
-        else:
-            db.session.execute(
-                text("""""")
-            )
-            db.session.commit()
-    except Exception:
-        pass
 
 @videos_bp.route("/comments/<video_id>", methods=["GET"])
 def get_video_comments(video_id):
-    _ensure_video_comments_table()
-    rows = db.session.execute(
-        text(""""""),
-        {"vid": video_id},
-    ).fetchall()
-    items = [dict(r._mapping) for r in rows]
+    rows = VideoComment.query.filter_by(
+        video_id=video_id).order_by(
+        VideoComment.created_at.desc()).all()
+    items = [
+        {
+            "id": r.id,
+            "video_id": r.video_id,
+            "posted_by": r.posted_by,
+            "content": r.content,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in rows
+    ]
     return jsonify(items), 200
+
 
 @videos_bp.route("/comments", methods=["POST"])
 @token_required
 def create_video_comment(current_user):
-    _ensure_video_comments_table()
-    _ensure_video_columns()
     data = request.get_json() or {}
     video_id = data.get("video_id")
     content = (data.get("content") or "").strip()
     if not video_id or not content:
         return jsonify({"error": "video_id and content are required"}), 400
-    import os
-
-    cid = (
-        os.popen(
-            'powershell -NoProfile -Command "[guid]::NewGuid().ToString()"')
-        .read()
-        .strip()
-        or os.urandom(16).hex()
-    )
     try:
-        row = db.session.execute(
-            text(""""""),
-            {"vid": video_id},
-        ).fetchone()
-        if not row:
+        video = Video.query.filter_by(id=video_id, is_deleted=False).first()
+        if not video:
             return jsonify({"error": "Video not found"}), 404
-        allow_comments_value = row[0]
-        allow_comments_enabled = bool(allow_comments_value)
-        if isinstance(allow_comments_value, str):
-            allow_comments_enabled = allow_comments_value.lower() not in (
-                "0",
-                "false",
-                "f",
-            )
-        if not allow_comments_enabled:
+        if not bool(video.allow_comments):
             return jsonify({"error": "Comments are disabled"}), 403
-        db.session.execute(
-            text(""""""),
-            {
-                "id": cid,
-                "vid": video_id,
-                "uid": current_user.id,
-                "content": content,
-                "ts": datetime.utcnow().isoformat(),
-            },
+        comment = VideoComment(
+            id=str(uuid.uuid4()),
+            video_id=video_id,
+            posted_by=current_user.id,
+            content=content,
+            created_at=datetime.utcnow(),
         )
+        db.session.add(comment)
         db.session.commit()
         return jsonify(
             {
-                "id": cid,
+                "id": comment.id,
                 "video_id": video_id,
                 "posted_by": current_user.id,
                 "content": content,

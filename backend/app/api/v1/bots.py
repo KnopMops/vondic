@@ -17,11 +17,13 @@ bots_bp = Blueprint("bots", __name__, url_prefix="/api/v1/bots")
 
 logger = logging.getLogger(__name__)
 
+
 @bots_bp.route("/", methods=["GET"])
 @token_required
 def get_bots(current_user):
     bots = BotService.get_all_bots()
     return jsonify(bots_schema.dump(bots)), 200
+
 
 @bots_bp.route("/search", methods=["POST"])
 @token_required
@@ -32,6 +34,7 @@ def search_bots(current_user):
         return jsonify({"error": "query is required"}), 400
     bots = BotService.search_bots(query)
     return jsonify(bots_schema.dump(bots)), 200
+
 
 @bots_bp.route("/", methods=["POST"])
 @token_required
@@ -49,6 +52,7 @@ def create_bot(current_user):
     payload = bot_schema.dump(bot)
     payload.update({"bot_token": token, "chat_url": chat_url})
     return jsonify(payload), 201
+
 
 @bots_bp.route("/<bot_id>/updates/push", methods=["POST"])
 @token_required
@@ -145,6 +149,7 @@ def push_bot_update(current_user, bot_id):
                 {"ok": True, "update_id": update_id, "outbox": []}), 200
         time.sleep(0.2)
 
+
 @bots_bp.route("/<bot_id>/outbox", methods=["GET"])
 @token_required
 def get_bot_outbox(current_user, bot_id):
@@ -173,6 +178,7 @@ def get_bot_outbox(current_user, bot_id):
     )
     return jsonify({"items": items}), 200
 
+
 @bots_bp.route("/<bot_id>/verify", methods=["POST"])
 @token_required
 def verify_bot(current_user, bot_id):
@@ -198,5 +204,8 @@ def verify_bot(current_user, bot_id):
         )
         return jsonify({"ok": True, "is_verified": bot.is_verified}), 200
     except Exception as e:
-        logger.error("bot_verification_error bot_id=%s error=%s", bot_id, str(e))
+        logger.error(
+            "bot_verification_error bot_id=%s error=%s",
+            bot_id,
+            str(e))
         return jsonify({"error": "Failed to update bot verification"}), 500

@@ -10,11 +10,13 @@ from flask import jsonify, request
 _RATE_BUCKETS = defaultdict(deque)
 _RATE_LOCK = Lock()
 
+
 def _client_key():
     forwarded = request.headers.get("X-Forwarded-For", "")
     if forwarded:
         return forwarded.split(",")[0].strip()
     return request.remote_addr or "unknown"
+
 
 def rate_limit(key_prefix: str, limit: int, window_seconds: int):
     def decorator(f):
@@ -35,6 +37,7 @@ def rate_limit(key_prefix: str, limit: int, window_seconds: int):
         return decorated
 
     return decorator
+
 
 def token_required(f):
     @wraps(f)
@@ -64,6 +67,7 @@ def token_required(f):
 
     decorated._auth_required = True
     return decorated
+
 
 def api_key_required(f):
     @wraps(f)

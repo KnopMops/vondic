@@ -24,15 +24,19 @@ BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:5050")
 dp = Dispatcher()
 bcrypter = BCrypter()
 
+
 class AuthStates(StatesGroup):
     email = State()
     password = State()
 
+
 class CoinsStates(StatesGroup):
     email = State()
 
+
 class LinkStates(StatesGroup):
     waiting_for_key = State()
+
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
@@ -73,6 +77,7 @@ async def cmd_start(message: types.Message):
         "👋 Добро пожаловать в Vondic Bot!\n\nВыберите действие:",
         reply_markup=builder.as_markup(),
     )
+
 
 @dp.callback_query(F.data == "buy_premium_tg")
 async def buy_premium_tg_start(callback: types.CallbackQuery):
@@ -127,6 +132,7 @@ async def buy_premium_tg_start(callback: types.CallbackQuery):
     )
     await callback.answer()
 
+
 @dp.callback_query(F.data == "buy_coins")
 async def buy_coins_menu(callback: types.CallbackQuery):
     builder = InlineKeyboardBuilder()
@@ -149,6 +155,7 @@ async def buy_coins_menu(callback: types.CallbackQuery):
         reply_markup=builder.as_markup(),
     )
     await callback.answer()
+
 
 @dp.callback_query(F.data == "buy_coins_tg")
 async def buy_coins_tg(callback: types.CallbackQuery):
@@ -200,6 +207,7 @@ async def buy_coins_tg(callback: types.CallbackQuery):
     )
     await callback.answer()
 
+
 @dp.callback_query(F.data == "buy_coins_email")
 async def buy_coins_email_start(
         callback: types.CallbackQuery,
@@ -209,6 +217,7 @@ async def buy_coins_email_start(
         "📧 Введите email аккаунта Vondic/Yandex для покупки монет:"
     )
     await callback.answer()
+
 
 @dp.callback_query(F.data.startswith("buy_coins_pack"))
 async def buy_coins_pack(callback: types.CallbackQuery):
@@ -243,6 +252,7 @@ async def buy_coins_pack(callback: types.CallbackQuery):
         logger.error(f"buy_coins_pack error: {e}")
         await callback.message.answer("Произошла ошибка.")
     await callback.answer()
+
 
 @dp.callback_query(F.data == "register")
 async def register_user(callback: types.CallbackQuery):
@@ -283,6 +293,7 @@ async def register_user(callback: types.CallbackQuery):
         )
     await callback.answer()
 
+
 @dp.message(CoinsStates.email)
 async def buy_coins_email_entered(message: types.Message, state: FSMContext):
     email = message.text.strip()
@@ -322,6 +333,7 @@ async def buy_coins_email_entered(message: types.Message, state: FSMContext):
         await message.answer(f"Ошибка проверки email: {str(e)}")
         return
 
+
 @dp.callback_query(F.data == "restore")
 async def restore_key(callback: types.CallbackQuery):
     user_id = str(callback.from_user.id)
@@ -357,6 +369,7 @@ async def restore_key(callback: types.CallbackQuery):
         await callback.message.answer("❌ Произошла ошибка при обновлении ключа.")
     await callback.answer()
 
+
 @dp.callback_query(F.data == "no_telegram")
 async def no_telegram_auth(callback: types.CallbackQuery):
     builder = InlineKeyboardBuilder()
@@ -374,6 +387,7 @@ async def no_telegram_auth(callback: types.CallbackQuery):
     )
     await callback.answer()
 
+
 @dp.callback_query(F.data == "auth_yandex")
 async def auth_yandex(callback: types.CallbackQuery):
     await callback.message.answer(
@@ -385,6 +399,7 @@ async def auth_yandex(callback: types.CallbackQuery):
     )
     await callback.answer()
 
+
 @dp.callback_query(F.data == "link_yandex")
 async def link_yandex_start(callback: types.CallbackQuery, state: FSMContext):
     await state.set_state(LinkStates.waiting_for_key)
@@ -392,6 +407,7 @@ async def link_yandex_start(callback: types.CallbackQuery, state: FSMContext):
         "Введите код привязки, полученный на сайте в настройках профиля:"
     )
     await callback.answer()
+
 
 @dp.message(LinkStates.waiting_for_key)
 async def process_link_key(message: types.Message, state: FSMContext):
@@ -431,11 +447,13 @@ async def process_link_key(message: types.Message, state: FSMContext):
         except Exception as e:
             await message.answer(f"❌ Ошибка соединения: {str(e)}")
 
+
 @dp.callback_query(F.data == "auth_email")
 async def auth_email_start(callback: types.CallbackQuery, state: FSMContext):
     await state.set_state(AuthStates.email)
     await callback.message.answer("📧 Введите ваш Email:")
     await callback.answer()
+
 
 @dp.message(AuthStates.email)
 async def auth_email_entered(message: types.Message, state: FSMContext):
@@ -443,6 +461,7 @@ async def auth_email_entered(message: types.Message, state: FSMContext):
     await state.update_data(email=email)
     await state.set_state(AuthStates.password)
     await message.answer("🔑 Введите ваш пароль:")
+
 
 @dp.message(AuthStates.password)
 async def auth_password_entered(message: types.Message, state: FSMContext):
@@ -475,6 +494,7 @@ async def auth_password_entered(message: types.Message, state: FSMContext):
         await message.answer(
             "❌ Неверный email или пароль.", reply_markup=builder.as_markup()
         )
+
 
 @dp.callback_query(F.data.startswith("buy_premium"))
 async def buy_premium(callback: types.CallbackQuery):
@@ -514,6 +534,7 @@ async def buy_premium(callback: types.CallbackQuery):
         await callback.message.answer("❌ Произошла ошибка.")
 
     await callback.answer()
+
 
 async def main():
     if not BOT_TOKEN:

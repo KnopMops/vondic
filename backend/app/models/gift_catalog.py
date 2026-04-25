@@ -2,6 +2,7 @@ from sqlalchemy import INTEGER, TEXT
 
 from app.core.extensions import db
 
+
 class GiftCatalog(db.Model):
     __tablename__ = "gifts_catalog"
 

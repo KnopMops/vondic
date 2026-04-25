@@ -1,0 +1,5 @@
+# Ignore everything except Dockerfile and nginx.conf
+*
+!.gitignore
+Dockerfile
+nginx.conf

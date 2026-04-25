@@ -9,6 +9,7 @@ from app.models.subscription import Subscription
 from app.models.user import User
 from flask import current_app
 
+
 class PostService:
     @staticmethod
     def _sanitize_text(value):
@@ -33,8 +34,11 @@ class PostService:
 
     @staticmethod
     def get_posts_paginated(
-        page=1, per_page=5, user_id=None, is_blog: bool | None = False, filter_mode: str | None = None
-    ):
+            page=1,
+            per_page=5,
+            user_id=None,
+            is_blog: bool | None = False,
+            filter_mode: str | None = None):
         query = Post.query.join(User, Post.posted_by == User.id).filter(
             Post.deleted.is_(False),
             User.is_blocked == 0,

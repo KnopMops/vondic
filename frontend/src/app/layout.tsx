@@ -1,5 +1,6 @@
 import { GlobalCallUI, WebRTCProvider } from '@/components/calls'
 import NotificationBell from '@/components/notifications/NotificationBell'
+import GlobalPlayer from '@/components/music/GlobalPlayer'
 import { UrlFallbackProvider } from '@/components/UrlFallbackProvider'
 import { AuthProvider } from '@/lib/AuthContext'
 import ReactQueryProvider from '@/lib/ReactQueryProvider'
@@ -7,6 +8,7 @@ import { SocketProvider } from '@/lib/SocketContext'
 import { ToastProvider } from '@/lib/ToastContext'
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
+import ThemeInit from '@/components/ThemeInit'
 import '../styles/calls.css'
 import './globals.css'
 import StoreProvider from './StoreProvider'
@@ -36,6 +38,7 @@ export default function RootLayout({
 			<body
 				className={`${geistSans.variable} ${geistMono.variable} antialiased`}
 			>
+				<ThemeInit />
 				<UrlFallbackProvider>
 					<StoreProvider>
 						<ReactQueryProvider>
@@ -45,6 +48,7 @@ export default function RootLayout({
 										<WebRTCProvider>
 											{children}
 											<GlobalCallUI />
+											<GlobalPlayer />
 											<NotificationBell />
 										</WebRTCProvider>
 									</ToastProvider>

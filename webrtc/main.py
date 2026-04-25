@@ -19,17 +19,18 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 REQUEST_COUNT = Counter(
-    "http_requests_total", "Всего HTTP запросов", ["method", "endpoint", "status"]
-)
+    "http_requests_total", "Всего HTTP запросов", [
+        "method", "endpoint", "status"])
 REQUEST_LATENCY = Histogram(
-    "http_request_duration_seconds", "Задержка HTTP запросов", ["method", "endpoint"]
-)
+    "http_request_duration_seconds", "Задержка HTTP запросов", [
+        "method", "endpoint"])
 REQUEST_IN_PROGRESS = Gauge(
-    "http_requests_in_progress", "HTTP запросов в процессе", ["method", "endpoint"]
-)
+    "http_requests_in_progress", "HTTP запросов в процессе", [
+        "method", "endpoint"])
 WEBSOCKET_CONNECTIONS = Gauge(
     "websocket_connections", "Текущие WebSocket подключения"
 )
+
 
 def _tag_for_rule(rule: str) -> str:
     if rule.startswith("/messages"):
@@ -47,6 +48,7 @@ def _tag_for_rule(rule: str) -> str:
     if rule == "/":
         return "Root"
     return "Other"
+
 
 def _build_swagger_paths(app: Flask):
     protected_rules = {
@@ -82,6 +84,7 @@ def _build_swagger_paths(app: Flask):
             }
     return paths
 
+
 def _build_allowed_origins() -> list[str]:
     defaults = [
         "https://vondic.knopusmedia.ru",
@@ -105,10 +108,10 @@ def _build_allowed_origins() -> list[str]:
             seen.add(origin)
     return merged
 
+
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
-
 
     allowed_origins = _build_allowed_origins()
     socketio = SocketIO(
@@ -149,7 +152,8 @@ def create_app():
         socket_id = data.get("socket_id")
 
         if not user_id or not socket_id:
-            return (jsonify({"error": "Отсутствует user_id или socket_id"}), 400)
+            return (
+                jsonify({"error": "Отсутствует user_id или socket_id"}), 400)
 
         updated_user = user_repo.update_socket_id_for_user(user_id, socket_id)
 
@@ -163,7 +167,8 @@ def create_app():
                 ),
                 200,
             )
-        return (jsonify({"error": "Пользователь не найден или ошибка базы данных"}), 404)
+        return (
+            jsonify({"error": "Пользователь не найден или ошибка базы данных"}), 404)
 
     @app.route("/messages/history", methods=["POST"])
     def get_messages_history():
@@ -382,8 +387,10 @@ def create_app():
                 logger.warning(
                     f"broadcast_message: Сокет не найден для {target_id}")
         else:
-            logger.error("broadcast_message: Отсутствует group_id или target_id")
-            return jsonify({"error": "Отсутствует group_id или target_id"}), 400
+            logger.error(
+                "broadcast_message: Отсутствует group_id или target_id")
+            return jsonify(
+                {"error": "Отсутствует group_id или target_id"}), 400
 
         return jsonify({"status": "success"}), 200
 
@@ -415,23 +422,34 @@ def create_app():
     @app.before_request
     def before_request_metrics():
         endpoint = request.endpoint or "unknown"
-        REQUEST_IN_PROGRESS.labels(method=request.method, endpoint=endpoint).inc()
+        REQUEST_IN_PROGRESS.labels(
+            method=request.method,
+            endpoint=endpoint).inc()
         request.start_time = time.time()
 
     @app.after_request
     def after_request_metrics(response):
         endpoint = request.endpoint or "unknown"
         status = response.status_code
-        REQUEST_COUNT.labels(method=request.method, endpoint=endpoint, status=status).inc()
-        REQUEST_IN_PROGRESS.labels(method=request.method, endpoint=endpoint).dec()
+        REQUEST_COUNT.labels(
+            method=request.method,
+            endpoint=endpoint,
+            status=status).inc()
+        REQUEST_IN_PROGRESS.labels(
+            method=request.method,
+            endpoint=endpoint).dec()
         if hasattr(request, 'start_time') and request.start_time:
             latency = time.time() - request.start_time
-            REQUEST_LATENCY.labels(method=request.method, endpoint=endpoint).observe(latency)
+            REQUEST_LATENCY.labels(
+                method=request.method,
+                endpoint=endpoint).observe(latency)
         return response
 
     @app.route("/metrics")
     def metrics():
-        return Response(generate_latest(), mimetype="text/plain; charset=utf-8")
+        return Response(
+            generate_latest(),
+            mimetype="text/plain; charset=utf-8")
 
     @socketio.on("connect")
     def on_connect():
@@ -442,6 +460,7 @@ def create_app():
         WEBSOCKET_CONNECTIONS.dec()
 
     return (app, socketio)
+
 
 if __name__ == "__main__":
     app, socketio = create_app()

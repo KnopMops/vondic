@@ -1,7 +1,8 @@
 'use client'
 
 import React from 'react'
-import { WifiIcon, Loader2Icon } from 'lucide-react'
+import { FiWifi as WifiIcon } from 'react-icons/fi'
+import { LuLoader as Loader2Icon } from 'react-icons/lu'
 
 interface ConnectingModalProps {
 	isVisible: boolean
@@ -11,8 +12,8 @@ export const ConnectingModal: React.FC<ConnectingModalProps> = ({ isVisible }) =
 	if (!isVisible) return null
 
 	return (
-		<div className='fixed inset-0 bg-black/80 backdrop-blur-md z-[99999] flex items-center justify-center p-4 animate-in fade-in duration-300'>
-			<div className='bg-gray-900 border border-gray-800 rounded-3xl w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95 duration-300'>
+		<div className='fixed inset-0 bg-black/45 backdrop-blur-md z-[99999] flex items-center justify-center p-4 animate-in fade-in duration-300'>
+			<div className='bg-black/30 border border-white/10 rounded-3xl w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95 duration-300'>
 				<div className='flex flex-col items-center text-center space-y-6'>
 					
 					<div className='relative'>

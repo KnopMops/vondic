@@ -3,24 +3,28 @@ import os
 import secrets
 from datetime import datetime
 
-from sqlalchemy import text
 from app.core.config import Config
 from app.core.extensions import db
-from app.models.channel import Channel, channel_participants
+from app.models.channel import Channel
 from app.models.comment import Comment
-from app.models.community import Community, community_members
+from app.models.community import Community
 from app.models.community_channel import CommunityChannel
 from app.models.friendship import Friendship
-from app.models.group import Group, group_participants
+from app.models.group import Group
 from app.models.like import Like
 from app.models.message import Message
+from app.models.notification import Notification
 from app.models.post import Post
+from app.models.post_report import PostReport
 from app.models.subscription import Subscription
+from app.models.support_chat_message import SupportChatMessage
+from app.models.escalation import Escalation
 from app.models.user import User
 from flask import current_app
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import check_password_hash, generate_password_hash
+
 
 class UserService:
     @staticmethod
@@ -280,11 +284,10 @@ class UserService:
                             delete_local_file(a.get("url"))
 
             shared_db_path = os.path.join(Config.BASE_DIR, "database.db")
-            result = db.session.execute(text(""""""), {"user_id": user_id})
-            report_rows = result.fetchall()
+            report_rows = PostReport.query.filter_by(reporter_id=user_id).all()
             for row in report_rows:
                 try:
-                    payload = row[0] if row else None
+                    payload = row.attachments if row else None
                     attachments = json.loads(payload) if payload else []
                     if isinstance(attachments, list):
                         for a in attachments:
@@ -293,54 +296,44 @@ class UserService:
                 except Exception:
                     continue
 
-            result = db.session.execute(text("SELECT id FROM escalations WHERE user_id = :user_id"), {"user_id": user_id})
-            esc_rows = result.fetchall()
-            esc_ids = [r[0] for r in esc_rows if r and r[0] is not None]
+            esc_ids = [
+                row.id
+                for row in Escalation.query.filter_by(user_id=user_id).all()
+                if row.id is not None
+            ]
             if esc_ids:
-                placeholders = ",".join(f":id{i}" for i in range(len(esc_ids)))
-                params = {f"id{i}": esc_id for i, esc_id in enumerate(esc_ids)}
-                db.session.execute(text(f"""
-                    DELETE FROM support_chat_messages WHERE escalation_id IN ({placeholders})
-                """), params)
+                SupportChatMessage.query.filter(
+                    SupportChatMessage.escalation_id.in_(esc_ids)
+                ).delete(synchronize_session=False)
 
-            db.session.execute(text("DELETE FROM escalations WHERE user_id = :user_id"), {"user_id": user_id})
-            db.session.execute(text("DELETE FROM notifications WHERE user_id = :user_id"), {"user_id": user_id})
-            db.session.execute(text("DELETE FROM post_reports WHERE reporter_id = :user_id"), {"user_id": user_id})
+            Escalation.query.filter_by(
+                user_id=user_id).delete(
+                synchronize_session=False)
+            Notification.query.filter_by(
+                user_id=user_id).delete(
+                synchronize_session=False)
+            PostReport.query.filter_by(
+                reporter_id=user_id).delete(
+                synchronize_session=False)
             db.session.commit()
-            webrtc_result = db.session.execute(text("""
-                SELECT payload FROM messages WHERE (sender_id = :user_id OR target_id = :user_id) AND payload IS NOT NULL
-            """), {"user_id": user_id})
-            webrtc_rows = webrtc_result.fetchall()
-            for row in webrtc_rows:
-                try:
-                    payload = row[0] if row else None
-                    attachments = json.loads(payload) if payload else []
-                    if isinstance(attachments, list):
-                        for a in attachments:
-                            if isinstance(a, dict):
-                                delete_local_file(a.get("url"))
-                except Exception:
-                    continue
-            webrtc_cur.execute(
-                "DELETE FROM messages WHERE sender_id = ? OR target_id = ?",
-                (user_id, user_id),
-            )
-            webrtc_conn.commit()
-            webrtc_conn.close()
 
-            db.session.execute(
-                group_participants.delete().where(
-                    group_participants.c.user_id == user_id
-                )
-            )
-            db.session.execute(
-                community_members.delete().where(
-                    community_members.c.user_id == user_id))
-            db.session.execute(
-                channel_participants.delete().where(
-                    channel_participants.c.user_id == user_id
-                )
-            )
+            for grp in Group.query.filter(
+                Group.participants.any(
+                    id=user_id)).all():
+                grp.participants = [
+                    p for p in grp.participants if str(
+                        p.id) != str(user_id)]
+            for comm in Community.query.filter(
+                    Community.members.any(id=user_id)).all():
+                comm.members = [
+                    m for m in comm.members if str(
+                        m.id) != str(user_id)]
+            for ch in Channel.query.filter(
+                Channel.participants.any(
+                    id=user_id)).all():
+                ch.participants = [
+                    p for p in ch.participants if str(
+                        p.id) != str(user_id)]
 
             Friendship.query.filter(
                 or_(
@@ -406,11 +399,7 @@ class UserService:
                 Message.query.filter(Message.group_id == group.id).delete(
                     synchronize_session=False
                 )
-                db.session.execute(
-                    group_participants.delete().where(
-                        group_participants.c.group_id == group.id
-                    )
-                )
+                group.participants = []
                 db.session.delete(group)
 
             communities = Community.query.filter(
@@ -419,42 +408,13 @@ class UserService:
                 CommunityChannel.query.filter(
                     CommunityChannel.community_id == community.id
                 ).delete(synchronize_session=False)
-                db.session.execute(
-                    community_members.delete().where(
-                        community_members.c.community_id == community.id
-                    )
-                )
+                community.members = []
                 db.session.delete(community)
 
             channels = Channel.query.filter(Channel.owner_id == user_id).all()
             for channel in channels:
-                db.session.execute(
-                    channel_participants.delete().where(
-                        channel_participants.c.channel_id == channel.id
-                    )
-                )
+                channel.participants = []
                 db.session.delete(channel)
-
-            if channels:
-                channel_ids = [c.id for c in channels]
-                placeholders = ",".join(f":id{i}" for i in range(len(channel_ids)))
-                params = {f"id{i}": channel_id for i, channel_id in enumerate(channel_ids)}
-                channel_result = db.session.execute(text(f""""""), params)
-                channel_rows = channel_result.fetchall()
-                for row in channel_rows:
-                    try:
-                        payload = row[0] if row else None
-                        attachments = json.loads(payload) if payload else []
-                        if isinstance(attachments, list):
-                            for a in attachments:
-                                if isinstance(a, dict):
-                                    delete_local_file(a.get("url"))
-                    except Exception:
-                        continue
-                webrtc_cur.execute(
-                    f"DELETE FROM messages WHERE channel_id IN ({placeholders})", channel_ids, )
-                webrtc_conn.commit()
-                webrtc_conn.close()
 
             db.session.delete(user)
             db.session.commit()

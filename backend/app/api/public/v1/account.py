@@ -7,10 +7,10 @@ public_account_bp = Blueprint(
     "public_account", __name__, url_prefix="/api/public/v1/account"
 )
 
+
 def _get_current_user():
     """Get current user from either access_token or api_key."""
     data = request.get_json(silent=True) or {}
-
 
     access_token = data.get("access_token")
     if not access_token:
@@ -23,7 +23,6 @@ def _get_current_user():
         if user:
             return user, None
         return None, error
-
 
     api_key = data.get("api_key")
     if not api_key:
@@ -41,6 +40,7 @@ def _get_current_user():
 
     return None, "access_token or api_key is missing"
 
+
 @public_account_bp.route("/developer/toggle", methods=["POST"])
 def toggle_developer():
     current_user, error = _get_current_user()
@@ -53,6 +53,7 @@ def toggle_developer():
         return jsonify({"error": error}), 400
     return jsonify({"user": user_schema.dump(user)}), 200
 
+
 @public_account_bp.route("/api-key", methods=["POST"])
 def generate_api_key():
     current_user, error = _get_current_user()
@@ -64,6 +65,7 @@ def generate_api_key():
     if error:
         return jsonify({"error": error}), 400
     return jsonify({"api_key": token}), 200
+
 
 @public_account_bp.route("/api-key", methods=["GET"])
 def get_api_key():

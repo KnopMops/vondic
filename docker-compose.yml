@@ -3,9 +3,9 @@ services:
     image: postgres:15
     container_name: postgres
     environment:
-      POSTGRES_USER: ...
-      POSTGRES_PASSWORD: ...
-      POSTGRES_DB: ...
+      POSTGRES_USER: vondic
+      POSTGRES_PASSWORD: vondic
+      POSTGRES_DB: vondic
     ports:
       - "5432:5432"
     volumes:
@@ -65,9 +65,9 @@ services:
     environment:
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_USER=...
-      - DB_PASSWORD=...
-      - DB_NAME=...
+      - DB_USER=vondic
+      - DB_PASSWORD=vondic
+      - DB_NAME=vondic
       - POOL_MODE=transaction
       - MAX_CLIENT_CONN=100
       - DEFAULT_POOL_SIZE=20
@@ -81,8 +81,7 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - ./pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:ro
-      - ./pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ./pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini
 
   backend:
     build:
@@ -94,15 +93,42 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      pgbouncer:
+        condition: service_started
       redis:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      static-nginx:
+        condition: service_started
     ports:
       - "5050:5050"
+    volumes:
+      - uploads_data:/app/uploads
+    environment:
+      - UPLOADS_DIR=/app/uploads
     networks:
       - app-network
     restart: unless-stopped
+
+  static-nginx:
+    build:
+      context: ./nginx-static
+    container_name: static-nginx
+    ports:
+      - "8080:80"
+    volumes:
+      - uploads_data:/data/uploads
+      - ./backend/app/static:/data/static:ro
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
 
   videochecker:
     build:
@@ -114,6 +140,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      pgbouncer:
+        condition: service_started
       redis:
         condition: service_healthy
       rabbitmq:
@@ -219,6 +247,7 @@ volumes:
   postgres_data:
   redis_data:
   rabbitmq_data:
+  uploads_data:
 
 networks:
   app-network:

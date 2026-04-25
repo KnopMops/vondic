@@ -8,6 +8,7 @@ from flask import Blueprint, jsonify, request
 
 messages_bp = Blueprint("messages", __name__, url_prefix="/api/v1/messages")
 
+
 @messages_bp.route("/<message_id>/reaction", methods=["POST"])
 @token_required
 def add_reaction(current_user, message_id):
@@ -23,10 +24,12 @@ def add_reaction(current_user, message_id):
 
     reactions = message.reactions or []
 
-    user_reaction = next((r for r in reactions if r.get("user_id") == current_user.id and r.get("emoji") == emoji), None)
+    user_reaction = next((r for r in reactions if r.get(
+        "user_id") == current_user.id and r.get("emoji") == emoji), None)
 
     if user_reaction:
-        reactions = [r for r in reactions if r.get("user_id") != current_user.id or r.get("emoji") != emoji]
+        reactions = [r for r in reactions if r.get(
+            "user_id") != current_user.id or r.get("emoji") != emoji]
     else:
         reactions.append({
             "user_id": current_user.id,
@@ -47,6 +50,7 @@ def add_reaction(current_user, message_id):
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
+
 @messages_bp.route("/<message_id>/edit", methods=["PUT"])
 @token_required
 def edit_message(current_user, message_id):
@@ -64,7 +68,8 @@ def edit_message(current_user, message_id):
         return jsonify({"error": "You can only edit your own messages"}), 403
 
     if (datetime.utcnow() - message.created_at).total_seconds() > 172800:
-        return jsonify({"error": "Message can only be edited within 48 hours"}), 400
+        return jsonify(
+            {"error": "Message can only be edited within 48 hours"}), 400
 
     try:
         edit_history = message.edit_history or []
@@ -86,6 +91,7 @@ def edit_message(current_user, message_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
+
 
 @messages_bp.route("/<message_id>/read", methods=["POST"])
 @token_required
@@ -113,6 +119,7 @@ def mark_message_read(current_user, message_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
+
 
 @messages_bp.route("/<message_id>/reply", methods=["POST"])
 @token_required
@@ -146,6 +153,7 @@ def reply_to_message(current_user, message_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
+
 
 @messages_bp.route("/<message_id>/forward", methods=["POST"])
 @token_required
@@ -182,6 +190,7 @@ def forward_message(current_user, message_id):
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
+
 @messages_bp.route("/<message_id>/delete-for-everyone", methods=["POST"])
 @token_required
 def delete_message_for_everyone(current_user, message_id):
@@ -193,7 +202,8 @@ def delete_message_for_everyone(current_user, message_id):
         return jsonify({"error": "You can only delete your own messages"}), 403
 
     if (datetime.utcnow() - message.created_at).total_seconds() > 604800:
-        return jsonify({"error": "Message can only be deleted within 7 days"}), 400
+        return jsonify(
+            {"error": "Message can only be deleted within 7 days"}), 400
 
     try:
         message.is_deleted = True
@@ -210,30 +220,25 @@ def delete_message_for_everyone(current_user, message_id):
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
+
 @messages_bp.route("/history", methods=["DELETE"])
 @token_required
 def delete_messages_history(current_user):
-    """Delete all direct messages history between current user and target_id"""
     data = request.get_json() or {}
     target_id = data.get("target_id")
 
     if not target_id:
         return jsonify({"error": "Требуется target_id"}), 400
 
-    from sqlalchemy import text
-
     try:
-
-        deleted = db.session.execute(
-            text("""
-                DELETE FROM messages
-                WHERE (sender_id = :user_id AND target_id = :target_id)
-                   OR (sender_id = :target_id AND target_id = :user_id)
-            """),
-            {"user_id": current_user.id, "target_id": target_id}
-        )
+        deleted = Message.query.filter(
+            ((Message.sender_id == current_user.id) & (
+                Message.target_id == target_id)) | (
+                (Message.sender_id == target_id) & (
+                    Message.target_id == current_user.id)))
+        deleted_count = deleted.delete(synchronize_session=False)
         db.session.commit()
-        return jsonify({"deleted": deleted.rowcount}), 200
+        return jsonify({"deleted": deleted_count}), 200
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500

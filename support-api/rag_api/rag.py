@@ -5,6 +5,7 @@ import requests
 
 DEFAULT_API_URL = "https://untortuously-hummel-arnoldo.ngrok-free.dev/ask"
 
+
 class RequestThread:
 
     def __init__(
@@ -56,6 +57,7 @@ class RequestThread:
 
     def execute(self):
         return self.run()
+
 
 def simple_request(api_url: str, question: str) -> str:
     try:

@@ -1,3 +1,4 @@
+from bcrypter.service import BCrypter
 from typing import Optional
 import asyncio
 import logging
@@ -20,14 +21,15 @@ from botiksdk import (
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from bcrypter.service import BCrypter
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 load_dotenv(".env.bot")
 
 BOT_ID = os.getenv("BOT_ID", "9b0325e4-13fc-4659-8b86-88b90a4bfdb5")
-BOT_TOKEN = os.getenv("BOT_TOKEN", "DbTXn0tna4VkF2XtiCI_bXa7TehYqxDIPfHKsjbfGKg")
+BOT_TOKEN = os.getenv(
+    "BOT_TOKEN",
+    "DbTXn0tna4VkF2XtiCI_bXa7TehYqxDIPfHKsjbfGKg")
 BACKEND_URL = os.getenv("BACKEND_URL", "https://api.vondic.knopusmedia.ru")
 
 dp = Dispatcher()
@@ -53,38 +55,38 @@ async def get_user_profile_photos_mock(bot, user_id: str, limit: int = 1):
 
 async def get_file_mock(bot, file_id: str):
     return {"file_id": file_id, "file_path": ""}
+
+
 @dp.message(Command("start"))
 async def cmd_start(message: Message, bot: Bot, state: FSMContext):
     builder = InlineKeyboardBuilder()
-
-    builder.row(InlineKeyboardButton(text="✅ Регистрация", callback_data="register"))
     builder.row(
         InlineKeyboardButton(
-            text="🔄 Войти / Восстановить ключ", callback_data="restore"
-        )
-    )
+            text="💎 Купить Vondic Premium (скоро)",
+            callback_data="premium_unavailable"))
     builder.row(
         InlineKeyboardButton(
-            text="💎 Купить Vondic Premium", callback_data="buy_premium_tg"
-        )
-    )
-    builder.row(
-        InlineKeyboardButton(text="💰 Купить Vondic Coins", callback_data="buy_coins")
-    )
+            text="💰 Купить Vondic Coins (скоро)",
+            callback_data="coins_unavailable"))
 
     safe_send_message(
         bot,
         str(message.chat.id),
-        "👋 Добро пожаловать в Vondic Bot!\n\nВыберите действие:",
+        "👋 Добро пожаловать в Vondic Bot!\n\nДоступные разделы:",
         reply_markup=builder.as_markup(),
     )
 
 
-async def safe_answer_callback_query(bot: Bot, callback_id: str, text: Optional[str] = None, show_alert: bool = False):
+async def safe_answer_callback_query(
+        bot: Bot,
+        callback_id: str,
+        text: Optional[str] = None,
+        show_alert: bool = False):
     try:
         import inspect
 
-        res = bot.answer_callback_query(callback_id, text=text, show_alert=show_alert)
+        res = bot.answer_callback_query(
+            callback_id, text=text, show_alert=show_alert)
         if inspect.iscoroutine(res):
             await res
     except Exception as e:
@@ -92,7 +94,6 @@ async def safe_answer_callback_query(bot: Bot, callback_id: str, text: Optional[
 
 
 def safe_send_message(bot: Bot, chat_id: str, text: str, **kwargs):
-    """Safely send a message, catching any exceptions to prevent 500 errors"""
     try:
         return bot.send_message(chat_id, text, **kwargs)
     except Exception as e:
@@ -101,83 +102,50 @@ def safe_send_message(bot: Bot, chat_id: str, text: str, **kwargs):
 
 
 @dp.callback_query(lambda c: c.data == "buy_premium_tg")
-async def buy_premium_tg_start(callback: CallbackQuery, bot: Bot, state: FSMContext):
-    user_id = str(callback.from_user.id)
-    linked_user = None
-
-    try:
-        import requests
-
-        response = requests.get(
-            f"{BACKEND_URL}/api/v1/users/by-telegram/{user_id}", timeout=5
-        )
-        if response.status_code == 200:
-            linked_user = response.json()
-    except Exception as e:
-        logger.error(f"Error checking linked user: {e}")
-
-    is_local_registered = bcrypter.is_user_registered(user_id)
-
-    if not linked_user and not is_local_registered:
-        builder = InlineKeyboardBuilder()
-        builder.add(
-            InlineKeyboardButton(text="✅ Зарегистрироваться", callback_data="register")
-        )
-        safe_send_message(
-            bot,
-            str(callback.message.chat.id),
-            "⚠️ Вы не зарегистрированы в системе.\nСначала пройдите регистрацию или привяжите существующий аккаунт, чтобы купить Premium.",
-            reply_markup=builder.as_markup(),
-        )
-        await safe_answer_callback_query(bot, callback.id)
-        return
-
-    target_user_id = linked_user["id"] if linked_user else user_id
-
-    builder = InlineKeyboardBuilder()
-    builder.add(
-        InlineKeyboardButton(
-            text="💳 Оплатить Premium",
-            callback_data=f"buy_premium:{target_user_id}",
-        )
-    )
-
+async def buy_premium_tg_start(
+        callback: CallbackQuery,
+        bot: Bot,
+        state: FSMContext):
     safe_send_message(
         bot,
         str(callback.message.chat.id),
-        "💎 **Vondic Premium**\n\n"
-        "Преимущества:\n"
-        "• ⭐ Уникальный значок профиля\n"
-        "• 💾 5 ГБ облачного хранилища (вместо 1 ГБ)\n"
-        "• 📁 Загрузка файлов до 100 МБ\n"
-        "• 🖼️ GIF-аватарки (живые фото профиля)\n"
-        "• 🚀 Приоритетная поддержка\n"
-        "• 🎨 Расширенные возможности кастомизации\n\n"
-        "Нажмите кнопку ниже, чтобы оформить подписку.",
-        parse_mode="Markdown",
-        reply_markup=builder.as_markup(),
+        "⏳ Покупка Vondic Premium временно недоступна.",
+    )
+    await safe_answer_callback_query(bot, callback.id)
+
+
+@dp.callback_query(lambda c: c.data == "premium_unavailable")
+async def premium_unavailable(
+        callback: CallbackQuery,
+        bot: Bot,
+        state: FSMContext):
+    safe_send_message(
+        bot,
+        str(callback.message.chat.id),
+        "⏳ Покупка Vondic Premium временно недоступна.",
     )
     await safe_answer_callback_query(bot, callback.id)
 
 
 @dp.callback_query(lambda c: c.data == "buy_coins")
 async def buy_coins_menu(callback: CallbackQuery, bot: Bot, state: FSMContext):
-    builder = InlineKeyboardBuilder()
-    builder.row(
-        InlineKeyboardButton(
-            text="Для Telegram аккаунта", callback_data="buy_coins_tg"
-        )
-    )
-    builder.row(
-        InlineKeyboardButton(
-            text="Для Yandex/Email аккаунта", callback_data="buy_coins_email"
-        )
-    )
     safe_send_message(
         bot,
         str(callback.message.chat.id),
-        "Выберите, для какого аккаунта купить Vondic Coins:",
-        reply_markup=builder.as_markup(),
+        "⏳ Покупка Vondic Coins временно недоступна.",
+    )
+    await safe_answer_callback_query(bot, callback.id)
+
+
+@dp.callback_query(lambda c: c.data == "coins_unavailable")
+async def coins_unavailable(
+        callback: CallbackQuery,
+        bot: Bot,
+        state: FSMContext):
+    safe_send_message(
+        bot,
+        str(callback.message.chat.id),
+        "⏳ Покупка Vondic Coins временно недоступна.",
     )
     await safe_answer_callback_query(bot, callback.id)
 
@@ -201,12 +169,12 @@ async def buy_coins_tg(callback: CallbackQuery, bot: Bot, state: FSMContext):
         builder = InlineKeyboardBuilder()
         builder.add(
             InlineKeyboardButton(
-                text="🔗 Привязать аккаунт (Yandex)", callback_data="link_yandex"
-            )
-        )
+                text="🔗 Привязать аккаунт (Yandex)",
+                callback_data="link_yandex"))
         builder.add(
-            InlineKeyboardButton(text="✅ Регистрация", callback_data="register")
-        )
+            InlineKeyboardButton(
+                text="✅ Регистрация",
+                callback_data="register"))
         safe_send_message(
             bot,
             str(callback.message.chat.id),
@@ -299,7 +267,9 @@ async def buy_coins_pack(callback: CallbackQuery, bot: Bot, state: FSMContext):
             )
     except Exception as e:
         logger.error(f"buy_coins_pack error: {e}")
-        safe_send_message(bot, str(callback.message.chat.id), "Произошла ошибка.")
+        safe_send_message(bot,
+                          str(callback.message.chat.id),
+                          "Произошла ошибка.")
     await safe_answer_callback_query(bot, callback.id)
 
 
@@ -347,7 +317,8 @@ async def buy_coins_email_entered(
             )
     except Exception as e:
         logger.error(f"buy_coins_email_entered error: {e}")
-        safe_send_message(bot, str(message.chat.id), f"Ошибка проверки email: {str(e)}")
+        safe_send_message(bot, str(message.chat.id),
+                          f"Ошибка проверки email: {str(e)}")
 
 
 @dp.callback_query(lambda c: c.data == "register")
@@ -393,7 +364,6 @@ async def restore_key(callback: CallbackQuery, bot: Bot, state: FSMContext):
 
     avatar_url = None
 
-
     if not bcrypter.is_user_registered(user_id):
         safe_send_message(
             bot,
@@ -419,8 +389,12 @@ async def restore_key(callback: CallbackQuery, bot: Bot, state: FSMContext):
         )
     await safe_answer_callback_query(bot, callback.id)
 
+
 @dp.callback_query(lambda c: c.data == "auth_email")
-async def auth_email_start(callback: CallbackQuery, bot: Bot, state: FSMContext):
+async def auth_email_start(
+        callback: CallbackQuery,
+        bot: Bot,
+        state: FSMContext):
     await state.set_state(AuthStates.email)
     safe_send_message(
         bot,
@@ -466,8 +440,9 @@ async def auth_password_entered(message: Message, bot: Bot, state: FSMContext):
     else:
         builder = InlineKeyboardBuilder()
         builder.add(
-            InlineKeyboardButton(text="Попробовать снова", callback_data="auth_email")
-        )
+            InlineKeyboardButton(
+                text="Попробовать снова",
+                callback_data="auth_email"))
         safe_send_message(
             bot,
             str(message.chat.id),
@@ -521,7 +496,9 @@ async def buy_premium(callback: CallbackQuery, bot: Bot, state: FSMContext):
 
     except Exception as e:
         logger.error(f"Error buying premium: {e}")
-        safe_send_message(bot, str(callback.message.chat.id), "❌ Произошла ошибка.")
+        safe_send_message(bot,
+                          str(callback.message.chat.id),
+                          "❌ Произошла ошибка.")
 
     await safe_answer_callback_query(bot, callback.id)
 
@@ -532,7 +509,6 @@ async def main():
             "BOT_TOKEN не установлен. Пожалуйста, укажите его в переменных окружения или файле .env."
         )
         return
-
 
     bot = Bot(
         bot_id=BOT_ID,

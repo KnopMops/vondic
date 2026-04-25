@@ -6,7 +6,13 @@ import { useAuth } from '@/lib/AuthContext'
 import { User } from '@/lib/types'
 import { getAttachmentUrl, getAvatarUrl } from '@/lib/utils'
 import { motion } from 'framer-motion'
-import { Search, UserCheck, UserPlus, Users, UserX } from 'lucide-react'
+import {
+	FiSearch as Search,
+	FiUserCheck as UserCheck,
+	FiUserPlus as UserPlus,
+	FiUsers as Users,
+	FiUserX as UserX,
+} from 'react-icons/fi'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 

@@ -2,22 +2,24 @@
 
 import { getAttachmentUrl } from '@/lib/utils'
 import {
-	ChevronDown,
-	ChevronUp,
-	HelpCircle,
-	Maximize2,
-	Mic,
-	MicOff,
-	Minimize2,
-	Monitor,
-	MonitorOff,
-	PhoneOff,
-	Settings2,
-	Video,
-	VideoOff,
-	Volume2,
-	X,
-} from 'lucide-react'
+	FiChevronDown as ChevronDown,
+	FiChevronUp as ChevronUp,
+	FiHelpCircle as HelpCircle,
+	FiMaximize2 as Maximize2,
+	FiMic as Mic,
+	FiMicOff as MicOff,
+	FiMinimize2 as Minimize2,
+	FiMonitor as Monitor,
+	FiPhoneOff as PhoneOff,
+	FiVideo as Video,
+	FiVideoOff as VideoOff,
+	FiVolume2 as Volume2,
+	FiX as X,
+} from 'react-icons/fi'
+import {
+	LuMonitorOff as MonitorOff,
+	LuSettings2 as Settings2,
+} from 'react-icons/lu'
 import React, { useEffect, useRef, useState } from 'react'
 import { CallState } from '../../lib/services/WebRTCService'
 

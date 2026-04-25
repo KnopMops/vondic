@@ -1,9 +1,9 @@
 'use client'
 
-import { Heart, MessageCircle, Share2, MoreHorizontal, Send, Image, Video, File, Download, Upload, Calendar, Clock, Star, Lock, Unlock, Eye, EyeOff, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ArrowLeft, ArrowRight, MoreVertical, Bell, Search, Home, User, Settings, Menu, X, Check, Plus, Trash2, Edit2 } from 'lucide-react';
 import AudioPlayer from '@/components/social/AudioPlayer'
 import PostDetailsModal from '@/components/social/PostDetailsModal'
 import VideoPlayer from '@/components/social/VideoPlayer'
+import { AppleEmoji } from '@/components/ui/AppleEmoji'
 import { Attachment, User } from '@/lib/types'
 import { formatMskTime, getAttachmentUrl, getAvatarUrl } from '@/lib/utils'
 import { memo, useEffect, useRef, useState } from 'react'
@@ -53,6 +53,10 @@ interface MessageBubbleProps {
 	isSelectionMode?: boolean
 	isSelected?: boolean
 	onToggleSelect?: (msg: Message) => void
+	isDeleting?: boolean
+	currentUserId?: string
+	botAccessToken?: string
+	onBotOutboxItems?: (botId: string, items: any[]) => void
 }
 
 const REACTIONS = ['❤️', '🔥', '😂', '👍', '😮', '😢']
@@ -74,6 +78,10 @@ const MessageBubble = memo(
 		isSelectionMode,
 		isSelected,
 		onToggleSelect,
+		isDeleting = false,
+		currentUserId,
+		botAccessToken,
+		onBotOutboxItems,
 	}: MessageBubbleProps) => {
 		const [isDetailsOpen, setIsDetailsOpen] = useState(false)
 		const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -205,7 +213,7 @@ const MessageBubble = memo(
 			<div
 				className={`flex w-full mb-2 transition-all duration-300 ease-out animate-in fade-in slide-in-from-bottom-2 ${
 					msg.isOwn ? 'justify-end' : 'justify-start'
-				}`}
+				} ${isDeleting ? 'message-deleting' : ''}`}
 			>
 				{!msg.isOwn && sender && (
 					<div className='flex items-end mr-2'>
@@ -366,7 +374,7 @@ const MessageBubble = memo(
 											}}
 											className='rounded-md px-2 py-1 text-sm hover:bg-white/10'
 										>
-											{emoji}
+											<AppleEmoji emoji={emoji} size={18} />
 										</button>
 									))}
 								</div>
@@ -572,11 +580,11 @@ const MessageBubble = memo(
 					)}
 					
 					
-					{msg.reply_markup?.inline_keyboard && (
+					{Array.isArray(msg.reply_markup?.inline_keyboard) && (
 						<div className='mt-3 flex flex-col gap-2'>
 							{msg.reply_markup.inline_keyboard.map((row, rowIndex) => (
 								<div key={rowIndex} className='flex flex-wrap gap-2'>
-									{row.map((btn, btnIndex) => (
+									{(Array.isArray(row) ? row : []).map((btn, btnIndex) => (
 										<button
 											key={`${rowIndex}-${btnIndex}`}
 											onClick={async (e) => {
@@ -588,7 +596,12 @@ const MessageBubble = memo(
 													try {
 														const token = localStorage.getItem('access_token')
 														const userData = localStorage.getItem('user')
-														const user = userData ? JSON.parse(userData) : null
+														let user: { id?: string } | null = null
+														try {
+															user = userData ? JSON.parse(userData) : null
+														} catch {
+															user = null
+														}
 														const url = `/api/public/v1/bots/${msg.sender_id}/callback`
 														console.log('[Button] Sending to:', url)
 														const response = await fetch(url, {
@@ -602,7 +615,31 @@ const MessageBubble = memo(
 																user_id: user?.id || 'unknown',
 															}),
 														})
-														console.log('[Button] Response:', response.status, await response.text())
+														const callbackText = await response.text()
+														console.log('[Button] Response:', response.status, callbackText)
+														if (response.ok && currentUserId) {
+															const token =
+																botAccessToken ||
+																localStorage.getItem('access_token') ||
+																undefined
+															const outboxRes = await fetch(
+																`/api/v1/bots?bot_id=${msg.sender_id}&chat_id=${currentUserId}&mode=outbox`,
+																token
+																	? {
+																			headers: {
+																				Authorization: `Bearer ${token}`,
+																			},
+																		}
+																	: undefined,
+															)
+															if (outboxRes.ok) {
+																const outboxData = await outboxRes.json().catch(() => ({}))
+																const items = Array.isArray(outboxData?.items) ? outboxData.items : []
+																if (items.length) {
+																	onBotOutboxItems?.(msg.sender_id, items)
+																}
+															}
+														}
 													} catch (e) {
 														console.error('[Button] Error:', e)
 													}
@@ -634,7 +671,7 @@ const MessageBubble = memo(
 											: 'border-white/10 bg-black/20 text-gray-200 hover:bg-black/30'
 									}`}
 								>
-									<span>{emoji}</span>
+									<AppleEmoji emoji={emoji} size={16} />
 									<span>{info.count}</span>
 								</button>
 							))}

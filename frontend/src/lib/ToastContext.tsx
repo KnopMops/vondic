@@ -1,7 +1,7 @@
 'use client'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { X } from 'lucide-react'
+import { FiX as X } from 'react-icons/fi'
 import React, { createContext, useCallback, useContext, useState } from 'react'
 
 export type ToastType = 'success' | 'error' | 'info'

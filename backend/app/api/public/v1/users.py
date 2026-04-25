@@ -7,19 +7,24 @@ from flask import Blueprint, jsonify, request
 public_users_bp = Blueprint(
     "public_users", __name__, url_prefix="/api/public/v1/users")
 
+
 @public_users_bp.route("/me", methods=["GET"])
 @api_key_required
 def get_me(current_user):
     try:
         user_data = user_schema.dump(current_user)
 
-        restricted_fields = ['password_hash', 'refresh_token', 'cloud_password_hash']
+        restricted_fields = [
+            'password_hash',
+            'refresh_token',
+            'cloud_password_hash']
         for field in restricted_fields:
             user_data.pop(field, None)
 
         return jsonify(user_data), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 @public_users_bp.route("/", methods=["GET"])
 def get_users():
@@ -43,6 +48,7 @@ def get_users():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @public_users_bp.route("/<user_id>", methods=["GET"])
 def get_user(user_id):
     try:
@@ -61,6 +67,7 @@ def get_user(user_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @public_users_bp.route("/username/<username>", methods=["GET"])
 def get_user_by_username(username):
     try:
@@ -78,6 +85,7 @@ def get_user_by_username(username):
         return jsonify(user_data), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 @public_users_bp.route("/search", methods=["GET"])
 def search_users():
@@ -104,6 +112,7 @@ def search_users():
         }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 @public_users_bp.route("/<user_id>/followers", methods=["GET"])
 def get_user_followers(user_id):
@@ -132,6 +141,7 @@ def get_user_followers(user_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @public_users_bp.route("/<user_id>/following", methods=["GET"])
 def get_user_following(user_id):
     try:
@@ -158,6 +168,7 @@ def get_user_following(user_id):
         }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 @public_users_bp.route("/me", methods=["PUT"])
 @api_key_required
@@ -202,9 +213,9 @@ def update_current_user(current_user):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @public_users_bp.route("/<user_id>/follow", methods=["POST"])
 @api_key_required
-
 @rate_limit(limit=50, window=3600, per_user=True)
 def follow_user(current_user, user_id):
     try:
@@ -223,9 +234,9 @@ def follow_user(current_user, user_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @public_users_bp.route("/<user_id>/unfollow", methods=["POST"])
 @api_key_required
-
 @rate_limit(limit=50, window=3600, per_user=True)
 def unfollow_user(current_user, user_id):
     try:

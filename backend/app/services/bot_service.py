@@ -3,7 +3,9 @@ import secrets
 from app.core.extensions import db
 from app.models.bot import Bot
 from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
 from werkzeug.security import check_password_hash, generate_password_hash
+
 
 class BotService:
     @staticmethod
@@ -60,6 +62,9 @@ class BotService:
         name = (data.get("name") or "").strip()
         if not name:
             return None, "name is required"
+        existing = Bot.query.filter(Bot.name == name).first()
+        if existing:
+            return None, "Бот с таким именем уже существует"
         description = data.get("description")
         avatar_url = data.get("avatar_url")
         is_active = data.get("is_active")
@@ -80,6 +85,12 @@ class BotService:
             db.session.add(bot)
             db.session.commit()
             return bot, None
+        except IntegrityError as e:
+            db.session.rollback()
+            error_text = str(getattr(e, "orig", e)).lower()
+            if "bots_name_key" in error_text or "duplicate key value" in error_text:
+                return None, "Бот с таким именем уже существует"
+            return None, "Не удалось создать бота из-за конфликта данных"
         except Exception as e:
             db.session.rollback()
             return None, str(e)

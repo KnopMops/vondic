@@ -35,7 +35,7 @@ const ApiDocumentationPage = () => {
 							<div className='bg-indigo-500/10 border-l-4 border-indigo-500 p-4 mb-4 backdrop-blur-sm border border-white/10 rounded-lg'>
 								<p className='font-semibold text-white'>Базовый URL:</p>
 								<code className='bg-gray-800/50 px-2 py-1 rounded text-indigo-300 border border-white/10'>
-									https:
+									https://api.vondic.knopusmedia.ru
 								</code>
 							</div>
 							<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>

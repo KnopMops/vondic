@@ -5,6 +5,7 @@ from sqlalchemy import INTEGER, TEXT, TIMESTAMP
 
 from app.core.extensions import db
 
+
 class Bot(db.Model):
     __tablename__ = "bots"
 

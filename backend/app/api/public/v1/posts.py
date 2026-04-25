@@ -7,6 +7,7 @@ from flask import Blueprint, jsonify, request
 public_posts_bp = Blueprint(
     "public_posts", __name__, url_prefix="/api/public/v1/posts")
 
+
 @public_posts_bp.route("/", methods=["GET"])
 def get_posts():
     try:
@@ -29,6 +30,7 @@ def get_posts():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @public_posts_bp.route("/<post_id>", methods=["GET"])
 def get_post(post_id):
     try:
@@ -42,6 +44,7 @@ def get_post(post_id):
         return jsonify(post_schema.dump(post)), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 @public_posts_bp.route("/", methods=["POST"])
 @api_key_required
@@ -87,9 +90,9 @@ def create_post(current_user):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @public_posts_bp.route("/<post_id>", methods=["PUT"])
 @api_key_required
-
 @rate_limit(limit=20, window=3600, per_user=True)
 def update_post(current_user, post_id):
     try:
@@ -133,6 +136,7 @@ def update_post(current_user, post_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @public_posts_bp.route("/<post_id>", methods=["DELETE"])
 @api_key_required
 def delete_post(current_user, post_id):
@@ -151,6 +155,7 @@ def delete_post(current_user, post_id):
         return jsonify({"message": "Post deleted successfully"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 @public_posts_bp.route("/<post_id>/like", methods=["POST"])
 @api_key_required
@@ -171,6 +176,7 @@ def like_post(current_user, post_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @public_posts_bp.route("/<post_id>/unlike", methods=["POST"])
 @api_key_required
 def unlike_post(current_user, post_id):
@@ -189,6 +195,7 @@ def unlike_post(current_user, post_id):
         return jsonify({"message": "Post unliked successfully"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 @public_posts_bp.route("/<post_id>/comments", methods=["GET"])
 def get_post_comments(post_id):

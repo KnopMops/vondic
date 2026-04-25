@@ -14,6 +14,7 @@ from proxy import ConnectionBroker
 
 logger = logging.getLogger(__name__)
 
+
 class SignalingService:
     def __init__(self, socket_server, broker: ConnectionBroker):
         self.io = socket_server
@@ -30,20 +31,14 @@ class SignalingService:
 
     def _load_existing_interactions(self):
         try:
+            rows = self.broker.repo.get_pinned_message_ids()
+            for message_id in rows:
+                self._pinned_messages.add(message_id)
 
-            rows = self.broker.repo._run(
-                self.broker.repo._fetch(
-                    "SELECT id FROM messages WHERE pinned_by IS NOT NULL"
-                )
-            )
-            for row in rows:
-                self._pinned_messages.add(row['id'])
-
-            reaction_rows = self.broker.repo._run(self.broker.repo._fetch(
-                "SELECT id, reactions FROM messages WHERE reactions IS NOT NULL"))
+            reaction_rows = self.broker.repo.get_reactions_by_message()
             for row in reaction_rows:
-                message_id = row['id']
-                reactions_str = row['reactions']
+                message_id = row["id"]
+                reactions_str = row["reactions"]
                 if reactions_str:
                     try:
                         reactions_dict = json.loads(reactions_str)
@@ -58,7 +53,8 @@ class SignalingService:
 
     def _broadcast_status(self, user_id, status):
         try:
-            friends_sockets = self.broker.repo.get_user_friends_sockets(user_id)
+            friends_sockets = self.broker.repo.get_user_friends_sockets(
+                user_id)
             if friends_sockets:
                 for socket_id in friends_sockets:
                     self.io.emit(
@@ -104,7 +100,9 @@ class SignalingService:
         self.io.on_event("get_history", self.on_get_history)
         self.io.on_event("authenticate", self.on_authenticate)
         self.io.on_event("video_state_changed", self.on_video_state_changed)
-        self.io.on_event("screen_share_state_changed", self.on_screen_share_state_changed)
+        self.io.on_event(
+            "screen_share_state_changed",
+            self.on_screen_share_state_changed)
 
     def _client_key(self):
         forwarded = request.headers.get("X-Forwarded-For", "")
@@ -207,8 +205,9 @@ class SignalingService:
         join_room(user_info["id"])
 
         logger.info(
-            f"Пользователь {user_info['username']} аутентифицирован. SID: {request.sid}"
-        )
+            f"Пользователь {
+                user_info['username']} аутентифицирован. SID: {
+                request.sid}")
 
         emit(
             "connection_success",
@@ -314,7 +313,9 @@ class SignalingService:
                 incoming_payload["offer"] = offer_sdp
             emit("incoming_call", incoming_payload, room=target_user_id)
         else:
-            emit("call_failed", {"message": "Пользователь не в сети или не найден"})
+            emit(
+                "call_failed", {
+                    "message": "Пользователь не в сети или не найден"})
 
     def on_e2e_key_exchange(self, payload):
         target_user_id = payload.get("target_user_id")
@@ -467,19 +468,18 @@ class SignalingService:
                 room=caller_socket_id,
             )
 
-
         existing_participants = []
 
-
-        if caller_socket_id and self.broker.resolve_recipient(caller_socket_id):
+        if caller_socket_id and self.broker.resolve_recipient(
+                caller_socket_id):
             existing_participants.append({
                 "user_id": caller_user_id,
                 "socket_id": caller_socket_id,
                 "username": caller_username,
                 "avatar_url": caller_avatar_url,
             })
-            logger.info(f"[GroupCall] Added caller to existing_participants: {caller_user_id} ({caller_socket_id})")
-
+            logger.info(
+                f"[GroupCall] Added caller to existing_participants: {caller_user_id} ({caller_socket_id})")
 
         for pid in call.get("participants", []):
             if str(pid) in [str(sender_id), str(caller_user_id)]:
@@ -493,10 +493,12 @@ class SignalingService:
                     "username": participant_info.get("username") if participant_info else None,
                     "avatar_url": participant_info.get("avatar_url") if participant_info else None,
                 })
-                logger.info(f"[GroupCall] Added participant to existing_participants: {pid} ({pid_socket})")
+                logger.info(
+                    f"[GroupCall] Added participant to existing_participants: {pid} ({pid_socket})")
 
-        logger.info(f"[GroupCall] Total existing_participants: {len(existing_participants)}")
-
+        logger.info(
+            f"[GroupCall] Total existing_participants: {
+                len(existing_participants)}")
 
         notify_payload = {
             "call_id": call_id,
@@ -507,20 +509,24 @@ class SignalingService:
         }
         if caller_socket_id and self.broker.resolve_recipient(
                 caller_socket_id):
-            logger.info(f"[GroupCall] Emitting participant_joined to caller {caller_socket_id}")
+            logger.info(
+                f"[GroupCall] Emitting participant_joined to caller {caller_socket_id}")
             emit("group_call_participant_joined",
                  notify_payload, room=caller_socket_id)
 
-
         for participant in existing_participants:
             if participant["socket_id"] != caller_socket_id:
-                logger.info(f"[GroupCall] Emitting participant_joined to other participant {participant['socket_id']}")
+                logger.info(
+                    f"[GroupCall] Emitting participant_joined to other participant {
+                        participant['socket_id']}")
                 emit("group_call_participant_joined",
                      notify_payload, room=participant["socket_id"])
 
-
         for participant in existing_participants:
-            logger.info(f"[GroupCall] Emitting participant_joined to new joiner {request.sid} about {participant['socket_id']}")
+            logger.info(
+                f"[GroupCall] Emitting participant_joined to new joiner {
+                    request.sid} about {
+                    participant['socket_id']}")
             emit("group_call_participant_joined",
                  {
                      "call_id": call_id,
@@ -722,8 +728,7 @@ class SignalingService:
             f"Получен запрос send_message от {
                 request.sid}. Target: {target_user_id}, Channel: {channel_id}, Group: {group_id}, Content: {
                 content[
-                    :50] if content else 'None'}..., Type: {msg_type}"
-        )
+                    :50] if content else 'None'}..., Type: {msg_type}")
         logger.info(f"Full payload keys: {list(payload.keys())}")
 
         if (
@@ -910,10 +915,8 @@ class SignalingService:
                 "timestamp": timestamp,
             }
 
-
             if forwarded_from:
                 msg_data["forwarded_from_id"] = forwarded_from.get("sender_id")
-
 
             saved, error = self.broker.repo.save_message(msg_data)
             if not saved:
@@ -938,7 +941,6 @@ class SignalingService:
                 "timestamp": timestamp,
                 "is_read": 0,
             }
-
 
             if forwarded_from:
                 full_message_payload["forwarded_from"] = forwarded_from
@@ -1018,9 +1020,6 @@ class SignalingService:
 
         payload = {
             "id": message_id,
-            "is_deleted": True,
-            "content": "Сообщение удалено",
-            "attachments": [],
         }
 
         if meta.get("channel_id"):
@@ -1194,14 +1193,13 @@ class SignalingService:
             reactions_dict[emoji] = [sender_id]
 
         try:
-            import json
             updated_reactions = json.dumps(
                 reactions_dict) if reactions_dict else None
-            query = "UPDATE messages SET reactions = ? WHERE id = ?"
-            self.broker.repo._run(
-                self.broker.repo._execute(
-                    query, (updated_reactions, message_id))
-            )
+            ok = self.broker.repo.update_message_reactions(
+                message_id, updated_reactions)
+            if not ok:
+                emit("error", {"message": "Failed to update reactions"})
+                return
         except Exception as e:
             logger.error(f"DB Error updating reactions: {e}")
             emit("error", {"message": "Failed to update reactions"})
@@ -1256,10 +1254,11 @@ class SignalingService:
             new_pinned_by = str(sender_id)
 
         try:
-            query = "UPDATE messages SET pinned_by = ? WHERE id = ?"
-            self.broker.repo._run(
-                self.broker.repo._execute(query, (new_pinned_by, message_id))
-            )
+            ok = self.broker.repo.update_message_pinned_by(
+                message_id, new_pinned_by)
+            if not ok:
+                emit("error", {"message": "Failed to update pinned status"})
+                return
         except Exception as e:
             logger.error(f"DB Error updating pinned status: {e}")
             emit("error", {"message": "Failed to update pinned status"})
@@ -1350,7 +1349,6 @@ class SignalingService:
         has_video = payload.get("has_video", False)
         user_id = payload.get("user_id") or sender_id
 
-
         call_id = payload.get("call_id")
         if call_id and call_id in self.group_calls:
             call = self.group_calls[call_id]
@@ -1370,7 +1368,6 @@ class SignalingService:
                         },
                         room=pid_socket,
                     )
-
 
         channel_id = payload.get("channel_id")
         if channel_id and channel_id in self.voice_channel_calls:
@@ -1403,7 +1400,6 @@ class SignalingService:
         is_sharing = payload.get("is_sharing", False)
         user_id = payload.get("user_id") or sender_id
 
-
         for call_id, call in list(self.group_calls.items()):
             participants = call.get("participants", [])
 
@@ -1421,7 +1417,6 @@ class SignalingService:
                         },
                         room=pid_socket,
                     )
-
 
         for channel_id, channel_set in list(self.voice_channel_calls.items()):
             for existing_sid in list(channel_set):

@@ -7,6 +7,7 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 backend_dir = os.path.join(basedir, "../../")
 load_dotenv(os.path.join(backend_dir, ".env.backend"))
 
+
 def _build_postgres_url() -> str | None:
     explicit = os.environ.get("POSTGRES_URL")
     if explicit:
@@ -27,6 +28,7 @@ def _build_postgres_url() -> str | None:
         url = f"{url}?sslmode={sslmode}"
     return url
 
+
 def _build_redis_url() -> str | None:
     explicit = os.environ.get("REDIS_URL")
     if explicit:
@@ -41,8 +43,10 @@ def _build_redis_url() -> str | None:
         return f"redis://:{quote_plus(password)}@{host}:{port}/{db}"
     return f"redis://{host}:{port}/{db}"
 
+
 def _is_redis_available(redis_url: str | None) -> bool:
     return bool(redis_url)
+
 
 class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY") or "you-will-never-guess"
@@ -64,8 +68,7 @@ class Config:
             "POSTGRES_USER=vondic\n"
             "POSTGRES_PASSWORD=vondic123\n"
             "Или:\n"
-            "DATABASE_URL=postgresql://vondic:vondic123@localhost:5432/vondic"
-        )
+            "DATABASE_URL=postgresql://vondic:vondic123@localhost:5432/vondic")
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     MAIL_SERVER = os.environ.get("MAIL_SERVER")

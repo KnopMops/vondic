@@ -3,6 +3,7 @@ from app.models.channel import Channel
 from app.models.community import Community
 from app.models.community_channel import CommunityChannel
 
+
 class CommunityChannelService:
     @staticmethod
     def create_channel(community_id, data):

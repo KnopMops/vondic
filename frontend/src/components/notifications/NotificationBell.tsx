@@ -3,6 +3,8 @@
 import { useSocket } from '@/lib/SocketContext'
 import { useNotificationStore } from '@/lib/stores/notificationStore'
 import { useToast } from '@/lib/ToastContext'
+import { usePathname } from 'next/navigation'
+import { FiBell } from 'react-icons/fi'
 import React, { useEffect, useMemo, useState } from 'react'
 
 export const NotificationBell: React.FC = () => {
@@ -15,6 +17,7 @@ export const NotificationBell: React.FC = () => {
 	const userCacheRef = React.useRef<Map<string, string>>(new Map())
 	const audioRef = React.useRef<HTMLAudioElement | null>(null)
 	const [open, setOpen] = useState(false)
+	const pathname = usePathname()
 	
 	
 	const [isAdmin, setIsAdmin] = useState(false)
@@ -392,15 +395,21 @@ export const NotificationBell: React.FC = () => {
 	const items = useMemo(() => notifications.slice(0, 10), [notifications])
 
 	return (
-		<div className='fixed bottom-4 right-4 z-50'>
+		<div
+			className={`fixed z-50 ${
+				pathname?.startsWith('/feed/messages')
+					? 'top-4 right-4'
+					: 'bottom-4 right-4'
+			}`}
+		>
 			<button
 				onClick={() => {
 					setOpen(o => !o)
 					markAllRead()
 				}}
-				className='relative rounded-full bg-white/10 text-white px-3 py-2 hover:bg-white/20 transition'
+				className='relative rounded-full bg-black/30 text-[color:var(--app-fg)] px-3 py-2 hover:bg-black/40 backdrop-blur transition'
 			>
-				<span>🔔</span>
+				<FiBell className='h-4 w-4' />
 				{unreadCount > 0 && (
 					<span className='absolute -top-1 -right-1 bg-red-600 text-white text-xs rounded-full px-1'>
 						{unreadCount}

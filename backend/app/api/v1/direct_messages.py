@@ -6,11 +6,16 @@ from flask import Blueprint, jsonify, make_response, request
 
 dm_bp = Blueprint("direct_messages", __name__, url_prefix="/api/v1/dm")
 
+
 @dm_bp.route("/recent", methods=["GET", "OPTIONS"])
 def get_recent_contacts():
     from app.services.auth_service import AuthService
 
-    token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
+    token = request.headers.get(
+        "Authorization",
+        "").replace(
+        "Bearer ",
+        "").strip()
     if not token:
         return jsonify({"error": "Требуется авторизация"}), 401
 
@@ -24,13 +29,15 @@ def get_recent_contacts():
             limit = 1
         if limit > 100:
             limit = 100
-        contacts = MessageService.get_recent_contacts(current_user.id, limit=limit)
+        contacts = MessageService.get_recent_contacts(
+            current_user.id, limit=limit)
         return jsonify({"items": contacts}), 200
     except Exception as e:
         import traceback
         print(f"Error in get_recent_contacts: {e}")
         print(traceback.format_exc())
         return jsonify({"error": str(e)}), 500
+
 
 @dm_bp.route("/<target_id>/messages", methods=["POST"])
 @token_required
@@ -49,6 +56,7 @@ def send_dm(current_user, target_id):
         OllamaService.process_message_async(message.id, is_dm=True)
 
     return jsonify(message_schema.dump(message)), 201
+
 
 @dm_bp.route("/<target_id>/messages", methods=["GET"])
 @token_required
@@ -81,12 +89,24 @@ def get_dm_history(current_user, target_id):
         }
     ), 200
 
-@dm_bp.route("/<target_id>/messages/<message_id>", methods=["DELETE", "OPTIONS"])
+
+@dm_bp.route("/<target_id>/messages/<message_id>",
+             methods=["DELETE", "OPTIONS"])
 def delete_message(target_id, message_id):
+    from flask import make_response
+
+    if request.method == "OPTIONS":
+        response = make_response("", 200)
+        return response
+
     from app.services.auth_service import AuthService
     from app.models.message import Message
 
-    token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
+    token = request.headers.get(
+        "Authorization",
+        "").replace(
+        "Bearer ",
+        "").strip()
     if not token:
         return jsonify({"error": "Требуется авторизация"}), 401
 
@@ -107,9 +127,7 @@ def delete_message(target_id, message_id):
     if str(message.sender_id) != str(current_user.id):
         return jsonify({"error": "Доступ запрещён"}), 403
 
-    message.content = "Сообщение удалено"
-    message.attachments = []
-    message.is_deleted = True
+    db.session.delete(message)
     db.session.commit()
 
     return jsonify({"message": "Сообщение успешно удалено"}), 200

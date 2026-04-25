@@ -13,6 +13,7 @@ channel_participants = db.Table(
     db.Column("joined_at", TIMESTAMP, default=datetime.utcnow),
 )
 
+
 class Channel(db.Model):
     __tablename__ = "channels"
 

@@ -2,9 +2,12 @@
 
 import Header from '@/components/social/Header'
 import Sidebar from '@/components/social/Sidebar'
+import RightPanel from '@/components/social/RightPanel'
 import { useAuth } from '@/lib/AuthContext'
-import { Loader2, Paperclip } from 'lucide-react'
+import { FiPaperclip as Paperclip } from 'react-icons/fi'
+import { LuLoader as Loader2 } from 'react-icons/lu'
 import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 type RagMessage = {
 	id: number
@@ -15,10 +18,19 @@ type RagMessage = {
 }
 
 export default function SupportPage() {
-	const { user } = useAuth()
+	const { user, isLoading: isAuthLoading, isInitialized } = useAuth()
+	const router = useRouter()
 	const [ragMessages, setRagMessages] = useState<RagMessage[]>([])
 	const [ragInput, setRagInput] = useState('')
 	const [isUploading, setIsUploading] = useState(false)
+
+	if (!isInitialized || isAuthLoading || !user) {
+		return (
+			<div className='flex min-h-screen items-center justify-center bg-black'>
+				<div className='h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent'></div>
+			</div>
+		)
+	}
 
 	const renderInline = (text: string, keyPrefix: string) => {
 		const parts = text.split('`')
@@ -282,251 +294,190 @@ export default function SupportPage() {
 			if (res.ok && data?.ok) {
 				setChats(prev => prev.filter(c => c.id !== escId))
 				if (selectedEsc === escId) setSelectedEsc(null)
-				// Also remove messages of deleted chat from view
 				setRagMessages(prev => prev.filter(m => m.escalation_id !== escId))
 			}
 		} catch {}
 	}
 
 	return (
-		<div className='min-h-screen bg-gradient-to-b from-gray-950 to-gray-900'>
-			<Header />
-			<main className='mx-auto max-w-6xl px-4 pt-6 sm:px-6 lg:px-8 grid grid-cols-12 gap-6'>
-				<div className='col-span-3'>
-					<Sidebar />
-				</div>
-				<div className='col-span-9'>
-					<div className='rounded-2xl border border-gray-800 bg-gray-900 p-4'>
-						<div className='flex items-center justify-between mb-3'>
-							<div className='flex items-center gap-2'>
-								<span className='text-lg font-semibold text-white'>
-									Тех. поддержка
-								</span>
-								<span className='text-xs text-gray-400'>
-									Справка и чат с поддержкой
-								</span>
-							</div>
-						</div>
-						<div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
-							<div className='md:col-span-1 bg-gray-950 border border-gray-800 rounded-xl p-3 h-[60vh] flex flex-col'>
-								<div className='text-sm font-medium text-gray-200 mb-2'>
-									Частые вопросы
-								</div>
-								<div className='flex-1 overflow-y-auto space-y-2 text-sm text-gray-300 custom-scrollbar'>
-									<div>
-										<div className='font-semibold'>Как войти через Yandex?</div>
-										<div className='text-gray-400'>
-											На странице входа нажмите «Войти через Yandex» и
-											подтвердите вход. После этого вас автоматически
-											перенаправит в ленту (/feed). Если окно авторизации не
-											открылось — обновите страницу и попробуйте ещё раз.
-										</div>
-									</div>
-									<div>
-										<div className='font-semibold'>
-											Почему меня просят ввести код при входе?
-										</div>
-										<div className='text-gray-400'>
-											Это двухфакторная защита (2FA). Нажмите «Отправить код на
-											почту», откройте письмо и введите шестизначный код.
-										</div>
-									</div>
-									<div>
-										<div className='font-semibold'>
-											Письмо с кодом не приходит — что делать?
-										</div>
-										<div className='text-gray-400'>
-											Проверьте «Спам» и «Промоакции». Убедитесь, что адрес
-											почты указан верно. Нажмите «Отправить код на почту» ещё
-											раз. Если проблема сохраняется — напишите в поддержку.
-										</div>
-									</div>
-									<div>
-										<div className='font-semibold'>Где вводить код 2FA?</div>
-										<div className='text-gray-400'>
-											После запроса 2FA на странице входа появится поле «Two
-											Factor Code». Введите шестизначный код из письма.
-										</div>
-									</div>
+		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white overflow-x-hidden relative'>
+			<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
+				<div className='absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-indigo-900/20 blur-[120px]' />
+				<div className='absolute top-[40%] -right-[10%] w-[40%] h-[60%] rounded-full bg-purple-900/20 blur-[120px]' />
+				<div className='absolute bottom-[10%] left-[20%] w-[30%] h-[30%] rounded-full bg-emerald-900/10 blur-[100px]' />
+			</div>
+
+			<div className='relative z-20'>
+				<Header email={user.email} onLogout={() => router.push('/')} />
+			</div>
+
+			<div className='relative z-10 mx-auto flex max-w-7xl pt-6'>
+				<Sidebar />
+				<main className='flex-1 px-4 sm:px-6 lg:px-8'>
+					<div className='mx-auto max-w-2xl space-y-6'>
+						<div className='rounded-2xl border border-gray-800 bg-black/40 backdrop-blur-sm p-6'>
+							<div className='flex items-center justify-between mb-4'>
+								<div className='flex items-center gap-2'>
+									<span className='text-lg font-semibold text-white'>
+										Тех. поддержка
+									</span>
+									<span className='text-xs text-gray-400'>
+										Справка и чат с поддержкой
+									</span>
 								</div>
 							</div>
-							<div className='md:col-span-2'>
-								<div className='bg-gray-950 border border-gray-800 rounded-xl p-3 h-[60vh] flex flex-col'>
-									<div className='flex items-center justify-between mb-2'>
-										<div className='text-sm text-gray-300'>
-											{selectedEsc ? `Чат #${selectedEsc}` : 'Все чаты'}
-										</div>
-										<div className='flex gap-2'>
-											<button
-												onClick={() => {
-													setSelectedEsc(-1)
-													setNewChatMode(true)
-												}}
-												className='px-2 py-1 rounded-lg bg-gray-800 hover:bg-gray-700 text-white text-xs'
-												title='Начать новый чат'
-												disabled={
-													chats.filter(
-														c => (c.status || '').toLowerCase() !== 'closed',
-													).length >= 5
-												}
-											>
-												Новый чат
-											</button>
-											<select
-												value={selectedEsc || ''}
-												onChange={e =>
-													setSelectedEsc(
-														e.target.value ? Number(e.target.value) : null,
-													)
-												}
-												className='bg-gray-900 border border-gray-800 rounded-lg px-2 py-1 text-sm text-gray-100'
-											>
-												<option value=''>Все</option>
-												{chats.map(c => (
-													<option key={c.id} value={c.id}>
-														#{c.id} [{c.status}] {c.question?.slice(0, 20)}
-													</option>
-												))}
-											</select>
-											{selectedEsc &&
-												chats.find(c => c.id === selectedEsc)?.status ===
-													'closed' && (
-													<button
-														onClick={() => deleteChat(selectedEsc)}
-														className='px-2 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs'
-														title='Удалить чат'
-													>
-														✕
-													</button>
-												)}
-										</div>
+							<div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
+								<div className='md:col-span-1 bg-gray-950/60 border border-gray-800 rounded-xl p-3 h-[50vh] flex flex-col'>
+									<div className='text-sm font-medium text-gray-200 mb-2'>
+										Частые вопросы
 									</div>
-									<div className='mb-2 max-h-24 overflow-y-auto space-y-1'>
-										{chats.map(c => (
-											<div
-												key={`chat-${c.id}`}
-												className='flex items-center justify-between text-xs text-gray-300'
-											>
-												<div
-													className='cursor-pointer hover:text-white'
-													onClick={() => setSelectedEsc(c.id)}
-												>
-													#{c.id} [{c.status}] {c.question?.slice(0, 28)}
-												</div>
-												{(c.status || '').toLowerCase() === 'closed' && (
-													<button
-														onClick={() => deleteChat(c.id)}
-														className='px-2 py-0.5 rounded bg-red-600 hover:bg-red-700 text-white'
-													>
-														✕
-													</button>
-												)}
+									<div className='flex-1 overflow-y-auto space-y-2 text-sm text-gray-300 custom-scrollbar'>
+										<div>
+											<div className='font-semibold'>Как войти через Yandex?</div>
+											<div className='text-gray-400'>
+												На странице входа нажмите «Войти через Yandex» и
+												подтвердите вход.
 											</div>
-										))}
+										</div>
+										<div>
+											<div className='font-semibold'>
+												Почему меня просят ввести код при входе?
+											</div>
+											<div className='text-gray-400'>
+												Это двухфакторная защита (2FA).
+											</div>
+										</div>
+										<div>
+											<div className='font-semibold'>
+												Письмо с кодом не приходит — что делать?
+											</div>
+											<div className='text-gray-400'>
+												Проверьте «Спам» и «Промоакции».
+											</div>
+										</div>
 									</div>
-									<div
-										className='flex-1 overflow-y-auto space-y-2 custom-scrollbar'
-										id='rag-chat-box'
-									>
-										{ragMessages
-											.filter(m =>
-												selectedEsc ? m.escalation_id === selectedEsc : true,
-											)
-											.map(m => (
-												<div
-													key={`${m.id}-${m.sender}-${m.created_at}`}
-													className={`flex ${
-														m.sender === 'user'
-															? 'justify-end'
-															: 'justify-start'
-													}`}
+								</div>
+								<div className='md:col-span-2'>
+									<div className='bg-gray-950/60 border border-gray-800 rounded-xl p-3 h-[50vh] flex flex-col'>
+										<div className='flex items-center justify-between mb-2'>
+											<div className='text-sm text-gray-300'>
+												{selectedEsc ? `Чат #${selectedEsc}` : 'Все чаты'}
+											</div>
+											<div className='flex gap-2'>
+												<button
+													onClick={() => {
+														setSelectedEsc(-1)
+														setNewChatMode(true)
+													}}
+													className='px-2 py-1 rounded-lg bg-gray-800 hover:bg-gray-700 text-white text-xs'
+													title='Начать новый чат'
 												>
+													Новый чат
+												</button>
+												<select
+													value={selectedEsc || ''}
+													onChange={e =>
+														setSelectedEsc(
+															e.target.value ? Number(e.target.value) : null,
+														)
+													}
+													className='bg-gray-900 border border-gray-800 rounded-lg px-2 py-1 text-sm text-gray-100'
+												>
+													<option value=''>Все</option>
+													{chats.map(c => (
+														<option key={c.id} value={c.id}>
+															#{c.id} [{c.status}] {c.question?.slice(0, 20)}
+														</option>
+													))}
+												</select>
+											</div>
+										</div>
+										<div
+											className='flex-1 overflow-y-auto space-y-2 custom-scrollbar'
+											id='rag-chat-box'
+										>
+											{ragMessages
+												.filter(m =>
+													selectedEsc ? m.escalation_id === selectedEsc : true,
+												)
+												.map(m => (
 													<div
-														className={`max-w-[70%] px-3 py-2 rounded-lg ${
+														key={`${m.id}-${m.sender}-${m.created_at}`}
+														className={`flex ${
 															m.sender === 'user'
-																? 'bg-blue-600 text-white'
-																: m.sender === 'bot'
-																	? 'bg-indigo-600 text-white'
-																	: 'bg-gray-800 text-gray-100'
+																? 'justify-end'
+																: 'justify-start'
 														}`}
 													>
-														<div className='text-xs opacity-70 mb-1'>
-															{m.sender === 'admin'
-																? 'Оператор'
-																: m.sender === 'bot'
-																	? 'Бот'
-																	: 'Вы'}
-														</div>
-														{m.content.startsWith('/static/uploads/') &&
-														/\.(jpg|jpeg|png|gif|webp)$/i.test(m.content) ? (
-															<img
-																src={
-																	m.content.startsWith('http')
-																		? m.content
-																		: `${BACKEND_URL}${m.content}`
-																}
-																alt='attachment'
-																className='max-w-full rounded-lg max-h-60 object-contain cursor-pointer'
-																onClick={() =>
-																	window.open(
-																		m.content.startsWith('http')
-																			? m.content
-																			: `${BACKEND_URL}${m.content}`,
-																		'_blank',
-																	)
-																}
-															/>
-														) : (
+														<div
+															className={`max-w-[70%] px-3 py-2 rounded-lg ${
+																m.sender === 'user'
+																	? 'bg-blue-600 text-white'
+																	: m.sender === 'bot'
+																		? 'bg-indigo-600 text-white'
+																		: 'bg-gray-800 text-gray-100'
+															}`}
+														>
+															<div className='text-xs opacity-70 mb-1'>
+																{m.sender === 'admin'
+																	? 'Оператор'
+																	: m.sender === 'bot'
+																		? 'Бот'
+																		: 'Вы'}
+															</div>
 															<div className='space-y-2'>
 																{renderFormattedContent(m.content)}
 															</div>
-														)}
+														</div>
 													</div>
-												</div>
-											))}
-									</div>
-									<div className='mt-3 flex gap-2 items-center'>
-										<input
-											type='file'
-											ref={fileInputRef}
-											className='hidden'
-											accept='image/*'
-											onChange={handleFileSelect}
-										/>
-										<button
-											onClick={() => fileInputRef.current?.click()}
-											disabled={isUploading}
-											className='p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition-colors'
-											title='Прикрепить фото'
-										>
-											{isUploading ? (
-												<Loader2 className='w-5 h-5 animate-spin' />
-											) : (
-												<Paperclip className='w-5 h-5' />
-											)}
-										</button>
-										<input
-											value={ragInput}
-											onChange={e => setRagInput(e.target.value)}
-											onKeyDown={e => {
-												if (e.key === 'Enter') ragSend()
-											}}
-											placeholder='Сообщение поддержке...'
-											className='flex-1 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-600'
-										/>
-										<button
-											onClick={() => ragSend()}
-											className='px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium'
-										>
-											Отправить
-										</button>
+												))}
+										</div>
+										<div className='mt-3 flex gap-2 items-center'>
+											<input
+												type='file'
+												ref={fileInputRef}
+												className='hidden'
+												accept='image/*'
+												onChange={handleFileSelect}
+											/>
+											<button
+												onClick={() => fileInputRef.current?.click()}
+												disabled={isUploading}
+												className='p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition-colors'
+												title='Прикрепить фото'
+											>
+												{isUploading ? (
+													<Loader2 className='w-5 h-5 animate-spin' />
+												) : (
+													<Paperclip className='w-5 h-5' />
+												)}
+											</button>
+											<input
+												value={ragInput}
+												onChange={e => setRagInput(e.target.value)}
+												onKeyDown={e => {
+													if (e.key === 'Enter') ragSend()
+												}}
+												placeholder='Сообщение поддержке...'
+												className='flex-1 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-600'
+											/>
+											<button
+												onClick={() => ragSend()}
+												className='px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium'
+											>
+												Отправить
+											</button>
+										</div>
 									</div>
 								</div>
 							</div>
 						</div>
 					</div>
+				</main>
+				<div className='hidden w-80 p-6 lg:block'>
+					<RightPanel />
 				</div>
-			</main>
+			</div>
 		</div>
 	)
 }

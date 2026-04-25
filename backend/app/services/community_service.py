@@ -2,6 +2,7 @@ from app.core.extensions import db
 from app.models.community import Community
 from app.models.user import User
 
+
 class CommunityService:
     @staticmethod
     def create_community(data, user_id):

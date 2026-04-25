@@ -9,10 +9,12 @@ from flask import Blueprint, jsonify, request
 
 users_bp = Blueprint("users", __name__, url_prefix="/api/v1/users")
 
+
 @users_bp.route("/", methods=["GET"])
 def get_users():
     users = UserService.get_all_users()
     return (jsonify(users_schema.dump(users)), 200)
+
 
 @users_bp.route("/get", methods=["POST"])
 def get_user_detail():
@@ -27,12 +29,14 @@ def get_user_detail():
         return jsonify({"error": "Пользователь не найден"}), 404
     return jsonify(user_schema.dump(user)), 200
 
+
 @users_bp.route("/by-email/<email>", methods=["GET"])
 def get_user_by_email(email):
     user = UserService.get_user_by_email(email)
     if not user:
         return jsonify({"error": "Пользователь не найден"}), 404
     return jsonify(user_schema.dump(user)), 200
+
 
 @users_bp.route("/search", methods=["POST"])
 @token_required
@@ -45,6 +49,7 @@ def search_users(current_user):
 
     users = UserService.search_users(query)
     return jsonify(users_schema.dump(users)), 200
+
 
 @users_bp.route("/internal/process_message", methods=["POST"])
 def internal_process_message():
@@ -69,6 +74,7 @@ def internal_process_message():
 
     return jsonify({"status": "ignored"}), 200
 
+
 @users_bp.route("/", methods=["POST"])
 def create_user():
     data = request.get_json()
@@ -79,6 +85,7 @@ def create_user():
         return (
             jsonify({"error": "Не удалось создать пользователя (дубликат?)"}), 400)
     return (jsonify(user_schema.dump(user)), 201)
+
 
 @users_bp.route("/", methods=["PUT"])
 @token_required
@@ -99,6 +106,7 @@ def update_user(current_user):
         return jsonify({"error": error}), status_code
 
     return jsonify(user_schema.dump(user)), 200
+
 
 @users_bp.route("/block", methods=["POST"])
 @token_required
@@ -123,6 +131,7 @@ def block_user(current_user):
             "user": user_schema.dump(user)}
     ), 200
 
+
 @users_bp.route("/unblock", methods=["POST"])
 @token_required
 def unblock_user(current_user):
@@ -146,6 +155,7 @@ def unblock_user(current_user):
             "user": user_schema.dump(user)}
     ), 200
 
+
 @users_bp.route("/delete", methods=["DELETE"])
 @token_required
 def delete_user_account(current_user):
@@ -154,6 +164,7 @@ def delete_user_account(current_user):
         status_code = 404 if error == "Пользователь не найден" else 400
         return jsonify({"error": error}), status_code
     return jsonify({"message": "Пользователь успешно удалён"}), 200
+
 
 GIFT_PRICING = {
     "newyear_fireworks": 99,
@@ -171,6 +182,7 @@ GIFT_PRICING = {
 }
 STORAGE_TB_PRICE = 6500
 STORAGE_TB_BYTES = 1024 * 1024 * 1024 * 1024
+
 
 @users_bp.route("/purchase-gift", methods=["POST"])
 @token_required
@@ -228,6 +240,7 @@ def purchase_gift(current_user):
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
+
 @users_bp.route("/purchase-storage", methods=["POST"])
 @token_required
 def purchase_storage(current_user):
@@ -259,6 +272,7 @@ def purchase_storage(current_user):
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
+
 
 @users_bp.route("/send-gift", methods=["POST"])
 @token_required
@@ -322,6 +336,7 @@ def send_gift(current_user):
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
+
 @users_bp.route("/set-gift-display", methods=["POST"])
 @token_required
 def set_gift_display(current_user):
@@ -343,6 +358,7 @@ def set_gift_display(current_user):
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
+
 @users_bp.route("/status", methods=["POST"])
 @token_required
 def set_user_status(current_user):
@@ -351,7 +367,8 @@ def set_user_status(current_user):
     status = data.get("status")
 
     if not status or status not in ["online", "offline"]:
-        return jsonify({"error": "Неверный статус. Должен быть 'online' или 'offline'"}), 400
+        return jsonify(
+            {"error": "Неверный статус. Должен быть 'online' или 'offline'"}), 400
 
     try:
         current_user.status = status
@@ -362,13 +379,15 @@ def set_user_status(current_user):
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
+
 @users_bp.route("/pinned-chats", methods=["POST"])
 @token_required
 def set_pinned_chats(current_user):
     data = request.get_json() or {}
     pinned_chats = data.get("pinned_chats", [])
 
-    if not current_user.premium or (current_user.premium_expired_at and current_user.premium_expired_at < datetime.utcnow()):
+    if not current_user.premium or (
+            current_user.premium_expired_at and current_user.premium_expired_at < datetime.utcnow()):
         return jsonify({"error": "Требуется подписка Premium"}), 403
 
     if not isinstance(pinned_chats, list):

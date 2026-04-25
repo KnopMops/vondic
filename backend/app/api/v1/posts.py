@@ -1,10 +1,11 @@
 import hashlib
 import os
 import time
+from datetime import datetime
 
-from sqlalchemy import text
 from app.core.config import Config
 from app.core.extensions import db
+from app.models.notification import Notification
 from app.models.user import User
 from app.schemas.comment_schema import comment_schema, comments_schema
 from app.schemas.post_schema import post_schema, posts_schema
@@ -14,6 +15,7 @@ from app.utils.decorators import token_required
 from flask import Blueprint, jsonify, request
 
 posts_bp = Blueprint("posts", __name__, url_prefix="/api/v1/posts")
+
 
 def notify_all_users(
         title: str,
@@ -28,19 +30,23 @@ def notify_all_users(
         content_hash = hashlib.sha256(
             f"{u.id}|{message}|{ts}".encode("utf-8")
         ).hexdigest()
-        existing = db.session.execute(text(""""""), {"user_id": u.id, "hash": content_hash}).fetchone()
+        existing = Notification.query.filter_by(
+            user_id=u.id, notification_hash=content_hash
+        ).first()
 
         if not existing:
-            db.session.execute(text(""""""), {
-                "user_id": u.id,
-                "title": title,
-                "type": notification_type,
-                "message": message,
-                "created_at": ts,
-                "delivered": 0,
-                "notification_hash": content_hash
-            })
+            db.session.add(
+                Notification(
+                    user_id=u.id,
+                    title=title,
+                    type=notification_type,
+                    message=message,
+                    created_at=datetime.utcfromtimestamp(ts),
+                    notification_hash=content_hash,
+                )
+            )
     db.session.commit()
+
 
 @posts_bp.route("/", methods=["GET"])
 def get_posts():
@@ -59,8 +65,11 @@ def get_posts():
         per_page = 50
 
     pagination = PostService.get_posts_paginated(
-        page=page, per_page=per_page, user_id=user_id, is_blog=is_blog, filter_mode=filter_mode
-    )
+        page=page,
+        per_page=per_page,
+        user_id=user_id,
+        is_blog=is_blog,
+        filter_mode=filter_mode)
     return jsonify(
         {
             "items": posts_schema.dump(pagination.items),
@@ -71,12 +80,14 @@ def get_posts():
         }
     ), 200
 
+
 @posts_bp.route("/<post_id>", methods=["GET"])
 def get_post(post_id):
     post = PostService.get_post_by_id(post_id)
     if not post:
         return jsonify({"error": "Пост не найден"}), 404
     return jsonify(post_schema.dump(post)), 200
+
 
 @posts_bp.route("/detail", methods=["POST"])
 def get_post_detail():
@@ -90,6 +101,7 @@ def get_post_detail():
     if not post:
         return jsonify({"error": "Пост не найден"}), 404
     return jsonify(post_schema.dump(post)), 200
+
 
 @posts_bp.route("/", methods=["POST"])
 @token_required
@@ -107,7 +119,8 @@ def create_post(current_user):
     content_stripped = content.strip()
 
     if current_user.role == "Admin" and content_stripped:
-        if content_stripped.startswith("# ") or content_stripped.startswith("#"):
+        if content_stripped.startswith(
+                "# ") or content_stripped.startswith("#"):
             is_blog = True
 
     if is_blog and current_user.role != "Admin":
@@ -126,6 +139,7 @@ def create_post(current_user):
 
     return jsonify(post_schema.dump(post)), 201
 
+
 @posts_bp.route("/", methods=["PUT"])
 @token_required
 def update_post(current_user):
@@ -142,6 +156,7 @@ def update_post(current_user):
         status_code = 404 if error == "Пост не найден" else 403
         return jsonify({"error": error}), status_code
     return jsonify(post_schema.dump(post)), 200
+
 
 @posts_bp.route("/", methods=["DELETE"])
 @token_required
@@ -161,6 +176,7 @@ def delete_post(current_user):
         status_code = 404 if error == "Пост не найден" else 403
         return jsonify({"error": error}), status_code
     return jsonify({"message": "Пост успешно удалён"}), 200
+
 
 @posts_bp.route("/admin", methods=["DELETE"])
 @token_required
@@ -187,6 +203,7 @@ def delete_post_admin(current_user):
         return jsonify({"error": error}), status_code
     return jsonify({"message": "Пост удалён администратором"}), 200
 
+
 @posts_bp.route("/like", methods=["POST"])
 @token_required
 def like_post(current_user):
@@ -200,6 +217,7 @@ def like_post(current_user):
         status_code = 404 if error == "Пост не найден" else 400
         return jsonify({"error": error}), status_code
     return jsonify(post_schema.dump(post)), 200
+
 
 @posts_bp.route("/unlike", methods=["POST"])
 @token_required
@@ -215,10 +233,12 @@ def unlike_post(current_user):
         return jsonify({"error": error}), status_code
     return jsonify(post_schema.dump(post)), 200
 
+
 @posts_bp.route("/<post_id>/comments", methods=["GET"])
 def get_post_comments(post_id):
     comments = CommentService.get_comments_by_post(post_id)
     return jsonify(comments_schema.dump(comments)), 200
+
 
 @posts_bp.route("/comment", methods=["POST"])
 @token_required

@@ -1,7 +1,12 @@
 'use client'
 
 import { useAuth } from '@/lib/AuthContext'
-import { Loader2, CheckCircle, XCircle, RefreshCw, Bot } from 'lucide-react'
+import {
+	FiCheckCircle as CheckCircle,
+	FiRefreshCw as RefreshCw,
+	FiXCircle as XCircle,
+} from 'react-icons/fi'
+import { LuBot as Bot, LuLoader as Loader2 } from 'react-icons/lu'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 

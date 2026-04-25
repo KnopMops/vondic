@@ -5,6 +5,7 @@ from sqlalchemy import JSON, TEXT, TIMESTAMP
 
 from app.core.extensions import db
 
+
 class Message(db.Model):
     __tablename__ = "messages"
 
@@ -53,8 +54,14 @@ class Message(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
-            "content": self.content if not getattr(self, 'is_deleted', False) else "Сообщение удалено",
-            "attachments": self.attachments if not getattr(self, 'is_deleted', False) else [],
+            "content": self.content if not getattr(
+                self,
+                'is_deleted',
+                False) else "Сообщение удалено",
+            "attachments": self.attachments if not getattr(
+                self,
+                'is_deleted',
+                False) else [],
             "sender_id": self.sender_id,
             "sender_username": self.sender.username if self.sender else None,
             "sender_avatar": self.sender.avatar_url if self.sender else None,
@@ -63,11 +70,17 @@ class Message(db.Model):
             "channel_id": self.channel_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
-            "is_edited": getattr(self, 'is_edited', False),
+            "is_edited": getattr(
+                self,
+                'is_edited',
+                False),
             "pinned_by": self.pinned_by,
             "reactions": self.reactions or [],
             "read_by": self.read_by or [],
             "reply_to_id": self.reply_to_id,
             "forwarded_from_id": self.forwarded_from_id,
-            "is_deleted": getattr(self, 'is_deleted', False),
+            "is_deleted": getattr(
+                    self,
+                    'is_deleted',
+                    False),
         }

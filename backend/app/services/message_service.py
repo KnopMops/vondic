@@ -7,6 +7,7 @@ from app.models.message import Message
 from app.models.user import User
 from sqlalchemy import or_
 
+
 class MessageService:
     @staticmethod
     def _sanitize_text(value):
@@ -151,12 +152,12 @@ class MessageService:
     def get_recent_contacts(user_id, limit=30):
         try:
             query = Message.query.filter(
-                Message.group_id.is_(None),
-                Message.target_id.isnot(None),
-                or_(Message.sender_id == user_id, Message.target_id == user_id),
-            ).order_by(Message.created_at.desc())
+                Message.group_id.is_(None), Message.target_id.isnot(None), or_(
+                    Message.sender_id == user_id, Message.target_id == user_id), ).order_by(
+                Message.created_at.desc())
             messages = query.limit(max(limit * 5, limit)).all()
             seen = {}
+            last_payload_by_user = {}
             ordered = []
             for msg in messages:
                 other_id = (
@@ -165,16 +166,30 @@ class MessageService:
                 )
                 if not other_id or str(other_id) == str(user_id):
                     continue
-                if other_id in seen:
+                other_id_str = str(other_id)
+                if other_id_str in seen:
                     continue
-                seen[other_id] = msg.created_at
-                ordered.append(other_id)
+                seen[other_id_str] = msg.created_at
+                content = (msg.content or "").strip()
+                if msg.type == "voice":
+                    preview = "🎤 Голосовое сообщение"
+                elif msg.type == "image":
+                    preview = "🖼️ Фото"
+                elif msg.type == "file":
+                    preview = "📎 Файл"
+                else:
+                    preview = content
+                last_payload_by_user[other_id_str] = {
+                    "last_message_text": preview,
+                    "last_message_type": msg.type or "text",
+                }
+                ordered.append(other_id_str)
                 if len(ordered) >= limit:
                     break
             if not ordered:
                 return []
             users = User.query.filter(User.id.in_(ordered)).all()
-            users_map = {u.id: u for u in users}
+            users_map = {str(u.id): u for u in users}
             result = []
             for uid in ordered:
                 user = users_map.get(uid)
@@ -184,6 +199,11 @@ class MessageService:
                 last_at = seen.get(uid)
                 if last_at:
                     data["last_message_at"] = last_at.isoformat()
+                payload = last_payload_by_user.get(uid) or {}
+                if payload.get("last_message_text"):
+                    data["last_message_text"] = payload["last_message_text"]
+                if payload.get("last_message_type"):
+                    data["last_message_type"] = payload["last_message_type"]
                 result.append(data)
             return result
         except Exception as e:

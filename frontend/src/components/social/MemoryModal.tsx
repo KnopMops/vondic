@@ -2,7 +2,7 @@
 
 import { getAttachmentUrl } from '@/lib/utils'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Trash2, X } from 'lucide-react'
+import { LuTrash2 as Trash2, LuX as X } from 'react-icons/lu'
 import { useEffect, useState } from 'react'
 
 type FileItem = {
@@ -35,13 +35,11 @@ export default function MemoryModal({ isOpen, onClose }: Props) {
 	const fetchFiles = async (page: number) => {
 		setIsLoading(true)
 		try {
-			const res = await fetch(
-				`/api/files/list?page=${page}&per_page=${perPage}`,
-				{
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-				},
-			)
+			const res = await fetch('/api/files/list', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ page, per_page: perPage }),
+			})
 			if (res.ok) {
 				const data = await res.json()
 				const items = Array.isArray(data)
@@ -173,7 +171,7 @@ export default function MemoryModal({ isOpen, onClose }: Props) {
 													deleteFile(file.id)
 												}}
 												disabled={isDeleting === file.id}
-												className='absolute top-2 right-2 p-1.5 rounded-lg bg-red-500/80 text-white opacity-0 group-hover:opacity-100 hover:bg-red-600 transition-all disabled:opacity-50'
+												className='absolute top-2 right-2 z-20 p-1.5 rounded-lg bg-red-500/80 text-white opacity-0 group-hover:opacity-100 hover:bg-red-600 transition-all disabled:opacity-50'
 												title='Удалить файл'
 												type='button'
 											>
@@ -211,7 +209,7 @@ export default function MemoryModal({ isOpen, onClose }: Props) {
 												href={getAttachmentUrl(file.url)}
 												target='_blank'
 												rel='noopener noreferrer'
-												className='absolute inset-0 cursor-pointer'
+												className='absolute inset-0 z-10 cursor-pointer'
 												onClick={e => e.stopPropagation()}
 												title='Открыть файл'
 											/>

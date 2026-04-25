@@ -3,6 +3,7 @@ from flask import current_app, url_for
 from flask_mail import Message
 from itsdangerous import URLSafeTimedSerializer
 
+
 class EmailService:
     @staticmethod
     def generate_verification_token(email):
@@ -22,7 +23,8 @@ class EmailService:
 
     @staticmethod
     def send_verification_email(to_email, token):
-        frontend_url = current_app.config.get("FRONTEND_URL") or "http://localhost:3000"
+        frontend_url = current_app.config.get(
+            "FRONTEND_URL") or "http://localhost:3000"
         verify_url = f"{frontend_url}/verify?token={token}"
         html = f'\n        <p>Добро пожаловать!</p>\n        <p>Пожалуйста, подтвердите вашу почту, перейдя по ссылке:</p>\n        <p><a href="{verify_url}">{verify_url}</a></p>\n        <br>\n        <p>Если вы не регистрировались, проигнорируйте это письмо.</p>\n        '
         msg = Message(

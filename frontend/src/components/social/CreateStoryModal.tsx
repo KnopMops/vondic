@@ -1,7 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, Upload, Image as ImageIcon, Video as VideoIcon } from 'lucide-react'
+import {
+	LuImage as ImageIcon,
+	LuUpload as Upload,
+	LuVideo as VideoIcon,
+	LuX as X,
+} from 'react-icons/lu'
 import { AnimatePresence, motion } from 'framer-motion'
 import { createPortal } from 'react-dom'
 

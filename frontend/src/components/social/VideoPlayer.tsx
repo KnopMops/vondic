@@ -1,14 +1,14 @@
 import { getAttachmentUrl } from '@/lib/utils'
 import {
-	Maximize,
-	Minimize,
-	Pause,
-	PictureInPicture,
-	Play,
-	Volume2,
-	VolumeX,
-	Settings,
-} from 'lucide-react'
+	LuMaximize as Maximize,
+	LuMinimize as Minimize,
+	LuPause as Pause,
+	LuPictureInPicture as PictureInPicture,
+	LuPlay as Play,
+	LuSettings as Settings,
+	LuVolume2 as Volume2,
+	LuVolumeX as VolumeX,
+} from 'react-icons/lu'
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '@/lib/AuthContext'
 

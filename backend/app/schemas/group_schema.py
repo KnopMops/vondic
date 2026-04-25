@@ -2,6 +2,7 @@ from app.core.extensions import ma
 from app.models.group import Group
 from app.schemas.user_schema import UserSchema
 
+
 class GroupSchema(ma.SQLAlchemyAutoSchema):
     class Meta:
         model = Group
@@ -13,6 +14,7 @@ class GroupSchema(ma.SQLAlchemyAutoSchema):
 
     def get_participants_count(self, obj):
         return len(obj.participants)
+
 
 group_schema = GroupSchema()
 groups_schema = GroupSchema(many=True)

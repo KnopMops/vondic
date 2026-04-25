@@ -11,15 +11,18 @@ class VondicAPIException(Exception):
         self.status_code = status_code
         self.response_data = response_data
 
+
 class AuthenticationError(VondicAPIException):
 
     def __init__(self, message: str = "Authentication failed"):
         super().__init__(message, status_code=401)
 
+
 class RateLimitError(VondicAPIException):
 
     def __init__(self, message: str = "Rate limit exceeded"):
         super().__init__(message, status_code=429)
+
 
 class ValidationError(VondicAPIException):
 

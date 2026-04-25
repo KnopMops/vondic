@@ -7,20 +7,78 @@ import { setUser } from '@/lib/features/authSlice'
 import { useAppDispatch } from '@/lib/hooks'
 import { useToast } from '@/lib/ToastContext'
 import { AnimatePresence, motion } from 'framer-motion'
-import {
-	Bell,
-	Code,
-	Eye,
-	Mail,
-	Monitor,
-	Music,
-	Palette,
-	PhoneCall,
-	Settings,
-	Shield,
-	Volume2,
-} from 'lucide-react'
+import { FiBell, FiCode, FiEye, FiMail, FiMonitor, FiMessageCircle, FiMusic, FiPhoneCall, FiSettings, FiShield, FiVolume2 } from 'react-icons/fi'
+import { HiOutlineColorSwatch } from 'react-icons/hi'
 import { useEffect, useState } from 'react'
+
+type AppPalette = {
+	bg: string
+	fg: string
+	surface: string
+	border: string
+	muted: string
+	accent: string
+	accent2: string
+}
+
+const DEFAULT_PALETTE_DARK: AppPalette = {
+	bg: '#0b1220',
+	fg: '#e7eaf0',
+	surface: '#ffffff',
+	border: '#334155',
+	muted: '#94a3b8',
+	accent: '#6366f1',
+	accent2: '#a855f7',
+}
+
+const DEFAULT_PALETTE_LIGHT: AppPalette = {
+	bg: '#f8fafc',
+	fg: '#0f172a',
+	surface: '#ffffff',
+	border: '#e2e8f0',
+	muted: '#475569',
+	accent: '#6366f1',
+	accent2: '#a855f7',
+}
+
+const CHAT_THEMES = [
+	{ id: 'default', name: 'Стандартный' },
+	{ id: 'blue', name: 'Синий' },
+	{ id: 'purple', name: 'Фиолетовый' },
+	{ id: 'emerald', name: 'Изумрудный' },
+	{ id: 'rose', name: 'Розовый' },
+] as const
+
+const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n))
+
+const hexToRgbTriplet = (hex: string): string | null => {
+	const raw = hex.trim().replace(/^#/, '')
+	if (!/^[0-9a-fA-F]{6}$/.test(raw)) return null
+	const r = Number.parseInt(raw.slice(0, 2), 16)
+	const g = Number.parseInt(raw.slice(2, 4), 16)
+	const b = Number.parseInt(raw.slice(4, 6), 16)
+	return `${r} ${g} ${b}`
+}
+
+const applyPalette = (palette: AppPalette) => {
+	const root = document.documentElement
+	root.style.setProperty('--app-bg', palette.bg)
+	root.style.setProperty('--app-fg', palette.fg)
+	root.style.setProperty('--app-surface', palette.surface)
+	root.style.setProperty('--app-border', palette.border)
+	root.style.setProperty('--app-muted', palette.muted)
+	root.style.setProperty('--app-accent', palette.accent)
+	root.style.setProperty('--app-accent-2', palette.accent2)
+
+	const bgRgb = hexToRgbTriplet(palette.bg)
+	const fgRgb = hexToRgbTriplet(palette.fg)
+	const surfaceRgb = hexToRgbTriplet(palette.surface)
+	const accentRgb = hexToRgbTriplet(palette.accent)
+	if (bgRgb) root.style.setProperty('--app-bg-rgb', bgRgb)
+	if (fgRgb) root.style.setProperty('--app-fg-rgb', fgRgb)
+	if (surfaceRgb) root.style.setProperty('--app-surface-rgb', surfaceRgb)
+	if (accentRgb) root.style.setProperty('--app-accent-rgb', accentRgb)
+}
 
 type SessionItem = {
 	session_id: string
@@ -55,6 +113,16 @@ export default function SettingsPage() {
 	const [theme, setTheme] = useState<'system' | 'dark' | 'light'>('system')
 	const [fontSize, setFontSize] = useState<number>(14)
 	const [borderRadius, setBorderRadius] = useState<number>(12)
+	const [fontFamily, setFontFamily] = useState<string>(
+		"var(--font-geist-sans), system-ui, -apple-system, 'Segoe UI', Roboto, Arial, 'Noto Sans', 'Liberation Sans', sans-serif",
+	)
+	const [palette, setPalette] = useState<AppPalette>(DEFAULT_PALETTE_DARK)
+	const [chatThemeId, setChatThemeId] = useState<string>('default')
+	const [messageThemeId, setMessageThemeId] = useState<string>('default')
+	const [chatBackgroundImage, setChatBackgroundImage] = useState<string>('')
+	const [chatBgOpacity, setChatBgOpacity] = useState<number>(70)
+	const [chatBgBlur, setChatBgBlur] = useState<number>(6)
+	const [chatBgGrid, setChatBgGrid] = useState<boolean>(false)
 	const [deleteConfirmText, setDeleteConfirmText] = useState('')
 	const [deleteLoading, setDeleteLoading] = useState(false)
 	const [sessions, setSessions] = useState<SessionItem[]>([])
@@ -134,6 +202,14 @@ export default function SettingsPage() {
 	useEffect(() => {
 		const savedFontSize = localStorage.getItem('app_font_size')
 		const savedBorderRadius = localStorage.getItem('app_border_radius')
+		const savedFontFamily = localStorage.getItem('app_font_family')
+		const savedPalette = localStorage.getItem('app_palette_v1')
+		const savedChatThemeId = localStorage.getItem('chat_theme')
+		const savedMessageThemeId = localStorage.getItem('message_theme')
+		const savedChatBgImage = localStorage.getItem('chat_background_image')
+		const savedOpacity = localStorage.getItem('chat_bg_opacity')
+		const savedBlur = localStorage.getItem('chat_bg_blur')
+		const savedGrid = localStorage.getItem('chat_bg_grid')
 		if (savedFontSize) {
 			const val = Number(savedFontSize)
 			setFontSize(val)
@@ -144,6 +220,39 @@ export default function SettingsPage() {
 			setBorderRadius(val)
 			document.documentElement.style.setProperty('--app-radius', `${val}px`)
 		}
+		if (savedFontFamily) {
+			setFontFamily(savedFontFamily)
+			document.documentElement.style.setProperty('--app-font-family', savedFontFamily)
+		}
+		if (savedPalette) {
+			try {
+				const parsed = JSON.parse(savedPalette)
+				if (parsed && typeof parsed === 'object') {
+					const next: AppPalette = {
+						...DEFAULT_PALETTE_DARK,
+						...parsed,
+					}
+					setPalette(next)
+					applyPalette(next)
+				}
+			} catch {
+				// ignore
+			}
+		} else {
+			applyPalette(DEFAULT_PALETTE_DARK)
+		}
+		if (savedChatThemeId) setChatThemeId(savedChatThemeId)
+		if (savedMessageThemeId) setMessageThemeId(savedMessageThemeId)
+		if (savedChatBgImage) setChatBackgroundImage(savedChatBgImage)
+		if (savedOpacity) {
+			const n = Number(savedOpacity)
+			if (!Number.isNaN(n)) setChatBgOpacity(clamp(n, 0, 100))
+		}
+		if (savedBlur) {
+			const n = Number(savedBlur)
+			if (!Number.isNaN(n)) setChatBgBlur(clamp(n, 0, 30))
+		}
+		if (savedGrid) setChatBgGrid(savedGrid === 'true')
 	}, [])
 
 	useEffect(() => {
@@ -158,6 +267,28 @@ export default function SettingsPage() {
 		)
 		localStorage.setItem('app_border_radius', borderRadius.toString())
 	}, [borderRadius])
+
+	useEffect(() => {
+		document.documentElement.style.setProperty('--app-font-family', fontFamily)
+		localStorage.setItem('app_font_family', fontFamily)
+	}, [fontFamily])
+
+	useEffect(() => {
+		applyPalette(palette)
+		localStorage.setItem('app_palette_v1', JSON.stringify(palette))
+	}, [palette])
+
+	useEffect(() => {
+		localStorage.setItem('chat_bg_opacity', String(chatBgOpacity))
+	}, [chatBgOpacity])
+
+	useEffect(() => {
+		localStorage.setItem('chat_bg_blur', String(chatBgBlur))
+	}, [chatBgBlur])
+
+	useEffect(() => {
+		localStorage.setItem('chat_bg_grid', chatBgGrid ? 'true' : 'false')
+	}, [chatBgGrid])
 
 	useEffect(() => {
 		applyTheme(theme)
@@ -587,7 +718,7 @@ export default function SettingsPage() {
 											: 'text-gray-400 hover:text-white hover:bg-white/5'
 									}`}
 								>
-									<Settings className='w-4 h-4' />
+									<FiSettings className='w-4 h-4' />
 									Системные
 								</button>
 								<button
@@ -598,7 +729,7 @@ export default function SettingsPage() {
 											: 'text-gray-400 hover:text-white hover:bg-white/5'
 									}`}
 								>
-									<Monitor className='w-4 h-4' />
+									<FiMonitor className='w-4 h-4' />
 									Интерфейс
 								</button>
 								<button
@@ -609,7 +740,7 @@ export default function SettingsPage() {
 											: 'text-gray-400 hover:text-white hover:bg-white/5'
 									}`}
 								>
-									<Music className='w-4 h-4' />
+									<FiMusic className='w-4 h-4' />
 									Звуки
 								</button>
 							</div>
@@ -630,7 +761,7 @@ export default function SettingsPage() {
 										className='absolute -top-20 -right-16 w-52 h-52 bg-gradient-to-br from-emerald-500/10 to-teal-500/10 rounded-full blur-3xl'
 									/>
 									<div className='flex items-center gap-3 mb-4'>
-										<Code className='w-5 h-5 text-emerald-400' />
+										<FiCode className='w-5 h-5 text-emerald-400' />
 										<h2 className='text-xl font-semibold'>Разработчик</h2>
 									</div>
 									<div className='space-y-4'>
@@ -684,7 +815,7 @@ export default function SettingsPage() {
 										className='absolute -bottom-24 -left-24 w-64 h-64 bg-gradient-to-tr from-emerald-500/10 to-teal-500/10 rounded-full blur-3xl'
 									/>
 									<div className='flex items-center gap-3 mb-4'>
-										<Shield className='w-5 h-5 text-indigo-400' />
+										<FiShield className='w-5 h-5 text-indigo-400' />
 										<h2 className='text-xl font-semibold'>Безопасность</h2>
 									</div>
 									<div className='space-y-4'>
@@ -738,7 +869,7 @@ export default function SettingsPage() {
 														</p>
 														<div className='flex items-center justify-between rounded-lg border border-white/10 bg-black/30 p-3'>
 															<div className='flex items-center gap-2'>
-																<Mail className='w-4 h-4 text-indigo-300' />
+																<FiMail className='w-4 h-4 text-indigo-300' />
 																<span className='text-sm text-gray-300'>
 																	Отправлять письмо при входе
 																</span>
@@ -921,7 +1052,7 @@ export default function SettingsPage() {
 										className='absolute -top-24 -left-24 w-64 h-64 bg-gradient-to-br from-pink-500/10 to-rose-500/10 rounded-full blur-3xl'
 									/>
 									<div className='flex items-center gap-3 mb-4'>
-										<Palette className='w-5 h-5 text-pink-400' />
+										<HiOutlineColorSwatch className='w-5 h-5 text-pink-400' />
 										<h2 className='text-xl font-semibold'>Оформление</h2>
 									</div>
 									<div className='grid grid-cols-3 gap-2'>
@@ -952,8 +1083,310 @@ export default function SettingsPage() {
 									transition={{ duration: 0.4 }}
 									className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
 								>
+									<motion.div
+										initial={{ opacity: 0.25 }}
+										animate={{ opacity: [0.25, 0.5, 0.25] }}
+										transition={{ duration: 7, repeat: Infinity }}
+										className='absolute -top-24 -right-24 w-64 h-64 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 rounded-full blur-3xl'
+									/>
+									<div className='flex items-center justify-between gap-3 mb-4'>
+										<div className='flex items-center gap-3'>
+											<HiOutlineColorSwatch className='w-5 h-5 text-indigo-300' />
+											<h2 className='text-xl font-semibold'>Палитра (полная)</h2>
+										</div>
+										<div className='flex items-center gap-2'>
+											<button
+												onClick={() =>
+													setPalette(
+														theme === 'light'
+															? DEFAULT_PALETTE_LIGHT
+															: DEFAULT_PALETTE_DARK,
+													)
+												}
+												className='rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-gray-200 hover:bg-white/10 transition'
+											>
+												Сбросить
+											</button>
+											<button
+												onClick={() =>
+													setPalette({
+														bg: '#000000',
+														fg: '#f8fafc',
+														surface: '#ffffff',
+														border: '#1f2937',
+														muted: '#94a3b8',
+														accent: '#22c55e',
+														accent2: '#06b6d4',
+													})
+												}
+												className='rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200 hover:bg-emerald-500/20 transition'
+											>
+												AMOLED
+											</button>
+										</div>
+									</div>
+
+									<div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+										{(
+											[
+												{ key: 'bg', label: 'Фон приложения' },
+												{ key: 'fg', label: 'Текст' },
+												{ key: 'surface', label: 'Поверхности' },
+												{ key: 'border', label: 'Границы' },
+												{ key: 'muted', label: 'Вторичный текст' },
+												{ key: 'accent', label: 'Акцент' },
+												{ key: 'accent2', label: 'Акцент 2' },
+											] as const
+										).map(item => (
+											<div
+												key={item.key}
+												className='rounded-xl border border-white/10 bg-black/20 p-4'
+											>
+												<div className='flex items-center justify-between gap-3'>
+													<div className='space-y-1'>
+														<p className='text-sm text-white'>{item.label}</p>
+														<p className='text-[11px] text-gray-400'>
+															{(palette as any)[item.key]}
+														</p>
+													</div>
+													<input
+														type='color'
+														value={(palette as any)[item.key]}
+														onChange={e =>
+															setPalette(prev => ({
+																...prev,
+																[item.key]: e.target.value,
+															}))
+														}
+														className='h-10 w-12 rounded-md border border-white/10 bg-black/30 p-1'
+													/>
+												</div>
+											</div>
+										))}
+									</div>
+
+									<p className='mt-4 text-xs text-gray-400'>
+										Изменения применяются сразу и сохраняются на устройстве.
+									</p>
+								</motion.div>
+
+								<motion.div
+									initial={{ opacity: 0, y: 20 }}
+									animate={{ opacity: 1, y: 0 }}
+									transition={{ duration: 0.4 }}
+									className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
+								>
+									<motion.div
+										initial={{ opacity: 0.25 }}
+										animate={{ opacity: [0.25, 0.55, 0.25] }}
+										transition={{ duration: 7, repeat: Infinity }}
+										className='absolute -bottom-24 -left-24 w-64 h-64 bg-gradient-to-tr from-blue-500/10 to-cyan-500/10 rounded-full blur-3xl'
+									/>
 									<div className='flex items-center gap-3 mb-4'>
-										<Monitor className='w-5 h-5 text-indigo-400' />
+										<FiMessageCircle className='w-5 h-5 text-cyan-300' />
+										<h2 className='text-xl font-semibold'>Фон чата</h2>
+									</div>
+
+									<div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+										<div className='space-y-2'>
+											<p className='text-sm text-white'>Тема фона</p>
+											<select
+												value={chatThemeId}
+												onChange={e => {
+													const id = e.target.value
+													setChatThemeId(id)
+													localStorage.setItem('chat_theme', id)
+													localStorage.removeItem('chat_background_image')
+													setChatBackgroundImage('')
+												}}
+												className='w-full rounded-lg border border-white/10 bg-black/30 p-2 text-sm text-white'
+											>
+												{CHAT_THEMES.map(t => (
+													<option key={t.id} value={t.id}>
+														{t.name}
+													</option>
+												))}
+											</select>
+										</div>
+										<div className='space-y-2'>
+											<p className='text-sm text-white'>Тема пузырьков (мои)</p>
+											<select
+												value={messageThemeId}
+												onChange={e => {
+													const id = e.target.value
+													setMessageThemeId(id)
+													localStorage.setItem('message_theme', id)
+												}}
+												className='w-full rounded-lg border border-white/10 bg-black/30 p-2 text-sm text-white'
+											>
+												{CHAT_THEMES.map(t => (
+													<option key={t.id} value={t.id}>
+														{t.name}
+													</option>
+												))}
+											</select>
+										</div>
+									</div>
+
+									<div className='mt-4 space-y-3'>
+										<div className='space-y-2'>
+											<p className='text-sm text-white'>Фон-картинка (как в мессенджере)</p>
+											<div className='grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2'>
+												<input
+													value={chatBackgroundImage}
+													onChange={e => setChatBackgroundImage(e.target.value)}
+													placeholder='URL или data:image/...'
+													className='w-full rounded-lg border border-white/10 bg-black/30 p-2 text-sm text-white placeholder:text-gray-500'
+												/>
+												<button
+													onClick={() => {
+														const url = chatBackgroundImage.trim()
+														if (!url) return
+														localStorage.setItem('chat_background_image', url)
+														localStorage.removeItem('chat_theme')
+													}}
+													className='rounded-lg bg-cyan-500/20 border border-cyan-500/30 px-4 py-2 text-sm text-white hover:bg-cyan-500/30 transition'
+												>
+													Применить
+												</button>
+											</div>
+											<div className='flex items-center gap-2'>
+												<input
+													type='file'
+													accept='image/*'
+													onChange={e => {
+														const file = e.target.files?.[0]
+														if (!file) return
+														const reader = new FileReader()
+														reader.onload = () => {
+															const url = String(reader.result || '')
+															setChatBackgroundImage(url)
+															localStorage.setItem('chat_background_image', url)
+															localStorage.removeItem('chat_theme')
+														}
+														reader.readAsDataURL(file)
+													}}
+													className='block w-full text-xs text-gray-300 file:mr-3 file:rounded-md file:border file:border-white/10 file:bg-white/5 file:px-3 file:py-1.5 file:text-xs file:text-gray-200 hover:file:bg-white/10'
+												/>
+												<button
+													onClick={() => {
+														localStorage.removeItem('chat_background_image')
+														setChatBackgroundImage('')
+													}}
+													className='rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-gray-200 hover:bg-white/10 transition'
+												>
+													Убрать
+												</button>
+											</div>
+										</div>
+
+										<div className='grid grid-cols-1 sm:grid-cols-3 gap-4'>
+											<div>
+												<div className='flex items-center justify-between mb-2'>
+													<p className='text-sm text-white'>Прозрачность</p>
+													<span className='text-xs text-cyan-300 font-medium'>
+														{chatBgOpacity}%
+													</span>
+												</div>
+												<input
+													type='range'
+													min='0'
+													max='100'
+													value={chatBgOpacity}
+													onChange={e => setChatBgOpacity(Number(e.target.value))}
+													className='w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-cyan-400'
+												/>
+											</div>
+											<div>
+												<div className='flex items-center justify-between mb-2'>
+													<p className='text-sm text-white'>Blur</p>
+													<span className='text-xs text-cyan-300 font-medium'>
+														{chatBgBlur}px
+													</span>
+												</div>
+												<input
+													type='range'
+													min='0'
+													max='30'
+													value={chatBgBlur}
+													onChange={e => setChatBgBlur(Number(e.target.value))}
+													className='w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-cyan-400'
+												/>
+											</div>
+											<div className='flex items-center justify-between rounded-xl border border-white/10 bg-black/20 p-4'>
+												<div>
+													<p className='text-sm font-medium text-white'>Сетка</p>
+													<p className='text-xs text-gray-400'>Лёгкий узор поверх фона</p>
+												</div>
+												<button
+													onClick={() => setChatBgGrid(v => !v)}
+													className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${chatBgGrid ? 'bg-cyan-500/50' : 'bg-white/10'}`}
+												>
+													<span
+														className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${chatBgGrid ? 'translate-x-7' : 'translate-x-1'}`}
+													/>
+												</button>
+											</div>
+										</div>
+									</div>
+								</motion.div>
+
+								<motion.div
+									initial={{ opacity: 0, y: 20 }}
+									animate={{ opacity: 1, y: 0 }}
+									transition={{ duration: 0.4 }}
+									className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
+								>
+									<div className='flex items-center gap-3 mb-4'>
+										<FiMonitor className='w-5 h-5 text-emerald-300' />
+										<h2 className='text-xl font-semibold'>Шрифт</h2>
+									</div>
+									<div className='grid grid-cols-1 sm:grid-cols-3 gap-2'>
+										<button
+											onClick={() =>
+												setFontFamily(
+													"var(--font-geist-sans), system-ui, -apple-system, 'Segoe UI', Roboto, Arial, 'Noto Sans', 'Liberation Sans', sans-serif",
+												)
+											}
+											className='rounded-lg px-4 py-2 text-sm border border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 transition'
+										>
+											Geist / default
+										</button>
+										<button
+											onClick={() =>
+												setFontFamily(
+													"system-ui, -apple-system, 'Segoe UI', Roboto, Arial, 'Noto Sans', 'Liberation Sans', sans-serif",
+												)
+											}
+											className='rounded-lg px-4 py-2 text-sm border border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 transition'
+										>
+											System
+										</button>
+										<button
+											onClick={() =>
+												setFontFamily(
+													"var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+												)
+											}
+											className='rounded-lg px-4 py-2 text-sm border border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 transition'
+										>
+											Mono
+										</button>
+									</div>
+									<div className='mt-3 rounded-xl border border-white/10 bg-black/20 p-4'>
+										<p className='text-xs text-gray-400 mb-2'>Текущее значение</p>
+										<p className='text-xs text-gray-200 break-words'>{fontFamily}</p>
+									</div>
+								</motion.div>
+
+								<motion.div
+									initial={{ opacity: 0, y: 20 }}
+									animate={{ opacity: 1, y: 0 }}
+									transition={{ duration: 0.4 }}
+									className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
+								>
+									<div className='flex items-center gap-3 mb-4'>
+										<FiMonitor className='w-5 h-5 text-indigo-400' />
 										<h2 className='text-xl font-semibold'>Масштабирование</h2>
 									</div>
 									<div className='space-y-6'>
@@ -1015,7 +1448,7 @@ export default function SettingsPage() {
 										className='absolute -bottom-24 -right-24 w-64 h-64 bg-gradient-to-tr from-blue-500/10 to-indigo-500/10 rounded-full blur-3xl'
 									/>
 									<div className='flex items-center gap-3 mb-4'>
-										<Eye className='w-5 h-5 text-blue-400' />
+										<FiEye className='w-5 h-5 text-blue-400' />
 										<h2 className='text-xl font-semibold'>
 											Конфиденциальность
 										</h2>
@@ -1076,7 +1509,7 @@ export default function SettingsPage() {
 										className='absolute -top-20 -right-16 w-52 h-52 bg-gradient-to-br from-yellow-500/10 to-orange-500/10 rounded-full blur-3xl'
 									/>
 									<div className='flex items-center gap-3 mb-4'>
-										<Bell className='w-5 h-5 text-yellow-400' />
+										<FiBell className='w-5 h-5 text-yellow-400' />
 										<h2 className='text-xl font-semibold'>Звуки уведомлений</h2>
 									</div>
 									<div className='space-y-4'>
@@ -1135,7 +1568,7 @@ export default function SettingsPage() {
 										</div>
 										<div className='flex items-center justify-between'>
 											<div className='flex items-center gap-2'>
-												<Volume2 className='w-4 h-4 text-gray-400' />
+												<FiVolume2 className='w-4 h-4 text-gray-400' />
 												<p className='text-sm text-white'>Звуки</p>
 											</div>
 											<button
@@ -1149,7 +1582,7 @@ export default function SettingsPage() {
 										</div>
 										<div className='flex items-center justify-between'>
 											<div className='flex items-center gap-2'>
-												<PhoneCall className='w-4 h-4 text-gray-400' />
+												<FiPhoneCall className='w-4 h-4 text-gray-400' />
 												<p className='text-sm text-white'>
 													Оповещение о входящем звонке
 												</p>
@@ -1181,7 +1614,7 @@ export default function SettingsPage() {
 								className='absolute -bottom-24 -left-24 w-64 h-64 bg-gradient-to-tr from-rose-500/10 to-red-500/10 rounded-full blur-3xl'
 							/>
 							<div className='flex items-center gap-3 mb-4'>
-								<Shield className='w-5 h-5 text-rose-400' />
+								<FiShield className='w-5 h-5 text-rose-400' />
 								<h2 className='text-xl font-semibold'>Удаление аккаунта</h2>
 							</div>
 							<div className='space-y-4'>

@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Smartphone, ArrowLeft } from 'lucide-react'
+import { FiArrowLeft as ArrowLeft, FiSmartphone as Smartphone } from 'react-icons/fi'
 
 export default function MobileDownloadPage() {
 	return (

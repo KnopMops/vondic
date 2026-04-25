@@ -1,7 +1,8 @@
 'use client'
 
 import { getAttachmentUrl } from '@/lib/utils'
-import { HelpCircle, Settings2 } from 'lucide-react'
+import { FiHelpCircle as HelpCircle } from 'react-icons/fi'
+import { LuSettings2 as Settings2 } from 'react-icons/lu'
 import React, { useEffect, useRef, useState } from 'react'
 import { CallState } from '../../lib/services/WebRTCService'
 
@@ -20,7 +21,9 @@ const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
 }) => {
 	const [position, setPosition] = useState({ x: 0, y: 0 })
 	const [isDragging, setIsDragging] = useState(false)
-	const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
+	const dragOffsetRef = useRef({ x: 0, y: 0 })
+	const pendingPosRef = useRef({ x: 0, y: 0 })
+	const rafRef = useRef<number | null>(null)
 	const modalRef = useRef<HTMLDivElement>(null)
 
 	if (!isVisible || !callerInfo) return null
@@ -38,47 +41,65 @@ const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
 	}, [isVisible])
 
 	useEffect(() => {
-		const handleMouseMove = (e: MouseEvent) => {
-			if (isDragging && modalRef.current) {
-				const rect = modalRef.current.getBoundingClientRect()
-				let newX = e.clientX - dragOffset.x
-				let newY = e.clientY - dragOffset.y
-
-				const maxX = window.innerWidth - rect.width
-				const maxY = window.innerHeight - rect.height
-
-				newX = Math.max(0, Math.min(newX, maxX))
-				newY = Math.max(0, Math.min(newY, maxY))
-
-				setPosition({ x: newX, y: newY })
-			}
+		const apply = (x: number, y: number) => {
+			if (!modalRef.current) return
+			modalRef.current.style.left = `${x}px`
+			modalRef.current.style.top = `${y}px`
 		}
 
-		const handleMouseUp = () => {
+		const scheduleApply = () => {
+			if (rafRef.current) return
+			rafRef.current = requestAnimationFrame(() => {
+				rafRef.current = null
+				apply(pendingPosRef.current.x, pendingPosRef.current.y)
+			})
+		}
+
+		const handlePointerMove = (e: PointerEvent) => {
+			if (!isDragging || !modalRef.current) return
+			const rect = modalRef.current.getBoundingClientRect()
+			const maxX = window.innerWidth - rect.width
+			const maxY = window.innerHeight - rect.height
+			const newX = Math.max(
+				0,
+				Math.min(e.clientX - dragOffsetRef.current.x, maxX),
+			)
+			const newY = Math.max(
+				0,
+				Math.min(e.clientY - dragOffsetRef.current.y, maxY),
+			)
+			pendingPosRef.current = { x: newX, y: newY }
+			scheduleApply()
+		}
+
+		const handlePointerUp = () => {
+			if (!isDragging) return
 			setIsDragging(false)
+			setPosition({ ...pendingPosRef.current })
 			document.body.style.cursor = 'default'
+			document.body.style.userSelect = ''
 		}
 
-		if (isDragging) {
-			window.addEventListener('mousemove', handleMouseMove)
-			window.addEventListener('mouseup', handleMouseUp)
-		}
-
+		window.addEventListener('pointermove', handlePointerMove, { passive: true })
+		window.addEventListener('pointerup', handlePointerUp)
 		return () => {
-			window.removeEventListener('mousemove', handleMouseMove)
-			window.removeEventListener('mouseup', handleMouseUp)
+			window.removeEventListener('pointermove', handlePointerMove)
+			window.removeEventListener('pointerup', handlePointerUp)
+			if (rafRef.current) cancelAnimationFrame(rafRef.current)
 		}
-	}, [isDragging, dragOffset])
+	}, [isDragging])
 
-	const handleMouseDown = (e: React.MouseEvent) => {
+	const handleMouseDown = (e: React.PointerEvent) => {
 		if (modalRef.current) {
 			setIsDragging(true)
 			const rect = modalRef.current.getBoundingClientRect()
-			setDragOffset({
+			dragOffsetRef.current = {
 				x: e.clientX - rect.left,
 				y: e.clientY - rect.top,
-			})
+			}
+			pendingPosRef.current = { ...position }
 			document.body.style.cursor = 'move'
+			document.body.style.userSelect = 'none'
 		}
 	}
 
@@ -171,7 +192,7 @@ const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
 					margin: 0, // Reset margin since we use absolute positioning
 					cursor: isDragging ? 'grabbing' : 'move',
 				}}
-				onMouseDown={handleMouseDown}
+				onPointerDown={handleMouseDown}
 			>
 				<div
 					className='modal-header'

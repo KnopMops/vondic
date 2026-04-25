@@ -20,6 +20,7 @@ OUTBOX_COUNTERS = defaultdict(int)
 QUEUE_LOCK = Lock()
 OUTBOX_LOCK = Lock()
 
+
 def _get_bot_token():
     auth = request.headers.get("Authorization") or ""
     if auth.startswith("Bot "):
@@ -29,6 +30,7 @@ def _get_bot_token():
         return header_token.strip()
     return None
 
+
 def _verify_bot_token(bot_id):
     token = _get_bot_token()
     if not token:
@@ -37,10 +39,12 @@ def _verify_bot_token(bot_id):
         return None, (jsonify({"error": "Invalid bot token"}), 401)
     return token, None
 
+
 @public_bots_bp.route("/", methods=["GET"])
 def list_public_bots():
     bots = BotService.get_active_bots()
     return jsonify(bots_schema.dump(bots)), 200
+
 
 @public_bots_bp.route("/<bot_id>", methods=["GET"])
 def get_public_bot(bot_id):
@@ -49,12 +53,14 @@ def get_public_bot(bot_id):
         return jsonify({"error": "Bot not found"}), 404
     return jsonify(bot_schema.dump(bot)), 200
 
+
 @public_bots_bp.route("/by-name/<name>", methods=["GET"])
 def get_public_bot_by_name(name):
     bot = BotService.get_active_bot_by_name(name)
     if not bot:
         return jsonify({"error": "Bot not found"}), 404
     return jsonify(bot_schema.dump(bot)), 200
+
 
 @public_bots_bp.route("/search", methods=["POST"])
 def search_public_bots():
@@ -65,6 +71,7 @@ def search_public_bots():
     bots = BotService.search_active_bots(query)
     return jsonify(bots_schema.dump(bots)), 200
 
+
 @public_bots_bp.route("/<bot_id>/token", methods=["POST"])
 @api_key_required
 def generate_public_bot_token(current_user, bot_id):
@@ -72,6 +79,7 @@ def generate_public_bot_token(current_user, bot_id):
     if error:
         return jsonify({"error": error}), 400
     return jsonify({"bot_token": token}), 200
+
 
 @public_bots_bp.route("/<bot_id>/updates", methods=["GET"])
 def get_bot_updates(bot_id):
@@ -180,8 +188,10 @@ def push_bot_update(bot_id):
         )
         return jsonify({"ok": True, "update_id": update_id}), 200
     except Exception as e:
-        logger.exception("bot_updates_push_error bot_id=%s error=%s", bot_id, e)
+        logger.exception(
+            "bot_updates_push_error bot_id=%s error=%s", bot_id, e)
         return jsonify({"error": "Internal server error"}), 500
+
 
 @public_bots_bp.route("/<bot_id>/send", methods=["POST"])
 def send_bot_message(bot_id):
@@ -218,10 +228,12 @@ def send_bot_message(bot_id):
             message_id,
             chat_id,
         )
-        return jsonify({"ok": True, "chat_id": str(chat_id), "text": text}), 200
+        return jsonify(
+            {"ok": True, "chat_id": str(chat_id), "text": text}), 200
     except Exception as e:
         logger.exception("bot_send_error bot_id=%s error=%s", bot_id, e)
         return jsonify({"error": "Internal server error"}), 500
+
 
 @public_bots_bp.route("/<bot_id>/callback", methods=["POST"])
 def handle_bot_callback(bot_id):
@@ -266,7 +278,6 @@ def handle_bot_callback(bot_id):
                     "date": int(time.time()),
                 })
 
-
             with QUEUE_LOCK:
                 UPDATE_COUNTERS[bot_id] += 1
                 update_id = UPDATE_COUNTERS[bot_id]
@@ -295,4 +306,30 @@ def handle_bot_callback(bot_id):
         return jsonify({"ok": True}), 200
     except Exception as e:
         logger.exception("bot_callback_error bot_id=%s error=%s", bot_id, e)
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@public_bots_bp.route("/<bot_id>/answerCallbackQuery", methods=["POST"])
+@public_bots_bp.route("/<bot_id>/answer-callback-query", methods=["POST"])
+def answer_callback_query(bot_id):
+    """Compatibility endpoint for Bot API clients that acknowledge callbacks."""
+    try:
+        _, error_response = _verify_bot_token(bot_id)
+        if error_response:
+            logger.info("bot_answer_callback_auth_failed bot_id=%s", bot_id)
+            return error_response
+
+        data = request.get_json() or {}
+        callback_query_id = data.get("callback_query_id") or data.get("id")
+        logger.info(
+            "bot_answer_callback_ok bot_id=%s callback_query_id=%s",
+            bot_id,
+            callback_query_id,
+        )
+        return jsonify({"ok": True}), 200
+    except Exception as e:
+        logger.exception(
+            "bot_answer_callback_error bot_id=%s error=%s",
+            bot_id,
+            e)
         return jsonify({"error": "Internal server error"}), 500

@@ -1,7 +1,8 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { CheckCircle, Sparkles } from 'lucide-react'
+import { FiCheckCircle as CheckCircle } from 'react-icons/fi'
+import { LuSparkles as Sparkles } from 'react-icons/lu'
 import Link from 'next/link'
 
 export default function PremiumSuccessPage() {

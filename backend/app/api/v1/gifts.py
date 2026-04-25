@@ -5,45 +5,18 @@ from app.core.extensions import db
 from app.models.gift_catalog import GiftCatalog
 from app.utils.decorators import token_required
 from flask import Blueprint, jsonify, request
-from sqlalchemy import text
 
 gifts_bp = Blueprint("gifts", __name__, url_prefix="/api/v1/gifts")
+
 
 @gifts_bp.route("/", methods=["GET"])
 def list_gifts():
     try:
         gifts = GiftCatalog.query.order_by(GiftCatalog.coin_price.asc()).all()
     except Exception as e:
-        msg = str(e)
-        if "no such column: gifts_catalog.image_url" in msg:
-            try:
-                db.session.execute(
-                    text("ALTER TABLE gifts_catalog ADD COLUMN image_url TEXT")
-                )
-                db.session.commit()
-            except Exception:
-                db.session.rollback()
-                return jsonify({"error": msg}), 500
-            gifts = GiftCatalog.query.order_by(
-                GiftCatalog.coin_price.asc()).all()
-        elif "no such column: gifts_catalog.total_supply" in msg:
-            try:
-                db.session.execute(
-                    text("ALTER TABLE gifts_catalog ADD COLUMN total_supply INTEGER"))
-                db.session.execute(
-                    text(
-                        "ALTER TABLE gifts_catalog ADD COLUMN minted_count INTEGER NOT NULL DEFAULT 0"
-                    )
-                )
-                db.session.commit()
-            except Exception:
-                db.session.rollback()
-                return jsonify({"error": msg}), 500
-            gifts = GiftCatalog.query.order_by(
-                GiftCatalog.coin_price.asc()).all()
-        else:
-            return jsonify({"error": msg}), 500
+        return jsonify({"error": str(e)}), 500
     return jsonify([g.to_dict() for g in gifts])
+
 
 def _generate_gift_id(name: str) -> str:
     raw = (name or "").strip().lower()
@@ -55,6 +28,7 @@ def _generate_gift_id(name: str) -> str:
         return base
     suffix = uuid.uuid4().hex[:6]
     return f"{base}_{suffix}"
+
 
 @gifts_bp.route("/admin/create", methods=["POST"])
 @token_required
@@ -103,6 +77,7 @@ def create_gift(current_user):
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
+
 
 @gifts_bp.route("/admin/update", methods=["POST"])
 @token_required
@@ -153,6 +128,7 @@ def update_gift(current_user):
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
+
 
 @gifts_bp.route("/admin/delete", methods=["POST"])
 @token_required

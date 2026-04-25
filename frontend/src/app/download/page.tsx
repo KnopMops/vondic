@@ -1,5 +1,9 @@
 import Link from 'next/link'
-import { Github, Monitor, Smartphone } from 'lucide-react'
+import {
+	FiGithub as Github,
+	FiMonitor as Monitor,
+	FiSmartphone as Smartphone,
+} from 'react-icons/fi'
 
 export default function DownloadPage() {
 	return (

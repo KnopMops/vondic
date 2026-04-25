@@ -1,5 +1,6 @@
 from vondic_api import AuthenticationError, VondicAPIException, VondicClient
 
+
 def main():
 
     api_key = "YOUR_API_KEY_HERE"
@@ -44,6 +45,7 @@ def main():
         print(f"API Error: {e.message}")
     except Exception as e:
         print(f"Unexpected error: {str(e)}")
+
 
 if __name__ == "__main__":
     main()

@@ -1,6 +1,5 @@
 'use client'
 
-import { Heart, MessageCircle, Share2, MoreHorizontal, Send, Image, Video, File, Download, Upload, Calendar, Clock, Star, Lock, Unlock, Eye, EyeOff, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ArrowLeft, ArrowRight, MoreVertical, Bell, Search, Home, User, Settings, Menu, X, Check, Plus, Trash2, Edit2 } from 'lucide-react';
 import { useAppSelector } from '@/lib/hooks'
 import { useSocket } from '@/lib/SocketContext'
 import { User } from '@/lib/types'
@@ -74,7 +73,7 @@ export default function Header({ email, onLogout }: Props) {
 	}
 
 	return (
-		<header className='sticky top-0 z-50 border-b border-gray-800/50 bg-gray-900/40 backdrop-blur-xl'>
+		<header className='sticky top-0 z-50 border-b border-white/10 bg-black/20 backdrop-blur-xl'>
 			<div className='mx-auto flex max-w-7xl items-center justify-between px-4 py-3'>
 				<div className='flex items-center gap-3'>
 					<BrandLogo size={28} />
@@ -92,7 +91,7 @@ export default function Header({ email, onLogout }: Props) {
 								value={searchQuery}
 								onChange={e => handleSearch(e.target.value)}
 								onFocus={() => searchQuery && setShowResults(true)}
-								className='w-full rounded-xl bg-gray-800/50 px-4 py-2 text-sm text-gray-200 placeholder-gray-500 border border-gray-700/50 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-all'
+								className='w-full rounded-xl bg-black/20 px-4 py-2 text-sm text-gray-200 placeholder-gray-500 border border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-all'
 							/>
 							<div className='absolute right-3 top-1/2 -translate-y-1/2'>
 								<svg
@@ -114,7 +113,7 @@ export default function Header({ email, onLogout }: Props) {
 
 						
 						{showResults && searchResults && (
-							<div className='absolute mt-2 w-full rounded-xl bg-gray-900/90 backdrop-blur-xl p-2 shadow-2xl ring-1 ring-white/10 z-50 max-h-96 overflow-y-auto custom-scrollbar'>
+							<div className='absolute mt-2 w-full rounded-xl bg-black/40 backdrop-blur-xl p-2 shadow-2xl ring-1 ring-white/10 z-50 max-h-96 overflow-y-auto custom-scrollbar'>
 								{isSearching ? (
 									<div className='p-4 text-center text-gray-400'>Поиск...</div>
 								) : (
@@ -205,7 +204,7 @@ export default function Header({ email, onLogout }: Props) {
 					<div className='relative'>
 						<button
 							onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-							className='flex h-9 w-9 items-center justify-center rounded-full bg-gray-800 ring-2 ring-gray-700 transition-all hover:ring-indigo-500 focus:outline-none overflow-hidden'
+							className='flex h-9 w-9 items-center justify-center rounded-full bg-black/30 ring-1 ring-white/15 transition-all hover:ring-indigo-500 focus:outline-none overflow-hidden'
 						>
 							{user?.avatar_url ? (
 								<img
@@ -221,8 +220,8 @@ export default function Header({ email, onLogout }: Props) {
 						</button>
 
 						{isDropdownOpen && (
-							<div className='absolute right-0 mt-2 w-48 origin-top-right rounded-xl bg-gray-900/90 backdrop-blur-xl py-1 shadow-2xl ring-1 ring-white/10 focus:outline-none z-50'>
-								<div className='px-4 py-3 text-sm text-gray-200 border-b border-gray-700/50'>
+							<div className='absolute right-0 mt-2 w-48 origin-top-right rounded-xl bg-black/40 backdrop-blur-xl py-1 shadow-2xl ring-1 ring-white/10 focus:outline-none z-50'>
+								<div className='px-4 py-3 text-sm text-gray-200 border-b border-white/10'>
 									<div className='font-medium'>Привет,</div>
 									<div className='font-bold text-indigo-400 truncate'>
 										{user?.username || 'Гость'}

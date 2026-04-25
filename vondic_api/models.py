@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+
 @dataclass
 class User:
     id: str
@@ -53,6 +54,7 @@ class User:
             'posts_count': self.posts_count,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None}
+
 
 @dataclass
 class Post:
@@ -109,6 +111,7 @@ class Post:
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None}
 
+
 @dataclass
 class Message:
     id: str
@@ -160,6 +163,7 @@ class Message:
             'delivered': self.delivered,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None}
+
 
 @dataclass
 class Comment:

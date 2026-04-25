@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import BrandLogo from './social/BrandLogo'
-import { ArrowLeft, Home } from 'lucide-react'
+import { FiArrowLeft as ArrowLeft, FiHome as Home } from 'react-icons/fi'
 
 interface ErrorPageProps {
     code: number

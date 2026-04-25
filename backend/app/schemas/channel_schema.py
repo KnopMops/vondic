@@ -2,6 +2,7 @@ from app.core.extensions import ma
 from app.models.channel import Channel
 from app.schemas.user_schema import UserSchema
 
+
 class ChannelSchema(ma.SQLAlchemyAutoSchema):
     class Meta:
         model = Channel
@@ -18,6 +19,7 @@ class ChannelSchema(ma.SQLAlchemyAutoSchema):
     def get_community_id(self, obj):
         community_channel = getattr(obj, "community_channel", None)
         return community_channel.community_id if community_channel else None
+
 
 channel_schema = ChannelSchema()
 channels_schema = ChannelSchema(many=True)

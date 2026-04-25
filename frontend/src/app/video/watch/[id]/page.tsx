@@ -3,7 +3,11 @@
 import Header from '@/components/social/Header'
 import VideoPlayer from '@/components/social/VideoPlayer'
 import { useAuth } from '@/lib/AuthContext'
-import { Bookmark, Heart, Share2 } from 'lucide-react'
+import {
+	FiBookmark as Bookmark,
+	FiHeart as Heart,
+	FiShare2 as Share2,
+} from 'react-icons/fi'
 import Link from 'next/link'
 import { use, useEffect, useMemo, useState } from 'react'
 

@@ -13,8 +13,8 @@ COPY backend/ /app/backend/
 RUN useradd --create-home appuser
 
 # Создаём директорию для загрузок и даём права пользователю
-RUN mkdir -p /app/backend/app/static/uploads && \
-    chown -R appuser:appuser /app/backend/app/static/uploads
+RUN mkdir -p /app/uploads && \
+    chown -R appuser:appuser /app/uploads
 
 USER appuser
 

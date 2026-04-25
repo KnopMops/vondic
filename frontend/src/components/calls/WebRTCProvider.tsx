@@ -30,7 +30,6 @@ export const WebRTCProvider: React.FC<WebRTCProviderProps> = ({ children }) => {
 	const { isInitialized, isWebRTCSupported, initializeWebRTC, cleanup } = useCallStore()
 
 	useEffect(() => {
-		
 		if (socket && user && isWebRTCSupported && !isInitialized && isConnected) {
 			console.log('[WebRTCProvider] Initializing WebRTC...')
 			initializeWebRTC(socket, {
@@ -41,15 +40,17 @@ export const WebRTCProvider: React.FC<WebRTCProviderProps> = ({ children }) => {
 				console.error('Failed to initialize WebRTC:', error)
 			})
 		}
+	}, [socket, user, isWebRTCSupported, isInitialized, isConnected])
 
-		
+	// Cleanup once when provider unmounts.
+	useEffect(() => {
 		return () => {
-			if (isInitialized) {
-				cleanup()
+			const state = useCallStore.getState()
+			if (state.isInitialized) {
+				state.cleanup()
 			}
 		}
-		
-	}, [socket, user, isWebRTCSupported, isInitialized, isConnected])
+	}, [])
 
 	
 	useEffect(() => {

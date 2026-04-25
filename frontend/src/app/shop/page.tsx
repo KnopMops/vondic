@@ -3,16 +3,18 @@ import Header from '@/components/social/Header'
 import Sidebar from '@/components/social/Sidebar'
 import { useAuth } from '@/lib/AuthContext'
 import {
-	Coins,
-	Flame,
-	Flower,
-	Gift,
-	Heart,
-	Star,
-	Coffee,
-	Crown,
-	HelpCircle,
-} from 'lucide-react'
+	FiCoffee as Coffee,
+	FiHelpCircle as HelpCircle,
+} from 'react-icons/fi'
+import {
+	LuCoins as Coins,
+	LuCrown as Crown,
+	LuFlame as Flame,
+	LuFlower as Flower,
+	LuGift as Gift,
+	LuHeart as Heart,
+	LuStar as Star,
+} from 'react-icons/lu'
 import { useEffect, useState } from 'react'
 
 export default function ShopPage() {

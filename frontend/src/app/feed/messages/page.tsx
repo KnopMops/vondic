@@ -43,6 +43,7 @@ import {
 } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import MessageBubble from './MessageBubble'
+import { AppleEmoji } from '@/components/ui/AppleEmoji'
 
 const formatLastSeen = (lastSeen?: string | Date): string => {
 	if (!lastSeen) return 'Не в сети'
@@ -383,31 +384,50 @@ const LogInIcon = ({ className }: { className?: string }) => (
 
 const EMOJIS = [
 	'😀',
+	'😁',
+	'😆',
+	'😅',
+	'🙂',
+	'🙃',
+	'😉',
+	'😇',
 	'😂',
 	'🤣',
 	'😊',
 	'😍',
 	'🥰',
 	'😘',
+	'😗',
+	'😙',
+	'😚',
 	'😜',
+	'😝',
+	'🤪',
 	'🤔',
+	'🤨',
 	'😎',
 	'🤩',
 	'🥳',
+	'😌',
 	'😏',
 	'😒',
 	'😞',
 	'😔',
 	'😟',
 	'😕',
+	'🙁',
+	'☹️',
 	'😢',
 	'😭',
+	'🥺',
 	'😤',
 	'😠',
 	'😡',
 	'🤬',
 	'🤯',
 	'😳',
+	'😬',
+	'😮‍💨',
 	'🥵',
 	'🥶',
 	'😱',
@@ -416,6 +436,62 @@ const EMOJIS = [
 	'😥',
 	'😓',
 	'🤗',
+	'🤫',
+	'🤭',
+	'🫢',
+	'🫣',
+	'😶‍🌫️',
+	'😵‍💫',
+	'🤤',
+	'😴',
+	'😪',
+	'😷',
+	'🤒',
+	'🤕',
+	'🤢',
+	'🤮',
+	'🤧',
+	'😈',
+	'👿',
+	'💀',
+	'☠️',
+	'👻',
+	'👽',
+	'🤖',
+	'🎃',
+	'💩',
+	'❤️',
+	'🧡',
+	'💛',
+	'💚',
+	'🩵',
+	'💙',
+	'💜',
+	'🖤',
+	'🤍',
+	'🤎',
+	'💔',
+	'❤️‍🔥',
+	'❤️‍🩹',
+	'💯',
+	'💫',
+	'✨',
+	'⭐️',
+	'🌟',
+	'⚡️',
+	'🔥',
+	'🌈',
+	'☀️',
+	'🌙',
+	'🌧️',
+	'❄️',
+	'☁️',
+	'🍀',
+	'🌹',
+	'🌻',
+	'🌸',
+	'🌊',
+	'🫶',
 	'👍',
 	'👎',
 	'👊',
@@ -428,10 +504,21 @@ const EMOJIS = [
 	'🤲',
 	'🤝',
 	'🙏',
+	'🤌',
+	'🤏',
+	'👌',
+	'✌️',
+	'🤞',
+	'🤟',
+	'🤘',
+	'🤙',
+	'🫡',
+	'🫠',
+	'🫥',
+	'👀',
 	'💪',
 	'🧠',
 	'🦴',
-	'👀',
 	'👁️',
 	'👄',
 	'💋',
@@ -441,10 +528,6 @@ const EMOJIS = [
 	'🦶',
 	'🦵',
 	'👣',
-	'🔥',
-	'✨',
-	'🌟',
-	'💫',
 	'💥',
 	'💢',
 	'💦',
@@ -455,13 +538,101 @@ const EMOJIS = [
 	'🖐️',
 	'✋',
 	'🖖',
-	'👌',
-	'🤏',
-	'✌️',
-	'🤞',
-	'🤟',
-	'🤘',
-	'🤙',
+	'🫳',
+	'🫴',
+	'🫵',
+	'🖤',
+	'✅',
+	'❌',
+	'⚠️',
+	'🗑️',
+	'📎',
+	'📌',
+	'🧩',
+	'🧠',
+	'🎉',
+	'🎁',
+	'🎈',
+	'🎶',
+	'🎵',
+	'🎬',
+	'📷',
+	'🖼️',
+	'📹',
+	'🎮',
+	'🏆',
+	'💎',
+	'🪙',
+	'🧿',
+	'🔒',
+	'🔓',
+	'🔑',
+	'👑',
+	'🗣️',
+	'💬',
+	'🫧',
+	'🧨',
+	'🚀',
+	'🛰️',
+	'🧳',
+	'🧭',
+	'🕹️',
+	'🧸',
+	'🐶',
+	'🐱',
+	'🐭',
+	'🐹',
+	'🐰',
+	'🦊',
+	'🐻',
+	'🐼',
+	'🐨',
+	'🐯',
+	'🦁',
+	'🐮',
+	'🐷',
+	'🐸',
+	'🐵',
+	'🦄',
+	'🐝',
+	'🦋',
+	'🐢',
+	'🐙',
+	'🦕',
+	'🦖',
+	'🍎',
+	'🍌',
+	'🍓',
+	'🍉',
+	'🍇',
+	'🍒',
+	'🍑',
+	'🍍',
+	'🥑',
+	'🍔',
+	'🍕',
+	'🍟',
+	'🌭',
+	'🍿',
+	'🍣',
+	'🍜',
+	'🍦',
+	'🍩',
+	'🍪',
+	'☕️',
+	'🧋',
+	'🍺',
+	'🥂',
+	'⚽️',
+	'🏀',
+	'🏈',
+	'🎾',
+	'🏐',
+	'🏓',
+	'🏸',
+	'🏹',
+	'🎯',
+	'🎲',
 ]
 
 const STICKERS = Array.from({ length: 13 }, (_, index) => ({
@@ -981,46 +1152,31 @@ export default function MessengerPage() {
 		let pollTimeout: number | null = null
 		const poll = async () => {
 			try {
+				const token =
+					accessToken ||
+					(typeof window !== 'undefined'
+						? localStorage.getItem('access_token') || undefined
+						: undefined)
 				const res = await fetch(
 					`/api/v1/bots?bot_id=${selectedFriend.id}&chat_id=${user.id}&mode=outbox`,
-					accessToken
+					token
 						? {
 								headers: {
-									Authorization: `Bearer ${accessToken}`,
+									Authorization: `Bearer ${token}`,
 								},
 							}
 						: undefined,
 				)
-				if (!res.ok) return
+				if (!res.ok) {
+					if (res.status !== 401) {
+						console.warn('[Bot outbox] poll failed with status', res.status)
+					}
+					return
+				}
 				const data: any = await res.json().catch(() => ({}))
 				const items = Array.isArray(data?.items) ? data.items : []
 				if (!items.length || !active) return
-				const texts: string[] = []
-				setBotMessages(prev => {
-					const next = [...prev]
-					for (const item of items) {
-						const messageId = String(
-							item?.message_id || `${Date.now()}-${Math.random()}`,
-						)
-						if (botMessageIdsRef.current.has(messageId)) continue
-						botMessageIdsRef.current.add(messageId)
-						const dateMs = item?.date ? Number(item.date) * 1000 : Date.now()
-						next.push({
-							id: messageId,
-							sender_id: selectedFriend.id,
-							content: String(item?.text || ''),
-							timestamp: new Date(dateMs).toISOString(),
-							isOwn: false,
-							is_read: true,
-							type: 'text',
-						})
-						if (item?.text) texts.push(String(item.text))
-					}
-					return next
-				})
-				for (const text of texts) {
-					mergeBotCommandHints(selectedFriend.id, text)
-				}
+				appendBotOutboxItems(selectedFriend.id, items)
 			} catch {}
 			if (active) {
 				pollTimeout = window.setTimeout(poll, 1200)
@@ -1094,6 +1250,10 @@ export default function MessengerPage() {
 	// Selection mode for mass deletion
 	const [isSelectionMode, setIsSelectionMode] = useState(false)
 	const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(
+		new Set(),
+	)
+	// Track messages being deleted for animation (for AI and Bot chats)
+	const [deletingAiBotMessageIds, setDeletingAiBotMessageIds] = useState<Set<string>>(
 		new Set(),
 	)
 	// Message filter state
@@ -1473,6 +1633,9 @@ export default function MessengerPage() {
 	const [messageTheme, setMessageTheme] = useState(BACKGROUNDS[0])
 	const [isCustomBgOpen, setIsCustomBgOpen] = useState(false)
 	const [customBgUrl, setCustomBgUrl] = useState('')
+	const [bgImageOpacity, setBgImageOpacity] = useState(1)
+	const [bgImageBlur, setBgImageBlur] = useState(0)
+	const [showGridPattern, setShowGridPattern] = useState(true)
 	const settingsRef = useRef<HTMLDivElement>(null)
 
 	// Load saved theme
@@ -1480,7 +1643,19 @@ export default function MessengerPage() {
 		const savedThemeId = localStorage.getItem('chat_theme')
 		const savedBgImage = localStorage.getItem('chat_background_image')
 		const savedMessageThemeId = localStorage.getItem('message_theme')
+		const savedOpacity = localStorage.getItem('chat_bg_opacity')
+		const savedBlur = localStorage.getItem('chat_bg_blur')
+		const savedGrid = localStorage.getItem('chat_bg_grid')
 		if (savedBgImage) setChatBackgroundImage(savedBgImage)
+		if (savedOpacity) {
+			const v = Number(savedOpacity)
+			if (!Number.isNaN(v)) setBgImageOpacity(Math.min(1, Math.max(0.1, v)))
+		}
+		if (savedBlur) {
+			const v = Number(savedBlur)
+			if (!Number.isNaN(v)) setBgImageBlur(Math.min(24, Math.max(0, v)))
+		}
+		if (savedGrid === 'false') setShowGridPattern(false)
 		if (savedMessageThemeId) {
 			const theme = BACKGROUNDS.find(bg => bg.id === savedMessageThemeId)
 			if (theme) setMessageTheme(theme)
@@ -1492,6 +1667,16 @@ export default function MessengerPage() {
 			}
 		}
 	}, [])
+
+	useEffect(() => {
+		localStorage.setItem('chat_bg_opacity', String(bgImageOpacity))
+	}, [bgImageOpacity])
+	useEffect(() => {
+		localStorage.setItem('chat_bg_blur', String(bgImageBlur))
+	}, [bgImageBlur])
+	useEffect(() => {
+		localStorage.setItem('chat_bg_grid', showGridPattern ? 'true' : 'false')
+	}, [showGridPattern])
 
 	// Fetch channels when tab is active
 	useEffect(() => {
@@ -1829,6 +2014,7 @@ export default function MessengerPage() {
 
 	const {
 		messages: chatMessages,
+		deletingMessageIds,
 		sendMessage: sendChatMessage,
 		loadMoreMessages,
 		searchMessages,
@@ -2635,6 +2821,39 @@ export default function MessengerPage() {
 		})
 	}
 
+	const appendBotOutboxItems = (botId: string, items: any[]) => {
+		if (!Array.isArray(items) || !items.length) return
+		const texts: string[] = []
+		setBotMessages(prev => {
+			const next = [...prev]
+			for (const item of items) {
+				const rawMessageId = String(
+					item?.message_id || `${Date.now()}-${Math.random()}`,
+				)
+				const dedupeKey = `${botId}:${rawMessageId}:${String(item?.date || '')}`
+				if (botMessageIdsRef.current.has(dedupeKey)) continue
+				botMessageIdsRef.current.add(dedupeKey)
+				const rawDate = item?.date ? Number(item.date) : NaN
+				const dateMs = Number.isFinite(rawDate) ? rawDate * 1000 : Date.now()
+				next.push({
+					id: dedupeKey,
+					sender_id: botId,
+					content: String(item?.text || ''),
+					timestamp: new Date(dateMs).toISOString(),
+					isOwn: false,
+					is_read: true,
+					type: 'text',
+					reply_markup: item?.reply_markup || undefined,
+				})
+				if (item?.text) texts.push(String(item.text))
+			}
+			return next
+		})
+		for (const text of texts) {
+			mergeBotCommandHints(botId, text)
+		}
+	}
+
 	const sendBotMessage = async () => {
 		const text = input.trim()
 		if (!text) return
@@ -2675,6 +2894,7 @@ export default function MessengerPage() {
 		const isBotikChat =
 			selectedFriend?.is_bot === true && selectedFriend.id === botUser.id
 		if (!isBotikChat) {
+			const targetBotId = selectedFriend?.id
 			setBotMessages(prev => [...prev, nextMessage])
 			if (!accessToken || !user?.id) {
 				setBotMessages(prev => [
@@ -2685,33 +2905,58 @@ export default function MessengerPage() {
 				setReplyToMessage(null)
 				return
 			}
+			if (!targetBotId) {
+				setBotMessages(prev => [
+					...prev,
+					buildBotReply('Не удалось определить чат бота.'),
+				])
+				setInput('')
+				setReplyToMessage(null)
+				return
+			}
 			try {
-				const res = await fetch(
-					`/api/v1/bots/${selectedFriend?.id}/updates/push`,
-					{
-						method: 'POST',
-						headers: {
-							'Content-Type': 'application/json',
-							Authorization: `Bearer ${accessToken}`,
+				const requestBody = JSON.stringify({
+					wait_for_reply: 5,
+					message: {
+						text,
+						from_user: {
+							id: user.id,
+							username: user.username,
+							avatar_url: user.avatar_url,
 						},
-						body: JSON.stringify({
-							wait_for_reply: 5,
-							message: {
-								text,
-								from_user: {
-									id: user.id,
-									username: user.username,
-									avatar_url: user.avatar_url,
-								},
-								chat: {
-									id: user.id,
-									type: 'private',
-									title: user.username,
-								},
-							},
-						}),
+						chat: {
+							id: user.id,
+							type: 'private',
+							title: user.username,
+						},
 					},
-				)
+				})
+				let res: Response | null = null
+				let lastError: unknown = null
+				for (let attempt = 0; attempt < 2; attempt++) {
+					try {
+						res = await fetch(
+							`/api/v1/bots/${targetBotId}/updates/push`,
+							{
+								method: 'POST',
+								headers: {
+									'Content-Type': 'application/json',
+									Authorization: `Bearer ${accessToken}`,
+								},
+								body: requestBody,
+							},
+						)
+						break
+					} catch (error) {
+						lastError = error
+						if (attempt === 0) {
+							await new Promise(resolve => setTimeout(resolve, 600))
+						}
+					}
+				}
+				if (!res) {
+					throw lastError ?? new Error('Failed to push bot update')
+				}
 				const textResponse = await res.text()
 				let data: any = {}
 				try {
@@ -2725,31 +2970,30 @@ export default function MessengerPage() {
 						buildBotReply('Не удалось отправить сообщение боту.'),
 					])
 				} else if (Array.isArray(data?.outbox) && data.outbox.length > 0) {
-					const items = data.outbox
-					setBotMessages(prev => {
-						const next = [...prev]
-						for (const item of items) {
-							const messageId = String(
-								item?.message_id || `${Date.now()}-${Math.random()}`,
-							)
-							if (botMessageIdsRef.current.has(messageId)) continue
-							botMessageIdsRef.current.add(messageId)
-							const dateMs = item?.date ? Number(item.date) * 1000 : Date.now()
-							next.push({
-								id: messageId,
-								sender_id: selectedFriend?.id || '',
-								content: String(item?.text || ''),
-								timestamp: new Date(dateMs).toISOString(),
-								isOwn: false,
-								is_read: true,
-								type: 'text',
-								reply_markup: item?.reply_markup || undefined,
-							})
-						}
-						return next
-					})
+					appendBotOutboxItems(targetBotId, data.outbox)
 				}
-			} catch {
+			} catch (error) {
+				try {
+					const outboxRes = await fetch(
+						`/api/v1/bots?bot_id=${targetBotId}&chat_id=${user.id}&mode=outbox`,
+						{
+							headers: {
+								Authorization: `Bearer ${accessToken}`,
+							},
+						},
+					)
+					if (outboxRes.ok) {
+						const outboxData: any = await outboxRes.json().catch(() => ({}))
+						const items = Array.isArray(outboxData?.items) ? outboxData.items : []
+						if (items.length > 0) {
+							appendBotOutboxItems(targetBotId, items)
+							setInput('')
+							setReplyToMessage(null)
+							return
+						}
+					}
+				} catch {}
+				console.error('Bot push network error:', error)
 				setBotMessages(prev => [
 					...prev,
 					buildBotReply('Ошибка сети при отправке сообщения боту.'),
@@ -3222,66 +3466,59 @@ export default function MessengerPage() {
 			showToast('Можно удалить только свои сообщения', 'error')
 			return
 		}
+		
 		if (isAiChat) {
-			setAiMessages(prev =>
-				prev.map(m =>
-					m.id === msg.id
-						? {
-								...m,
-								content: 'Сообщение удалено',
-								attachments: [],
-								is_deleted: true,
-							}
-						: m,
-				),
-			)
+			// Start animation
+			setDeletingAiBotMessageIds(prev => new Set(prev).add(msg.id))
+			// Wait for animation, then delete
+			setTimeout(() => {
+				setAiMessages(prev => prev.filter(m => m.id !== msg.id))
+				setDeletingAiBotMessageIds(prev => {
+					const next = new Set(prev)
+					next.delete(msg.id)
+					return next
+				})
+			}, 400)
+			// Clean up pinned messages
+			if (pinnedMessageId === msg.id) {
+				setPinnedMessageId(null)
+			}
+			if (pinnedMessageIds.includes(msg.id)) {
+				setPinnedMessageIds(prev => prev.filter(id => id !== msg.id))
+			}
+			showToast('Сообщение удалено', 'success')
 		} else if (isBotChat) {
-			setBotMessages(prev =>
-				prev.map(m =>
-					m.id === msg.id
-						? {
-								...m,
-								content: 'Сообщение удалено',
-								attachments: [],
-								is_deleted: true,
-							}
-						: m,
-				),
-			)
+			// Start animation
+			setDeletingAiBotMessageIds(prev => new Set(prev).add(msg.id))
+			// Wait for animation, then delete
+			setTimeout(() => {
+				setBotMessages(prev => prev.filter(m => m.id !== msg.id))
+				setDeletingAiBotMessageIds(prev => {
+					const next = new Set(prev)
+					next.delete(msg.id)
+					return next
+				})
+			}, 400)
+			// Clean up pinned messages
+			if (pinnedMessageId === msg.id) {
+				setPinnedMessageId(null)
+			}
+			if (pinnedMessageIds.includes(msg.id)) {
+				setPinnedMessageIds(prev => prev.filter(id => id !== msg.id))
+			}
+			showToast('Сообщение удалено', 'success')
 		} else {
-			// Delete via REST API
-			const token = accessToken
-
-			;(async () => {
-				try {
-					if (selectedFriend) {
-						const res = await fetch(
-							`${apiUrl()}/api/v1/dm/${selectedFriend.id}/messages/${msg.id}`,
-							{
-								method: 'DELETE',
-								headers: {
-									'Content-Type': 'application/json',
-									Authorization: `Bearer ${token}`,
-								},
-							},
-						)
-						if (res.ok) {
-							markMessageDeleted(msg.id)
-							showToast('Сообщение удалено', 'success')
-						} else {
-							showToast('Ошибка при удалении сообщения', 'error')
-						}
-					}
-				} catch (err) {
-					showToast('Ошибка при удалении сообщения', 'error')
-				}
-			})()
-		}
-		if (pinnedMessageId === msg.id) {
-			setPinnedMessageId(null)
-		}
-		if (pinnedMessageIds.includes(msg.id)) {
-			setPinnedMessageIds(prev => prev.filter(id => id !== msg.id))
+			// For normal DMs, trigger deletion via socket (which will also broadcast to other user)
+			// The animation will be triggered by useChat's handleMessageDeleted
+			deleteMessage(msg.id)
+			
+			// Clean up pinned messages
+			if (pinnedMessageId === msg.id) {
+				setPinnedMessageId(null)
+			}
+			if (pinnedMessageIds.includes(msg.id)) {
+				setPinnedMessageIds(prev => prev.filter(id => id !== msg.id))
+			}
 		}
 	}
 
@@ -3337,68 +3574,27 @@ export default function MessengerPage() {
 		)
 
 		if (isAiChat) {
-			setAiMessages(prev =>
-				prev.map(m =>
-					selectedMessageIds.has(m.id)
-						? {
-								...m,
-								content: 'Сообщение удалено',
-								attachments: [],
-								is_deleted: true,
-							}
-						: m,
-				),
-			)
+			// Start animation for all selected messages
+			setDeletingAiBotMessageIds(new Set(selectedMessageIds))
+			// Wait for animation, then delete
+			setTimeout(() => {
+				setAiMessages(prev => prev.filter(m => !selectedMessageIds.has(m.id)))
+				setDeletingAiBotMessageIds(new Set())
+			}, 400)
 		} else if (isBotChat) {
-			setBotMessages(prev =>
-				prev.map(m =>
-					selectedMessageIds.has(m.id)
-						? {
-								...m,
-								content: 'Сообщение удалено',
-								attachments: [],
-								is_deleted: true,
-							}
-						: m,
-				),
-			)
-		} else if (selectedFriend) {
-			// Delete messages via REST API
-			const token = accessToken
-			let deletedCount = 0
-
-			// Delete all messages sequentially
+			// Start animation for all selected messages
+			setDeletingAiBotMessageIds(new Set(selectedMessageIds))
+			// Wait for animation, then delete
+			setTimeout(() => {
+				setBotMessages(prev => prev.filter(m => !selectedMessageIds.has(m.id)))
+				setDeletingAiBotMessageIds(new Set())
+			}, 400)
+		} else {
+			// For normal DMs, delete via socket for each message
 			for (const msg of messagesToDelete) {
 				if (msg.isOwn) {
-					try {
-						const res = await fetch(
-							`${apiUrl()}/api/v1/dm/${selectedFriend.id}/messages/${msg.id}`,
-							{
-								method: 'DELETE',
-								headers: {
-									'Content-Type': 'application/json',
-									Authorization: `Bearer ${token}`,
-								},
-							},
-						)
-						if (res.ok) {
-							// Update local state immediately
-							markMessageDeleted(msg.id)
-							deletedCount++
-						} else {
-							const errorData = await res.json().catch(() => ({}))
-							console.error('Failed to delete message:', msg.id, errorData)
-						}
-					} catch (err) {
-						console.error('Error deleting message:', msg.id, err)
-					}
+					deleteMessage(msg.id)
 				}
-			}
-
-			if (deletedCount === 0) {
-				showToast('Не удалось удалить сообщения', 'error')
-				handleClearSelection()
-				return
 			}
 		}
 
@@ -3897,6 +4093,52 @@ export default function MessengerPage() {
 		pinnedChatIds,
 		user,
 	])
+	const recentContactsById = useMemo(() => {
+		const map = new Map<string, any>()
+		for (const contact of recentContacts) {
+			if (contact?.id) map.set(String(contact.id), contact)
+		}
+		return map
+	}, [recentContacts])
+	const getSidebarPreview = useCallback(
+		(friend: User) => {
+			if (selectedFriend?.id === friend.id) {
+				return getLastMessage(friend.id, messages)
+			}
+			const recentMeta = recentContactsById.get(String(friend.id))
+			const raw =
+				recentMeta?.last_message_text ||
+				recentMeta?.last_message_preview ||
+				recentMeta?.last_message ||
+				recentMeta?.preview ||
+				''
+			const text = String(raw || '')
+			return text.length > 30 ? `${text.substring(0, 30)}...` : text
+		},
+		[messages, recentContactsById, selectedFriend?.id],
+	)
+	const getSidebarPreviewTime = useCallback(
+		(friend: User) => {
+			if (selectedFriend?.id === friend.id) {
+				return getLastMessageTime(friend.id, messages)
+			}
+			const recentMeta = recentContactsById.get(String(friend.id))
+			const raw =
+				recentMeta?.last_message_at ||
+				recentMeta?.last_message_time ||
+				recentMeta?.updated_at
+			if (!raw) return ''
+			try {
+				return new Date(raw).toLocaleTimeString('ru-RU', {
+					hour: '2-digit',
+					minute: '2-digit',
+				})
+			} catch {
+				return ''
+			}
+		},
+		[messages, recentContactsById, selectedFriend?.id],
+	)
 
 	// Determine messages to show in chat
 	let messagesToDisplay =
@@ -3985,18 +4227,18 @@ export default function MessengerPage() {
 	)
 
 	return (
-		<div className='flex h-[calc(100vh-4rem)] w-full overflow-hidden bg-gray-950 text-gray-100 font-sans'>
+		<div className='flex h-[100dvh] w-full overflow-hidden bg-[color:var(--app-bg)] text-[color:var(--app-fg)] font-sans'>
 			<div
-				className={`w-80 border-r border-gray-800 bg-gray-950 flex-shrink-0 z-20 shadow-xl flex-col ${
+				className={`w-80 border-r border-white/10 bg-black/20 flex-shrink-0 z-20 shadow-xl flex-col ${
 					hasActiveChat ? 'hidden md:flex' : 'flex'
 				}`}
 			>
-				<div className='p-4 border-b border-gray-800 bg-gray-900/50 backdrop-blur-sm'>
+				<div className='p-4 border-b border-white/10 bg-black/20 backdrop-blur-sm'>
 					<div className='flex justify-between items-center mb-4'>
 						<div className='flex items-center gap-3'>
 							<Link
 								href='/feed'
-								className='p-2 -ml-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors'
+								className='p-2 -ml-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-full transition-colors'
 							>
 								<ArrowLeftIcon className='w-5 h-5' />
 							</Link>
@@ -4008,9 +4250,9 @@ export default function MessengerPage() {
 						</div>
 					</div>
 
-					<div className='flex p-1 bg-gray-900 rounded-lg border border-gray-800 relative'>
+					<div className='flex p-1 bg-black/30 rounded-lg border border-white/10 relative'>
 						<div
-							className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-gray-700/50 rounded-md transition-all duration-300 ease-out ${
+							className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white/10 rounded-md transition-all duration-300 ease-out ${
 								activeTab === 'direct' ? 'left-1' : 'left-[calc(50%+4px)]'
 							}`}
 						/>
@@ -4243,11 +4485,11 @@ export default function MessengerPage() {
 												)}
 											</span>
 											<span className='text-[10px] text-gray-600'>
-												{getLastMessageTime(friend.id, messages)}
+												{getSidebarPreviewTime(friend)}
 											</span>
 										</div>
 										<span className='text-xs text-gray-500 truncate group-hover:text-gray-400 transition-colors'>
-											{getLastMessage(friend.id, messages)}
+											{getSidebarPreview(friend)}
 										</span>
 									</div>
 
@@ -4751,9 +4993,7 @@ export default function MessengerPage() {
 				className={`flex-1 flex flex-col relative min-w-0 ${!hasActiveChat ? 'hidden md:flex' : ''}`}
 			>
 				<div
-					className={`absolute inset-0 transition-opacity duration-500 ${
-						chatBackgroundImage ? 'opacity-100' : 'opacity-30'
-					}`}
+					className='absolute inset-0 transition-opacity duration-500'
 					style={
 						chatBackgroundImage
 							? {
@@ -4761,6 +5001,8 @@ export default function MessengerPage() {
 									backgroundSize: 'cover',
 									backgroundPosition: 'center',
 									backgroundRepeat: 'no-repeat',
+									opacity: bgImageOpacity,
+									filter: bgImageBlur ? `blur(${bgImageBlur}px)` : undefined,
 								}
 							: undefined
 					}
@@ -4768,16 +5010,18 @@ export default function MessengerPage() {
 
 				<div
 					className={`absolute inset-0 transition-colors duration-500 ${
-						chatBackgroundImage ? 'bg-gray-950/60' : currentBackground.class
+						chatBackgroundImage ? 'bg-black/30' : currentBackground.class
 					}`}
 				/>
 
-				<div className='absolute inset-0 bg-grid-pattern pointer-events-none opacity-10' />
+				{showGridPattern && (
+					<div className='absolute inset-0 bg-grid-pattern pointer-events-none opacity-10' />
+				)}
 
 				<div className='relative z-10 flex flex-col flex-1 min-h-0'>
 					{selectedFriend || selectedChannel || selectedGroup ? (
 						<>
-							<div className='h-16 px-6 border-b border-gray-800/50 flex items-center justify-between bg-gray-900/40 backdrop-blur-md z-10 sticky top-0'>
+							<div className='h-16 px-6 border-b border-white/10 flex items-center justify-between bg-black/20 backdrop-blur-md z-10 sticky top-0'>
 								{isChatSearchOpen ? (
 									<div className='flex items-center gap-2 w-full animate-in fade-in slide-in-from-top-2 duration-200'>
 										<SearchIcon className='w-5 h-5 text-gray-400' />
@@ -4788,7 +5032,7 @@ export default function MessengerPage() {
 												placeholder='Поиск сообщений...'
 												value={chatSearchQuery}
 												onChange={e => setChatSearchQuery(e.target.value)}
-												className='w-full bg-transparent border-none text-white placeholder-gray-500 focus:ring-0 text-sm'
+												className='w-full bg-transparent border-none text-[color:var(--app-fg)] placeholder:text-gray-500 focus:ring-0 text-sm'
 											/>
 										</form>
 										{isSearchingMessages && (
@@ -4805,7 +5049,7 @@ export default function MessengerPage() {
 												setChatSearchQuery('')
 												setFoundMessages([])
 											}}
-											className='p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors'
+											className='p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-full transition-colors'
 										>
 											<XIcon className='w-5 h-5' />
 										</button>
@@ -5214,6 +5458,47 @@ export default function MessengerPage() {
 																		</button>
 																	)}
 																</div>
+
+																{chatBackgroundImage && (
+																	<div className='mt-3 space-y-3'>
+																		<div>
+																			<label className='text-[10px] text-gray-500 mb-1 block uppercase tracking-wider font-medium'>
+																				Прозрачность картинки
+																			</label>
+																			<input
+																				type='range'
+																				min='0.1'
+																				max='1'
+																				step='0.05'
+																				value={bgImageOpacity}
+																				onChange={e =>
+																					setBgImageOpacity(
+																						parseFloat(e.target.value),
+																					)
+																				}
+																				className='w-full'
+																			/>
+																		</div>
+																		<div>
+																			<label className='text-[10px] text-gray-500 mb-1 block uppercase tracking-wider font-medium'>
+																				Размытие картинки
+																			</label>
+																			<input
+																				type='range'
+																				min='0'
+																				max='24'
+																				step='1'
+																				value={bgImageBlur}
+																				onChange={e =>
+																					setBgImageBlur(
+																						parseInt(e.target.value, 10),
+																					)
+																				}
+																				className='w-full'
+																			/>
+																		</div>
+																	</div>
+																)}
 															</div>
 
 															<div className='pt-3 border-t border-gray-800'>
@@ -5243,6 +5528,21 @@ export default function MessengerPage() {
 																		</button>
 																	))}
 																</div>
+															</div>
+
+															<div className='pt-3 border-t border-gray-800'>
+																<label className='text-xs text-gray-500 mb-2 block uppercase tracking-wider font-medium'>
+																	Эффекты
+																</label>
+																<button
+																	onClick={() => setShowGridPattern(v => !v)}
+																	className='w-full flex items-center justify-between rounded-lg bg-gray-800/60 hover:bg-gray-800 px-3 py-2 text-sm text-gray-200 transition-colors'
+																>
+																	<span>Сетка на фоне</span>
+																	<span className='text-xs text-gray-400'>
+																		{showGridPattern ? 'Вкл' : 'Выкл'}
+																	</span>
+																</button>
 															</div>
 
 															<div className='pt-3 border-t border-gray-800'>
@@ -5966,6 +6266,10 @@ export default function MessengerPage() {
 												isSelectionMode={isSelectionMode}
 												isSelected={selectedMessageIds.has(msg.id)}
 												onToggleSelect={handleToggleMessageSelection}
+												isDeleting={deletingMessageIds.has(msg.id) || deletingAiBotMessageIds.has(msg.id)}
+												currentUserId={user?.id}
+												botAccessToken={accessToken}
+												onBotOutboxItems={appendBotOutboxItems}
 											/>
 										</div>
 									)
@@ -6139,7 +6443,7 @@ export default function MessengerPage() {
 																		}
 																		className='text-2xl p-2 hover:bg-gray-800/50 rounded-xl transition-all hover:scale-110 active:scale-90'
 																	>
-																		{emoji}
+																		<AppleEmoji emoji={emoji} size={28} />
 																	</button>
 																))}
 															</div>
@@ -6995,3 +7299,4 @@ export default function MessengerPage() {
 		</div>
 	)
 }
+

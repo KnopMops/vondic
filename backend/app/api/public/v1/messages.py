@@ -8,6 +8,7 @@ from flask import Blueprint, jsonify, request
 public_messages_bp = Blueprint(
     "public_messages", __name__, url_prefix="/api/public/v1/messages")
 
+
 @public_messages_bp.route("/", methods=["GET"])
 @api_key_required
 def get_messages(current_user):
@@ -39,6 +40,7 @@ def get_messages(current_user):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @public_messages_bp.route("/<message_id>", methods=["GET"])
 @api_key_required
 def get_message(current_user, message_id):
@@ -54,9 +56,9 @@ def get_message(current_user, message_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @public_messages_bp.route("/", methods=["POST"])
 @api_key_required
-
 @rate_limit(limit=50, window=3600, per_user=True)
 def send_message(current_user):
     try:
@@ -98,9 +100,9 @@ def send_message(current_user):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @public_messages_bp.route("/<message_id>", methods=["PUT"])
 @api_key_required
-
 @rate_limit(limit=20, window=3600, per_user=True)
 def update_message(current_user, message_id):
     try:
@@ -139,6 +141,7 @@ def update_message(current_user, message_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @public_messages_bp.route("/<message_id>", methods=["DELETE"])
 @api_key_required
 def delete_message(current_user, message_id):
@@ -158,6 +161,7 @@ def delete_message(current_user, message_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @public_messages_bp.route("/read/<message_id>", methods=["POST"])
 @api_key_required
 def mark_message_as_read(current_user, message_id):
@@ -176,6 +180,7 @@ def mark_message_as_read(current_user, message_id):
         return jsonify({"message": "Message marked as read"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 @public_messages_bp.route("/unread", methods=["GET"])
 @api_key_required
@@ -200,6 +205,7 @@ def get_unread_messages(current_user):
         }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 @public_messages_bp.route("/threads", methods=["GET"])
 @api_key_required

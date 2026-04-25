@@ -16,6 +16,7 @@ auth_bp = Blueprint("auth", __name__, url_prefix="/api/v1/auth")
 
 desktop_yandex_sessions: dict[str, dict] = {}
 
+
 def _get_client_ip():
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
@@ -24,6 +25,7 @@ def _get_client_ip():
     if real_ip:
         return real_ip.strip()
     return request.remote_addr or ""
+
 
 def _parse_user_agent(ua_string: str):
 
@@ -57,6 +59,7 @@ def _parse_user_agent(ua_string: str):
 
     return device, platform, browser
 
+
 def _extract_access_token():
     data = request.get_json(silent=True) or {}
     token = data.get("access_token")
@@ -69,6 +72,7 @@ def _extract_access_token():
     if not token:
         token = request.cookies.get("access_token")
     return token
+
 
 def _store_login_session(
         user,
@@ -134,6 +138,7 @@ def _store_login_session(
         current_app.logger.error(
             f"Failed to store login session in Redis: {e}")
 
+
 @auth_bp.route("/register", methods=["POST"])
 @rate_limit("auth-register", limit=5, window_seconds=60)
 def register():
@@ -158,12 +163,14 @@ def register():
         201,
     )
 
+
 @auth_bp.route("/verify-email/<token>", methods=["GET"])
 def verify_email(token):
     success, message = AuthService.verify_email(token)
     if not success:
         return (jsonify({"error": message}), 400)
     return (jsonify({"message": message}), 200)
+
 
 @auth_bp.route("/login", methods=["POST"])
 @rate_limit("auth-login", limit=10, window_seconds=60)
@@ -186,7 +193,9 @@ def login():
 
         email = data.get("email")
         password = data.get("password")
-        current_app.logger.info(f"Email: {email}, Password length: {len(password) if password else 0}")
+        current_app.logger.info(
+            f"Email: {email}, Password length: {
+                len(password) if password else 0}")
 
     except Exception as e:
         current_app.logger.error(f"JSON parsing error: {e}")
@@ -234,6 +243,7 @@ def login():
         200,
     )
 
+
 @auth_bp.route("/me", methods=["POST"])
 def me():
     data = request.get_json() or {}
@@ -258,6 +268,7 @@ def me():
         200,
     )
 
+
 @auth_bp.route("/socket-token", methods=["GET"])
 @token_required
 @rate_limit("socket-token", limit=20, window_seconds=60)
@@ -266,6 +277,7 @@ def socket_token(current_user):
     token = serializer.dumps(
         {"uid": str(current_user.id)}, salt="socket-token")
     return jsonify({"token": token, "expires_in": 300}), 200
+
 
 @auth_bp.route("/yandex/login", methods=["GET"])
 def yandex_login():
@@ -289,6 +301,7 @@ def yandex_login():
             )
         )
     return jsonify({"auth_url": auth_url}), 200
+
 
 @auth_bp.route("/yandex/callback", methods=["GET"])
 def yandex_callback():
@@ -316,6 +329,7 @@ def yandex_callback():
 
     return jsonify(response_payload), 200
 
+
 @auth_bp.route("/yandex/desktop-session", methods=["GET"])
 def yandex_desktop_session():
     cid = request.args.get("cid")
@@ -335,6 +349,7 @@ def yandex_desktop_session():
         }
     ), 200
 
+
 @auth_bp.route("/2fa/setup", methods=["POST"])
 @token_required
 def setup_2fa(current_user):
@@ -345,6 +360,7 @@ def setup_2fa(current_user):
     if error:
         return jsonify({"error": error}), 400
     return jsonify({"user": user_schema.dump(user)}), 200
+
 
 @auth_bp.route("/2fa/email/send", methods=["POST"])
 @token_required
@@ -363,6 +379,7 @@ def send_2fa_email(current_user):
         return jsonify({"error": error}), 400
     return jsonify({"message": "Code sent"}), 200
 
+
 @auth_bp.route("/2fa/email/verify", methods=["POST"])
 @token_required
 def verify_2fa_email(current_user):
@@ -373,6 +390,7 @@ def verify_2fa_email(current_user):
         return jsonify({"error": error}), 400
     return jsonify({"message": "Код 2FA подтверждён"}), 200
 
+
 @auth_bp.route("/login-alerts/toggle", methods=["POST"])
 @token_required
 def toggle_login_alerts(current_user):
@@ -382,6 +400,7 @@ def toggle_login_alerts(current_user):
     if not success:
         return jsonify({"error": error}), 400
     return jsonify({"message": "Настройки оповещений о входе обновлены"}), 200
+
 
 @auth_bp.route("/sessions", methods=["GET"])
 @token_required
@@ -413,6 +432,7 @@ def list_sessions(current_user):
             item_copy["is_current"] = False
         items.append(item_copy)
     return jsonify({"items": items}), 200
+
 
 @auth_bp.route("/sessions/terminate", methods=["POST"])
 @token_required
@@ -485,6 +505,7 @@ def terminate_session(current_user):
         }
     ), 200
 
+
 @auth_bp.route("/api-key-login", methods=["POST"])
 @rate_limit("auth-api-key-login", limit=20, window_seconds=60)
 def api_key_login():
@@ -533,6 +554,7 @@ def api_key_login():
         ),
         200,
     )
+
 
 @auth_bp.route("/ai-user", methods=["GET"])
 def get_ai_user():

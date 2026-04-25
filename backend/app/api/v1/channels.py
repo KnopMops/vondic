@@ -5,6 +5,7 @@ from flask import Blueprint, jsonify, request
 
 channels_bp = Blueprint("channels", __name__, url_prefix="/api/v1/channels")
 
+
 def validate_channel_input(data):
     if not data:
         return None, "Request body is required"
@@ -35,6 +36,7 @@ def validate_channel_input(data):
         "description": description.strip() if description else None
     }, None
 
+
 @channels_bp.route("/", methods=["POST"])
 @token_required
 def create_channel(current_user):
@@ -45,18 +47,24 @@ def create_channel(current_user):
         if error:
             return jsonify({"error": error, "code": "INVALID_INPUT"}), 400
 
-        channel, error = ChannelService.create_channel(validated_data, current_user.id)
+        channel, error = ChannelService.create_channel(
+            validated_data, current_user.id)
         if error:
             if "unique" in error.lower() or "already exists" in error.lower():
-                return jsonify({"error": "Channel with this name already exists", "code": "CHANNEL_EXISTS"}), 409
+                return jsonify(
+                    {"error": "Channel with this name already exists", "code": "CHANNEL_EXISTS"}), 409
             if "database" in error.lower() or "sql" in error.lower():
-                return jsonify({"error": "Database error. Please try again later", "code": "DATABASE_ERROR"}), 500
-            return jsonify({"error": error, "code": "CHANNEL_CREATE_FAILED"}), 400
+                return jsonify(
+                    {"error": "Database error. Please try again later", "code": "DATABASE_ERROR"}), 500
+            return jsonify(
+                {"error": error, "code": "CHANNEL_CREATE_FAILED"}), 400
 
         return jsonify(channel_schema.dump(channel)), 201
 
     except Exception as e:
-        return jsonify({"error": f"Internal server error: {str(e)}", "code": "INTERNAL_ERROR"}), 500
+        return jsonify(
+            {"error": f"Internal server error: {str(e)}", "code": "INTERNAL_ERROR"}), 500
+
 
 @channels_bp.route("/join", methods=["POST"])
 @token_required
@@ -72,11 +80,13 @@ def join_channel(current_user):
         return jsonify({"error": error}), 400
     return jsonify(channel_schema.dump(channel)), 200
 
+
 @channels_bp.route("/my", methods=["POST"])
 @token_required
 def get_my_channels(current_user):
     channels = ChannelService.get_user_channels(current_user.id)
     return jsonify(channels_schema.dump(channels)), 200
+
 
 @channels_bp.route("/<channel_id>", methods=["POST", "GET"])
 @token_required

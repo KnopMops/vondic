@@ -5,16 +5,16 @@ import { useAuth } from '@/lib/AuthContext'
 import { getAttachmentUrl } from '@/lib/utils'
 import { motion } from 'framer-motion'
 import {
-	Bookmark,
-	Clock,
-	Heart,
-	Home,
-	List,
-	PlaySquare,
-	Upload,
-	User2,
-	Users,
-} from 'lucide-react'
+	FiBookmark as Bookmark,
+	FiClock as Clock,
+	FiHeart as Heart,
+	FiHome as Home,
+	FiList as List,
+	FiUpload as Upload,
+	FiUser as User2,
+	FiUsers as Users,
+} from 'react-icons/fi'
+import { FiPlayCircle as PlaySquare } from 'react-icons/fi'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 

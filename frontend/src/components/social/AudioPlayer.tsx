@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { getAttachmentUrl } from '@/lib/utils'
-import { Play, Pause, Volume2, VolumeX } from 'lucide-react'
+import {
+	LuPause as Pause,
+	LuPlay as Play,
+	LuVolume2 as Volume2,
+	LuVolumeX as VolumeX,
+} from 'react-icons/lu'
 
 type Props = {
   src: string

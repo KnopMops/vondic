@@ -1,7 +1,7 @@
 import { useAppSelector } from '@/lib/hooks'
 import { User } from '@/lib/types'
 import { getAvatarUrl } from '@/lib/utils'
-import { Plus } from 'lucide-react'
+import { LuPlus as Plus } from 'react-icons/lu'
 import { useEffect, useState } from 'react'
 import CreateStoryModal from './CreateStoryModal'
 import StoriesModal from './StoriesModal'

@@ -6,7 +6,15 @@ import { useAppDispatch } from '@/lib/hooks'
 import { User } from '@/lib/types'
 import { getAttachmentUrl, getAvatarUrl } from '@/lib/utils'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Coffee, Crown, Flame, Flower, Gift, Heart, Star } from 'lucide-react'
+import {
+	LuCoffee as Coffee,
+	LuCrown as Crown,
+	LuFlame as Flame,
+	LuFlower as Flower,
+	LuGift as Gift,
+	LuHeart as Heart,
+	LuStar as Star,
+} from 'react-icons/lu'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import Post from './Post'
@@ -39,8 +47,8 @@ export default function UserProfile({ user, currentUser }: Props) {
 	const [loading, setLoading] = useState(false)
 	const [checkingStatus, setCheckingStatus] = useState(true)
 	const [activeTab, setActiveTab] = useState<
-		'posts' | 'friends' | 'gifts' | 'videos' | 'shorts' | 'video_info'
-	>('posts')
+		'posts' | 'friends' | 'gifts' | 'videos' | 'shorts' | 'video_info' | 'music'
+	>('video_info')
 	const [friends, setFriends] = useState<User[]>([])
 	const [loadingFriends, setLoadingFriends] = useState(false)
 	const [profilePosts, setProfilePosts] = useState<any[]>([])
@@ -87,6 +95,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 	const [isEditModalOpen, setIsEditModalOpen] = useState(false)
 	const [avatarUrl, setAvatarUrl] = useState(user.avatar_url || '')
 	const [usernameEdit, setUsernameEdit] = useState(user.username || '')
+	const [descriptionEdit, setDescriptionEdit] = useState(user.description || '')
 	const [isUpdating, setIsUpdating] = useState(false)
 	const [uploadingAvatar, setUploadingAvatar] = useState(false)
 	const [profileBgImageUrl, setProfileBgImageUrl] = useState<string>(
@@ -98,6 +107,9 @@ export default function UserProfile({ user, currentUser }: Props) {
 	const [isGiftModalOpen, setIsGiftModalOpen] = useState(false)
 	const [giftError, setGiftError] = useState<string | null>(null)
 	const [giftLoading, setGiftLoading] = useState(false)
+	const [userPlaylists, setUserPlaylists] = useState<any[]>([])
+	const [loadingMusic, setLoadingMusic] = useState(false)
+	const [addingPlaylistId, setAddingPlaylistId] = useState<string | null>(null)
 	const giftsCatalog = [
 		{ id: 'newyear_fireworks', name: 'Новогодний салют', icon: Flame },
 		{ id: 'valentine_heart', name: 'Валентинка', icon: Heart },
@@ -431,6 +443,61 @@ export default function UserProfile({ user, currentUser }: Props) {
 	}, [activeTab, user.id, isBlocked, isAdmin])
 
 	useEffect(() => {
+		if (activeTab === 'music' && userPlaylists.length === 0) {
+			const fetchPlaylists = async () => {
+				setLoadingMusic(true)
+				try {
+					const res = await fetch(`/api/playlists/user/${user.id}/public`, {
+						method: 'GET',
+						headers: { 'Content-Type': 'application/json' },
+					})
+					if (res.ok) {
+						const data = await res.json()
+						setUserPlaylists(Array.isArray(data) ? data : [])
+					}
+				} catch (e) {
+					console.error('Failed to load user playlists:', e)
+					setUserPlaylists([])
+				} finally {
+					setLoadingMusic(false)
+				}
+			}
+			fetchPlaylists()
+		}
+	}, [activeTab, user.id, userPlaylists.length])
+
+	const handleAddPlaylistToMyMusic = async (playlistId: string) => {
+		if (!authUser) return
+		
+		try {
+			setAddingPlaylistId(playlistId)
+			// Get the playlist details first
+			const playlist = userPlaylists.find(p => p.id === playlistId)
+			if (!playlist) return
+
+			// Borrow playlist (creates local snapshot + requests sync permission)
+			const response = await fetch('/api/playlists/borrow', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					source_playlist_id: playlist.id,
+				}),
+			})
+
+			if (response.ok) {
+				alert('Плейлист добавлен. Запрос синхронизации отправлен владельцу!')
+			} else {
+				alert('Не удалось добавить плейлист')
+			}
+		} catch (error) {
+			console.error('Error adding playlist:', error)
+			alert('Ошибка при добавлении плейлиста')
+		} finally {
+			setAddingPlaylistId(null)
+		}
+	}
+
+	useEffect(() => {
 		if (activeTab !== 'gifts') return
 		const loadSendersAndCatalog = async () => {
 			try {
@@ -724,6 +791,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 				email: user.email,
 				username: uname,
 				avatar_url: avatarUrl,
+				description: (descriptionEdit || '').trim(),
 			}
 			if (currentUser?.premium) {
 				if ((profileBgImageUrl || '').trim()) {
@@ -750,6 +818,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 				localStorage.setItem('user', JSON.stringify(mergedUser))
 				setAvatarUrl(mergedUser.avatar_url || '')
 				setUsernameEdit(mergedUser.username || '')
+				setDescriptionEdit(mergedUser.description || '')
 				if (mergedUser.profile_bg_theme) {
 					setProfileTheme(mergedUser.profile_bg_theme)
 				}
@@ -766,6 +835,10 @@ export default function UserProfile({ user, currentUser }: Props) {
 			setIsUpdating(false)
 		}
 	}
+
+	useEffect(() => {
+		setDescriptionEdit(user.description || '')
+	}, [user.description, user.id])
 
 	return (
 		<motion.div
@@ -889,6 +962,19 @@ export default function UserProfile({ user, currentUser }: Props) {
 												className='w-full rounded-xl border border-gray-700 bg-black/50 px-4 py-3 text-white focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all'
 												placeholder='Введите имя...'
 												maxLength={32}
+											/>
+										</div>
+										<div>
+											<label className='mb-2 block text-sm font-medium text-gray-400'>
+												Инфо
+											</label>
+											<textarea
+												value={descriptionEdit}
+												onChange={e => setDescriptionEdit(e.target.value)}
+												rows={4}
+												className='w-full rounded-xl border border-gray-700 bg-black/50 px-4 py-3 text-white focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all'
+												placeholder='Расскажите о себе...'
+												maxLength={500}
 											/>
 										</div>
 
@@ -1097,7 +1183,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 										whileTap={{ scale: 0.95 }}
 										onClick={handleRemoveFriend}
 										disabled={loading}
-										className='rounded-xl bg-red-500/10 border border-red-500/50 px-4 py-2 text-sm font-semibold text-red-400 hover:bg-red-500/20 transition-all disabled:opacity-50'
+										className='rounded-xl bg-red-500/15 border border-red-400/60 px-4 py-2 text-sm font-semibold text-red-200 hover:bg-red-500/25 transition-all disabled:opacity-50'
 									>
 										Удалить из друзей
 									</motion.button>
@@ -1107,7 +1193,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 										whileTap={{ scale: 0.95 }}
 										onClick={handleAddFriend}
 										disabled={loading}
-										className='rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg hover:shadow-indigo-500/25 transition-all disabled:opacity-50'
+										className='rounded-xl bg-indigo-500/30 border border-indigo-300/40 px-4 py-2 text-sm font-semibold text-indigo-100 hover:bg-indigo-500/40 transition-all disabled:opacity-50'
 									>
 										Добавить в друзья
 									</motion.button>
@@ -1119,7 +1205,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 										whileTap={{ scale: 0.95 }}
 										onClick={handleUnsubscribe}
 										disabled={loading}
-										className='rounded-xl bg-white/10 border border-white/20 px-4 py-2 text-sm font-semibold text-white hover:bg-white/20 transition-all disabled:opacity-50'
+										className='rounded-xl bg-slate-500/20 border border-slate-300/35 px-4 py-2 text-sm font-semibold text-slate-100 hover:bg-slate-500/30 transition-all disabled:opacity-50'
 									>
 										Отписаться
 									</motion.button>
@@ -1129,7 +1215,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 										whileTap={{ scale: 0.95 }}
 										onClick={handleSubscribe}
 										disabled={loading}
-										className='rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 transition-all disabled:opacity-50'
+										className='rounded-xl bg-blue-500/30 border border-blue-300/40 px-4 py-2 text-sm font-semibold text-blue-100 hover:bg-blue-500/40 transition-all disabled:opacity-50'
 									>
 										Подписаться
 									</motion.button>
@@ -1139,7 +1225,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 									whileTap={{ scale: 0.95 }}
 									onClick={() => setIsGiftModalOpen(true)}
 									disabled={loading}
-									className='rounded-xl bg-pink-600 px-4 py-2 text-sm font-semibold text-white hover:bg-pink-500 transition-all disabled:opacity-50'
+									className='rounded-xl bg-pink-500/30 border border-pink-300/40 px-4 py-2 text-sm font-semibold text-pink-100 hover:bg-pink-500/40 transition-all disabled:opacity-50'
 								>
 									Подарить
 								</motion.button>
@@ -1233,10 +1319,10 @@ export default function UserProfile({ user, currentUser }: Props) {
 			</AnimatePresence>
 
 			<div className='rounded-3xl bg-white/5 border border-white/10 backdrop-blur-md p-1'>
-				<div className='flex flex-wrap'>
+				<div className='flex flex-wrap gap-1'>
 					<button
 						onClick={() => setActiveTab('posts')}
-						className={`flex-1 min-w-[120px] rounded-2xl py-3 text-sm font-medium transition-all ${
+						className={`flex-1 min-w-[110px] rounded-2xl py-3 px-2 text-sm font-medium transition-all ${
 							activeTab === 'posts'
 								? 'bg-white/10 text-white shadow-sm'
 								: 'text-gray-400 hover:text-white hover:bg-white/5'
@@ -1246,7 +1332,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 					</button>
 					<button
 						onClick={() => setActiveTab('friends')}
-						className={`flex-1 min-w-[120px] rounded-2xl py-3 text-sm font-medium transition-all ${
+						className={`flex-1 min-w-[110px] rounded-2xl py-3 px-2 text-sm font-medium transition-all ${
 							activeTab === 'friends'
 								? 'bg-white/10 text-white shadow-sm'
 								: 'text-gray-400 hover:text-white hover:bg-white/5'
@@ -1255,28 +1341,18 @@ export default function UserProfile({ user, currentUser }: Props) {
 						Друзья
 					</button>
 					<button
-						onClick={() => setActiveTab('videos')}
-						className={`flex-1 min-w-[120px] rounded-2xl py-3 text-sm font-medium transition-all ${
-							activeTab === 'videos'
+						onClick={() => setActiveTab('music')}
+						className={`flex-1 min-w-[110px] rounded-2xl py-3 px-2 text-sm font-medium transition-all ${
+							activeTab === 'music'
 								? 'bg-white/10 text-white shadow-sm'
 								: 'text-gray-400 hover:text-white hover:bg-white/5'
 						}`}
 					>
-						Видео
-					</button>
-					<button
-						onClick={() => setActiveTab('shorts')}
-						className={`flex-1 min-w-[120px] rounded-2xl py-3 text-sm font-medium transition-all ${
-							activeTab === 'shorts'
-								? 'bg-white/10 text-white shadow-sm'
-								: 'text-gray-400 hover:text-white hover:bg-white/5'
-						}`}
-					>
-						VShorts
+						Музыка
 					</button>
 					<button
 						onClick={() => setActiveTab('video_info')}
-						className={`flex-1 min-w-[120px] rounded-2xl py-3 text-sm font-medium transition-all ${
+						className={`flex-1 min-w-[100px] rounded-2xl py-3 px-2 text-sm font-medium transition-all ${
 							activeTab === 'video_info'
 								? 'bg-white/10 text-white shadow-sm'
 								: 'text-gray-400 hover:text-white hover:bg-white/5'
@@ -1286,7 +1362,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 					</button>
 					<button
 						onClick={() => setActiveTab('gifts')}
-						className={`flex-1 min-w-[120px] rounded-2xl py-3 text-sm font-medium transition-all ${
+						className={`min-w-[96px] rounded-2xl py-3 px-3 text-sm font-medium whitespace-nowrap transition-all ${
 							activeTab === 'gifts'
 								? 'bg-white/10 text-white shadow-sm'
 								: 'text-gray-400 hover:text-white hover:bg-white/5'
@@ -1534,6 +1610,104 @@ export default function UserProfile({ user, currentUser }: Props) {
 									</div>
 								</div>
 							</div>
+						</div>
+					) : activeTab === 'music' ? (
+						<div className='space-y-4'>
+							{loadingMusic ? (
+								<div className='flex justify-center py-12'>
+									<div className='h-8 w-8 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent' />
+								</div>
+							) : isBlocked && !isAdmin ? (
+								<div className='flex flex-col items-center justify-center py-12 text-center text-gray-400'>
+									<motion.div
+										initial={{ scale: 0.8, opacity: 0 }}
+										animate={{ scale: 1, opacity: 1 }}
+										transition={{ delay: 0.4 }}
+										className='mb-4 text-6xl opacity-50'
+									>
+										🚫
+									</motion.div>
+									<p className='text-lg font-medium'>Музыка скрыта</p>
+									<p className='text-sm text-gray-500'>
+										Музыкальные плейлисты пользователя недоступны из-за блокировки
+									</p>
+								</div>
+							) : userPlaylists.length > 0 ? (
+								<div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'>
+									{userPlaylists.map(playlist => (
+										<motion.div
+											key={playlist.id}
+											initial={{ opacity: 0, y: 20 }}
+											animate={{ opacity: 1, y: 0 }}
+											className='rounded-2xl border border-white/10 bg-white/5 p-4 hover:bg-white/10 transition-all'
+										>
+											<div className='flex items-start justify-between mb-3'>
+												<div className='flex-1 min-w-0'>
+													<h3 className='font-bold text-white truncate'>
+														{playlist.name}
+													</h3>
+													{playlist.description && (
+														<p className='text-xs text-gray-400 mt-1 line-clamp-2'>
+															{playlist.description}
+														</p>
+													)}
+												</div>
+											</div>
+											<div className='space-y-2'>
+												<div className='flex items-center justify-between text-xs text-gray-400'>
+													<span>🎵 Треков:</span>
+													<span className='text-white font-medium'>
+														{playlist.track_count || playlist.tracks?.length || 0}
+													</span>
+												</div>
+												{playlist.created_at && (
+													<div className='flex items-center justify-between text-xs text-gray-400'>
+														<span>📅 Создан:</span>
+														<span className='text-white'>
+															{new Date(playlist.created_at).toLocaleDateString()}
+														</span>
+													</div>
+												)}
+												{!isMe && authUser && (
+													<button
+														onClick={() => handleAddPlaylistToMyMusic(playlist.id)}
+														disabled={addingPlaylistId === playlist.id}
+														className='w-full mt-2 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-600 text-white text-sm font-medium rounded-xl transition-colors'
+													>
+														{addingPlaylistId === playlist.id ? (
+															<span className='flex items-center justify-center gap-2'>
+																<div className='h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent' />
+																Добавление...
+															</span>
+														) : (
+															'Добавить в мою музыку'
+														)}
+													</button>
+												)}
+											</div>
+										</motion.div>
+									))}
+								</div>
+							) : (
+								<div className='col-span-full flex flex-col items-center justify-center py-12 text-center text-gray-400'>
+									<motion.div
+										initial={{ scale: 0.8, opacity: 0 }}
+										animate={{ scale: 1, opacity: 1 }}
+										transition={{ delay: 0.4 }}
+										className='mb-4 text-6xl opacity-50'
+									>
+										🎵
+									</motion.div>
+									<p className='text-lg font-medium'>
+										{isMe ? 'У вас пока нет плейлистов' : 'У пользователя нет плейлистов'}
+									</p>
+									<p className='text-sm text-gray-500 mt-1'>
+										{isMe
+											? 'Создайте свой первый плейлист в VМьюзик'
+											: 'Пользователь еще не создал ни одного плейлиста'}
+									</p>
+								</div>
+							)}
 						</div>
 					) : activeTab === 'friends' ? (
 						<div className='grid grid-cols-1 gap-4 sm:grid-cols-2'>

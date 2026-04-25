@@ -26,6 +26,7 @@ try:
 except Exception:
     pipeline = None
 
+
 class RAGEngine:
     def __init__(self):
         self.questions: List[str] = []
@@ -187,17 +188,21 @@ class RAGEngine:
             return content
         return ""
 
+
 app = FastAPI()
 engine = RAGEngine()
 
+
 class AskPayload(BaseModel):
     question: str
+
 
 @app.post("/ask")
 def ask(payload: AskPayload):
     q = (payload.question or "").strip()
     ans = engine.answer(q)
     return {"answer": ans}
+
 
 @app.get("/health")
 def health():

@@ -1,18 +1,20 @@
 'use client'
 
 import {
-	HelpCircle,
-	Mic,
-	MicOff,
-	Monitor,
-	MonitorOff,
-	PhoneOff,
-	ScreenShare,
-	Settings2,
-	Users,
-	Video,
-	VideoOff,
-} from 'lucide-react'
+	FiHelpCircle as HelpCircle,
+	FiMic as Mic,
+	FiMicOff as MicOff,
+	FiMonitor as Monitor,
+	FiPhoneOff as PhoneOff,
+	FiUsers as Users,
+	FiVideo as Video,
+	FiVideoOff as VideoOff,
+} from 'react-icons/fi'
+import {
+	LuMonitorOff as MonitorOff,
+	LuScreenShare as ScreenShare,
+	LuSettings2 as Settings2,
+} from 'react-icons/lu'
 import React, { useEffect, useRef, useState } from 'react'
 import { useCallStore } from '../../lib/stores/callStore'
 

@@ -3,7 +3,7 @@
 import Header from '@/components/social/Header'
 import { useAuth } from '@/lib/AuthContext'
 import { getAttachmentUrl } from '@/lib/utils'
-import { Home, Upload } from 'lucide-react'
+import { FiHome as Home, FiUpload as Upload } from 'react-icons/fi'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 

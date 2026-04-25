@@ -6,6 +6,7 @@ subscriptions_bp = Blueprint(
     "subscriptions", __name__, url_prefix="/api/v1/subscriptions"
 )
 
+
 @subscriptions_bp.route("/subscribe", methods=["POST"])
 @token_required
 def subscribe(current_user):
@@ -20,6 +21,7 @@ def subscribe(current_user):
         return jsonify({"error": error}), 400
 
     return jsonify(sub.to_dict()), 201
+
 
 @subscriptions_bp.route("/unsubscribe", methods=["POST"])
 @token_required
@@ -37,6 +39,7 @@ def unsubscribe(current_user):
 
     return jsonify({"message": "Отписка успешна"}), 200
 
+
 @subscriptions_bp.route("/followers", methods=["POST"])
 @token_required
 def get_followers(current_user):
@@ -48,6 +51,7 @@ def get_followers(current_user):
 
     followers = SubscriptionService.get_followers(user_id)
     return jsonify(followers), 200
+
 
 @subscriptions_bp.route("/following", methods=["POST"])
 @token_required

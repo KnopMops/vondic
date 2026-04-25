@@ -5,6 +5,7 @@ from flask import Blueprint, jsonify, request
 
 friends_bp = Blueprint("friends", __name__, url_prefix="/api/v1/friends")
 
+
 @friends_bp.route("/list", methods=["POST"])
 @token_required
 def get_friends(current_user):
@@ -18,6 +19,7 @@ def get_friends(current_user):
         print(f"Error in get_friends: {e}")
         print(traceback.format_exc())
         return jsonify({"error": str(e)}), 500
+
 
 @friends_bp.route("/requests", methods=["POST"])
 @token_required
@@ -35,6 +37,7 @@ def get_requests(current_user):
     requests = FriendshipService.get_pending_requests(user_id)
     return jsonify(requests), 200
 
+
 @friends_bp.route("/request", methods=["POST"])
 @token_required
 def send_request(current_user):
@@ -49,6 +52,7 @@ def send_request(current_user):
         return jsonify({"error": error}), 400
 
     return jsonify(friendship_schema.dump(friendship)), 201
+
 
 @friends_bp.route("/accept", methods=["POST"])
 @token_required
@@ -65,6 +69,7 @@ def accept_request(current_user):
 
     return jsonify(friendship_schema.dump(friendship)), 200
 
+
 @friends_bp.route("/reject", methods=["POST"])
 @token_required
 def reject_request(current_user):
@@ -79,6 +84,7 @@ def reject_request(current_user):
         return jsonify({"error": error}), 400
 
     return jsonify({"message": "Request rejected"}), 200
+
 
 @friends_bp.route("/remove", methods=["POST"])
 @token_required

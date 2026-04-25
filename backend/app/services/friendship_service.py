@@ -5,6 +5,7 @@ from app.models.friendship import Friendship
 from app.models.user import User
 from sqlalchemy import or_
 
+
 class FriendshipService:
     @staticmethod
     def send_request(requester_id, addressee_id):

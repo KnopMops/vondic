@@ -8,6 +8,7 @@ from flask import Blueprint, jsonify, request
 public_comments_bp = Blueprint(
     "public_comments", __name__, url_prefix="/api/public/v1/comments")
 
+
 @public_comments_bp.route("/", methods=["GET"])
 def get_comments():
     try:
@@ -31,6 +32,7 @@ def get_comments():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @public_comments_bp.route("/<comment_id>", methods=["GET"])
 def get_comment(comment_id):
     try:
@@ -46,9 +48,9 @@ def get_comment(comment_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @public_comments_bp.route("/", methods=["POST"])
 @api_key_required
-
 @rate_limit(limit=15, window=3600, per_user=True)
 def create_comment(current_user):
     try:
@@ -89,9 +91,9 @@ def create_comment(current_user):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @public_comments_bp.route("/<comment_id>", methods=["PUT"])
 @api_key_required
-
 @rate_limit(limit=10, window=3600, per_user=True)
 def update_comment(current_user, comment_id):
     try:
@@ -124,6 +126,7 @@ def update_comment(current_user, comment_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @public_comments_bp.route("/<comment_id>", methods=["DELETE"])
 @api_key_required
 def delete_comment(current_user, comment_id):
@@ -142,6 +145,7 @@ def delete_comment(current_user, comment_id):
         return jsonify({"message": "Comment deleted successfully"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 @public_comments_bp.route("/<comment_id>/like", methods=["POST"])
 @api_key_required
@@ -164,6 +168,7 @@ def like_comment(current_user, comment_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @public_comments_bp.route("/<comment_id>/unlike", methods=["POST"])
 @api_key_required
 def unlike_comment(current_user, comment_id):
@@ -184,6 +189,7 @@ def unlike_comment(current_user, comment_id):
         return jsonify({"message": "Comment unliked successfully"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 @public_comments_bp.route("/post/<post_id>", methods=["GET"])
 def get_comments_for_post(post_id):

@@ -6,6 +6,7 @@ from app.models.comment import Comment
 from app.models.like import Like
 from app.models.post import Post
 
+
 class CommentService:
     @staticmethod
     def _sanitize_text(value):

@@ -12,6 +12,7 @@ DEFAULT_MAX_FRAME_SIZE = 4 * 1024 * 1024
 HTTP_HEADER_LIMIT = 65536
 PROXY_RECEIVER_VERSION = "1.0"
 
+
 @dataclass(frozen=True)
 class ProxyConfig:
     mode: str
@@ -28,6 +29,7 @@ class ProxyConfig:
     standalone_mode: str
     enable_tui: bool
 
+
 @dataclass
 class ProxyStats:
     total_connections: int = 0
@@ -38,11 +40,13 @@ class ProxyStats:
     bytes_out: int = 0
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
+
 def parse_host_port(value: str) -> Tuple[str, int]:
     if ":" not in value:
         return "0.0.0.0", int(value)
     host, port = value.rsplit(":", 1)
     return host.strip() or "0.0.0.0", int(port)
+
 
 def normalize_key(key: str) -> bytes:
     raw = key.strip()
@@ -62,6 +66,7 @@ def normalize_key(key: str) -> bytes:
     if len(raw_bytes) >= 32:
         return raw_bytes[:32]
     raise ValueError("Master key must be at least 32 bytes")
+
 
 def build_config() -> ProxyConfig:
     parser = argparse.ArgumentParser()

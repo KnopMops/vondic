@@ -2,6 +2,7 @@ from app.core.extensions import ma
 from app.models.community import Community
 from app.schemas.user_schema import UserSchema
 
+
 class CommunitySchema(ma.SQLAlchemyAutoSchema):
     class Meta:
         model = Community
@@ -13,6 +14,7 @@ class CommunitySchema(ma.SQLAlchemyAutoSchema):
 
     def get_members_count(self, obj):
         return len(obj.members)
+
 
 community_schema = CommunitySchema()
 communities_schema = CommunitySchema(many=True)

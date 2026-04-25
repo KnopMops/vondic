@@ -4,25 +4,21 @@ import subprocess
 import sys
 import threading
 import time
+from datetime import datetime
 
 import pika
 from app import create_app
 from app.core.extensions import db
-from sqlalchemy import text
+from app.models.video_check import VideoCheck
+
 
 def ensure_checks_table():
     try:
-        db.session.execute(
-            text("""""")
-        )
-        db.session.execute(
-            text(
-                "CREATE INDEX IF NOT EXISTS idx_video_checks_status ON video_checks(status)"
-            )
-        )
+        db.create_all()
         db.session.commit()
     except Exception:
         pass
+
 
 def _clean_text(value: str | None):
     if value is None:
@@ -31,6 +27,7 @@ def _clean_text(value: str | None):
         return value.replace("\x00", "")
     return value
 
+
 def _trim_text(value: str | None, limit: int = 800):
     if value is None:
         return None
@@ -38,23 +35,21 @@ def _trim_text(value: str | None, limit: int = 800):
         return value
     return value[:limit]
 
+
 def update_job(
         job_id: str,
         status: str,
         result_json: str | None = None,
         error: str | None = None):
-    ts = time.strftime("%Y-%m-%dT%H:%M:%S")
-    db.session.execute(
-        text(""""""),
-        {
-            "status": status,
-            "result_json": _clean_text(result_json),
-            "error": _clean_text(error),
-            "ts": ts,
-            "id": job_id,
-        },
-    )
+    row = VideoCheck.query.filter_by(id=job_id).first()
+    if not row:
+        return
+    row.status = status
+    row.result = _clean_text(result_json)
+    row.error = _clean_text(error)
+    row.updated_at = datetime.utcnow()
     db.session.commit()
+
 
 def run_checker(file_path: str):
     script_path = os.path.abspath(
@@ -103,11 +98,13 @@ def run_checker(file_path: str):
     except Exception:
         return None, "Checker вернул некорректный JSON"
 
+
 def _purge_queue(ch):
     try:
         ch.queue_purge(queue="video_checks")
     except Exception:
         pass
+
 
 def handle_message(ch, method, properties, body, app):
     try:
@@ -125,7 +122,11 @@ def handle_message(ch, method, properties, body, app):
             ensure_checks_table()
             update_job(job_id, "processing")
             if not file_path:
-                update_job(job_id, "error", None, "Video file path not provided")
+                update_job(
+                    job_id,
+                    "error",
+                    None,
+                    "Video file path not provided")
                 _purge_queue(ch)
                 ch.basic_ack(delivery_tag=method.delivery_tag)
                 return
@@ -151,6 +152,7 @@ def handle_message(ch, method, properties, body, app):
             _purge_queue(ch)
     ch.basic_ack(delivery_tag=method.delivery_tag)
 
+
 def _consume(app):
     rabbit_url = os.environ.get(
         "RABBITMQ_URL", "amqp://guest:guest@localhost:5672/%2F")
@@ -165,10 +167,13 @@ def _consume(app):
             break
         except pika.exceptions.AMQPConnectionError as e:
             if attempt < max_retries - 1:
-                print(f"RabbitMQ connection failed (attempt {attempt + 1}/{max_retries}), retrying in {retry_delay}s...")
+                print(
+                    f"RabbitMQ connection failed (attempt {
+                        attempt + 1}/{max_retries}), retrying in {retry_delay}s...")
                 time.sleep(retry_delay)
             else:
-                print(f"RabbitMQ connection failed after {max_retries} attempts: {e}")
+                print(
+                    f"RabbitMQ connection failed after {max_retries} attempts: {e}")
                 raise
 
     channel = connection.channel()
@@ -188,6 +193,7 @@ def _consume(app):
     )
     channel.start_consuming()
 
+
 def main():
     app = create_app()
     worker_count = int(os.environ.get("RABBITMQ_WORKERS", "2"))
@@ -199,6 +205,7 @@ def main():
         threads.append(t)
     for t in threads:
         t.join()
+
 
 if __name__ == "__main__":
     main()

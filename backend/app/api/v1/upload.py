@@ -1,8 +1,9 @@
 import base64
+import io
 import os
 import time
-import uuid
 
+import requests as http_requests
 from app.utils.decorators import token_required
 from flask import Blueprint, current_app, jsonify, request
 
@@ -16,10 +17,17 @@ LIMIT_PREMIUM = 100 * 1024 * 1024
 
 THROTTLE_SPEED_BPS = 1_750_000
 
+
+STATIC_UPLOAD_URL = os.getenv(
+    "STATIC_UPLOAD_URL",
+    "http://static-nginx:80/api/upload")
+
+
 def _get_extension(filename: str) -> str | None:
     if not filename or "." not in filename:
         return None
     return filename.rsplit(".", 1)[1].lower()
+
 
 def _decode_base64(data: str, max_size: int = None) -> bytes:
     if not isinstance(data, str) or not data:
@@ -32,15 +40,31 @@ def _decode_base64(data: str, max_size: int = None) -> bytes:
             f"File too large. Limit is {max_size // (1024 * 1024)} MB")
     return decoded
 
+
 def _save_upload(file_bytes: bytes, ext: str, subdir: str) -> str:
-    unique_filename = f"{uuid.uuid4()}.{ext}"
-    upload_folder = os.path.join(
-        current_app.root_path, "static", "uploads", subdir)
-    os.makedirs(upload_folder, exist_ok=True)
-    file_path = os.path.join(upload_folder, unique_filename)
-    with open(file_path, "wb") as f:
-        f.write(file_bytes)
-    return f"/static/uploads/{subdir}/{unique_filename}"
+    """Upload file to static-nginx upload service."""
+    filename = f"file.{ext}"
+
+    try:
+        files = {
+            "file": (
+                filename,
+                io.BytesIO(file_bytes),
+                "application/octet-stream")}
+        data = {"filename": filename}
+
+        resp = http_requests.post(
+            f"{STATIC_UPLOAD_URL}/{subdir}",
+            files=files,
+            data=data,
+            timeout=30
+        )
+        resp.raise_for_status()
+        result = resp.json()
+        return result["url"]
+    except http_requests.exceptions.RequestException as e:
+        raise RuntimeError(f"Failed to upload file to static service: {e}")
+
 
 @upload_bp.route("/voice", methods=["POST"])
 @token_required
@@ -98,6 +122,7 @@ def upload_voice(current_user):
     except Exception as e:
         return jsonify({"message": f"Upload failed: {str(e)}"}), 500
 
+
 @upload_bp.route("/file", methods=["POST"])
 @token_required
 def upload_file(current_user):
@@ -132,9 +157,24 @@ def upload_file(current_user):
 
         file_url = _save_upload(file_bytes, ext, "files")
 
-        current_user.disk_usage += file_size
-        from app.core.extensions import db
+        try:
+            from app.core.extensions import db
+            from app.models.user_file import UserFile
 
+            db.session.add(
+                UserFile(
+                    user_id=current_user.id,
+                    name=filename,
+                    url=file_url,
+                    size=file_size,
+                )
+            )
+            db.session.flush()
+        except Exception:
+
+            pass
+
+        current_user.disk_usage += file_size
         db.session.commit()
 
         return jsonify(
@@ -149,6 +189,7 @@ def upload_file(current_user):
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         return jsonify({"error": f"Failed to process file: {str(e)}"}), 400
+
 
 @upload_bp.route("/video", methods=["POST"])
 @token_required
@@ -176,8 +217,6 @@ def upload_video(current_user):
             time.sleep(delay)
 
         file_url = _save_upload(file_bytes, ext, "video")
-
-        print(f"Video uploaded: {file_url} -> {os.path.join(current_app.root_path, file_url.lstrip('/'))}")
 
         current_user.disk_usage += file_size
         from app.core.extensions import db

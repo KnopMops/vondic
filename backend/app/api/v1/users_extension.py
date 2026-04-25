@@ -5,6 +5,7 @@ from app.core.extensions import db
 from app.utils.decorators import token_required
 from flask import jsonify
 
+
 @users_bp.route("/link-key", methods=["POST"])
 @token_required
 def generate_link_key(current_user):

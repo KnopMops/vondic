@@ -2,6 +2,11 @@ import { useAppSelector } from '@/lib/hooks'
 import { Message } from '@/lib/types'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Socket } from 'socket.io-client'
+import {
+	backupKeyToServer,
+	restoreKeyFromServer,
+	getDeviceInfo,
+} from '@/lib/e2eKeySync'
 
 const hasCryptoSubtle =
 	typeof crypto !== 'undefined' && typeof crypto.subtle !== 'undefined'
@@ -323,6 +328,9 @@ export const useChat = (
 	const { user } = useAppSelector(state => state.auth)
 	const accessToken = user?.access_token
 	const [messages, setMessages] = useState<Message[]>([])
+	const [deletingMessageIds, setDeletingMessageIds] = useState<Set<string>>(
+		new Set(),
+	)
 	const [offset, setOffset] = useState(0)
 	const [hasMore, setHasMore] = useState(true)
 	const [isLoading, setIsLoading] = useState(false)
@@ -346,7 +354,7 @@ export const useChat = (
 			? [currentUserId, targetUserId].sort().join(':')
 			: null
 
-	const loadStoredKey = useCallback(() => {
+	const loadStoredKey = useCallback(async () => {
 		if (!e2eKeyId) return
 		if (e2eKeysRef.current.has(e2eKeyId)) return
 		// 1) Текущий формат (отсортированная пара)
@@ -366,13 +374,41 @@ export const useChat = (
 		}
 		if (stored) {
 			e2eKeysRef.current.set(e2eKeyId, bytesFromBase64(stored))
+			return
 		}
-	}, [e2eKeyId, currentUserId, targetUserId])
+		
+		// 3) Try to restore from server backup
+		if (accessToken && e2eKeyId) {
+			console.log('[E2E] No local key found, trying to restore from server:', e2eKeyId)
+			const restoredKey = await restoreKeyFromServer(accessToken, e2eKeyId)
+			if (restoredKey) {
+				console.log('[E2E] Successfully restored key from server:', e2eKeyId)
+				e2eKeysRef.current.set(e2eKeyId, restoredKey)
+				// Store locally for future use
+				localStorage.setItem(`e2e_key_${e2eKeyId}`, base64FromBytes(restoredKey))
+			}
+		}
+	}, [e2eKeyId, currentUserId, targetUserId, accessToken])
 
-	const storeKey = useCallback((keyId: string, keyBytes: Uint8Array) => {
+	const storeKey = useCallback(async (keyId: string, keyBytes: Uint8Array) => {
 		e2eKeysRef.current.set(keyId, keyBytes)
 		localStorage.setItem(`e2e_key_${keyId}`, base64FromBytes(keyBytes))
-	}, [])
+		
+		// Backup to server for multi-device sync
+		if (accessToken) {
+			const { deviceId, deviceName } = getDeviceInfo()
+			const success = await backupKeyToServer(
+				accessToken,
+				keyId,
+				keyBytes,
+				deviceId,
+				deviceName
+			)
+			if (success) {
+				console.log('[E2E] Key backed up to server:', keyId)
+			}
+		}
+	}, [accessToken])
 
 	const deriveKey = useCallback(async (shared: ArrayBuffer, keyId: string) => {
 		const encoder = new TextEncoder()
@@ -399,7 +435,7 @@ export const useChat = (
 			return
 		}
 		console.log('[E2E] ensureKeyExchange called for:', e2eKeyId)
-		loadStoredKey()
+		await loadStoredKey()
 		if (e2eKeysRef.current.has(e2eKeyId)) {
 			console.log('[E2E] Key already loaded for:', e2eKeyId)
 			return
@@ -523,7 +559,7 @@ export const useChat = (
 			return
 		}
 		console.log('[E2E] Starting key exchange for:', e2eKeyId)
-		loadStoredKey()
+		;(async () => { await loadStoredKey() })()
 		const handleKeyExchange = async (data: any) => {
 			console.log('[E2E] Received key exchange:', data)
 			if (!data || data.key_id !== e2eKeyId) return
@@ -564,7 +600,7 @@ export const useChat = (
 			)
 			const derived = await deriveKey(shared, e2eKeyId)
 			console.log('[E2E] Derived key, storing for:', e2eKeyId)
-			storeKey(e2eKeyId, derived)
+			await storeKey(e2eKeyId, derived)
 
 			// Re-decrypt ALL messages with the new key
 			console.log('[E2E] Re-decrypting all messages with new key')
@@ -624,10 +660,12 @@ export const useChat = (
 
 	useEffect(() => {
 		if (!e2eKeyId) return
-		loadStoredKey()
-		if (e2eKeysRef.current.has(e2eKeyId)) {
-			setMessages(prev => prev.map(m => decryptMessage(m)))
-		}
+		;(async () => {
+			await loadStoredKey()
+			if (e2eKeysRef.current.has(e2eKeyId)) {
+				setMessages(prev => prev.map(m => decryptMessage(m)))
+			}
+		})()
 	}, [e2eKeyId, loadStoredKey, decryptMessage])
 
 	// 1. Load history when chat opens
@@ -728,7 +766,7 @@ export const useChat = (
 								attachments: msg.is_deleted ? undefined : msg.attachments,
 							}))
 						: []
-					loadStoredKey()
+					await loadStoredKey()
 					const decryptedHistory = history.map(msg => decryptMessage(msg))
 
 					decryptedHistory.sort(
@@ -1101,18 +1139,20 @@ export const useChat = (
 
 		const handleMessageDeleted = (data: any) => {
 			if (!data?.id) return
-			setMessages(prevMessages =>
-				prevMessages.map(msg =>
-					msg.id === data.id
-						? {
-								...msg,
-								content: 'Сообщение удалено',
-								attachments: [],
-								is_deleted: true,
-							}
-						: msg,
-				),
-			)
+			// Start deletion animation
+			setDeletingMessageIds(prev => new Set(prev).add(data.id))
+			// Wait for animation to complete before actually removing
+			setTimeout(() => {
+				setMessages(prevMessages =>
+					prevMessages.filter(msg => msg.id !== data.id)
+				)
+				// Clean up from deleting set
+				setDeletingMessageIds(prev => {
+					const next = new Set(prev)
+					next.delete(data.id)
+					return next
+				})
+			}, 400) // Match animation duration
 		}
 
 		socket.on('receive_message', handleReceiveMessage)
@@ -1149,7 +1189,7 @@ export const useChat = (
 
 	// 3. Send function
 	const sendMessage = useCallback(
-		(
+		async (
 			content: string,
 			type: 'text' | 'voice' = 'text',
 			attachments?: any[],
@@ -1166,7 +1206,7 @@ export const useChat = (
 				: []
 
 			if (!channelId && !groupId && targetUserId && e2eKeyId) {
-				loadStoredKey()
+				await loadStoredKey()
 				const key = e2eKeysRef.current.get(e2eKeyId)
 				if (!key) {
 					const pending = e2ePendingRef.current.get(e2eKeyId) || []
@@ -1292,17 +1332,9 @@ export const useChat = (
 	}, [])
 
 	const markMessageDeleted = useCallback((id: string) => {
+		// Remove the message from the list entirely
 		setMessages(prev =>
-			prev.map(msg =>
-				msg.id === id
-					? {
-							...msg,
-							content: 'Сообщение удалено',
-							attachments: [],
-							is_deleted: true,
-						}
-					: msg,
-			),
+			prev.filter(msg => msg.id !== id)
 		)
 	}, [])
 
@@ -1318,6 +1350,7 @@ export const useChat = (
 
 	return {
 		messages,
+		deletingMessageIds,
 		sendMessage,
 		loadMoreMessages,
 		searchMessages: async () => [], // TODO: Implement search for groups

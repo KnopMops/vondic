@@ -1,69 +1,157 @@
 @import 'tailwindcss';
 
+/* Message deletion animation */
+@keyframes messageDeleteFade {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+    max-height: 500px;
+    margin-bottom: 8px;
+  }
+  30% {
+    opacity: 0.5;
+    transform: scale(0.98);
+    background-color: rgba(239, 68, 68, 0.1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.95) translateX(-20px);
+    max-height: 0;
+    margin-bottom: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    overflow: hidden;
+  }
+}
+
+.message-deleting {
+  animation: messageDeleteFade 0.4s ease-out forwards;
+  pointer-events: none;
+}
+
+/* App theme variables (customizable via Settings) */
 :root {
+	/* legacy tokens used by Tailwind @theme */
 	--background: #ffffff;
 	--foreground: #171717;
+
+	/* layout tokens */
 	--app-radius: 12px;
+	--app-font-family: var(--font-geist-sans), system-ui, -apple-system,
+		'Segoe UI', Roboto, Arial, 'Noto Sans', 'Liberation Sans', sans-serif;
+
+	/* palette tokens */
+	/* softer dark by default (less contrast than pure black/white) */
+	--app-bg: #0b1220;
+	--app-fg: #e7eaf0;
+	--app-surface: #ffffff;
+	--app-border: #334155;
+	--app-muted: #94a3b8;
+	--app-accent: #6366f1; /* indigo-500 */
+	--app-accent-2: #a855f7; /* purple-500 */
+
+	/* rgb triplets for alpha mixing */
+	--app-bg-rgb: 11 18 32;
+	--app-fg-rgb: 231 234 240;
+	--app-surface-rgb: 255 255 255;
+	--app-accent-rgb: 99 102 241;
 }
 
 :root[data-theme='light'] {
 	--background: #ffffff;
 	--foreground: #171717;
+	--app-bg: #f8fafc;
+	--app-fg: #0f172a;
+	--app-surface: #ffffff;
+	--app-border: #e2e8f0;
+	--app-muted: #475569;
+	--app-bg-rgb: 248 250 252;
+	--app-fg-rgb: 15 23 42;
+	--app-surface-rgb: 255 255 255;
 	color-scheme: light;
 }
 
 :root[data-theme='dark'] {
 	--background: #0a0a0a;
 	--foreground: #ededed;
+	--app-bg: #0a0a0a;
+	--app-fg: #ededed;
+	--app-surface: #ffffff;
+	--app-border: #334155;
+	--app-muted: #94a3b8;
+	--app-bg-rgb: 10 10 10;
+	--app-fg-rgb: 237 237 237;
+	--app-surface-rgb: 255 255 255;
 	color-scheme: dark;
 }
 
-:root[data-theme='light'] body {
-	background: #f8fafc;
-	color: #0f172a;
+/* Common Tailwind utility overrides driven by palette vars */
+.bg-black,
+.bg-gray-950 {
+	background-color: var(--app-bg) !important;
 }
 
-:root[data-theme='light'] .bg-black,
-:root[data-theme='light'] .bg-gray-950 {
-	background-color: #f8fafc !important;
+[class*='bg-gray-900'] {
+	background-color: rgb(var(--app-bg-rgb) / 0.86) !important;
 }
 
-:root[data-theme='light'] [class*='bg-gray-900'] {
-	background-color: #f1f5f9 !important;
+[class*='bg-gray-800'] {
+	background-color: rgb(var(--app-bg-rgb) / 0.78) !important;
 }
 
-:root[data-theme='light'] [class*='bg-gray-800'] {
-	background-color: #e2e8f0 !important;
+[class*='border-gray-900'],
+[class*='border-gray-800'],
+[class*='border-gray-700'] {
+	border-color: var(--app-border) !important;
 }
 
-:root[data-theme='light'] [class*='border-gray-900'],
-:root[data-theme='light'] [class*='border-gray-800'],
-:root[data-theme='light'] [class*='border-gray-700'] {
-	border-color: #e2e8f0 !important;
+.text-white {
+	color: var(--app-fg) !important;
 }
 
-:root[data-theme='light'] .text-white {
-	color: #0f172a !important;
+[class*='text-gray-100'] {
+	color: var(--app-fg) !important;
 }
 
-:root[data-theme='light'] [class*='text-gray-100'] {
-	color: #0f172a !important;
+[class*='text-gray-200'] {
+	color: rgb(var(--app-fg-rgb) / 0.9) !important;
 }
 
-:root[data-theme='light'] [class*='text-gray-200'] {
-	color: #1f2937 !important;
+[class*='text-gray-300'] {
+	color: rgb(var(--app-fg-rgb) / 0.82) !important;
 }
 
-:root[data-theme='light'] [class*='text-gray-300'] {
-	color: #374151 !important;
+[class*='text-gray-400'] {
+	color: var(--app-muted) !important;
 }
 
-:root[data-theme='light'] [class*='text-gray-400'] {
-	color: #4b5563 !important;
+[class*='text-gray-500'] {
+	color: rgb(var(--app-fg-rgb) / 0.6) !important;
 }
 
-:root[data-theme='light'] [class*='text-gray-500'] {
-	color: #6b7280 !important;
+/* Surface-like utilities frequently used in the UI */
+[class*='bg-white/5'] {
+	background-color: rgb(var(--app-surface-rgb) / 0.05) !important;
+}
+[class*='bg-white/10'] {
+	background-color: rgb(var(--app-surface-rgb) / 0.1) !important;
+}
+[class*='bg-white/20'] {
+	background-color: rgb(var(--app-surface-rgb) / 0.2) !important;
+}
+[class*='bg-black/20'] {
+	background-color: rgb(var(--app-bg-rgb) / 0.2) !important;
+}
+[class*='bg-black/30'] {
+	background-color: rgb(var(--app-bg-rgb) / 0.3) !important;
+}
+[class*='bg-black/40'] {
+	background-color: rgb(var(--app-bg-rgb) / 0.4) !important;
+}
+
+::selection {
+	background: rgb(var(--app-accent-rgb) / 0.35);
+	color: var(--app-fg);
 }
 
 @theme inline {
@@ -81,9 +169,9 @@
 }
 
 body {
-	background: var(--background);
-	color: var(--foreground);
-	font-family: Arial, Helvetica, sans-serif;
+	background: var(--app-bg);
+	color: var(--app-fg);
+	font-family: var(--app-font-family);
 }
 
 /* Custom Scrollbar */

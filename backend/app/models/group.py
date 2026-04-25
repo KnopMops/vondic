@@ -12,6 +12,7 @@ group_participants = db.Table(
     db.Column("joined_at", TIMESTAMP, default=datetime.utcnow),
 )
 
+
 class Group(db.Model):
     __tablename__ = "groups"
 

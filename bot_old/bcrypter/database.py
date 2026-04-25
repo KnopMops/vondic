@@ -1,11 +1,17 @@
 import logging
 import os
 import secrets
-import psycopg2
-from psycopg2.extras import RealDictCursor
+from contextlib import contextmanager
 from datetime import datetime
 
+from sqlalchemy import DateTime, Integer, Text, create_engine
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.orm import Mapped, Session, declarative_base, mapped_column, sessionmaker
+
 logger = logging.getLogger(__name__)
+Base = declarative_base()
+
+
 def _build_postgres_dsn() -> str:
     explicit = os.environ.get("POSTGRES_URL") or os.environ.get("DATABASE_URL")
     if explicit:
@@ -24,125 +30,130 @@ def _build_postgres_dsn() -> str:
         auth = f"{user}:{password}@"
     return f"postgresql://{auth}{host}:{port}/{db}"
 
+
+class UserModel(Base):
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    username: Mapped[str] = mapped_column(Text, nullable=False)
+    email: Mapped[str] = mapped_column(Text, nullable=False)
+    password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    access_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    refresh_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    premium: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True)
+
+
 class AuthRepository:
     def __init__(self, db_path=None):
         self.db_path = db_path or _build_postgres_dsn()
+        self.engine = create_engine(self.db_path, pool_pre_ping=True)
+        self.session_factory = sessionmaker(
+            bind=self.engine, expire_on_commit=False)
         self._init_db()
 
-    def _connect(self):
-        conn = psycopg2.connect(self.db_path, cursor_factory=RealDictCursor)
-        return conn
+    @contextmanager
+    def _session(self):
+        session: Session = self.session_factory()
+        try:
+            yield session
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    @staticmethod
+    def _to_dict(model):
+        return {column.name: getattr(model, column.name)
+                for column in model.__table__.columns}
 
     def _init_db(self):
-        conn = self._connect()
-        cursor = conn.cursor()
-        cursor.execute(
-
-        )
-        conn.commit()
-        conn.close()
+        try:
+            Base.metadata.create_all(
+                self.engine, tables=[
+                    UserModel.__table__], checkfirst=True)
+        except Exception as exc:
+            logger.warning("AuthRepository init schema skipped: %s", exc)
 
     def user_exists(self, user_id: str) -> bool:
-        conn = self._connect()
-        cursor = conn.cursor()
-        try:
-            cursor.execute("SELECT 1 FROM users WHERE id = %s", (user_id,))
-            return cursor.fetchone() is not None
-        finally:
-            conn.close()
+        with self._session() as session:
+            return session.query(
+                UserModel.id).filter(
+                UserModel.id == str(user_id)).first() is not None
 
     def save_user_key(
-            self,
-            user_id: str,
-            username: str,
-            password_hash: str,
-            avatar_url: str = None) -> bool:
-        conn = self._connect()
-        cursor = conn.cursor()
+        self,
+        user_id: str,
+        username: str,
+        password_hash: str,
+        avatar_url: str = None,
+    ) -> bool:
         email = f"{user_id}@telegram.bot"
         access_token = secrets.token_hex(32)
         refresh_token = secrets.token_hex(32)
         try:
-            cursor.execute(
-                ,
-                (
-                    user_id,
-                    username,
-                    email,
-                    password_hash,
-                    access_token,
-                    refresh_token,
-                    datetime.now().isoformat(),
-                    avatar_url,
-                ),
-            )
-            conn.commit()
+            with self._session() as session:
+                user = UserModel(
+                    id=str(user_id),
+                    username=username,
+                    email=email,
+                    password_hash=password_hash,
+                    access_token=access_token,
+                    refresh_token=refresh_token,
+                    avatar_url=avatar_url,
+                    updated_at=datetime.utcnow(),
+                )
+                session.add(user)
             return True
-        except psycopg2.IntegrityError:
+        except IntegrityError:
             return False
-        finally:
-            conn.close()
+        except SQLAlchemyError:
+            return False
 
     def update_user_key(
-        self, user_id: str, password_hash: str, avatar_url: str = None
-    ) -> bool:
-        conn = self._connect()
-        cursor = conn.cursor()
+            self,
+            user_id: str,
+            password_hash: str,
+            avatar_url: str = None) -> bool:
         try:
-            if avatar_url:
-                cursor.execute(
-                    ,
-                    (
-                        password_hash,
-                        datetime.now().isoformat(),
-                        avatar_url,
-                        user_id,
-                    ),
-                )
-            else:
-                cursor.execute(
-                    ,
-                    (password_hash, datetime.now().isoformat(), user_id),
-                )
-            conn.commit()
+            with self._session() as session:
+                user = session.query(UserModel).filter(
+                    UserModel.id == str(user_id)).first()
+                if not user:
+                    return False
+                user.password_hash = password_hash
+                user.updated_at = datetime.utcnow()
+                if avatar_url is not None:
+                    user.avatar_url = avatar_url
             return True
-        except psycopg2.Error:
+        except SQLAlchemyError:
             return False
-        finally:
-            conn.close()
 
     def get_password_hash(self, user_id: str) -> str:
-        conn = self._connect()
-        cursor = conn.cursor()
-        try:
-            cursor.execute(
-                "SELECT password_hash FROM users WHERE id = %s", (user_id,))
-            row = cursor.fetchone()
-            return row["password_hash"] if row else None
-        finally:
-            conn.close()
+        with self._session() as session:
+            row = session.query(UserModel).filter(
+                UserModel.id == str(user_id)).first()
+            return row.password_hash if row else None
 
     def get_user_by_email(self, email: str):
-        conn = self._connect()
-        cursor = conn.cursor()
-        try:
-            cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
-            row = cursor.fetchone()
-            return dict(row) if row else None
-        finally:
-            conn.close()
+        with self._session() as session:
+            row = session.query(UserModel).filter(
+                UserModel.email == email).first()
+            return self._to_dict(row) if row else None
 
     def set_premium(self, user_id: str, premium_status: int) -> bool:
-        conn = self._connect()
-        cursor = conn.cursor()
         try:
-            cursor.execute(
-                "UPDATE users SET premium = %s WHERE id = %s", (
-                    premium_status, user_id)
-            )
-            conn.commit()
+            with self._session() as session:
+                user = session.query(UserModel).filter(
+                    UserModel.id == str(user_id)).first()
+                if not user:
+                    return False
+                user.premium = int(premium_status)
+                user.updated_at = datetime.utcnow()
             return True
-        except psycopg2.Error:
+        except SQLAlchemyError:
             return False
-        finally:
-            conn.close()

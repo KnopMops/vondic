@@ -1,13 +1,13 @@
 'use client'
 
 import {
-	AlertCircle,
-	Maximize2,
-	Minimize2,
-	Monitor,
-	X,
-	Zap,
-} from 'lucide-react'
+	FiAlertCircle as AlertCircle,
+	FiMaximize2 as Maximize2,
+	FiMinimize2 as Minimize2,
+	FiMonitor as Monitor,
+	FiX as X,
+	FiZap as Zap,
+} from 'react-icons/fi'
 import React, { useEffect, useRef, useState } from 'react'
 import { useCallStore } from '../../lib/stores/callStore'
 

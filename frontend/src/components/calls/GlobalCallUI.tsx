@@ -1,13 +1,17 @@
 'use client'
 
 import React from 'react'
+import { usePathname, useRouter } from 'next/navigation'
 import { useCallStore } from '../../lib/stores/callStore'
 import { useToast } from '../../lib/ToastContext'
 import ActiveGroupCall from './ActiveGroupCall'
+import { FloatingCallBar } from './FloatingCallBar'
 import IncomingCallModal from './IncomingCallModal'
 
 
 export const GlobalCallUI: React.FC = () => {
+	const pathname = usePathname()
+	const router = useRouter()
 	const {
 		incomingCall,
 		activeCalls,
@@ -67,6 +71,9 @@ export const GlobalCallUI: React.FC = () => {
 		await toggleVideo()
 	}
 
+	const hasDirectCall = Array.from(activeCalls.values()).some(c => !c.isGroupCall)
+	const isMessagesPage = pathname?.startsWith('/feed/messages')
+
 	return (
 		<>
 			
@@ -101,7 +108,9 @@ export const GlobalCallUI: React.FC = () => {
 				/>
 			)}
 
-			
+			{hasDirectCall && !activeGroupCallId && !isMessagesPage && (
+				<FloatingCallBar onReturnToCall={() => router.push('/feed/messages')} />
+			)}
 		</>
 	)
 }

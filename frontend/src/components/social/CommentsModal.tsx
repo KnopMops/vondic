@@ -1,6 +1,5 @@
 'use client'
 
-import { Heart, MessageCircle, Share2, MoreHorizontal, Send, Image, Video, File, Download, Upload, Calendar, Clock, Star, Lock, Unlock, Eye, EyeOff, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ArrowLeft, ArrowRight, MoreVertical, Bell, Search, Home, User, Settings, Menu, X, Check, Plus, Trash2, Edit2 } from 'lucide-react';
 import { useAppSelector } from '@/lib/hooks'
 import { useComments } from '@/lib/hooks/useComments'
 import { getAvatarUrl, getAttachmentUrl } from '@/lib/utils'

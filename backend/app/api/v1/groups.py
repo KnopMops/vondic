@@ -7,6 +7,7 @@ from flask import Blueprint, jsonify, request
 
 groups_bp = Blueprint("groups", __name__, url_prefix="/api/v1/groups")
 
+
 @groups_bp.route("/", methods=["POST"])
 @token_required
 def create_group(current_user):
@@ -15,6 +16,7 @@ def create_group(current_user):
     if error:
         return jsonify({"error": error}), 400
     return jsonify(group_schema.dump(group)), 201
+
 
 @groups_bp.route("/join", methods=["POST"])
 @token_required
@@ -30,11 +32,13 @@ def join_group(current_user):
         return jsonify({"error": error}), 400
     return jsonify(group_schema.dump(group)), 200
 
+
 @groups_bp.route("/my", methods=["POST"])
 @token_required
 def get_my_groups(current_user):
     groups = GroupService.get_user_groups(current_user.id)
     return jsonify(groups_schema.dump(groups)), 200
+
 
 @groups_bp.route("/info", methods=["POST"])
 @token_required
@@ -49,6 +53,7 @@ def get_group(current_user):
     if not group:
         return jsonify({"error": "Group not found"}), 404
     return jsonify(group_schema.dump(group)), 200
+
 
 @groups_bp.route("/<group_id>/participants", methods=["GET", "POST"])
 @token_required
@@ -76,6 +81,7 @@ def participants(current_user, group_id):
 
     return jsonify(group_schema.dump(group)), 200
 
+
 @groups_bp.route("/<group_id>/messages", methods=["POST"])
 @token_required
 def send_message(current_user, group_id):
@@ -85,6 +91,7 @@ def send_message(current_user, group_id):
     if error:
         return jsonify({"error": error}), 400
     return jsonify(message_schema.dump(message)), 201
+
 
 @groups_bp.route("/<group_id>/messages", methods=["GET"])
 @token_required
@@ -117,6 +124,7 @@ def get_messages(current_user, group_id):
         }
     ), 200
 
+
 @groups_bp.route("/<group_id>/messages/<message_id>", methods=["DELETE"])
 @token_required
 def delete_group_message(current_user, group_id, message_id):
@@ -143,15 +151,6 @@ def delete_group_message(current_user, group_id, message_id):
     if hasattr(message, 'is_deleted'):
         message.is_deleted = True
     else:
-
-        from app.core.extensions import db
-        from sqlalchemy import text
-        try:
-            db.session.execute(
-                text("ALTER TABLE messages ADD COLUMN is_deleted INTEGER DEFAULT 0"))
-            db.session.commit()
-        except Exception:
-            pass
         message.is_deleted = True
 
     db.session.commit()
@@ -164,10 +163,10 @@ def delete_group_message(current_user, group_id, message_id):
 
     return jsonify({"message": "Message deleted successfully"}), 200
 
+
 @groups_bp.route("/history", methods=["DELETE"])
 @token_required
 def delete_group_history(current_user):
-    """Delete all messages in a group (only owner can do this)"""
     data = request.get_json() or {}
     group_id = data.get("group_id")
 
@@ -176,27 +175,21 @@ def delete_group_history(current_user):
 
     from app.models.group import Group
     from app.models.message import Message
-    from sqlalchemy import text
 
     group = Group.query.get(group_id)
     if not group:
         return jsonify({"error": "Группа не найдена"}), 404
 
-
     if str(group.owner_id) != str(current_user.id):
-        return jsonify({"error": "Только владелец группы может удалить историю"}), 403
+        return jsonify(
+            {"error": "Только владелец группы может удалить историю"}), 403
 
     try:
-
-        deleted = db.session.execute(
-            text("""
-                DELETE FROM messages
-                WHERE group_id = :group_id
-            """),
-            {"group_id": group_id}
-        )
+        deleted_count = Message.query.filter(
+            Message.group_id == group_id).delete(
+            synchronize_session=False)
         db.session.commit()
-        return jsonify({"deleted": deleted.rowcount}), 200
+        return jsonify({"deleted": deleted_count}), 200
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500

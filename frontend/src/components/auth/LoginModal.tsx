@@ -226,6 +226,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 							onClick={() => loginWithYandex()}
 							className='group relative flex w-full items-center justify-center gap-3 rounded-xl border border-white/20 bg-transparent px-4 py-3.5 text-sm font-semibold text-white hover:bg-white/5 transition-all active:scale-[0.98]'
 						>
+							Яндекс
 							<svg
 								width='20'
 								height='20'
@@ -240,7 +241,6 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 									fill='#FC3F1D'
 								/>
 							</svg>
-							Яндекс
 						</button>
 						<p className='text-center text-xs text-gray-500'>
 							Входя через соцсети, вы соглашаетесь с{' '}

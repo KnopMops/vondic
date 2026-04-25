@@ -5,6 +5,7 @@ from flask import Blueprint, jsonify, request
 
 comments_bp = Blueprint("comments", __name__, url_prefix="/api/v1/comments")
 
+
 @comments_bp.route("/", methods=["PUT"])
 @token_required
 def update_comment(current_user):
@@ -22,6 +23,7 @@ def update_comment(current_user):
         status_code = 404 if error == "Комментарий не найден" else 403
         return jsonify({"error": error}), status_code
     return jsonify(comment_schema.dump(comment)), 200
+
 
 @comments_bp.route("/", methods=["DELETE"])
 @token_required
@@ -41,6 +43,7 @@ def delete_comment(current_user):
         status_code = 404 if error == "Комментарий не найден" else 403
         return jsonify({"error": error}), status_code
     return jsonify({"message": "Комментарий успешно удалён"}), 200
+
 
 @comments_bp.route("/admin", methods=["DELETE"])
 @token_required
@@ -68,6 +71,7 @@ def delete_comment_admin(current_user):
         return jsonify({"error": error}), status_code
     return jsonify({"message": "Комментарий удалён администратором"}), 200
 
+
 @comments_bp.route("/like", methods=["POST"])
 @token_required
 def like_comment(current_user):
@@ -81,6 +85,7 @@ def like_comment(current_user):
         status_code = 404 if error == "Комментарий не найден" else 400
         return jsonify({"error": error}), status_code
     return jsonify(comment_schema.dump(comment)), 200
+
 
 @comments_bp.route("/unlike", methods=["POST"])
 @token_required

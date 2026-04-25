@@ -66,3 +66,5 @@ nginx/
 *.yaml
 prometheus.yml
 pgbouncer/
+
+strip_comments_and_format_pep8.sh

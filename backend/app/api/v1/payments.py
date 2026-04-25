@@ -17,6 +17,7 @@ COINS_PRICING = {
     2000: 15000,
 }
 
+
 @payments_bp.route("/create-checkout-session", methods=["POST"])
 def create_checkout_session():
     data = request.get_json()
@@ -46,6 +47,7 @@ def create_checkout_session():
         return jsonify({"url": checkout_session.url})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 @payments_bp.route("/create-payment-session", methods=["POST"])
 def create_payment_session():
@@ -101,6 +103,7 @@ def create_payment_session():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @payments_bp.route("/create-coins-session", methods=["POST"])
 def create_coins_session():
     data = request.get_json() or {}
@@ -141,6 +144,7 @@ def create_coins_session():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @payments_bp.route("/confirm-coins", methods=["POST"])
 def confirm_coins():
     data = request.get_json() or {}
@@ -174,6 +178,7 @@ def confirm_coins():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @payments_bp.route("/webhook", methods=["POST"])
 def stripe_webhook():
     payload = request.get_data(as_text=True)
@@ -196,6 +201,7 @@ def stripe_webhook():
             print(f"Webhook error: {e}")
 
     return jsonify(success=True)
+
 
 def handle_checkout_session(session):
     user_id = session.get("client_reference_id")

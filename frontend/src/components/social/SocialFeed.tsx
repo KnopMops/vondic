@@ -74,33 +74,33 @@ export default function SocialFeed({ email, onLogout, mode = 'feed' }: Props) {
 						<Composer onCreate={addPost} />
 
 						
-						<div className='flex gap-2'>
+						<div className='rounded-xl bg-gray-900/40 backdrop-blur-md border border-gray-800/50 p-2 shadow-sm flex gap-2'>
 							<button
 								onClick={() => setFilter('all')}
-								className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+								className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
 									filter === 'all'
-										? 'bg-indigo-600 text-white'
-										: 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+										? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
+										: 'text-gray-400 hover:bg-white/5 hover:text-white'
 								}`}
 							>
 								Все
 							</button>
 							<button
 								onClick={() => setFilter('subscriptions')}
-								className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+								className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
 									filter === 'subscriptions'
-										? 'bg-indigo-600 text-white'
-										: 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+										? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
+										: 'text-gray-400 hover:bg-white/5 hover:text-white'
 								}`}
 							>
 								Подписки
 							</button>
 							<button
 								onClick={() => setFilter('blog')}
-								className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+								className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
 									filter === 'blog'
-										? 'bg-indigo-600 text-white'
-										: 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+										? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
+										: 'text-gray-400 hover:bg-white/5 hover:text-white'
 								}`}
 							>
 								БЛОГ ✍️

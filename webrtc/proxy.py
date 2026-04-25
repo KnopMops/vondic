@@ -6,6 +6,7 @@ from database import UserRepository
 
 logger = logging.getLogger(__name__)
 
+
 class ConnectionBroker:
     def __init__(self, repo: UserRepository):
         self.repo = repo
@@ -31,7 +32,8 @@ class ConnectionBroker:
 
     def close_session(self, socket_id):
         user_id = self.repo.release_socket(socket_id)
-        logger.info(f"Брокер: Сессия сокета {socket_id} закрыта (user_id: {user_id})")
+        logger.info(
+            f"Брокер: Сессия сокета {socket_id} закрыта (user_id: {user_id})")
         return user_id
 
     def resolve_recipient(self, target_socket_id):

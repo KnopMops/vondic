@@ -6,6 +6,7 @@ import requests
 from .exceptions import AuthenticationError, VondicAPIException
 from .models import Comment, Message, Post, User
 
+
 class VondicClient:
 
     def __init__(

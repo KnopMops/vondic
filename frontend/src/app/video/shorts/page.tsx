@@ -3,7 +3,12 @@
 import Header from '@/components/social/Header'
 import { useAuth } from '@/lib/AuthContext'
 import { getAttachmentUrl } from '@/lib/utils'
-import { Pause, Play, Volume2, VolumeX } from 'lucide-react'
+import {
+	FiPause as Pause,
+	FiPlay as Play,
+	FiVolume2 as Volume2,
+	FiVolumeX as VolumeX,
+} from 'react-icons/fi'
 import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
 

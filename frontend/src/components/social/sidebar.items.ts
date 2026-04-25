@@ -4,8 +4,9 @@ export const sidebarItems = [
 	{ label: 'Мессенджер', icon: '💬', href: '/feed/messages' },
 	{ label: 'Друзья', icon: '👥', href: '/friends' },
 	{ label: 'Магазин', icon: '🎁', href: '/shop' },
-	
-	
+	{ label: 'VМьюзик', icon: '🎵', href: '/feed/music' },
+
+
 	{ label: 'Тех. поддержка', icon: '🛟', href: '/feed/support' },
 	{ label: 'Настройки', icon: '⚙️', href: '/feed/settings' },
 ]
