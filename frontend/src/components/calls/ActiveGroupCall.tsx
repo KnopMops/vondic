@@ -2,6 +2,14 @@
 
 import React, { useEffect, useRef, useState } from 'react'
 import { CallState } from '../../lib/services/WebRTCService'
+import {
+	LuMinus as Minus,
+	LuMic as Mic,
+	LuMicOff as MicOff,
+	LuPhoneOff as PhoneOff,
+	LuUser as User,
+	LuUsers as Users,
+} from 'react-icons/lu'
 
 interface ActiveGroupCallProps {
 	callId: string
@@ -128,7 +136,7 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 						aria-label='Развернуть'
 					>
 						<div className='h-9 w-9 overflow-hidden rounded-2xl bg-white/10 flex items-center justify-center text-sm font-semibold'>
-							👥
+							<Users className='h-5 w-5 text-white/80' />
 						</div>
 						<div>
 							<p className='text-xs font-semibold text-white truncate'>
@@ -149,14 +157,14 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 							}`}
 							title={isMuted ? 'Включить микрофон' : 'Выключить микрофон'}
 						>
-							{isMuted ? '🔇' : '🎤'}
+							{isMuted ? <MicOff className='h-4 w-4' /> : <Mic className='h-4 w-4' />}
 						</button>
 						<button
 							onClick={() => onEndCall(callId)}
 							className='rounded-xl border border-rose-500/40 bg-rose-500/10 px-2 py-1 text-rose-200 transition hover:bg-rose-500/20'
 							title='Покинуть группу'
 						>
-							📞
+							<PhoneOff className='h-4 w-4' />
 						</button>
 					</div>
 				</div>
@@ -169,7 +177,7 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 			<div className='flex items-start justify-between gap-3'>
 				<div className='flex items-center gap-3 min-w-0'>
 					<div className='h-10 w-10 overflow-hidden rounded-2xl bg-white/10 flex items-center justify-center text-sm font-semibold'>
-						👥
+						<Users className='h-5 w-5 text-white/80' />
 					</div>
 					<div className='min-w-0'>
 						<p className='text-sm font-semibold truncate'>Групповой звонок</p>
@@ -186,7 +194,7 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 					className='rounded-xl border border-white/10 bg-white/5 px-2 py-1 text-white hover:bg-white/10'
 					title='Свернуть'
 				>
-					➖
+					<Minus className='h-4 w-4' />
 				</button>
 			</div>
 
@@ -196,7 +204,7 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 					
 					<div className='text-center'>
 						<div className='mx-auto mb-1 h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-semibold'>
-							{localStream ? '🎤' : '🔇'}
+							{localStream ? <Mic className='h-4 w-4' /> : <MicOff className='h-4 w-4' />}
 						</div>
 						<p className='text-[8px] truncate'>Вы</p>
 					</div>
@@ -268,7 +276,7 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 				) : null}
 				<div className='rounded-2xl border border-white/10 bg-white/5 p-4 text-center'>
 					<p className='text-xs text-white/60'>
-						Вы {isMuted ? '🔇' : '🎤'}
+						Вы {isMuted ? <MicOff className='inline h-4 w-4' /> : <Mic className='inline h-4 w-4' />}
 					</p>
 					<audio
 						ref={ref => {
@@ -391,7 +399,7 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 							<div className='mt-2 flex items-center justify-center'>
 								<div className='text-center'>
 									<div className='mx-auto h-12 w-12 rounded-full bg-gray-700 flex items-center justify-center'>
-										<span>👤</span>
+										<User className='h-4 w-4 text-white/70' />
 									</div>
 									<p className='text-[10px] text-white/50 mt-1'>
 										Камера выключена
@@ -413,7 +421,7 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 					}`}
 					title={isMuted ? 'Включить микрофон' : 'Выключить микрофон'}
 				>
-					{isMuted ? '🔇' : '🎤'}
+					{isMuted ? <MicOff className='h-4 w-4' /> : <Mic className='h-4 w-4' />}
 				</button>
 				{hasScreenVideo && (
 					<>
@@ -492,7 +500,7 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 					className='rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-rose-200 transition hover:bg-rose-500/20'
 					title='Покинуть звонок'
 				>
-					📞
+					<PhoneOff className='h-4 w-4' />
 				</button>
 			</div>
 		</div>

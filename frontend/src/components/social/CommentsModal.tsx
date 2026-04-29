@@ -5,6 +5,15 @@ import { useComments } from '@/lib/hooks/useComments'
 import { getAvatarUrl, getAttachmentUrl } from '@/lib/utils'
 import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+	LuCornerUpLeft as Reply,
+	LuHeart as Heart,
+	LuMoreVertical as MoreVertical,
+	LuPencil as Pencil,
+	LuSend as Send,
+	LuTrash2 as Trash2,
+	LuX as X,
+} from 'react-icons/lu'
 
 type Comment = {
 	id: string
@@ -26,56 +35,9 @@ interface CommentsModalProps {
 	onClose: () => void
 }
 
-const DotsVerticalIcon = ({ className }: { className?: string }) => (
-	<svg
-		xmlns='http://www.w3.org/2000/svg'
-		fill='none'
-		viewBox='0 0 24 24'
-		strokeWidth={1.5}
-		stroke='currentColor'
-		className={className}
-	>
-		<path
-			strokeLinecap='round'
-			strokeLinejoin='round'
-			d='M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z'
-		/>
-	</svg>
-)
-
-const EditIcon = ({ className }: { className?: string }) => (
-	<svg
-		xmlns='http://www.w3.org/2000/svg'
-		fill='none'
-		viewBox='0 0 24 24'
-		strokeWidth={1.5}
-		stroke='currentColor'
-		className={className}
-	>
-		<path
-			strokeLinecap='round'
-			strokeLinejoin='round'
-			d='M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10'
-		/>
-	</svg>
-)
-
-const TrashIcon = ({ className }: { className?: string }) => (
-	<svg
-		xmlns='http://www.w3.org/2000/svg'
-		fill='none'
-		viewBox='0 0 24 24'
-		strokeWidth={1.5}
-		stroke='currentColor'
-		className={className}
-	>
-		<path
-			strokeLinecap='round'
-			strokeLinejoin='round'
-			d='M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0'
-		/>
-	</svg>
-)
+const DotsVerticalIcon = MoreVertical
+const EditIcon = Pencil
+const TrashIcon = Trash2
 
 function CommentItem({
 	comment,
@@ -314,20 +276,7 @@ function CommentItem({
 						className={`flex items-center gap-1 font-semibold transition-colors hover:text-indigo-600 ${isLiked ? 'text-red-500' : ''}`}
 						title={isLiked ? 'Не нравится' : 'Нравится'}
 					>
-						<svg
-							xmlns='http://www.w3.org/2000/svg'
-							fill={isLiked ? 'currentColor' : 'none'}
-							viewBox='0 0 24 24'
-							strokeWidth={1.5}
-							stroke='currentColor'
-							className='h-4 w-4'
-						>
-							<path
-								strokeLinecap='round'
-								strokeLinejoin='round'
-								d='M6.633 10.5c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 012.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 00.322-1.672V3a2.25 2.25 0 012.25 2.25c0 1.152-.26 2.247-.723 3.218-.266.558.107 1.282.725 1.282h3.126c1.026 0 1.945.694 2.054 1.715.045.422.068.85.068 1.285a11.95 11.95 0 01-2.649 7.521c-.388.482-.987.729-1.605.729H13.48c-.483 0-.964-.078-1.423-.23l-3.114-1.04a4.501 4.501 0 00-1.423-.23H5.904M14.25 9h2.25M5.904 18.75c.083.205.173.405.27.602.197.4-.078.898-.523.898h-.908c-.889 0-1.713-.518-1.972-1.368a12 12 0 01-.521-3.507c0-1.553.295-3.036.831-4.398C3.287 9.483 4.122 9 5.01 9h.918c.445 0 .72.498.523.898a8.932 8.932 0 00-.27.602'
-							/>
-						</svg>
+						<Heart className='h-4 w-4' fill={isLiked ? 'currentColor' : 'none'} />
 						{likeCount > 0 && <span>{likeCount}</span>}
 					</button>
 					<button
@@ -335,20 +284,7 @@ function CommentItem({
 						className='flex items-center gap-1 font-semibold hover:text-indigo-600'
 						title='Ответить'
 					>
-						<svg
-							xmlns='http://www.w3.org/2000/svg'
-							fill='none'
-							viewBox='0 0 24 24'
-							strokeWidth={1.5}
-							stroke='currentColor'
-							className='h-4 w-4'
-						>
-							<path
-								strokeLinecap='round'
-								strokeLinejoin='round'
-								d='M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3'
-							/>
-						</svg>
+						<Reply className='h-4 w-4' />
 					</button>
 				</div>
 			</div>
@@ -517,21 +453,9 @@ export default function CommentsModal({
 					<button
 						onClick={onClose}
 						className='rounded-full p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200'
+						aria-label='Закрыть'
 					>
-						<svg
-							xmlns='http://www.w3.org/2000/svg'
-							fill='none'
-							viewBox='0 0 24 24'
-							strokeWidth={1.5}
-							stroke='currentColor'
-							className='h-6 w-6'
-						>
-							<path
-								strokeLinecap='round'
-								strokeLinejoin='round'
-								d='M6 18L18 6M6 6l12 12'
-							/>
-						</svg>
+						<X className='h-6 w-6' />
 					</button>
 				</div>
 
@@ -574,8 +498,9 @@ export default function CommentsModal({
 									setNewComment('')
 								}}
 								className='hover:text-indigo-900 dark:hover:text-indigo-100'
+								aria-label='Отменить ответ'
 							>
-								✕
+								<X className='h-4 w-4' />
 							</button>
 						</div>
 					)}
@@ -591,15 +516,9 @@ export default function CommentsModal({
 							type='submit'
 							disabled={!newComment.trim() || isCreating}
 							className='rounded-full bg-indigo-600 p-2 text-white hover:bg-indigo-700 disabled:bg-indigo-400'
+							aria-label='Отправить'
 						>
-							<svg
-								xmlns='http://www.w3.org/2000/svg'
-								viewBox='0 0 20 20'
-								fill='currentColor'
-								className='h-5 w-5'
-							>
-								<path d='M3.105 2.289a.75.75 0 00-.826.95l1.414 4.925A.75.75 0 003.75 8.25H10a.75.75 0 010 1.5H3.75a.75.75 0 00-.057.056l-1.414 4.925a.75.75 0 00.826.95 12.894 12.894 0 009-3.69 4.48 4.48 0 000-6.32 12.89 12.89 0 00-9-3.69z' />
-							</svg>
+							<Send className='h-5 w-5' />
 						</button>
 					</form>
 				</div>

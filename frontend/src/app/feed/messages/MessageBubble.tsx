@@ -7,6 +7,13 @@ import { AppleEmoji } from '@/components/ui/AppleEmoji'
 import { Attachment, User } from '@/lib/types'
 import { formatMskTime, getAttachmentUrl, getAvatarUrl } from '@/lib/utils'
 import { memo, useEffect, useRef, useState } from 'react'
+import {
+	LuCheck as Check,
+	LuCheckCheck as CheckCheck,
+	LuMic as Mic,
+	LuRepeat2 as Repeat2,
+} from 'react-icons/lu'
+import { FiMoreHorizontal as MoreHorizontal } from 'react-icons/fi'
 
 interface Message {
 	id: string
@@ -213,7 +220,9 @@ const MessageBubble = memo(
 			<div
 				className={`flex w-full mb-2 transition-all duration-300 ease-out animate-in fade-in slide-in-from-bottom-2 ${
 					msg.isOwn ? 'justify-end' : 'justify-start'
-				} ${isDeleting ? 'message-deleting' : ''}`}
+				} ${isDeleting ? 'message-deleting' : ''} ${
+					isMenuOpen || isReactionsOpen ? 'relative z-40' : ''
+				}`}
 			>
 				{!msg.isOwn && sender && (
 					<div className='flex items-end mr-2'>
@@ -260,19 +269,7 @@ const MessageBubble = memo(
 								}`}
 								title={isSelected ? 'Отменить выделение' : 'Выбрать'}
 							>
-								{isSelected && (
-									<svg
-										className='w-4 h-4 text-white'
-										viewBox='0 0 24 24'
-										fill='none'
-										stroke='currentColor'
-										strokeWidth='3'
-										strokeLinecap='round'
-										strokeLinejoin='round'
-									>
-										<polyline points='20 6 9 17 4 12'></polyline>
-									</svg>
-								)}
+								{isSelected ? <Check className='w-4 h-4 text-white' /> : null}
 							</button>
 						)}
 						{isPinned && (
@@ -286,8 +283,9 @@ const MessageBubble = memo(
 								setIsMenuOpen(o => !o)
 							}}
 							className='rounded-full bg-black/30 px-2 py-0.5 text-xs text-white/80 hover:text-white hover:bg-black/50 transition z-30 relative'
+							aria-label='Меню сообщения'
 						>
-							⋯
+							<MoreHorizontal className='h-4 w-4' />
 						</button>
 						{isMenuOpen && (
 							<div className='absolute right-0 top-full mt-1 z-50 w-40 rounded-lg border border-white/10 bg-gray-900/95 p-1 shadow-xl'>
@@ -391,18 +389,7 @@ const MessageBubble = memo(
 					)}
 					{msg.forwarded_from && (
 						<div className='mb-2 flex items-center gap-2 rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-xs'>
-							<svg
-								className='w-3.5 h-3.5 text-blue-400 flex-shrink-0'
-								viewBox='0 0 24 24'
-								fill='none'
-								stroke='currentColor'
-								strokeWidth='2'
-							>
-								<polyline points='17 1 21 5 17 9'></polyline>
-								<path d='M3 11V9a4 4 0 0 1 4-4h14'></path>
-								<polyline points='7 23 3 19 7 15'></polyline>
-								<path d='M21 13v2a4 4 0 0 1-4 4H3'></path>
-							</svg>
+							<Repeat2 className='w-3.5 h-3.5 text-blue-400 flex-shrink-0' />
 							<span className='text-blue-300 truncate'>
 								Переслано от <span className='font-semibold text-white'>{msg.forwarded_from.sender_name}</span>
 							</span>
@@ -442,25 +429,15 @@ const MessageBubble = memo(
 					) : msg.type === 'voice' ? (
 						<div className='min-w-[240px] py-1'>
 							<div className='flex items-center gap-2 mb-2'>
-								<svg
-									className='w-4 h-4 text-blue-400'
-									viewBox='0 0 24 24'
-									fill='none'
-									stroke='currentColor'
-									strokeWidth='2'
-								>
-									<path d='M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z'></path>
-									<path d='M19 10v2a7 7 0 0 1-14 0v-2'></path>
-									<line x1='12' y1='19' x2='12' y2='23'></line>
-									<line x1='8' y1='23' x2='16' y2='23'></line>
-								</svg>
+								<Mic className='w-4 h-4 text-blue-400' />
 								<span className='text-xs text-blue-400'>
 									Голосовое сообщение
 								</span>
 							</div>
 							<audio
 								controls
-								src={getAttachmentUrl(msg.content)}
+								// voice notes should be stored as attachment; fallback to content if server sent url there
+								src={getAttachmentUrl(attachments[0]?.url || msg.content)}
 								className='w-full h-8'
 							/>
 						</div>
@@ -693,44 +670,9 @@ const MessageBubble = memo(
 						{msg.isOwn && (
 							<div className='flex items-center'>
 								{msg.is_read ? (
-									// Read: Double Blue Ticks
-									<div className='flex items-center'>
-										<svg
-											className='h-3 w-3 text-blue-400'
-											viewBox='0 0 24 24'
-											fill='none'
-											stroke='currentColor'
-											strokeWidth='3'
-											strokeLinecap='round'
-											strokeLinejoin='round'
-										>
-											<polyline points='20 6 9 17 4 12'></polyline>
-										</svg>
-										<svg
-											className='-ml-1.5 h-3 w-3 text-blue-400'
-											viewBox='0 0 24 24'
-											fill='none'
-											stroke='currentColor'
-											strokeWidth='3'
-											strokeLinecap='round'
-											strokeLinejoin='round'
-										>
-											<polyline points='20 6 9 17 4 12'></polyline>
-										</svg>
-									</div>
+									<CheckCheck className='h-3.5 w-3.5 text-blue-400' />
 								) : (
-									// Sent: Single Gray/White Tick
-									<svg
-										className='h-3 w-3 text-white/70'
-										viewBox='0 0 24 24'
-										fill='none'
-										stroke='currentColor'
-										strokeWidth='3'
-										strokeLinecap='round'
-										strokeLinejoin='round'
-									>
-										<polyline points='20 6 9 17 4 12'></polyline>
-									</svg>
+									<Check className='h-3.5 w-3.5 text-white/70' />
 								)}
 							</div>
 						)}

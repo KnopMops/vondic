@@ -81,6 +81,8 @@ class UserService:
             user.username = data["username"]
         if "avatar_url" in data:
             user.avatar_url = data["avatar_url"]
+        if "description" in data:
+            user.description = data.get("description")
         if "profile_bg_theme" in data:
             user.profile_bg_theme = data.get("profile_bg_theme")
             if user.profile_bg_theme:

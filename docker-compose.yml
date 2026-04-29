@@ -175,6 +175,8 @@ services:
     container_name: frontend
     env_file:
       - ./frontend/.env
+    environment:
+      - FRONTEND_DNS_OVERRIDE_IP=192.168.120.200
     depends_on:
       - backend
       - webrtc

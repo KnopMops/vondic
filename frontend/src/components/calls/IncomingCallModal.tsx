@@ -5,6 +5,7 @@ import { FiHelpCircle as HelpCircle } from 'react-icons/fi'
 import { LuSettings2 as Settings2 } from 'react-icons/lu'
 import React, { useEffect, useRef, useState } from 'react'
 import { CallState } from '../../lib/services/WebRTCService'
+import { LuUser as User, LuUsers as Users } from 'react-icons/lu'
 
 interface IncomingCallModalProps {
 	callerInfo: CallState | null
@@ -224,7 +225,11 @@ const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
 							/>
 						) : (
 							<div className='avatar-placeholder'>
-								{callerInfo.isGroupCall ? '👥' : '👤'}
+								{callerInfo.isGroupCall ? (
+									<Users className='h-6 w-6 text-gray-400' />
+								) : (
+									<User className='h-6 w-6 text-gray-400' />
+								)}
 							</div>
 						)}
 					</div>

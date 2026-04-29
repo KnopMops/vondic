@@ -7,6 +7,11 @@ import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import MemoryModal from './MemoryModal'
 import { sidebarItems } from './sidebar.items'
+import {
+	LuChevronLeft as ChevronLeft,
+	LuChevronRight as ChevronRight,
+	LuWrench as Wrench,
+} from 'react-icons/lu'
 
 export default function Sidebar() {
 	const [isExpanded, setIsExpanded] = useState(false)
@@ -39,7 +44,7 @@ export default function Sidebar() {
 
 	// Add Admin panel for Support role
 	if (user?.role === 'Support' || user?.role === 'Admin') {
-		items.push({ label: 'Админка', icon: '🛠️', href: '/feed/admin' })
+		items.push({ label: 'Админка', icon: Wrench, href: '/feed/admin' })
 	}
 
 	return (
@@ -55,8 +60,9 @@ export default function Sidebar() {
 							<button
 								onClick={toggleSidebar}
 								className='rounded-full p-1 text-gray-400 hover:bg-gray-800/50 hover:text-white transition-colors'
+								aria-label='Свернуть меню'
 							>
-								◀
+								<ChevronLeft className='h-4 w-4' />
 							</button>
 						)}
 					</div>
@@ -66,13 +72,15 @@ export default function Sidebar() {
 							onClick={toggleSidebar}
 							className='mt-2 text-gray-400 hover:text-white transition-colors'
 							title='Expand'
+							aria-label='Развернуть меню'
 						>
-							▶
+							<ChevronRight className='h-5 w-5' />
 						</button>
 					)}
 
 					<nav className='flex w-full flex-col gap-2'>
 						{items.map(i => {
+							const Icon = (i as any).icon
 							const isActive =
 								!!i.href &&
 								(pathname === i.href ||
@@ -86,7 +94,9 @@ export default function Sidebar() {
 							const activeClass = isActive ? 'bg-white/15 text-white' : ''
 							const content = (
 								<>
-									<span className='text-xl drop-shadow-lg'>{i.icon}</span>
+									<span className='text-xl drop-shadow-lg'>
+										{Icon ? <Icon className='h-5 w-5' /> : null}
+									</span>
 									{isExpanded && (
 										<span className='text-sm font-medium whitespace-nowrap overflow-hidden'>
 											{i.label}

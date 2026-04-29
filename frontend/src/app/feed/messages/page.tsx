@@ -44,6 +44,30 @@ import {
 import { AnimatePresence, motion } from 'framer-motion'
 import MessageBubble from './MessageBubble'
 import { AppleEmoji } from '@/components/ui/AppleEmoji'
+import {
+	LuArrowLeft as ArrowLeft,
+	LuCheck as Check,
+	LuCopy as Copy,
+	LuFilter as Filter,
+	LuHash as Hash,
+	LuInfo as Info,
+	LuLogIn as LogIn,
+	LuMessageSquare as MessageSquare,
+	LuMic as Mic,
+	LuPaperclip as Paperclip,
+	LuPhone as Phone,
+	LuPlus as Plus,
+	LuScreenShare as ScreenShare,
+	LuSearch as Search,
+	LuSend as Send,
+	LuSmile as Smile,
+	LuSquare as Stop,
+	LuSticker as Sticker,
+	LuUserPlus as UserPlus,
+	LuUsers as Users,
+	LuX as X,
+} from 'react-icons/lu'
+import { FiMoreVertical as MoreVertical } from 'react-icons/fi'
 
 const formatLastSeen = (lastSeen?: string | Date): string => {
 	if (!lastSeen) return 'Не в сети'
@@ -74,16 +98,16 @@ const getLastMessage = (friendId: string, messages: Message[]): string => {
 			// Direct message: no channel or group
 			(m.channel_id === undefined || m.channel_id === null) &&
 			(m.group_id === undefined || m.group_id === null) &&
-			// Messages from or to this friend
-			(m.sender_id === friendId || (!m.isOwn && m.sender_id !== friendId)),
+			// Messages from this friend in current direct context
+			m.sender_id === friendId,
 	)
 	if (friendMessages.length === 0) return ''
 
 	const lastMessage = friendMessages[friendMessages.length - 1]
 	if (!lastMessage) return ''
-	if (lastMessage.type === 'voice') return '🎤 Голосовое сообщение'
-	if (lastMessage.type === 'image') return '🖼️ Фото'
-	if (lastMessage.type === 'file') return '📎 Файл'
+	if (lastMessage.type === 'voice') return 'Голосовое сообщение'
+	if (lastMessage.type === 'image') return 'Фото'
+	if (lastMessage.type === 'file') return 'Файл'
 
 	const content = lastMessage.content || ''
 	return content.length > 30 ? content.substring(0, 30) + '...' : content
@@ -97,8 +121,8 @@ const getLastMessageTime = (friendId: string, messages: Message[]): string => {
 			// Direct message: no channel or group
 			(m.channel_id === undefined || m.channel_id === null) &&
 			(m.group_id === undefined || m.group_id === null) &&
-			// Messages from or to this friend
-			(m.sender_id === friendId || (!m.isOwn && m.sender_id !== friendId)),
+			// Messages from this friend in current direct context
+			m.sender_id === friendId,
 	)
 	if (friendMessages.length === 0) return ''
 
@@ -114,273 +138,24 @@ const getLastMessageTime = (friendId: string, messages: Message[]): string => {
 	}
 }
 
-// --- Icons Components ---
-const ArrowLeftIcon = ({ className }: { className?: string }) => (
-	<svg
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}
-	>
-		<line x1='19' y1='12' x2='5' y2='12'></line>
-		<polyline points='12 19 5 12 12 5'></polyline>
-	</svg>
-)
-
-const SendIcon = ({ className }: { className?: string }) => (
-	<svg
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}
-	>
-		<line x1='22' y1='2' x2='11' y2='13'></line>
-		<polygon points='22 2 15 22 11 13 2 9 22 2'></polygon>
-	</svg>
-)
-
-const PaperclipIcon = ({ className }: { className?: string }) => (
-	<svg
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}
-	>
-		<path d='M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48'></path>
-	</svg>
-)
-
-const SmileIcon = ({ className }: { className?: string }) => (
-	<svg
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}
-	>
-		<circle cx='12' cy='12' r='10'></circle>
-		<path d='M8 14s1.5 2 4 2 4-2 4-2'></path>
-		<line x1='9' y1='9' x2='9.01' y2='9'></line>
-		<line x1='15' y1='9' x2='15.01' y2='9'></line>
-	</svg>
-)
-
-const StickerIcon = ({ className }: { className?: string }) => (
-	<svg
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}
-	>
-		<rect x='3' y='3' width='18' height='18' rx='4' ry='4'></rect>
-		<circle cx='9' cy='9' r='1'></circle>
-		<circle cx='15' cy='9' r='1'></circle>
-		<path d='M8 15s1.5 2 4 2 4-2 4-2'></path>
-	</svg>
-)
-
-const XIcon = ({ className }: { className?: string }) => (
-	<svg
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}
-	>
-		<path d='M18 6 6 18'></path>
-		<path d='m6 6 12 12'></path>
-	</svg>
-)
-
-const MoreVerticalIcon = ({ className }: { className?: string }) => (
-	<svg
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}
-	>
-		<circle cx='12' cy='12' r='1'></circle>
-		<circle cx='12' cy='5' r='1'></circle>
-		<circle cx='12' cy='19' r='1'></circle>
-	</svg>
-)
-
-const ScreenShareIcon = ({ className }: { className?: string }) => (
-	<svg
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}
-	>
-		<rect x='2' y='3' width='20' height='14' rx='2'></rect>
-		<path d='M8 21h8'></path>
-		<path d='M12 17v4'></path>
-		<path d='M9 8l6 3-6 3z'></path>
-	</svg>
-)
-
-const SearchIcon = ({ className }: { className?: string }) => (
-	<svg
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}
-	>
-		<circle cx='11' cy='11' r='8'></circle>
-		<line x1='21' y1='21' x2='16.65' y2='16.65'></line>
-	</svg>
-)
-
-const UserPlusIcon = ({ className }: { className?: string }) => (
-	<svg
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}
-	>
-		<path d='M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2'></path>
-		<circle cx='8.5' cy='7' r='4'></circle>
-		<line x1='20' y1='8' x2='20' y2='14'></line>
-		<line x1='23' y1='11' x2='17' y2='11'></line>
-	</svg>
-)
-
-const FilterIcon = ({ className }: { className?: string }) => (
-	<svg
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}
-	>
-		<polygon points='22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3'></polygon>
-	</svg>
-)
-
-const UsersIcon = ({ className }: { className?: string }) => (
-	<svg
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}
-	>
-		<path d='M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2'></path>
-		<circle cx='9' cy='7' r='4'></circle>
-		<path d='M23 21v-2a4 4 0 0 0-3-3.87'></path>
-		<path d='M16 3.13a4 4 0 0 1 0 7.75'></path>
-	</svg>
-)
-
-const MessageSquareIcon = ({ className }: { className?: string }) => (
-	<svg
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}
-	>
-		<path d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'></path>
-	</svg>
-)
-
-const PlusIcon = ({ className }: { className?: string }) => (
-	<svg
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}
-	>
-		<line x1='12' y1='5' x2='12' y2='19'></line>
-		<line x1='5' y1='12' x2='19' y2='12'></line>
-	</svg>
-)
-
-const InfoIcon = ({ className }: { className?: string }) => (
-	<svg
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}
-	>
-		<circle cx='12' cy='12' r='10'></circle>
-		<line x1='12' y1='16' x2='12' y2='12'></line>
-		<line x1='12' y1='8' x2='12.01' y2='8'></line>
-	</svg>
-)
-
-const HashIcon = ({ className }: { className?: string }) => (
-	<svg
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}
-	>
-		<line x1='4' y1='9' x2='20' y2='9'></line>
-		<line x1='4' y1='15' x2='20' y2='15'></line>
-		<line x1='10' y1='3' x2='8' y2='21'></line>
-		<line x1='16' y1='3' x2='14' y2='21'></line>
-	</svg>
-)
-
-const LogInIcon = ({ className }: { className?: string }) => (
-	<svg
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}
-	>
-		<path d='M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4'></path>
-		<polyline points='10 17 15 12 10 7'></polyline>
-		<line x1='15' y1='12' x2='3' y2='12'></line>
-	</svg>
-)
+// --- Icons (react-icons) ---
+const ArrowLeftIcon = ArrowLeft
+const SendIcon = Send
+const PaperclipIcon = Paperclip
+const SmileIcon = Smile
+const StickerIcon = Sticker
+const XIcon = X
+const MoreVerticalIcon = MoreVertical
+const ScreenShareIcon = ScreenShare
+const SearchIcon = Search
+const UserPlusIcon = UserPlus
+const FilterIcon = Filter
+const UsersIcon = Users
+const MessageSquareIcon = MessageSquare
+const PlusIcon = Plus
+const InfoIcon = Info
+const HashIcon = Hash
+const LogInIcon = LogIn
 
 const EMOJIS = [
 	'😀',
@@ -712,79 +487,11 @@ const BACKGROUNDS = [
 	},
 ]
 
-const PhoneIcon = ({ className }: { className?: string }) => (
-	<svg
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}
-	>
-		<path d='M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z'></path>
-	</svg>
-)
-
-const MicIcon = ({ className }: { className?: string }) => (
-	<svg
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}
-	>
-		<path d='M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z'></path>
-		<path d='M19 10v2a7 7 0 0 1-14 0v-2'></path>
-		<line x1='12' y1='19' x2='12' y2='23'></line>
-		<line x1='8' y1='23' x2='16' y2='23'></line>
-	</svg>
-)
-
-const StopIcon = ({ className }: { className?: string }) => (
-	<svg
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}
-	>
-		<rect x='3' y='3' width='18' height='18' rx='2' ry='2'></rect>
-	</svg>
-)
-
-const CheckIcon = ({ className }: { className?: string }) => (
-	<svg
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}
-	>
-		<polyline points='20 6 9 17 4 12'></polyline>
-	</svg>
-)
-
-const CopyIcon = ({ className }: { className?: string }) => (
-	<svg
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}
-	>
-		<rect x='9' y='9' width='13' height='13' rx='2' ry='2'></rect>
-		<path d='M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'></path>
-	</svg>
-)
+const PhoneIcon = Phone
+const MicIcon = Mic
+const StopIcon = Stop
+const CheckIcon = Check
+const CopyIcon = Copy
 
 export default function MessengerPage() {
 	const { user } = useAuth()
@@ -1234,6 +941,7 @@ export default function MessengerPage() {
 	const containerRef = useRef<HTMLDivElement>(null)
 	const forceScrollToBottomRef = useRef(false)
 	const scrollToBottomOnOpenRef = useRef(false)
+	const [showScrollToBottom, setShowScrollToBottom] = useState(false)
 	const [prevScrollHeight, setPrevScrollHeight] = useState(0)
 	const [isRestoringScroll, setIsRestoringScroll] = useState(false)
 	const [replyToMessage, setReplyToMessage] = useState<Message | null>(null)
@@ -2002,6 +1710,11 @@ export default function MessengerPage() {
 	const isBotChat = selectedFriend?.is_bot === true && !isAiChat
 	const targetUserId = selectedFriend?.id
 	const hasActiveChat = !!(selectedFriend || selectedChannel || selectedGroup)
+	const canWriteToSelectedChannel = !selectedChannel
+		? true
+		: !selectedChannel.owner_id ||
+		  !user?.id ||
+		  String(selectedChannel.owner_id) === String(user.id)
 	const accessToken = (user as any)?.access_token as string | undefined
 	const isSelectedFriendOnline =
 		selectedFriend?.status?.toLowerCase() === 'online'
@@ -3187,6 +2900,10 @@ export default function MessengerPage() {
 			sendBotMessage()
 			return
 		}
+		if (!canWriteToSelectedChannel) {
+			showToast('В этом канале писать может только владелец', 'error')
+			return
+		}
 		const hasText = !!input.trim()
 		if (!hasText && files.length === 0) return
 		if (isUploading) return
@@ -3241,6 +2958,11 @@ export default function MessengerPage() {
 			return
 		}
 		if (isUploading) return
+		if (!canWriteToSelectedChannel) {
+			showToast('В этом канале писать может только владелец', 'error')
+			setIsPickerOpen(false)
+			return
+		}
 		const stickerPayload = JSON.stringify({
 			type: 'sticker',
 			url: stickerUrl,
@@ -3906,6 +3628,9 @@ export default function MessengerPage() {
 		// Disable infinite scroll loading when searching messages
 		if (isChatSearchOpen && chatSearchQuery) return
 		const { scrollTop, scrollHeight } = e.currentTarget
+		const distanceFromBottom =
+			scrollHeight - (scrollTop + e.currentTarget.clientHeight)
+		setShowScrollToBottom(distanceFromBottom > 220)
 		requestAnimationFrame(() => resolvePinnedForScroll(scrollTop))
 		if (scrollTop < 30 && !isChatLoading && !isBotChat && messages.length > 0) {
 			setPrevScrollHeight(scrollHeight)
@@ -3921,6 +3646,7 @@ export default function MessengerPage() {
 		if (scrollToBottomOnOpenRef.current) {
 			scrollToBottomOnOpenRef.current = false
 			setIsRestoringScroll(false)
+			setShowScrollToBottom(false)
 			requestAnimationFrame(() => {
 				messagesEndRef.current?.scrollIntoView({
 					behavior: 'auto',
@@ -3936,6 +3662,7 @@ export default function MessengerPage() {
 		if (forceScrollToBottomRef.current) {
 			forceScrollToBottomRef.current = false
 			setIsRestoringScroll(false)
+			setShowScrollToBottom(false)
 			requestAnimationFrame(() => {
 				messagesEndRef.current?.scrollIntoView({
 					behavior: 'smooth',
@@ -3962,6 +3689,7 @@ export default function MessengerPage() {
 		if (containerRef.current) {
 			resolvePinnedForScroll(containerRef.current.scrollTop)
 		}
+		setShowScrollToBottom(false)
 	}, [messages, isChatSearchOpen, chatSearchQuery])
 
 	useEffect(() => {
@@ -4311,6 +4039,7 @@ export default function MessengerPage() {
 								<div
 									onClick={() => {
 										setSelectedFriend(aiFriend)
+										setSelectedChannel(null)
 										setSelectedGroup(null)
 										setIsChatSearchOpen(false)
 										setChatSearchQuery('')
@@ -4362,6 +4091,7 @@ export default function MessengerPage() {
 								<div
 									onClick={() => {
 										setSelectedFriend(botFriend)
+										setSelectedChannel(null)
 										setSelectedGroup(null)
 										setIsChatSearchOpen(false)
 										setChatSearchQuery('')
@@ -4429,6 +4159,7 @@ export default function MessengerPage() {
 									key={friend.id}
 									onClick={() => {
 										setSelectedFriend(friend)
+										setSelectedChannel(null)
 										setSelectedGroup(null)
 										// Reset message search when changing chat
 										setIsChatSearchOpen(false)
@@ -6288,6 +6019,22 @@ export default function MessengerPage() {
 									</div>
 								)}
 							</div>
+							{showScrollToBottom && (
+								<button
+									type='button'
+									onClick={() => {
+										forceScrollToBottomRef.current = true
+										messagesEndRef.current?.scrollIntoView({
+											behavior: 'smooth',
+											block: 'end',
+										})
+										setShowScrollToBottom(false)
+									}}
+									className='absolute bottom-28 right-6 z-30 rounded-full bg-gray-800/90 border border-white/15 px-3 py-2 text-xs text-white shadow-lg hover:bg-gray-700 transition'
+								>
+									Вниз
+								</button>
+							)}
 
 							<div className='p-4 bg-gray-900/40 backdrop-blur-md border-t border-gray-800/50'>
 								{replyToMessage && (
@@ -6519,8 +6266,13 @@ export default function MessengerPage() {
 													}
 												}}
 												rows={1}
+												disabled={!canWriteToSelectedChannel}
 												className='flex-1 bg-transparent border-none text-white placeholder-gray-500 focus:ring-0 resize-none py-2.5 max-h-32 min-h-[44px] custom-scrollbar'
-												placeholder='Напишите сообщение...'
+												placeholder={
+													canWriteToSelectedChannel
+														? 'Напишите сообщение...'
+														: 'В этом канале писать может только владелец'
+												}
 												style={{ height: 'auto', minHeight: '44px' }}
 												onInput={e => {
 													const target = e.target as HTMLTextAreaElement
@@ -6549,6 +6301,7 @@ export default function MessengerPage() {
 											{input.trim() ? (
 												<button
 													onClick={handleSendMessage}
+													disabled={!canWriteToSelectedChannel}
 													className={`p-3 rounded-2xl transition-all duration-300 shadow-lg flex items-center justify-center ${currentBackground.buttonBg} ${currentBackground.buttonHover} text-white translate-x-0 rotate-0`}
 												>
 													<SendIcon className='w-5 h-5' />

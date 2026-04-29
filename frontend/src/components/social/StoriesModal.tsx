@@ -23,6 +23,7 @@ type Props = {
 	items: Item[]
 	title?: string
 	ownerId: string
+	initialStoryId?: string
 	onUpdateStories?: (items: Item[]) => void
 	onViewed?: (storyId: string) => void
 }
@@ -35,6 +36,7 @@ export default function StoriesModal({
 	items,
 	title,
 	ownerId,
+	initialStoryId,
 	onUpdateStories,
 	onViewed,
 }: Props) {
@@ -84,14 +86,18 @@ export default function StoriesModal({
 		}
 	}
 	useEffect(() => {
-		if (!isOpen) setIndex(0)
-	}, [isOpen])
-	useEffect(() => {
 		if (isOpen) {
 			setStoryItems(items)
+			const initialIndex = initialStoryId
+				? Math.max(
+						0,
+						items.findIndex(item => item.id === initialStoryId),
+					)
+				: 0
+			setIndex(initialIndex)
 			setProgress(0)
 		}
-	}, [items, isOpen])
+	}, [items, isOpen, initialStoryId])
 
 	useEffect(() => {
 		if (isOpen && current?.id && onViewed) {
@@ -146,9 +152,13 @@ export default function StoriesModal({
 		if (!res.ok) return
 		const data = await res.json().catch(() => ({}))
 		if (data?.story) {
-			setStoryItems(prev =>
-				prev.map(item => (item.id === data.story.id ? data.story : item)),
-			)
+			setStoryItems(prev => {
+				const nextItems = prev.map(item =>
+					item.id === data.story.id ? data.story : item,
+				)
+				onUpdateStories?.(nextItems)
+				return nextItems
+			})
 		}
 	}
 

@@ -7,6 +7,7 @@ import { getAttachmentUrl, getAvatarUrl, formatMskDateTime } from '@/lib/utils'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import BrandLogo from './BrandLogo'
+import { LuSearch as Search } from 'react-icons/lu'
 
 type SearchResult = {
 	results: any[]
@@ -76,7 +77,9 @@ export default function Header({ email, onLogout }: Props) {
 		<header className='sticky top-0 z-50 border-b border-white/10 bg-black/20 backdrop-blur-xl'>
 			<div className='mx-auto flex max-w-7xl items-center justify-between px-4 py-3'>
 				<div className='flex items-center gap-3'>
-					<BrandLogo size={28} />
+					<Link href='/feed' aria-label='Перейти в ленту'>
+						<BrandLogo size={28} />
+					</Link>
 				</div>
 
 				<div className='flex flex-1 justify-center px-4'>
@@ -94,20 +97,7 @@ export default function Header({ email, onLogout }: Props) {
 								className='w-full rounded-xl bg-black/20 px-4 py-2 text-sm text-gray-200 placeholder-gray-500 border border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-all'
 							/>
 							<div className='absolute right-3 top-1/2 -translate-y-1/2'>
-								<svg
-									xmlns='http://www.w3.org/2000/svg'
-									className='h-4 w-4 text-gray-500'
-									fill='none'
-									viewBox='0 0 24 24'
-									stroke='currentColor'
-								>
-									<path
-										strokeLinecap='round'
-										strokeLinejoin='round'
-										strokeWidth={2}
-										d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'
-									/>
-								</svg>
+								<Search className='h-4 w-4 text-gray-500' />
 							</div>
 						</div>
 

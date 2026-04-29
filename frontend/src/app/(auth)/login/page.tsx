@@ -1,6 +1,7 @@
 'use client'
 
 import { useAuth } from '@/lib/AuthContext'
+import SmartCaptcha from '@/components/auth/SmartCaptcha'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -18,6 +19,7 @@ export default function LoginPage() {
 	)
 	const [twoFactorCode, setTwoFactorCode] = useState('')
 	const [loginError, setLoginError] = useState<string | null>(null)
+	const [captchaToken, setCaptchaToken] = useState('')
 	const sendLoginEmailCode = async () => {
 		try {
 			const res = await fetch('/api/auth/2fa/email/send', { method: 'POST' })
@@ -42,7 +44,11 @@ export default function LoginPage() {
 			const res = await fetch('/api/auth/login', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ email, password }),
+				body: JSON.stringify({
+					email,
+					password,
+					smart_captcha_token: captchaToken,
+				}),
 			})
 			const data = await res.json().catch(() => ({}))
 			if (!res.ok) {
@@ -70,7 +76,10 @@ export default function LoginPage() {
 			const res = await fetch('/api/auth/login', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(body),
+				body: JSON.stringify({
+					...body,
+					smart_captcha_token: captchaToken,
+				}),
 			})
 			const data = await res.json().catch(() => ({}))
 			if (!res.ok) {
@@ -180,11 +189,12 @@ export default function LoginPage() {
 								</div>
 							)}
 						</div>
+						<SmartCaptcha onTokenChange={setCaptchaToken} />
 
 						<div className='space-y-4'>
 							<button
 								type='submit'
-								disabled={isLoading}
+								disabled={isLoading || !captchaToken}
 								className='group relative flex w-full justify-center rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-3 text-sm font-semibold text-white hover:shadow-lg hover:shadow-indigo-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed'
 							>
 								{isLoading

@@ -5,6 +5,7 @@ import { User } from '@/lib/types'
 import { getAttachmentUrl, getAvatarUrl } from '@/lib/utils'
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { LuX as X } from 'react-icons/lu'
 
 interface ShareModalProps {
 	isOpen: boolean
@@ -104,21 +105,9 @@ export default function ShareModal({ isOpen, onClose, post }: ShareModalProps) {
 					<button
 						onClick={onClose}
 						className='rounded-full p-1 text-gray-300 hover:bg-white/10 hover:text-white'
+						aria-label='Закрыть'
 					>
-						<svg
-							xmlns='http://www.w3.org/2000/svg'
-							fill='none'
-							viewBox='0 0 24 24'
-							strokeWidth={1.5}
-							stroke='currentColor'
-							className='h-6 w-6'
-						>
-							<path
-								strokeLinecap='round'
-								strokeLinejoin='round'
-								d='M6 18L18 6M6 6l12 12'
-							/>
-						</svg>
+						<X className='h-6 w-6' />
 					</button>
 				</div>
 

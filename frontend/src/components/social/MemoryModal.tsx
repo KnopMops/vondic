@@ -2,7 +2,17 @@
 
 import { getAttachmentUrl } from '@/lib/utils'
 import { AnimatePresence, motion } from 'framer-motion'
-import { LuTrash2 as Trash2, LuX as X } from 'react-icons/lu'
+import {
+	LuArchive as Archive,
+	LuFileText as FileText,
+	LuFolder as Folder,
+	LuImage as Image,
+	LuMic as Mic,
+	LuMusic as Music,
+	LuTrash2 as Trash2,
+	LuVideo as Video,
+	LuX as X,
+} from 'react-icons/lu'
 import { useEffect, useState } from 'react'
 
 type FileItem = {
@@ -91,24 +101,48 @@ export default function MemoryModal({ isOpen, onClose }: Props) {
 		return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i]
 	}
 
+	const getExt = (filename: string) =>
+		(filename.split('.').pop() || '').toLowerCase()
+
+	const isAudio = (filename: string) => {
+		const ext = getExt(filename)
+		return ['mp3', 'wav', 'ogg', 'flac', 'm4a', 'webm'].includes(ext)
+	}
+
+	const isVideo = (filename: string) => {
+		const ext = getExt(filename)
+		return ['mp4', 'mov', 'webm', 'mkv', 'avi'].includes(ext)
+	}
+
+	const isDoc = (filename: string) => {
+		const ext = getExt(filename)
+		return ['pdf', 'doc', 'docx', 'txt', 'rtf'].includes(ext)
+	}
+
+	const isArchive = (filename: string) => {
+		const ext = getExt(filename)
+		return ['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)
+	}
+
 	const getFileIcon = (filename: string) => {
 		const ext = filename.split('.').pop()?.toLowerCase() || ''
 		if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext)) {
-			return '🖼️'
+			return <Image className='h-10 w-10 text-indigo-300' />
 		}
-		if (['mp4', 'mov', 'webm', 'mkv', 'avi'].includes(ext)) {
-			return '🎬'
+		if (isVideo(filename)) {
+			return <Video className='h-10 w-10 text-rose-300' />
 		}
-		if (['mp3', 'wav', 'ogg', 'flac'].includes(ext)) {
-			return '🎵'
+		if (isAudio(filename)) {
+			// Prefer mic icon for voice messages; most voice notes are ogg/webm/mp3
+			return <Mic className='h-10 w-10 text-emerald-300' />
 		}
-		if (['pdf', 'doc', 'docx', 'txt', 'rtf'].includes(ext)) {
-			return '📄'
+		if (isDoc(filename)) {
+			return <FileText className='h-10 w-10 text-sky-300' />
 		}
-		if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) {
-			return '📦'
+		if (isArchive(filename)) {
+			return <Archive className='h-10 w-10 text-amber-300' />
 		}
-		return '📁'
+		return <Folder className='h-10 w-10 text-gray-300' />
 	}
 
 	const isImage = (filename: string) => {
@@ -182,13 +216,25 @@ export default function MemoryModal({ isOpen, onClose }: Props) {
 												)}
 											</button>
 
-											<div className='aspect-square flex items-center justify-center text-4xl mb-2 overflow-hidden rounded-lg bg-black/20'>
+											<div className='aspect-square flex flex-col items-center justify-center gap-2 mb-2 overflow-hidden rounded-lg bg-black/20 p-2'>
 												{isImage(file.name) ? (
 													<img
 														src={getAttachmentUrl(file.url)}
 														alt={file.name}
 														className='w-full h-full object-cover group-hover:scale-110 transition-transform duration-500'
 													/>
+												) : isAudio(file.name) ? (
+													<>
+														<div className='flex items-center justify-center'>
+															<Mic className='h-8 w-8 text-emerald-300' />
+														</div>
+														<audio
+															controls
+															preload='none'
+															src={getAttachmentUrl(file.url)}
+															className='w-full h-8'
+														/>
+													</>
 												) : (
 													getFileIcon(file.name)
 												)}

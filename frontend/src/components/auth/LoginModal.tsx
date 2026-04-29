@@ -5,6 +5,8 @@ import { useAuth } from '@/lib/AuthContext'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
+import { SiYandexcloud as Yandex } from 'react-icons/si'
+import { LuX as X } from 'react-icons/lu'
 
 interface LoginModalProps {
 	isOpen: boolean
@@ -98,21 +100,9 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 				<button
 					onClick={onClose}
 					className='absolute top-4 right-4 text-gray-500 hover:text-white transition-colors'
+					aria-label='Закрыть'
 				>
-					<svg
-						xmlns='http://www.w3.org/2000/svg'
-						fill='none'
-						viewBox='0 0 24 24'
-						strokeWidth={1.5}
-						stroke='currentColor'
-						className='w-6 h-6'
-					>
-						<path
-							strokeLinecap='round'
-							strokeLinejoin='round'
-							d='M6 18L18 6M6 6l12 12'
-						/>
-					</svg>
+					<X className='w-6 h-6' />
 				</button>
 
 				<div className='flex items-center justify-center gap-3'>
@@ -227,20 +217,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 							className='group relative flex w-full items-center justify-center gap-3 rounded-xl border border-white/20 bg-transparent px-4 py-3.5 text-sm font-semibold text-white hover:bg-white/5 transition-all active:scale-[0.98]'
 						>
 							Яндекс
-							<svg
-								width='20'
-								height='20'
-								viewBox='0 0 20 20'
-								fill='none'
-								xmlns='http://www.w3.org/2000/svg'
-							>
-								<path
-									fillRule='evenodd'
-									clipRule='evenodd'
-									d='M10 20C15.5228 20 20 15.5228 20 10C20 4.47715 15.5228 0 10 0C4.47715 0 0 4.47715 0 10C0 15.5228 4.47715 20 10 20ZM8.57143 14.2857H7.14286V5.71429H8.57143V14.2857ZM12.8571 14.2857H11.4286L12.8571 10.7143L10.7143 5.71429H12.1429L13.5714 9.28571L15 5.71429H16.4286L14.2857 10.7143L12.8571 14.2857Z'
-									fill='#FC3F1D'
-								/>
-							</svg>
+							<Yandex className='h-5 w-5 text-[#FC3F1D]' />
 						</button>
 						<p className='text-center text-xs text-gray-500'>
 							Входя через соцсети, вы соглашаетесь с{' '}

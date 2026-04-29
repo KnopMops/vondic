@@ -14,6 +14,7 @@ import {
 	LuGift as Gift,
 	LuHeart as Heart,
 	LuStar as Star,
+	LuUpload as UploadCloud,
 } from 'react-icons/lu'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
@@ -96,6 +97,9 @@ export default function UserProfile({ user, currentUser }: Props) {
 	const [avatarUrl, setAvatarUrl] = useState(user.avatar_url || '')
 	const [usernameEdit, setUsernameEdit] = useState(user.username || '')
 	const [descriptionEdit, setDescriptionEdit] = useState(user.description || '')
+	const [displayDescription, setDisplayDescription] = useState(
+		user.description || '',
+	)
 	const [isUpdating, setIsUpdating] = useState(false)
 	const [uploadingAvatar, setUploadingAvatar] = useState(false)
 	const [profileBgImageUrl, setProfileBgImageUrl] = useState<string>(
@@ -201,7 +205,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 		(isMe ? profileTheme : user.profile_bg_theme) || FREE_THEMES[0].id
 	const activeTheme =
 		FREE_THEMES.find(t => t.id === activeThemeId) || FREE_THEMES[0]
-	const activeGradient = user.premium
+	const activeGradient = Boolean(user.premium)
 		? `linear-gradient(${gradAngle}deg, ${gradColor1}, ${gradColor2})`
 		: undefined
 	const registeredDate = (() => {
@@ -215,6 +219,10 @@ export default function UserProfile({ user, currentUser }: Props) {
 			day: 'numeric',
 		})
 	})()
+	const videosCount =
+		profileVideos.length || Number((user as any).videos_count || 0)
+	const shortsCount =
+		profileShorts.length || Number((user as any).shorts_count || 0)
 
 	useEffect(() => {
 		if (user.profile_bg_theme) {
@@ -819,6 +827,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 				setAvatarUrl(mergedUser.avatar_url || '')
 				setUsernameEdit(mergedUser.username || '')
 				setDescriptionEdit(mergedUser.description || '')
+				setDisplayDescription(mergedUser.description || '')
 				if (mergedUser.profile_bg_theme) {
 					setProfileTheme(mergedUser.profile_bg_theme)
 				}
@@ -838,6 +847,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 
 	useEffect(() => {
 		setDescriptionEdit(user.description || '')
+		setDisplayDescription(user.description || '')
 	}, [user.description, user.id])
 
 	return (
@@ -865,7 +875,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 					/>
 				)}
 				<div className='absolute inset-0 bg-black/20' />
-				{user.premium && (
+				{Boolean(user.premium) && (
 					<div className='absolute inset-0 pointer-events-none'>
 						<div className='absolute -top-10 -left-10 w-64 h-64 bg-amber-400/10 rounded-full blur-3xl animate-pulse' />
 						<div className='absolute -bottom-10 -right-10 w-72 h-72 bg-indigo-500/10 rounded-full blur-3xl animate-pulse' />
@@ -898,7 +908,9 @@ export default function UserProfile({ user, currentUser }: Props) {
 						<div>
 							<h1 className='text-3xl font-bold text-white'>
 								{user.username}
-								{user.premium && <span className='ml-2 text-amber-400'>★</span>}
+								{Boolean(user.premium) && (
+									<span className='ml-2 text-amber-400'>★</span>
+								)}
 							</h1>
 							{(isMe || user.privacy_settings?.show_email !== false) && (
 								<p className='text-sm text-gray-400'>{user.email}</p>
@@ -1002,20 +1014,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 														<span>Загрузка...</span>
 													) : (
 														<>
-															<svg
-																xmlns='http://www.w3.org/2000/svg'
-																fill='none'
-																viewBox='0 0 24 24'
-																strokeWidth={1.5}
-																stroke='currentColor'
-																className='w-5 h-5'
-															>
-																<path
-																	strokeLinecap='round'
-																	strokeLinejoin='round'
-																	d='M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5'
-																/>
-															</svg>
+															<UploadCloud className='h-5 w-5' />
 															<span>Загрузить фото/GIF</span>
 														</>
 													)}
@@ -1108,20 +1107,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 																	<span>Загрузка...</span>
 																) : (
 																	<>
-																		<svg
-																			xmlns='http://www.w3.org/2000/svg'
-																			fill='none'
-																			viewBox='0 0 24 24'
-																			strokeWidth={1.5}
-																			stroke='currentColor'
-																			className='w-5 h-5'
-																		>
-																			<path
-																				strokeLinecap='round'
-																				strokeLinejoin='round'
-																				d='M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5'
-																			/>
-																		</svg>
+																		<UploadCloud className='h-5 w-5' />
 																		<span>Загрузить фон</span>
 																	</>
 																)}
@@ -1259,9 +1245,9 @@ export default function UserProfile({ user, currentUser }: Props) {
 						)}
 					</div>
 
-					{user.description && (
+					{displayDescription && (
 						<p className='mt-4 text-sm text-gray-300 max-w-2xl'>
-							{user.description}
+							{displayDescription}
 						</p>
 					)}
 				</div>
@@ -1587,20 +1573,20 @@ export default function UserProfile({ user, currentUser }: Props) {
 							<div className='rounded-2xl border border-white/10 bg-white/5 p-4'>
 								<div className='text-xs text-gray-400'>Описание</div>
 								<div className='mt-2 text-white'>
-									{user.description || 'Описание не указано'}
+									{displayDescription || 'Описание не указано'}
 								</div>
 							</div>
 							<div className='grid grid-cols-1 gap-3 sm:grid-cols-3'>
 								<div className='rounded-2xl border border-white/10 bg-white/5 p-4'>
 									<div className='text-xs text-gray-400'>Видео</div>
 									<div className='mt-1 text-lg font-semibold text-white'>
-										{profileVideos.length}
+										{videosCount}
 									</div>
 								</div>
 								<div className='rounded-2xl border border-white/10 bg-white/5 p-4'>
 									<div className='text-xs text-gray-400'>VShorts</div>
 									<div className='mt-1 text-lg font-semibold text-white'>
-										{profileShorts.length}
+										{shortsCount}
 									</div>
 								</div>
 								<div className='rounded-2xl border border-white/10 bg-white/5 p-4'>

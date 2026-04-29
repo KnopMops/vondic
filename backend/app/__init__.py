@@ -5,6 +5,7 @@ import time
 from flasgger import Swagger
 from flask import Flask, Response, request
 from prometheus_client import Counter, Gauge, Histogram, generate_latest
+from sqlalchemy import text
 
 from app.core.config import Config
 from app.core.extensions import cache, cors, db, ma, mail, migrate
@@ -125,6 +126,27 @@ def create_app(config_class=Config):
         if not os.environ.get("SKIP_DB_BOOTSTRAP"):
             db.create_all()
             db.session.rollback()
+
+            try:
+                with db.engine.begin() as conn:
+                    conn.execute(
+                        text("ALTER TABLE users ADD COLUMN IF NOT EXISTS description TEXT"))
+                    conn.execute(
+                        text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to_id TEXT"))
+                    conn.execute(
+                        text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS forwarded_from_id TEXT"))
+                    conn.execute(
+                        text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_read INTEGER"))
+                    conn.execute(
+                        text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN"))
+                    conn.execute(
+                        text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS pinned_by TEXT"))
+                    conn.execute(
+                        text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS reactions JSONB"))
+                    conn.execute(
+                        text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS read_by JSONB"))
+            except Exception as e:
+                print(f"Failed to ensure messages schema: {e}")
 
             try:
                 from app.models.gift_catalog import GiftCatalog

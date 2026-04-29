@@ -16,6 +16,7 @@ class User(db.Model):
     refresh_token = db.Column(TEXT)
     password_hash = db.Column(TEXT, nullable=False)
     avatar_url = db.Column(TEXT, default=None)
+    description = db.Column(TEXT, default=None)
     is_verified = db.Column(INTEGER, default=0)
     socket_id = db.Column(TEXT)
     is_blocked = db.Column(INTEGER, default=0)
@@ -45,7 +46,7 @@ class User(db.Model):
     is_developer = db.Column(INTEGER, default=0)
     api_key_hash = db.Column(TEXT, default=None)
     api_key = db.Column(TEXT, default=None)
-    privacy_settings = db.Column(JSON, default=lambda: {"show_email": True})
+    privacy_settings = db.Column(JSON, default=lambda: {"show_email": False})
     cloud_password_hash = db.Column(TEXT, default=None)
     cloud_password_reset_month = db.Column(INTEGER, default=None)
     cloud_password_reset_count = db.Column(INTEGER, default=0)
@@ -93,6 +94,7 @@ class User(db.Model):
             "profile_bg_gradient": self.profile_bg_gradient,
             "profile_bg_image": self.profile_bg_image,
             "avatar_url": self.avatar_url,
+            "description": self.description,
             "storis": self.storis or [],
             "pinned_chats": self.pinned_chats or [],
             "is_blocked": bool(self.is_blocked),
@@ -101,6 +103,6 @@ class User(db.Model):
             "two_factor_method": self.two_factor_method,
             "login_alert_enabled": bool(self.login_alert_enabled),
             "is_developer": bool(self.is_developer),
-            "privacy_settings": self.privacy_settings or {"show_email": True},
+            "privacy_settings": self.privacy_settings or {"show_email": False},
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

@@ -18,6 +18,9 @@ export default function StoriesBar({ onCreateStory }: Props) {
 	const [isUploading, setIsUploading] = useState(false)
 	const [showCreateModal, setShowCreateModal] = useState(false)
 	const [viewedStories, setViewedStories] = useState<string[]>([])
+	const [lastViewedStoryByOwner, setLastViewedStoryByOwner] = useState<
+		Record<string, string>
+	>({})
 
 	useEffect(() => {
 		const viewed = localStorage.getItem('viewed_stories')
@@ -28,6 +31,14 @@ export default function StoriesBar({ onCreateStory }: Props) {
 				console.error('Failed to parse viewed stories', e)
 			}
 		}
+		const lastViewed = localStorage.getItem('last_viewed_story_by_owner')
+		if (lastViewed) {
+			try {
+				setLastViewedStoryByOwner(JSON.parse(lastViewed))
+			} catch (e) {
+				console.error('Failed to parse last viewed stories', e)
+			}
+		}
 	}, [])
 
 	const markAsViewed = (storyId: string) => {
@@ -35,6 +46,13 @@ export default function StoriesBar({ onCreateStory }: Props) {
 			if (prev.includes(storyId)) return prev
 			const next = [...prev, storyId]
 			localStorage.setItem('viewed_stories', JSON.stringify(next))
+			return next
+		})
+	}
+	const rememberOwnerProgress = (ownerId: string, storyId: string) => {
+		setLastViewedStoryByOwner(prev => {
+			const next = { ...prev, [ownerId]: storyId }
+			localStorage.setItem('last_viewed_story_by_owner', JSON.stringify(next))
 			return next
 		})
 	}
@@ -261,7 +279,11 @@ export default function StoriesBar({ onCreateStory }: Props) {
 					items={(openUser.storis as any) || []}
 					title={openUser.username}
 					ownerId={openUser.id}
-					onViewed={markAsViewed}
+					initialStoryId={lastViewedStoryByOwner[openUser.id]}
+					onViewed={storyId => {
+						markAsViewed(storyId)
+						rememberOwnerProgress(openUser.id, storyId)
+					}}
 					onUpdateStories={items => {
 						if (!items.length) {
 							setOpenUser(null)

@@ -1,6 +1,7 @@
 'use client'
 
 import { useAuth } from '@/lib/AuthContext'
+import SmartCaptcha from '@/components/auth/SmartCaptcha'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { useState } from 'react'
@@ -9,11 +10,12 @@ export default function RegisterPage() {
 	const [email, setEmail] = useState('')
 	const [username, setUsername] = useState('')
 	const [password, setPassword] = useState('')
+	const [captchaToken, setCaptchaToken] = useState('')
 	const { register, isLoading } = useAuth()
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault()
-		await register(email, username, password)
+		await register(email, username, password, captchaToken)
 	}
 
 	return (
@@ -88,11 +90,12 @@ export default function RegisterPage() {
 							/>
 						</div>
 					</div>
+					<SmartCaptcha onTokenChange={setCaptchaToken} />
 
 					<div>
 						<button
 							type='submit'
-							disabled={isLoading}
+							disabled={isLoading || !captchaToken}
 							className='group relative flex w-full justify-center rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-3 text-sm font-semibold text-white hover:shadow-lg hover:shadow-indigo-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed'
 						>
 							{isLoading ? 'Создание...' : 'Зарегистрироваться'}

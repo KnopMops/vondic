@@ -83,6 +83,9 @@ class Config:
     YANDEX_CLIENT_ID = os.environ.get("YANDEX_CLIENT_ID")
     YANDEX_CLIENT_SECRET = os.environ.get("YANDEX_CLIENT_SECRET")
     YANDEX_REDIRECT_URI = os.environ.get("YANDEX_REDIRECT_URI")
+    YANDEX_SMARTCAPTCHA_SERVER_KEY = os.environ.get(
+        "YANDEX_SMARTCAPTCHA_SERVER_KEY"
+    )
     STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY")
     STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET")
     STRIPE_PRICE_ID = os.environ.get("STRIPE_PRICE_ID")

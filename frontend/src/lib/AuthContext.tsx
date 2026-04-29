@@ -14,7 +14,12 @@ interface AuthContextType {
 	user: User | null
 	login: (email: string, password: string) => Promise<void>
 	loginWithYandex: () => Promise<void>
-	register: (email: string, username: string, password: string) => Promise<void>
+	register: (
+		email: string,
+		username: string,
+		password: string,
+		captchaToken?: string,
+	) => Promise<void>
 	logout: () => void
 	isLoading: boolean
 	isInitialized: boolean
@@ -139,13 +144,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		email: string,
 		username: string,
 		password: string,
+		captchaToken?: string,
 	) => {
 		try {
 			// Запрос к нашему API Proxy
 			const response = await fetch('/api/auth/register', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ email, username, password }),
+				body: JSON.stringify({
+					email,
+					username,
+					password,
+					smart_captcha_token: captchaToken,
+				}),
 			})
 
 			const data = await response.json()

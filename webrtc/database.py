@@ -9,6 +9,7 @@ from datetime import datetime
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from sqlalchemy import Integer, String, Text, create_engine, func, or_
+from sqlalchemy import text
 from sqlalchemy.orm import Mapped, Session, declarative_base, mapped_column, sessionmaker
 
 from config import Config
@@ -38,7 +39,8 @@ class Message(Base):
     target_id: Mapped[str | None] = mapped_column(String, nullable=True)
     channel_id: Mapped[str | None] = mapped_column(String, nullable=True)
     group_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    reply_to: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    reply_to_id: Mapped[str | None] = mapped_column(String, nullable=True)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     attachments: Mapped[str | None] = mapped_column(Text, nullable=True)
     type: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -121,11 +123,36 @@ class UserRepository:
             )
             self.engine = create_engine(
                 Config.DATABASE_URL, pool_pre_ping=True)
+            self._ensure_schema()
             self.session_factory = sessionmaker(
                 bind=self.engine, expire_on_commit=False)
         except Exception as e:
             logger.error(f"Ошибка инициализации репозитория: {e}")
             raise
+
+    def _ensure_schema(self):
+        """
+        Lightweight runtime migration for environments without Alembic.
+        Keeps DB schema compatible with current message payload fields.
+        """
+        try:
+            with self.engine.begin() as conn:
+                conn.execute(
+                    text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to_id TEXT"))
+                conn.execute(
+                    text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS forwarded_from_id TEXT"))
+
+                conn.execute(
+                    text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_read INTEGER"))
+                conn.execute(
+                    text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_deleted INTEGER"))
+                conn.execute(
+                    text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS pinned_by TEXT"))
+                conn.execute(
+                    text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS reactions TEXT"))
+        except Exception as e:
+
+            logger.warning(f"Schema ensure skipped/failed: {e}")
 
     @contextmanager
     def _session(self):
@@ -356,7 +383,8 @@ class UserRepository:
 
             channel_id = msg_data.get("channel_id")
             group_id = msg_data.get("group_id")
-            reply_to = msg_data.get("reply_to")
+
+            reply_to = msg_data.get("reply_to") or msg_data.get("reply_to_id")
             msg_type = msg_data.get("type", "text")
 
             ts = msg_data.get("timestamp")
@@ -377,7 +405,7 @@ class UserRepository:
                         msg_data.get("target_id")) if msg_data.get("target_id") else None,
                     channel_id=str(channel_id) if channel_id else None,
                     group_id=str(group_id) if group_id else None,
-                    reply_to=str(reply_to) if reply_to else None,
+                    reply_to_id=str(reply_to) if reply_to else None,
                     content=encrypted_content,
                     attachments=encrypted_attachments,
                     type=msg_type,

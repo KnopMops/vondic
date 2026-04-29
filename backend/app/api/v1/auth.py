@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
+from app.core.config import Config
 from app.core.extensions import cache
 from app.schemas.user_schema import user_schema
 from app.services.auth_service import AuthService
@@ -11,6 +12,7 @@ from app.services.user_service import UserService
 from app.utils.decorators import rate_limit, token_required
 from flask import Blueprint, current_app, jsonify, request
 from itsdangerous import URLSafeTimedSerializer
+import requests
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/v1/auth")
 
@@ -72,6 +74,31 @@ def _extract_access_token():
     if not token:
         token = request.cookies.get("access_token")
     return token
+
+
+def _verify_smart_captcha(token: str | None) -> tuple[bool, str | None]:
+    server_key = Config.YANDEX_SMARTCAPTCHA_SERVER_KEY
+
+    if not server_key:
+        return True, None
+    if not token:
+        return False, "Подтвердите, что вы не робот"
+    try:
+        response = requests.post(
+            "https://smartcaptcha.yandexcloud.net/validate",
+            data={
+                "secret": server_key,
+                "token": token,
+                "ip": _get_client_ip(),
+            },
+            timeout=8,
+        )
+        payload = response.json() if response.content else {}
+        if response.ok and payload.get("status") == "ok":
+            return True, None
+        return False, payload.get("message") or "Капча не пройдена"
+    except Exception:
+        return False, "Не удалось проверить капчу"
 
 
 def _store_login_session(
@@ -145,6 +172,14 @@ def register():
     data = request.get_json()
     if not data:
         return (jsonify({"error": "Нет данных"}), 400)
+    captcha_token = (
+        data.get("smart_captcha_token")
+        or data.get("captcha_token")
+        or data.get("smart-token")
+    )
+    captcha_ok, captcha_error = _verify_smart_captcha(captcha_token)
+    if not captcha_ok:
+        return jsonify({"error": captcha_error}), 400
     user, error = AuthService.register_user(data)
     if error:
         return (jsonify({"error": error}), 400)
@@ -190,6 +225,14 @@ def login():
 
         if not data:
             return (jsonify({"error": "No data provided"}), 400)
+        captcha_token = (
+            data.get("smart_captcha_token")
+            or data.get("captcha_token")
+            or data.get("smart-token")
+        )
+        captcha_ok, captcha_error = _verify_smart_captcha(captcha_token)
+        if not captcha_ok:
+            return jsonify({"error": captcha_error}), 400
 
         email = data.get("email")
         password = data.get("password")
