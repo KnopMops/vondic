@@ -1,4 +1,3 @@
-from app.core.rate_limiter import check_spam_protection, rate_limit
 from app.schemas.comment_schema import comment_schema, comments_schema
 from app.services.comment_service import CommentService
 from app.services.post_service import PostService
@@ -51,7 +50,6 @@ def get_comment(comment_id):
 
 @public_comments_bp.route("/", methods=["POST"])
 @api_key_required
-@rate_limit(limit=15, window=3600, per_user=True)
 def create_comment(current_user):
     try:
         data = request.get_json() or {}
@@ -94,7 +92,6 @@ def create_comment(current_user):
 
 @public_comments_bp.route("/<comment_id>", methods=["PUT"])
 @api_key_required
-@rate_limit(limit=10, window=3600, per_user=True)
 def update_comment(current_user, comment_id):
     try:
         comment = CommentService.get_comment_by_id(comment_id)

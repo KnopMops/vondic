@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.core.extensions import db
 from app.models.user import User
@@ -182,6 +182,45 @@ GIFT_PRICING = {
 }
 STORAGE_TB_PRICE = 6500
 STORAGE_TB_BYTES = 1024 * 1024 * 1024 * 1024
+
+PREMIUM_COIN_PRICE = 50
+PREMIUM_DURATION_DAYS = 30
+
+
+@users_bp.route("/buy-premium-coins", methods=["POST"])
+@token_required
+def buy_premium_coins(current_user):
+    """Оплата Premium внутриигровыми коинами (магазин)."""
+    price = PREMIUM_COIN_PRICE
+    if (current_user.balance or 0) < price:
+        return jsonify({"error": "Недостаточно коинов"}), 400
+    try:
+        now = datetime.utcnow()
+        base = now
+        if (
+            getattr(current_user, "premium", 0)
+            and current_user.premium_expired_at
+            and current_user.premium_expired_at > now
+        ):
+            base = current_user.premium_expired_at
+        new_expiry = base + timedelta(days=PREMIUM_DURATION_DAYS)
+        current_user.balance = (current_user.balance or 0) - price
+        current_user.premium = 1
+        if not current_user.premium_started_at:
+            current_user.premium_started_at = now
+        current_user.premium_expired_at = new_expiry
+        db.session.commit()
+        return jsonify(
+            {
+                "success": True,
+                "balance": current_user.balance,
+                "premium": True,
+                "premium_expired_at": new_expiry.isoformat(),
+            }
+        ), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
 
 
 @users_bp.route("/purchase-gift", methods=["POST"])
@@ -373,6 +412,9 @@ def set_user_status(current_user):
     try:
         current_user.status = status
         current_user.last_seen = datetime.utcnow()
+
+        if status == "offline":
+            current_user.socket_id = None
         db.session.commit()
         return jsonify({"success": True, "status": status}), 200
     except Exception as e:

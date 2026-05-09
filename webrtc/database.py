@@ -289,7 +289,7 @@ class UserRepository:
                     User.id == str(user_id)).first()
                 if user:
                     user.socket_id = socket_id
-                    user.status = "Online"
+                    user.status = "online"
         except Exception as e:
             logger.error(f"DB Error bind_socket: {e}")
 
@@ -301,11 +301,26 @@ class UserRepository:
                 if not user:
                     return None
                 user.socket_id = None
-                user.status = "Offline"
+                user.status = "offline"
                 return user.id
         except Exception as e:
             logger.error(f"DB Error release_socket: {e}")
             return None
+
+    def force_user_offline(self, user_id):
+        """Сброс сокета по user id (БД содержала несовпадающий socket_id — например случайный UUID с фронта)."""
+        try:
+            with self._session() as session:
+                user = session.query(User).filter(
+                    User.id == str(user_id)).first()
+                if not user:
+                    return False
+                user.socket_id = None
+                user.status = "offline"
+                return True
+        except Exception as e:
+            logger.error(f"DB Error force_user_offline: {e}")
+            return False
 
     def get_user_friends_sockets(self, user_id):
         try:
@@ -339,6 +354,50 @@ class UserRepository:
                 return [row[0] for row in sockets if row[0]]
         except Exception as e:
             logger.error(f"DB Error get_user_friends_sockets: {e}")
+            return []
+
+    def get_recent_dm_partner_sockets(self, user_id, limit_messages=500):
+        """Сокеты пользователей из недавних ЛС (не обязательно в друзьях)."""
+        uid = str(user_id)
+        try:
+            with self._session() as session:
+                rows = (
+                    session.query(Message)
+                    .filter(
+                        Message.channel_id.is_(None),
+                        Message.group_id.is_(None),
+                        Message.target_id.isnot(None),
+                        or_(
+                            Message.sender_id == uid,
+                            Message.target_id == uid,
+                        ),
+                    )
+                    .order_by(
+                        Message.created_at.desc(),
+                        Message.id.desc(),
+                    )
+                    .limit(limit_messages)
+                    .all()
+                )
+                partner_ids: set[str] = set()
+                for m in rows:
+                    if str(m.sender_id) == uid and m.target_id:
+                        partner_ids.add(str(m.target_id))
+                    elif m.target_id and str(m.target_id) == uid:
+                        partner_ids.add(str(m.sender_id))
+                if not partner_ids:
+                    return []
+                sock_rows = (
+                    session.query(User.socket_id)
+                    .filter(
+                        User.id.in_(partner_ids),
+                        User.socket_id.isnot(None),
+                    )
+                    .all()
+                )
+                return [r[0] for r in sock_rows if r[0]]
+        except Exception as e:
+            logger.error(f"DB Error get_recent_dm_partner_sockets: {e}")
             return []
 
     def find_user_by_socket(self, socket_id):
@@ -803,6 +862,23 @@ class UserRepository:
         except Exception as e:
             logger.error(f"DB Error get_online_users_count: {e}")
             return 0
+
+    def get_online_user_ids(self):
+        """Users with active socket bindings (truthy socket_id)."""
+        try:
+            with self._session() as session:
+                rows = (
+                    session.query(User.id)
+                    .filter(
+                        User.socket_id.isnot(None),
+                        User.socket_id != "",
+                    )
+                    .all()
+                )
+                return [str(row[0]) for row in rows if row and row[0]]
+        except Exception as e:
+            logger.error(f"DB Error get_online_user_ids: {e}")
+            return []
 
     def update_socket_id_for_user(self, user_id, socket_id):
         try:

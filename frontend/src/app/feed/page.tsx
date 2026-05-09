@@ -2,28 +2,14 @@
 
 import SocialFeed from '@/components/social/SocialFeed'
 import { useAuth } from '@/lib/AuthContext'
-import { setSocketId } from '@/lib/features/authSlice'
-import { useAppDispatch } from '@/lib/hooks'
+import { useSocket } from '@/lib/SocketContext'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
-
-function generateUUID(): string {
-	if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-		return crypto.randomUUID()
-	}
-	
-	return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-		const r = (Math.random() * 16) | 0
-		const v = c === 'x' ? r : (r & 0x3) | 0x8
-		return v.toString(16)
-	})
-}
+import { useEffect } from 'react'
 
 export default function FeedPage() {
 	const { user, logout, isLoading: isAuthLoading, isInitialized } = useAuth()
-	const dispatch = useAppDispatch()
+	const { isConnected } = useSocket()
 	const router = useRouter()
-	const [isSocketLoading, setIsSocketLoading] = useState(false)
 
 	useEffect(() => {
 		if (isInitialized && !isAuthLoading && !user) {
@@ -31,43 +17,14 @@ export default function FeedPage() {
 		}
 	}, [user, isAuthLoading, isInitialized, router])
 
-	useEffect(() => {
-		if (user && !user.socket_id && !isSocketLoading) {
-			const fetchSocketId = async () => {
-				setIsSocketLoading(true)
-				try {
-					const socketId = generateUUID()
-					const res = await fetch(`/api/webrtc/set_socket_id`, {
-						method: 'POST',
-						headers: {
-							'Content-Type': 'application/json',
-						},
-						body: JSON.stringify({
-							socket_id: socketId,
-							user_id: user.id,
-						}),
-					})
-					if (res.ok) {
-						dispatch(setSocketId(socketId))
-						if (user) {
-							const updatedUser = { ...user, socket_id: socketId }
-							localStorage.setItem('user', JSON.stringify(updatedUser))
-						}
-					}
-				} catch (e) {
-					console.error('Failed to fetch socket_id', e)
-				} finally {
-					setIsSocketLoading(false)
-				}
-			}
-			fetchSocketId()
-		}
-	}, [user, dispatch, isSocketLoading])
-
-	// Блокируем отображение, пока загружается авторизация или (если пользователь есть) пока нет socket_id
-	// Также блокируем, если нет пользователя (ждем редиректа)
+	// socket_id задаёт только сервер signaling (SocketContext → connection_success).
+	// Старый random UUID через /set_socket_id ломал release_socket при выходе (профиль висел «в сети»).
 	const isLoading =
-		!isInitialized || isAuthLoading || (!!user && !user.socket_id) || !user
+		!isInitialized ||
+		isAuthLoading ||
+		!user ||
+		!isConnected ||
+		!user.socket_id
 
 	if (isLoading) {
 		return (

@@ -15,10 +15,14 @@ import {
 	LuHeart as Heart,
 	LuStar as Star,
 } from 'react-icons/lu'
+import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
 export default function ShopPage() {
 	const { user } = useAuth()
+	const router = useRouter()
+	const [premiumLoading, setPremiumLoading] = useState(false)
+	const [premiumNote, setPremiumNote] = useState<string | null>(null)
 	const [loading, setLoading] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 	const [balanceOverride, setBalanceOverride] = useState<number | null>(null)
@@ -167,6 +171,38 @@ export default function ShopPage() {
 		}
 	}
 
+	const buyPremiumWithCoins = async () => {
+		setPremiumLoading(true)
+		setPremiumNote(null)
+		try {
+			const meRes = await fetch('/api/auth/me', { method: 'GET' })
+			if (!meRes.ok) {
+				throw new Error('Требуется авторизация')
+			}
+			const meData = await meRes.json()
+			const token = meData?.user?.access_token || meData?.access_token
+			if (!token) throw new Error('Требуется авторизация')
+			const res = await fetch(`${backendUrl}/api/v1/users/buy-premium-coins`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`,
+				},
+			})
+			const data = await res.json().catch(() => ({}))
+			if (!res.ok) {
+				throw new Error(data.error || data.message || 'Не удалось купить Premium')
+			}
+			setBalanceOverride(typeof data.balance === 'number' ? data.balance : null)
+			setPremiumNote('Premium на 30 дней активирован.')
+			router.refresh()
+		} catch (e: any) {
+			setPremiumNote(e.message || 'Ошибка')
+		} finally {
+			setPremiumLoading(false)
+		}
+	}
+
 	const buyGift = async () => {
 		if (!selectedGift) {
 			setGiftError('Требуется авторизация')
@@ -256,6 +292,39 @@ export default function ShopPage() {
 						)}
 
 						<div className='mt-6 grid grid-cols-1 gap-6'>
+							<div className='rounded-2xl border border-amber-400/30 bg-gradient-to-br from-amber-500/10 to-indigo-500/10 p-6 shadow-sm dark:border-amber-500/40'>
+								<div className='flex items-start gap-4'>
+									<div className='flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/20'>
+										<Crown className='h-6 w-6 text-amber-300' />
+									</div>
+									<div className='flex-1'>
+										<div className='text-lg font-semibold text-white'>
+											Vondic Premium
+										</div>
+										<p className='mt-1 text-sm text-gray-400'>
+											Подписка на 30 дней за{' '}
+											<span className='font-semibold text-amber-200'>50</span> коинов
+											из баланса.
+										</p>
+										{premiumNote && (
+											<p
+												className={`mt-2 text-sm ${premiumNote.includes('Ошиб') || premiumNote.includes('Недост') ? 'text-red-400' : 'text-emerald-400'}`}
+											>
+												{premiumNote}
+											</p>
+										)}
+										<button
+											type='button'
+											disabled={premiumLoading}
+											onClick={buyPremiumWithCoins}
+											className='mt-4 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 px-5 py-2.5 text-sm font-semibold text-black disabled:opacity-50 hover:opacity-95 transition-opacity'
+										>
+											{premiumLoading ? 'Оформление…' : 'Купить за 50 коинов'}
+										</button>
+									</div>
+								</div>
+							</div>
+
 							<div className='rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800'>
 								<div className='text-lg font-semibold text-gray-900 dark:text-white'>
 									Подарки

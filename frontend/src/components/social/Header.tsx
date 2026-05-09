@@ -90,7 +90,7 @@ export default function Header({ email, onLogout }: Props) {
 						<div className='relative'>
 							<input
 								type='text'
-								placeholder='Поиск'
+								placeholder='@ - поиск пользователя, # - поиск поста'
 								value={searchQuery}
 								onChange={e => handleSearch(e.target.value)}
 								onFocus={() => searchQuery && setShowResults(true)}
@@ -181,6 +181,13 @@ export default function Header({ email, onLogout }: Props) {
 														</div>
 													))
 												)}
+											</div>
+										)}
+										{searchResults.type === 'unknown' && (
+											<div className='p-4 text-center text-gray-500 text-sm'>
+												Начните запрос с <span className='text-indigo-300'>@</span>{' '}
+												для поиска пользователей или с{' '}
+												<span className='text-indigo-300'>#</span> для поиска постов
 											</div>
 										)}
 									</>

@@ -51,6 +51,28 @@ class EmailService:
             return False
 
     @staticmethod
+    def send_system_notification_email(to_email, username, message_body):
+        """Письмо по важным системным уведомлениям (модерация и т.п.)."""
+        name = (username or "пользователь").strip()
+        body = (message_body or "").strip()
+        html = (
+            f"<p>Здравствуйте, {name},</p>"
+            f"<p>{body}</p>"
+            f"<p>Благодарим за внимание.</p>"
+        )
+        msg = Message(
+            subject="Уведомление Vondic",
+            recipients=[to_email],
+            html=html,
+        )
+        try:
+            mail.send(msg)
+            return True
+        except Exception as e:
+            print(f"Error sending system notification email: {e}")
+            return False
+
+    @staticmethod
     def send_login_alert(to_email):
         html = "<p>Зафиксирован вход в ваш аккаунт Vondic.</p><p>Если это были не вы, срочно смените пароль.</p>"
         msg = Message(

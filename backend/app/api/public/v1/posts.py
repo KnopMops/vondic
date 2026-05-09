@@ -1,4 +1,3 @@
-from app.core.rate_limiter import check_spam_protection, rate_limit
 from app.schemas.post_schema import post_schema, posts_schema
 from app.services.post_service import PostService
 from app.utils.decorators import api_key_required
@@ -48,7 +47,6 @@ def get_post(post_id):
 
 @public_posts_bp.route("/", methods=["POST"])
 @api_key_required
-@rate_limit(limit=10, window=3600, per_user=True)
 def create_post(current_user):
     try:
         data = request.get_json() or {}
@@ -93,7 +91,6 @@ def create_post(current_user):
 
 @public_posts_bp.route("/<post_id>", methods=["PUT"])
 @api_key_required
-@rate_limit(limit=20, window=3600, per_user=True)
 def update_post(current_user, post_id):
     try:
         post = PostService.get_post_by_id(post_id)

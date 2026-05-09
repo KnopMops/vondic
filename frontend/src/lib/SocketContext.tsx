@@ -1,6 +1,12 @@
 'use client'
 
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import React, {
+	createContext,
+	useContext,
+	useEffect,
+	useRef,
+	useState,
+} from 'react'
 import { io, Socket } from 'socket.io-client'
 import { setSocketId } from './features/authSlice'
 import { useAppDispatch, useAppSelector } from './hooks'
@@ -26,32 +32,63 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 	const [isConnected, setIsConnected] = useState(false)
 	const { user } = useAppSelector(state => state.auth)
 	const dispatch = useAppDispatch()
+	const socketRef = useRef<Socket | null>(null)
 
 	useEffect(() => {
-		let socketInstance: Socket | null = null
+		socketRef.current = socket
+	}, [socket])
+
+	useEffect(() => {
+		let cancelled = false
+
+		const forceDisconnect = (s: Socket | null | undefined) => {
+			if (!s) return
+			try {
+				
+				const ioClient = (s as unknown as { io?: { reconnection: (v: boolean) => void } })
+					.io
+				ioClient?.reconnection(false)
+				s.removeAllListeners()
+				s.disconnect()
+			} catch {
+				void 0
+			}
+		}
+
+		const onBeforeLogout = () => {
+			forceDisconnect(socketRef.current)
+			socketRef.current = null
+			setSocket(null)
+			setIsConnected(false)
+		}
+		if (typeof window !== 'undefined') {
+			window.addEventListener('vondic-before-logout', onBeforeLogout)
+		}
 
 		const connectSocket = async () => {
 			if (!user) {
-				if (socket) {
-					socket.disconnect()
-					setSocket(null)
-					setIsConnected(false)
-				}
+				
+				forceDisconnect(socketRef.current)
+				socketRef.current = null
+				setSocket(null)
+				setIsConnected(false)
 				return
 			}
 
-			
-			
-			
-
 			try {
 				const res = await fetch('/api/auth/socket-token')
-				if (!res.ok) return
+				if (!res.ok || cancelled) return
 				const { token } = await res.json()
 
 				if (!token) {
 					return
 				}
+
+				if (cancelled) return
+
+				
+				forceDisconnect(socketRef.current)
+				socketRef.current = null
 
 				
 				const socketUrlRaw = getWebRtcUrl()
@@ -89,7 +126,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 					`Connecting to WebSocket server: ${socketUrl} (secure: ${isSecure})`,
 				)
 
-				socketInstance = io(socketUrl, {
+				const socketInstance = io(socketUrl, {
 					auth: { token },
 					transports: ['websocket', 'polling'],
 					path: socketPath,
@@ -100,6 +137,13 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 					reconnectionAttempts: 5,
 					reconnectionDelay: 1000,
 				})
+
+				if (cancelled) {
+					forceDisconnect(socketInstance)
+					return
+				}
+
+				socketRef.current = socketInstance
 
 				socketInstance.on('connect', () => {
 					console.log('Socket connected')
@@ -133,10 +177,10 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 					}
 				})
 
-				socketInstance.on('user_status_changed', (data: { user_id: string, status: string }) => {
-					console.log(`User status changed: ${data.user_id} is now ${data.status}`)
-					// Here you can dispatch an action to update friends status in store
-					// if you had a friends slice.
+				socketInstance.on('user_status_changed', (data: { user_id: string; status: string }) => {
+					console.log(
+						`[presence] user_status_changed: user ${data.user_id} → ${data.status}`,
+					)
 				})
 
 				setSocket(socketInstance)
@@ -151,9 +195,26 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 		connectSocket()
 
 		return () => {
-			if (socketInstance) {
-				socketInstance.disconnect()
+			cancelled = true
+			if (typeof window !== 'undefined') {
+				window.removeEventListener('vondic-before-logout', onBeforeLogout)
 			}
+			const s = socketRef.current
+			
+			try {
+				
+				const ioClient = (
+					s as unknown as {
+						io?: { reconnection: (v: boolean) => void }
+					}
+				)?.io
+				ioClient?.reconnection(false)
+				s?.removeAllListeners()
+				s?.disconnect()
+			} catch {
+				void 0
+			}
+			socketRef.current = null
 		}
 	}, [user?.id, dispatch]) // Re-run if user ID changes
 

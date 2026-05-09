@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Vondic OAuth Test</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 24px 16px 48px;
+        background: #0f172a;
+        color: #e2e8f0;
+        line-height: 1.45;
+      }
+      h1 { font-size: 1.5rem; margin: 0 0 8px; }
+      .lead { color: #94a3b8; margin: 0 0 20px; font-size: 0.95rem; }
+      .card {
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        border-radius: 14px;
+        padding: 16px 18px;
+        margin-top: 14px;
+        background: rgba(15, 23, 42, 0.85);
+      }
+      .card h3 { margin: 0 0 10px; font-size: 1rem; color: #cbd5e1; }
+      button.primary {
+        padding: 11px 16px;
+        border: 0;
+        border-radius: 10px;
+        cursor: pointer;
+        background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        color: #fff;
+        font-weight: 600;
+        font-size: 0.95rem;
+      }
+      .logout {
+        background: #334155;
+        color: #f1f5f9;
+        border: 0;
+        padding: 8px 12px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.875rem;
+      }
+      pre {
+        background: #020617;
+        color: #e2e8f0;
+        padding: 12px;
+        border-radius: 10px;
+        overflow: auto;
+        font-size: 0.8rem;
+        border: 1px solid rgba(148, 163, 184, 0.2);
+      }
+      .muted { color: #94a3b8; font-size: 0.875rem; }
+      ul { margin: 0; padding-left: 1.2rem; color: #cbd5e1; font-size: 0.9rem; }
+      .who {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        flex-wrap: wrap;
+        border-color: rgba(99, 102, 241, 0.45);
+        background: rgba(99, 102, 241, 0.08);
+      }
+      .who.waiting {
+        border-color: rgba(148, 163, 184, 0.35);
+        background: rgba(255, 255, 255, 0.03);
+      }
+      .who img {
+        width: 52px;
+        height: 52px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 2px solid rgba(99, 102, 241, 0.5);
+      }
+      .who .label { font-size: 1.05rem; margin: 0; flex: 1; min-width: 200px; }
+      code { color: #a5b4fc; font-size: 0.85em; }
+    </style>
+  </head>
+  <body>
+    <h1>Тест OAuth Вондик (Flask)</h1>
+    <p class="lead">
+      Локальный тест: после входа здесь должны появиться ваш аккаунт и ответ сервера. Открывайте страницу по тому же
+      адресу, что в Redirect URI (<code>http://127.0.0.1:5055</code> и <code>http://localhost:5055</code> —
+      разные cookie; сервер переадресует под ваш redirect_uri).
+    </p>
+
+    <div id="whoCard" class="card who waiting">
+      <div class="label" id="whoStatus"><b>Статус:</b> ожидание входа…</div>
+      <button type="button" class="logout" id="logoutBtn" style="display: none;">Выйти</button>
+    </div>
+
+    {% if oauth_user %}
+    <script>
+      window.__OAUTH_USER__ = {{ oauth_user|tojson }};
+    </script>
+    {% endif %}
+
+    <div class="card">
+      <button type="button" class="primary" id="loginBtn">Войти через Вондик (popup)</button>
+      <p class="muted">Если popup заблокирован, откроется полный переход.</p>
+    </div>
+
+    <div class="card">
+      <h3>Параметры OAuth</h3>
+      <ul>
+        <li><b>Authorize:</b> {{ authorize_url }}</li>
+        <li><b>Redirect URI:</b> {{ redirect_uri }}</li>
+        <li><b>Client ID:</b> {{ client_id or "not set" }}</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h3>Ответ после обмена кода</h3>
+      <pre id="result">Нажмите «Войти через Вондик», затем «Разрешить» на Вондик.</pre>
+    </div>
+
+    <script>
+      const LS_KEY = "vondic_oauth_test_user_v1";
+      const resultEl = document.getElementById("result");
+      const loginBtn = document.getElementById("loginBtn");
+      const whoCard = document.getElementById("whoCard");
+      const whoStatus = document.getElementById("whoStatus");
+      const logoutBtn = document.getElementById("logoutBtn");
+
+      function persistUserLocally(u) {
+        if (!u) {
+          localStorage.removeItem(LS_KEY);
+          return;
+        }
+        try {
+          localStorage.setItem(LS_KEY, JSON.stringify(u));
+        } catch (_) {}
+      }
+
+      function readUserLocally() {
+        try {
+          const raw = localStorage.getItem(LS_KEY);
+          if (!raw) return null;
+          return JSON.parse(raw);
+        } catch (_) {
+          return null;
+        }
+      }
+
+      function userLabel(user) {
+        if (!user) return null;
+        return user.username || user.email || user.id || null;
+      }
+
+      function renderWho(user) {
+        const label = userLabel(user);
+        if (!label) {
+          whoCard.classList.add("waiting");
+          logoutBtn.style.display = "none";
+          whoCard.querySelectorAll("img").forEach((n) => n.remove());
+          whoStatus.innerHTML =
+            "<b>Статус:</b> не авторизованы в этом тесте — нажмите кнопку входа ниже.";
+          return;
+        }
+        whoCard.classList.remove("waiting");
+        logoutBtn.style.display = "";
+        whoStatus.innerHTML =
+          "<b>Вы вошли как:</b> " + String(label);
+        const exist = whoCard.querySelector("img.who-avatar");
+        if (user.avatar_url) {
+          if (exist) exist.src = user.avatar_url;
+          else {
+            const img = document.createElement("img");
+            img.className = "who-avatar";
+            img.src = user.avatar_url;
+            img.alt = "";
+            whoCard.insertBefore(img, whoStatus);
+          }
+        } else if (exist) exist.remove();
+      }
+
+      loginBtn.addEventListener("click", () => {
+        const popup = window.open("/auth/start", "vondic_oauth", "width=540,height=760");
+        if (!popup) {
+          window.location.href = "/auth/start";
+        }
+      });
+
+      logoutBtn.addEventListener("click", async () => {
+        try {
+          await fetch("/auth/logout", {
+            method: "POST",
+            credentials: "include",
+            headers: { Accept: "application/json" },
+          });
+        } catch (_) {}
+        persistUserLocally(null);
+        renderWho(null);
+        resultEl.textContent = "Сессия сброшена.";
+      });
+
+      window.addEventListener("message", async (event) => {
+        if (event.origin !== window.location.origin) return;
+        const payload = event.data || {};
+        if (payload.type !== "vondic_oauth_result") return;
+
+        if (payload.error) {
+          resultEl.textContent = JSON.stringify(payload, null, 2);
+          return;
+        }
+
+        if (!payload.state_ok) {
+          resultEl.textContent = "Ошибка: state mismatch (CSRF check failed).";
+          return;
+        }
+
+        try {
+          const resp = await fetch("/auth/exchange", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code: payload.code, state: payload.state }),
+          });
+          const data = await resp.json();
+          resultEl.textContent = JSON.stringify(data, null, 2);
+          if (!resp.ok) return;
+          if (data.stored_user) {
+            persistUserLocally(data.stored_user);
+            renderWho(data.stored_user);
+          }
+          await refreshWho();
+        } catch (err) {
+          resultEl.textContent = String(err);
+        }
+      });
+
+      async function refreshWho() {
+        try {
+          const resp = await fetch("/auth/me", { credentials: "include" });
+          const data = await resp.json();
+          if (data && data.user) {
+            persistUserLocally(data.user);
+            renderWho(data.user);
+            return;
+          }
+        } catch (_) {}
+        const local = readUserLocally();
+        if (local) renderWho(local);
+        else renderWho(window.__OAUTH_USER__ || null);
+      }
+
+      refreshWho();
+    </script>
+  </body>
+</html>

@@ -15,8 +15,15 @@ export interface User {
 		type?: 'image' | 'video'
 		created_at?: string
 		text?: string
+		hidden_from?: string[]
 		reactions?: { user_id: string; emoji: string; created_at?: string }[]
 	}[]
+	privacy_settings?: {
+		show_email?: boolean
+		show_online_status?: boolean
+		show_last_seen?: boolean
+		allow_friend_requests?: boolean
+	}
 	description?: string
 	birth_date?: string
 	socket_id?: string | null

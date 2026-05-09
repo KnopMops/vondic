@@ -318,6 +318,38 @@ const mtDecrypt = (ciphertext: string, key: Uint8Array) => {
 	return decoder.decode(body)
 }
 
+/** Превью E2E в списке чатов без открытия переписки (ключ из localStorage). */
+export function decryptDmPreviewText(
+	selfId: string,
+	peerId: string,
+	text: string,
+): string {
+	if (!text || !text.startsWith('e2e:')) return text
+	if (!selfId || !peerId) return '🔒 Зашифрованное сообщение'
+	const keyId = [selfId, peerId].sort().join(':')
+	let stored =
+		localStorage.getItem(`e2e_key_${keyId}`) ||
+		sessionStorage.getItem(`e2e_key_${keyId}`)
+	if (!stored) {
+		const legacyA = `e2e_key_${selfId}:${peerId}`
+		const legacyB = `e2e_key_${peerId}:${selfId}`
+		stored =
+			localStorage.getItem(legacyA) ||
+			localStorage.getItem(legacyB) ||
+			sessionStorage.getItem(legacyA) ||
+			sessionStorage.getItem(legacyB) ||
+			null
+	}
+	if (!stored) return '🔒 Зашифрованное сообщение'
+	try {
+		const key = bytesFromBase64(stored)
+		const dec = mtDecrypt(text, key)
+		return dec && dec.trim() !== '' ? dec : '🔒 Зашифрованное сообщение'
+	} catch {
+		return '🔒 Зашифрованное сообщение'
+	}
+}
+
 export const useChat = (
 	socket: Socket | null,
 	currentUserId: string | undefined,

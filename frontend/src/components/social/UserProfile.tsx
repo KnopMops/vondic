@@ -13,12 +13,16 @@ import {
 	LuFlower as Flower,
 	LuGift as Gift,
 	LuHeart as Heart,
+	LuLink as LinkIcon,
+	LuSettings as SettingsIcon,
+	LuShare2 as Share2,
 	LuStar as Star,
 	LuUpload as UploadCloud,
 } from 'react-icons/lu'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import Post from './Post'
+import StoriesModal from './StoriesModal'
 
 type Props = {
 	user: User
@@ -107,6 +111,18 @@ export default function UserProfile({ user, currentUser }: Props) {
 	)
 	const [uploadingBgImage, setUploadingBgImage] = useState(false)
 	const [linkKey, setLinkKey] = useState<string | null>(null)
+	const [isShareModalOpen, setIsShareModalOpen] = useState(false)
+	const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false)
+	const [privacySettings, setPrivacySettings] = useState({
+		show_email: true,
+		show_online_status: true,
+		show_last_seen: true,
+		allow_friend_requests: true,
+	})
+	const [savingPrivacy, setSavingPrivacy] = useState(false)
+	const [profileStories, setProfileStories] = useState<any[]>([])
+	const [loadingStories, setLoadingStories] = useState(false)
+	const [isStoriesOpen, setIsStoriesOpen] = useState(false)
 
 	const [isGiftModalOpen, setIsGiftModalOpen] = useState(false)
 	const [giftError, setGiftError] = useState<string | null>(null)
@@ -201,6 +217,13 @@ export default function UserProfile({ user, currentUser }: Props) {
 
 	const isMe = currentUser?.id === user.id
 	const isAdmin = currentUser?.role === 'Admin'
+	const profileUrl =
+		typeof window !== 'undefined'
+			? `${window.location.origin}/feed/profile/${user.id}`
+			: `/feed/profile/${user.id}`
+	const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(
+		profileUrl,
+	)}`
 	const activeThemeId =
 		(isMe ? profileTheme : user.profile_bg_theme) || FREE_THEMES[0].id
 	const activeTheme =
@@ -223,6 +246,39 @@ export default function UserProfile({ user, currentUser }: Props) {
 		profileVideos.length || Number((user as any).videos_count || 0)
 	const shortsCount =
 		profileShorts.length || Number((user as any).shorts_count || 0)
+	const hasProfileStories = profileStories.length > 0
+
+	useEffect(() => {
+		if (!user) return
+		const next = {
+			show_email: user.privacy_settings?.show_email !== false,
+			show_online_status: user.privacy_settings?.show_online_status !== false,
+			show_last_seen: user.privacy_settings?.show_last_seen !== false,
+			allow_friend_requests: user.privacy_settings?.allow_friend_requests !== false,
+		}
+		setPrivacySettings(next)
+	}, [user.id, user.privacy_settings])
+
+	useEffect(() => {
+		const fetchStories = async () => {
+			setLoadingStories(true)
+			try {
+				const res = await fetch('/api/storis/user', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ user_id: user.id }),
+				})
+				if (!res.ok) throw new Error('Failed to load stories')
+				const data = await res.json()
+				setProfileStories(Array.isArray(data) ? data : [])
+			} catch {
+				setProfileStories([])
+			} finally {
+				setLoadingStories(false)
+			}
+		}
+		fetchStories()
+	}, [user.id])
 
 	useEffect(() => {
 		if (user.profile_bg_theme) {
@@ -263,6 +319,44 @@ export default function UserProfile({ user, currentUser }: Props) {
 		} catch (e) {
 			console.error(e)
 			alert('Error generating key')
+		}
+	}
+
+	const copyProfileLink = async () => {
+		try {
+			await navigator.clipboard.writeText(profileUrl)
+			alert('Ссылка скопирована')
+		} catch {
+			alert('Не удалось скопировать ссылку')
+		}
+	}
+
+	const savePrivacySettings = async () => {
+		if (!currentUser) return
+		setSavingPrivacy(true)
+		try {
+			const res = await fetch('/api/users/update', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					user_id: currentUser.id,
+					privacy_settings: privacySettings,
+				}),
+			})
+			const data = await res.json().catch(() => ({}))
+			if (!res.ok) throw new Error(data.error || 'Ошибка сохранения')
+			const updatedUser = data.user || data
+			if (updatedUser) {
+				dispatch(setUser(updatedUser))
+				localStorage.setItem('user', JSON.stringify(updatedUser))
+			}
+			setIsPrivacyModalOpen(false)
+			alert('Настройки конфиденциальности сохранены')
+		} catch (error) {
+			console.error(error)
+			alert('Не удалось сохранить настройки конфиденциальности')
+		} finally {
+			setSavingPrivacy(false)
 		}
 	}
 
@@ -884,24 +978,41 @@ export default function UserProfile({ user, currentUser }: Props) {
 			</div>
 
 			<div className='flex flex-col sm:flex-row items-end gap-6 px-4'>
-				<motion.div
+				<motion.button
 					initial={{ scale: 0.8, opacity: 0 }}
 					animate={{ scale: 1, opacity: 1 }}
 					transition={{ delay: 0.2 }}
-					className={`-mt-20 flex h-32 w-32 items-center justify-center rounded-full bg-gray-900 overflow-hidden shadow-xl z-10`}
+					onClick={() => hasProfileStories && setIsStoriesOpen(true)}
+					disabled={!hasProfileStories || loadingStories}
+					className='-mt-20 relative z-10 disabled:cursor-default'
 				>
-					{user.avatar_url && (!isBlocked || isAdmin) ? (
-						<img
-							src={getAttachmentUrl(user.avatar_url)}
-							alt={user.username}
-							className='h-full w-full object-cover'
-						/>
-					) : (
-						<span className='text-5xl'>
-							{user.username?.[0]?.toUpperCase() || '👤'}
+					<div
+						className={`rounded-full p-[3px] ${
+							hasProfileStories
+								? 'bg-gradient-to-tr from-indigo-500 to-pink-500'
+								: 'bg-gray-700'
+						}`}
+					>
+						<div className='flex h-32 w-32 items-center justify-center rounded-full bg-gray-900 overflow-hidden shadow-xl'>
+							{user.avatar_url && (!isBlocked || isAdmin) ? (
+								<img
+									src={getAttachmentUrl(user.avatar_url)}
+									alt={user.username}
+									className='h-full w-full object-cover'
+								/>
+							) : (
+								<span className='text-5xl'>
+									{user.username?.[0]?.toUpperCase() || '👤'}
+								</span>
+							)}
+						</div>
+					</div>
+					{hasProfileStories && (
+						<span className='absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-black/70 px-2 py-0.5 text-[10px] text-white'>
+							Сторис
 						</span>
 					)}
-				</motion.div>
+				</motion.button>
 
 				<div className='flex-1 pb-2 w-full'>
 					<div className='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4'>
@@ -912,9 +1023,10 @@ export default function UserProfile({ user, currentUser }: Props) {
 									<span className='ml-2 text-amber-400'>★</span>
 								)}
 							</h1>
-							{(isMe || user.privacy_settings?.show_email !== false) && (
+							{(isMe && privacySettings.show_email) ||
+							(!isMe && user.privacy_settings?.show_email !== false) ? (
 								<p className='text-sm text-gray-400'>{user.email}</p>
-							)}
+							) : null}
 							<p
 								className={`text-sm capitalize mt-1 ${
 									user.role === 'Admin'
@@ -934,16 +1046,38 @@ export default function UserProfile({ user, currentUser }: Props) {
 							)}
 						</div>
 
-						{isMe && (
+						<div className='flex items-center gap-2'>
 							<motion.button
 								whileHover={{ scale: 1.05 }}
 								whileTap={{ scale: 0.95 }}
-								onClick={() => setIsEditModalOpen(true)}
-								className='rounded-xl bg-white/10 border border-white/20 px-6 py-2 text-sm font-semibold text-white hover:bg-white/20 backdrop-blur-md transition-all shadow-lg'
+								onClick={() => setIsShareModalOpen(true)}
+								className='rounded-xl bg-white/10 border border-white/20 p-2.5 text-white hover:bg-white/20 backdrop-blur-md transition-all shadow-lg'
+								title='Поделиться страницей'
 							>
-								Редактировать
+								<Share2 className='h-4 w-4' />
 							</motion.button>
-						)}
+							{isMe && (
+								<>
+									<motion.button
+										whileHover={{ scale: 1.05 }}
+										whileTap={{ scale: 0.95 }}
+										onClick={() => setIsPrivacyModalOpen(true)}
+										className='rounded-xl bg-white/10 border border-white/20 p-2.5 text-white hover:bg-white/20 backdrop-blur-md transition-all shadow-lg'
+										title='Конфиденциальность'
+									>
+										<SettingsIcon className='h-4 w-4' />
+									</motion.button>
+									<motion.button
+										whileHover={{ scale: 1.05 }}
+										whileTap={{ scale: 0.95 }}
+										onClick={() => setIsEditModalOpen(true)}
+										className='rounded-xl bg-white/10 border border-white/20 px-6 py-2 text-sm font-semibold text-white hover:bg-white/20 backdrop-blur-md transition-all shadow-lg'
+									>
+										Редактировать
+									</motion.button>
+								</>
+							)}
+						</div>
 
 						<AnimatePresence>
 							{isEditModalOpen && (
@@ -1303,6 +1437,154 @@ export default function UserProfile({ user, currentUser }: Props) {
 					</motion.div>
 				)}
 			</AnimatePresence>
+			<AnimatePresence>
+				{isShareModalOpen && (
+					<motion.div
+						initial={{ opacity: 0 }}
+						animate={{ opacity: 1 }}
+						exit={{ opacity: 0 }}
+						className='fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4'
+					>
+						<motion.div
+							initial={{ scale: 0.95, opacity: 0 }}
+							animate={{ scale: 1, opacity: 1 }}
+							exit={{ scale: 0.95, opacity: 0 }}
+							className='w-full max-w-sm rounded-2xl bg-gray-900/90 border border-white/10 p-5 shadow-2xl space-y-4'
+						>
+							<div className='flex items-center justify-between'>
+								<h3 className='text-lg font-bold text-white'>Поделиться профилем</h3>
+								<button
+									onClick={() => setIsShareModalOpen(false)}
+									className='text-gray-400 hover:text-white'
+								>
+									✕
+								</button>
+							</div>
+							<div className='rounded-2xl bg-white p-2 w-fit mx-auto'>
+								<img src={qrUrl} alt='QR профиля' className='h-48 w-48' />
+							</div>
+							<div className='rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-gray-300 break-all'>
+								{profileUrl}
+							</div>
+							<div className='flex gap-2'>
+								<button
+									onClick={copyProfileLink}
+									className='flex-1 rounded-xl bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500 transition'
+								>
+									Копировать ссылку
+								</button>
+								<a
+									href={profileUrl}
+									target='_blank'
+									rel='noreferrer'
+									className='rounded-xl border border-white/20 px-3 py-2 text-sm text-white hover:bg-white/10 transition inline-flex items-center gap-1'
+								>
+									<LinkIcon className='h-4 w-4' /> Открыть
+								</a>
+							</div>
+						</motion.div>
+					</motion.div>
+				)}
+			</AnimatePresence>
+			<AnimatePresence>
+				{isPrivacyModalOpen && (
+					<motion.div
+						initial={{ opacity: 0 }}
+						animate={{ opacity: 1 }}
+						exit={{ opacity: 0 }}
+						className='fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4'
+					>
+						<motion.div
+							initial={{ scale: 0.95, opacity: 0 }}
+							animate={{ scale: 1, opacity: 1 }}
+							exit={{ scale: 0.95, opacity: 0 }}
+							className='w-full max-w-md rounded-2xl bg-gray-900/95 border border-white/10 p-6 shadow-2xl space-y-4'
+						>
+							<div className='flex items-center justify-between'>
+								<h3 className='text-lg font-bold text-white'>Конфиденциальность</h3>
+								<button
+									onClick={() => setIsPrivacyModalOpen(false)}
+									className='text-gray-400 hover:text-white'
+								>
+									✕
+								</button>
+							</div>
+							{[
+								{
+									key: 'show_email',
+									label: 'Показывать email',
+									desc: 'Ваш email виден другим пользователям',
+								},
+								{
+									key: 'show_online_status',
+									label: 'Статус в сети',
+									desc: 'Показывать, когда вы онлайн',
+								},
+								{
+									key: 'show_last_seen',
+									label: 'Последний раз в сети',
+									desc: 'Показывать время последнего посещения',
+								},
+								{
+									key: 'allow_friend_requests',
+									label: 'Запросы в друзья',
+									desc: 'Разрешить отправку запросов в друзья',
+								},
+							].map(item => (
+								<div
+									key={item.key}
+									className='flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-2.5'
+								>
+									<div>
+										<div className='text-sm text-white'>{item.label}</div>
+										<div className='text-xs text-gray-400'>{item.desc}</div>
+									</div>
+									<button
+										onClick={() =>
+											setPrivacySettings(prev => ({
+												...prev,
+												[item.key]: !(prev as any)[item.key],
+											}))
+										}
+										className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
+											(privacySettings as any)[item.key]
+												? 'bg-indigo-600'
+												: 'bg-gray-600'
+										}`}
+									>
+										<span
+											className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+												(privacySettings as any)[item.key]
+													? 'translate-x-6'
+													: 'translate-x-1'
+											}`}
+										/>
+									</button>
+								</div>
+							))}
+							<button
+								onClick={savePrivacySettings}
+								disabled={savingPrivacy}
+								className='w-full rounded-xl bg-indigo-600 py-2.5 font-semibold text-white hover:bg-indigo-500 transition disabled:opacity-60'
+							>
+								{savingPrivacy ? 'Сохранение...' : 'Сохранить'}
+							</button>
+						</motion.div>
+					</motion.div>
+				)}
+			</AnimatePresence>
+			{isStoriesOpen && hasProfileStories && (
+				<StoriesModal
+					isOpen={isStoriesOpen}
+					onClose={() => setIsStoriesOpen(false)}
+					items={profileStories as any}
+					title={user.username}
+					ownerId={user.id}
+					onUpdateStories={items => {
+						setProfileStories(items as any)
+					}}
+				/>
+			)}
 
 			<div className='rounded-3xl bg-white/5 border border-white/10 backdrop-blur-md p-1'>
 				<div className='flex flex-wrap gap-1'>

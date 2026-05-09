@@ -131,7 +131,11 @@ export default function StoriesBar({ onCreateStory }: Props) {
 		fetchData()
 	}, [user?.id])
 
-	const handleUpload = async (file: File, text: string) => {
+	const handleUpload = async (
+		file: File,
+		text: string,
+		hiddenFrom: string[] = [],
+	) => {
 		setIsUploading(true)
 		try {
 			// Read file as data URL
@@ -160,7 +164,7 @@ export default function StoriesBar({ onCreateStory }: Props) {
 			const storyRes = await fetch('/api/storis/create', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ url, type, text }),
+				body: JSON.stringify({ url, type, text, hidden_from: hiddenFrom }),
 			})
 
 			if (storyRes.ok) {
@@ -270,6 +274,7 @@ export default function StoriesBar({ onCreateStory }: Props) {
 				onClose={() => setShowCreateModal(false)}
 				onUpload={handleUpload}
 				isUploading={isUploading}
+				friends={friends.filter(f => f.id !== user?.id)}
 			/>
 
 			{openUser && (

@@ -166,8 +166,8 @@ def _store_login_session(
             f"Failed to store login session in Redis: {e}")
 
 
-@auth_bp.route("/register", methods=["POST"])
 @rate_limit("auth-register", limit=5, window_seconds=60)
+@auth_bp.route("/register", methods=["POST"])
 def register():
     data = request.get_json()
     if not data:
@@ -207,8 +207,8 @@ def verify_email(token):
     return (jsonify({"message": message}), 200)
 
 
-@auth_bp.route("/login", methods=["POST"])
 @rate_limit("auth-login", limit=10, window_seconds=60)
+@auth_bp.route("/login", methods=["POST"])
 def login():
     try:
 
@@ -287,11 +287,9 @@ def login():
     )
 
 
-@auth_bp.route("/me", methods=["POST"])
+@auth_bp.route("/me", methods=["GET", "POST"])
 def me():
-    data = request.get_json() or {}
-    token = data.get("access_token")
-
+    token = _extract_access_token()
     if not token:
         return jsonify({"error": "Требуется access_token"}), 400
 
@@ -312,9 +310,9 @@ def me():
     )
 
 
+@rate_limit("socket-token", limit=20, window_seconds=60)
 @auth_bp.route("/socket-token", methods=["GET"])
 @token_required
-@rate_limit("socket-token", limit=20, window_seconds=60)
 def socket_token(current_user):
     serializer = URLSafeTimedSerializer(current_app.config["SECRET_KEY"])
     token = serializer.dumps(
@@ -550,7 +548,6 @@ def terminate_session(current_user):
 
 
 @auth_bp.route("/api-key-login", methods=["POST"])
-@rate_limit("auth-api-key-login", limit=20, window_seconds=60)
 def api_key_login():
     data = request.get_json() or {}
     api_key = data.get("api_key")

@@ -1,4 +1,3 @@
-from app.core.rate_limiter import check_spam_protection, rate_limit
 from app.schemas.message_schema import message_schema, messages_schema
 from app.services.message_service import MessageService
 from app.services.user_service import UserService
@@ -59,7 +58,6 @@ def get_message(current_user, message_id):
 
 @public_messages_bp.route("/", methods=["POST"])
 @api_key_required
-@rate_limit(limit=50, window=3600, per_user=True)
 def send_message(current_user):
     try:
         data = request.get_json() or {}
@@ -103,7 +101,6 @@ def send_message(current_user):
 
 @public_messages_bp.route("/<message_id>", methods=["PUT"])
 @api_key_required
-@rate_limit(limit=20, window=3600, per_user=True)
 def update_message(current_user, message_id):
     try:
         message = MessageService.get_message_by_id(message_id)

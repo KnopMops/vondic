@@ -52,8 +52,6 @@ backup.sql
 
 dist/
 
-desktop/
-
 build/
 
 run.py
@@ -68,3 +66,15 @@ prometheus.yml
 pgbouncer/
 
 strip_comments_and_format_pep8.sh
+
+*.dump
+
+docker-entrypoint.sh
+
+.qwen/
+
+nginx-static/
+
+qwen_free_cli/
+
+docker-compose.yml

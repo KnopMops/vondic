@@ -1,4 +1,3 @@
-from app.core.rate_limiter import rate_limit
 from app.schemas.user_schema import user_schema, users_schema
 from app.services.user_service import UserService
 from app.utils.decorators import api_key_required, token_required
@@ -172,7 +171,6 @@ def get_user_following(user_id):
 
 @public_users_bp.route("/me", methods=["PUT"])
 @api_key_required
-@rate_limit(limit=20, window=3600, per_user=True)
 def update_current_user(current_user):
     try:
         data = request.get_json() or {}
@@ -216,7 +214,6 @@ def update_current_user(current_user):
 
 @public_users_bp.route("/<user_id>/follow", methods=["POST"])
 @api_key_required
-@rate_limit(limit=50, window=3600, per_user=True)
 def follow_user(current_user, user_id):
     try:
         target_user = UserService.get_user_by_id(user_id)
@@ -237,7 +234,6 @@ def follow_user(current_user, user_id):
 
 @public_users_bp.route("/<user_id>/unfollow", methods=["POST"])
 @api_key_required
-@rate_limit(limit=50, window=3600, per_user=True)
 def unfollow_user(current_user, user_id):
     try:
         target_user = UserService.get_user_by_id(user_id)

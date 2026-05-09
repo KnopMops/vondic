@@ -1,13 +1,14 @@
 'use client'
 
 import Header from '@/components/social/Header'
+import DeveloperSettings from '@/components/settings/DeveloperSettings'
 import Sidebar from '@/components/social/Sidebar'
 import { useAuth } from '@/lib/AuthContext'
 import { setUser } from '@/lib/features/authSlice'
 import { useAppDispatch } from '@/lib/hooks'
 import { useToast } from '@/lib/ToastContext'
 import { AnimatePresence, motion } from 'framer-motion'
-import { FiBell, FiCode, FiEye, FiMail, FiMonitor, FiMessageCircle, FiMusic, FiPhoneCall, FiSettings, FiShield, FiVolume2 } from 'react-icons/fi'
+import { FiBell, FiCode, FiMail, FiMonitor, FiMessageCircle, FiMusic, FiPhoneCall, FiSettings, FiShield, FiVolume2 } from 'react-icons/fi'
 import { HiOutlineColorSwatch } from 'react-icons/hi'
 import { useEffect, useState } from 'react'
 
@@ -106,10 +107,6 @@ export default function SettingsPage() {
 	const [notifAlerts, setNotifAlerts] = useState(true)
 	const [notifSounds, setNotifSounds] = useState(true)
 	const [notifIncomingCall, setNotifIncomingCall] = useState(true)
-	const [presenceStatus, setPresenceStatus] = useState<'Online' | 'Offline'>(
-		'Online',
-	)
-	const [showEmail, setShowEmail] = useState(true)
 	const [theme, setTheme] = useState<'system' | 'dark' | 'light'>('system')
 	const [fontSize, setFontSize] = useState<number>(14)
 	const [borderRadius, setBorderRadius] = useState<number>(12)
@@ -135,6 +132,7 @@ export default function SettingsPage() {
 	)
 	const [ringtoneVolume, setRingtoneVolume] = useState<number>(70)
 	const [messageVolume, setMessageVolume] = useState<number>(50)
+	const [isOauthModalOpen, setIsOauthModalOpen] = useState(false)
 
 	const dispatch = useAppDispatch()
 
@@ -145,9 +143,6 @@ export default function SettingsPage() {
 			setSecretKey(user.two_factor_secret || null)
 			setLoginAlertEnabled(!!user.login_alert_enabled)
 			setDeveloperEnabled(!!user.is_developer)
-			const rawStatus = String(user.status || '').toLowerCase()
-			setPresenceStatus(rawStatus === 'offline' ? 'Offline' : 'Online')
-			setShowEmail(user.privacy_settings?.show_email !== false)
 		}
 	}, [user?.id])
 
@@ -294,70 +289,6 @@ export default function SettingsPage() {
 		applyTheme(theme)
 		localStorage.setItem('app_theme', theme)
 	}, [theme])
-
-	const updateStatus = async (nextStatus: 'Online' | 'Offline') => {
-		if (!user) return
-		setPresenceStatus(nextStatus)
-		try {
-			const res = await fetch('/api/users/update', {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ user_id: user.id, status: nextStatus }),
-			})
-			const data = await res.json()
-			if (!res.ok) {
-				throw new Error(data.error || 'Ошибка обновления статуса')
-			}
-			const updatedUser = data?.user || data
-			if (updatedUser) {
-				dispatch(setUser(updatedUser))
-				localStorage.setItem('user', JSON.stringify(updatedUser))
-			}
-			showToast(
-				nextStatus === 'Online' ? 'Статус: В сети' : 'Статус: Не в сети',
-				'success',
-			)
-		} catch (e: any) {
-			setPresenceStatus(
-				String(user.status || '').toLowerCase() === 'offline'
-					? 'Offline'
-					: 'Online',
-			)
-			showToast(e.message || 'Не удалось обновить статус', 'error')
-		}
-	}
-
-	const updatePrivacy = async (key: string, value: any) => {
-		if (!user) return
-		const nextPrivacy = {
-			...(user.privacy_settings || { show_email: true }),
-			[key]: value,
-		}
-		if (key === 'show_email') setShowEmail(value)
-
-		try {
-			const res = await fetch('/api/users/update', {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					user_id: user.id,
-					privacy_settings: nextPrivacy,
-				}),
-			})
-			const data = await res.json()
-			if (!res.ok) throw new Error(data.error || 'Ошибка обновления')
-			const updatedUser = data?.user || data
-			if (updatedUser) {
-				dispatch(setUser(updatedUser))
-				localStorage.setItem('user', JSON.stringify(updatedUser))
-			}
-			showToast('Настройки приватности обновлены', 'success')
-		} catch (e: any) {
-			if (key === 'show_email')
-				setShowEmail(user.privacy_settings?.show_email !== false)
-			showToast(e.message || 'Ошибка обновления', 'error')
-		}
-	}
 
 	const isYandexAccount = !!user?.email?.endsWith('@yandex.ru')
 
@@ -797,6 +728,12 @@ export default function SettingsPage() {
 												<div className='rounded-lg border border-white/10 bg-black/30 p-3 text-sm text-gray-300 break-all'>
 													{apiKey || 'Ключ появится здесь после генерации'}
 												</div>
+												<button
+													onClick={() => setIsOauthModalOpen(true)}
+													className='rounded-lg bg-indigo-500/20 border border-indigo-400/30 px-4 py-2 text-sm text-indigo-200 hover:bg-indigo-500/30 transition'
+												>
+													OAuth приложения и настройки
+												</button>
 											</div>
 										)}
 									</div>
@@ -1435,62 +1372,6 @@ export default function SettingsPage() {
 									</div>
 								</motion.div>
 
-								<motion.div
-									initial={{ opacity: 0, y: 20 }}
-									animate={{ opacity: 1, y: 0 }}
-									transition={{ duration: 0.4 }}
-									className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
-								>
-									<motion.div
-										initial={{ opacity: 0.2 }}
-										animate={{ opacity: [0.2, 0.4, 0.2] }}
-										transition={{ duration: 7, repeat: Infinity }}
-										className='absolute -bottom-24 -right-24 w-64 h-64 bg-gradient-to-tr from-blue-500/10 to-indigo-500/10 rounded-full blur-3xl'
-									/>
-									<div className='flex items-center gap-3 mb-4'>
-										<FiEye className='w-5 h-5 text-blue-400' />
-										<h2 className='text-xl font-semibold'>
-											Конфиденциальность
-										</h2>
-									</div>
-									<div className='space-y-4'>
-										<div>
-											<p className='text-sm text-white mb-2'>Статус</p>
-											<div className='grid grid-cols-2 gap-2'>
-												<button
-													onClick={() => updateStatus('Online')}
-													className={`rounded-lg px-4 py-2 text-sm border ${presenceStatus === 'Online' ? 'border-indigo-500 bg-indigo-500/20 text-white' : 'border-white/10 bg-white/5 text-gray-300'}`}
-												>
-													В сети
-												</button>
-												<button
-													onClick={() => updateStatus('Offline')}
-													className={`rounded-lg px-4 py-2 text-sm border ${presenceStatus === 'Offline' ? 'border-indigo-500 bg-indigo-500/20 text-white' : 'border-white/10 bg-white/5 text-gray-300'}`}
-												>
-													Не в сети
-												</button>
-											</div>
-										</div>
-										<div className='flex items-center justify-between'>
-											<div>
-												<p className='text-sm font-medium text-white'>
-													Показывать почту
-												</p>
-												<p className='text-xs text-gray-400'>
-													Видна ли ваша почта другим пользователям
-												</p>
-											</div>
-											<button
-												onClick={() => updatePrivacy('show_email', !showEmail)}
-												className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${showEmail ? 'bg-emerald-500/60' : 'bg-white/10'}`}
-											>
-												<span
-													className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${showEmail ? 'translate-x-7' : 'translate-x-1'}`}
-												/>
-											</button>
-										</div>
-									</div>
-								</motion.div>
 							</>
 						)}
 
@@ -1600,6 +1481,43 @@ export default function SettingsPage() {
 								</motion.div>
 							</>
 						)}
+
+						<AnimatePresence>
+							{isOauthModalOpen && (
+								<motion.div
+									initial={{ opacity: 0 }}
+									animate={{ opacity: 1 }}
+									exit={{ opacity: 0 }}
+									className='fixed inset-0 z-[99999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4'
+								>
+									<motion.div
+										initial={{ scale: 0.95, opacity: 0 }}
+										animate={{ scale: 1, opacity: 1 }}
+										exit={{ scale: 0.95, opacity: 0 }}
+										className='w-full max-w-4xl max-h-[85vh] overflow-y-auto rounded-2xl border border-white/10 bg-gray-950/95 p-5'
+									>
+										<div className='mb-4 flex items-center justify-between'>
+											<div>
+												<h3 className='text-xl font-semibold text-white'>
+													OAuth приложения
+												</h3>
+												<p className='text-sm text-gray-400'>
+													Настраивайте приложения здесь, а в внешнем проекте
+													используйте только ключи клиента.
+												</p>
+											</div>
+											<button
+												onClick={() => setIsOauthModalOpen(false)}
+												className='rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-gray-200 hover:bg-white/10'
+											>
+												Закрыть
+											</button>
+										</div>
+										<DeveloperSettings enabled={developerEnabled} />
+									</motion.div>
+								</motion.div>
+							)}
+						</AnimatePresence>
 
 						<motion.div
 							initial={{ opacity: 0, y: 20 }}

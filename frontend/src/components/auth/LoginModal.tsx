@@ -1,9 +1,11 @@
 'use client'
 
 import BrandLogo from '@/components/social/BrandLogo'
+import SmartCaptcha from '@/components/auth/SmartCaptcha'
 import { useAuth } from '@/lib/AuthContext'
+import { setUser } from '@/lib/features/authSlice'
+import { useAppDispatch } from '@/lib/hooks'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { SiYandexcloud as Yandex } from 'react-icons/si'
 import { LuX as X } from 'react-icons/lu'
@@ -16,8 +18,10 @@ interface LoginModalProps {
 export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 	const [email, setEmail] = useState('')
 	const [password, setPassword] = useState('')
-	const { login, loginWithYandex, isLoading } = useAuth()
-	const router = useRouter()
+	const { loginWithYandex, isLoading } = useAuth()
+	const dispatch = useAppDispatch()
+	const captchaSiteKey =
+		process.env.NEXT_PUBLIC_YANDEX_SMARTCAPTCHA_SITE_KEY || ''
 
 	const [twoFactorRequired, setTwoFactorRequired] = useState(false)
 	const [twoFactorMethod, setTwoFactorMethod] = useState<'email' | 'totp'>(
@@ -25,6 +29,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 	)
 	const [twoFactorCode, setTwoFactorCode] = useState('')
 	const [loginError, setLoginError] = useState<string | null>(null)
+	const [captchaToken, setCaptchaToken] = useState('')
 	const sendLoginEmailCode = async () => {
 		try {
 			const res = await fetch('/api/auth/2fa/email/send', { method: 'POST' })
@@ -47,23 +52,41 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 	const handleEmailLogin = async (e: React.FormEvent) => {
 		e.preventDefault()
 		setLoginError(null)
+		if (captchaSiteKey && !captchaToken.trim()) {
+			setLoginError('Подтвердите, что вы не робот')
+			return
+		}
 		try {
 			const res = await fetch('/api/auth/login', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ email, password }),
+				body: JSON.stringify({
+					email,
+					password,
+					smart_captcha_token: captchaToken || undefined,
+				}),
 			})
 			const data = await res.json().catch(() => ({}))
 			if (!res.ok) {
 				if (data?.two_factor_required) {
 					setTwoFactorRequired(true)
 					setTwoFactorMethod(data.method === 'totp' ? 'totp' : 'email')
+					setCaptchaToken('')
 					return
 				}
 				setLoginError(data?.error || 'Ошибка входа')
 				return
 			}
-			router.push('/feed')
+			const userData = data.user ? { ...data.user } : null
+			if (userData && data.access_token) {
+				userData.access_token = data.access_token
+			}
+			if (userData) {
+				dispatch(setUser(userData))
+				localStorage.setItem('user', JSON.stringify(userData))
+			}
+			onClose()
+			window.location.assign('/feed')
 		} catch (err: any) {
 			setLoginError(err.message || 'Ошибка входа')
 		}
@@ -72,10 +95,15 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 	const handleEmailTwoFactor = async (e: React.FormEvent) => {
 		e.preventDefault()
 		setLoginError(null)
+		if (captchaSiteKey && !captchaToken.trim()) {
+			setLoginError('Подтвердите, что вы не робот')
+			return
+		}
 		try {
-			const body: any = { email, password }
+			const body: Record<string, string> = { email, password }
 			if (twoFactorMethod === 'email') body.email_code = twoFactorCode
 			else body.totp_code = twoFactorCode
+			if (captchaToken) body.smart_captcha_token = captchaToken
 			const res = await fetch('/api/auth/login', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -86,7 +114,16 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 				setLoginError(data?.error || 'Неверный код')
 				return
 			}
-			router.push('/feed')
+			const userData = data.user ? { ...data.user } : null
+			if (userData && data.access_token) {
+				userData.access_token = data.access_token
+			}
+			if (userData) {
+				dispatch(setUser(userData))
+				localStorage.setItem('user', JSON.stringify(userData))
+			}
+			onClose()
+			window.location.assign('/feed')
 		} catch (err: any) {
 			setLoginError(err.message || 'Ошибка подтверждения')
 		}
@@ -184,12 +221,19 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 								)}
 							</div>
 						)}
+						<SmartCaptcha
+							key={twoFactorRequired ? 'twofactor' : 'password'}
+							onTokenChange={setCaptchaToken}
+						/>
 					</div>
 
 					<div className='space-y-4 pt-2'>
 						<button
 							type='submit'
-							disabled={isLoading}
+							disabled={
+								isLoading ||
+								(!!captchaSiteKey && !captchaToken.trim())
+							}
 							className='group relative flex w-full justify-center rounded-xl bg-indigo-600 px-4 py-3.5 text-sm font-bold text-white hover:bg-indigo-500 disabled:opacity-50 transition-all shadow-lg shadow-indigo-500/20 active:scale-[0.98]'
 						>
 							{isLoading

@@ -53,6 +53,21 @@ def normalize_storis(items):
         if not isinstance(reactions, list):
             item["reactions"] = []
             changed = True
+
+        if "hidden_from" not in item:
+            item["hidden_from"] = []
+            changed = True
+        elif not isinstance(item["hidden_from"], list):
+            item["hidden_from"] = []
+            changed = True
+        else:
+
+            original_len = len(item["hidden_from"])
+            item["hidden_from"] = [
+                uid for uid in item["hidden_from"] if isinstance(
+                    uid, str)]
+            if len(item["hidden_from"]) != original_len:
+                changed = True
         normalized.append(item)
     return normalized, changed
 
@@ -76,8 +91,13 @@ def friends_with_storis(current_user):
         if changed:
             u.storis = items
             changed_any = True
-        if isinstance(items, list) and len(items) > 0:
+        visible_items = [
+            item for item in items
+            if str(current_user.id) not in (item.get("hidden_from") or [])
+        ]
+        if isinstance(visible_items, list) and len(visible_items) > 0:
             d = u.to_dict()
+            d["storis"] = visible_items
             result.append(d)
     if changed_any:
         db.session.commit()
@@ -91,11 +111,17 @@ def create_storis(current_user):
     media_url = data.get("url")
     media_type = data.get("type") or "image"
     text = (data.get("text") or "").strip()
+    hidden_from = data.get("hidden_from", [])
     if not media_url:
         return jsonify({"error": "url is required"}), 400
     try:
         user = User.query.get(current_user.id)
         items = user.storis or []
+        if not isinstance(hidden_from, list):
+            hidden_from = []
+        hidden_from = [
+            str(uid) for uid in hidden_from if uid is not None and str(uid).strip()]
+
         item = {
             "id": str(uuid.uuid4()),
             "url": media_url,
@@ -103,6 +129,7 @@ def create_storis(current_user):
             "created_at": request.headers.get("X-Client-Time")
             or datetime.now(timezone.utc).isoformat(),
             "reactions": [],
+            "hidden_from": hidden_from,
         }
         if text:
             item["text"] = text
@@ -152,6 +179,11 @@ def user_storis(current_user):
     if changed:
         user.storis = items
         db.session.commit()
+    if str(user_id) != str(current_user.id):
+        items = [
+            item for item in items
+            if str(current_user.id) not in (item.get("hidden_from") or [])
+        ]
     return jsonify(items), 200
 
 
@@ -206,3 +238,49 @@ def react_storis(current_user):
     flag_modified(user, "storis")
     db.session.commit()
     return jsonify({"story": target}), 200
+
+
+@storis_bp.route("/hide", methods=["POST"])
+@token_required
+def hide_story_from_user(current_user):
+    """
+    Add or remove a user from the hidden_from list of a story.
+    Expects JSON: { "story_id": "...", "user_id": "...", "action": "add|remove" }
+    Only the story owner can modify this list.
+    """
+    data = request.get_json() or {}
+    story_id = data.get("story_id")
+    user_id = data.get("user_id")
+    action = data.get("action")
+    if not story_id or not user_id or action not in ("add", "remove"):
+        return jsonify(
+            {"error": "story_id, user_id and action (add|remove) are required"}), 400
+
+    owner = User.query.get(current_user.id)
+    if not owner:
+        return jsonify({"error": "User not found"}), 404
+    items, changed = normalize_storis(owner.storis)
+    target = None
+    for item in items:
+        if str(item.get("id")) == str(story_id):
+            target = item
+            break
+    if not target:
+        return jsonify({"error": "Story not found"}), 404
+    hidden_from = target.get("hidden_from", [])
+    if not isinstance(hidden_from, list):
+        hidden_from = []
+    if action == "add":
+        if user_id not in hidden_from:
+            hidden_from.append(user_id)
+            changed = True
+    else:
+        if user_id in hidden_from:
+            hidden_from.remove(user_id)
+            changed = True
+    if changed:
+        target["hidden_from"] = hidden_from
+        owner.storis = items
+        flag_modified(owner, "storis")
+        db.session.commit()
+    return jsonify({"success": True, "story": target}), 200

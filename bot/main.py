@@ -62,17 +62,15 @@ async def cmd_start(message: Message, bot: Bot, state: FSMContext):
     builder = InlineKeyboardBuilder()
     builder.row(
         InlineKeyboardButton(
-            text="💎 Купить Vondic Premium (скоро)",
-            callback_data="premium_unavailable"))
-    builder.row(
-        InlineKeyboardButton(
-            text="💰 Купить Vondic Coins (скоро)",
+            text="💰 Пополнить баланс (скоро)",
             callback_data="coins_unavailable"))
 
     safe_send_message(
         bot,
         str(message.chat.id),
-        "👋 Добро пожаловать в Vondic Bot!\n\nДоступные разделы:",
+        "👋 Добро пожаловать в Vondic Bot!\n\n"
+        "Покупка Premium — в веб-магазине Vondic за коины.\n"
+        "Здесь пока только заглушка пополнения баланса.",
         reply_markup=builder.as_markup(),
     )
 

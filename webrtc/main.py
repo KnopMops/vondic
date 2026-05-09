@@ -144,6 +144,8 @@ def create_app():
 
     @app.route("/set_socket_id", methods=["POST"])
     def set_socket_id():
+        """Устарело: наличие в сети и socket_id задаёт только живой Socket.IO.
+        Произвольный UUID от клиента ломал logout (release_socket по реальному sid)."""
         data = request.get_json()
         if not data:
             return (jsonify({"error": "Данные не предоставлены"}), 400)

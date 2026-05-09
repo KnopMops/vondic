@@ -12,6 +12,7 @@ const ApiDocumentationPage = () => {
 		{ id: 'posts', label: 'Посты' },
 		{ id: 'messages', label: 'Сообщения' },
 		{ id: 'comments', label: 'Комментарии' },
+		{ id: 'oauth2', label: 'OAuth 2.0' },
 		{ id: 'botiksdk', label: 'BotikSDK' },
 		{ id: 'vondicapi', label: 'ВондикAPI' },
 	]
@@ -926,14 +927,238 @@ const ApiDocumentationPage = () => {
 					</div>
 				)
 
+			case 'oauth2':
+				return (
+					<div className='space-y-6'>
+						<section>
+							<h2 className='text-2xl font-bold mb-4 text-white'>
+								OAuth 2.0 (Вондик)
+							</h2>
+							<p className='mb-4 text-gray-300'>
+								Вондик поддерживает OAuth 2.0 в стиле Yandex/Google: можно
+								подключать вход через Вондик в сторонние приложения и сервисы.
+							</p>
+							<div className='mb-6'>
+								<h3 className='text-xl font-semibold mb-2 text-white'>
+									Базовые URL
+								</h3>
+								<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+									{`Authorize: https://vondic.knopusmedia.ru/oauth/authorize
+Token:     https://vondic.knopusmedia.ru/oauth/token
+Userinfo:  https://vondic.knopusmedia.ru/oauth/userinfo`}
+								</pre>
+								<p className='mt-2 text-sm text-gray-400'>
+									Настройка OAuth-приложений выполняется в
+									<code className='mx-1 text-indigo-300'>
+										Настройки → Разработчик → OAuth приложения и настройки
+									</code>
+									. В интегрируемом проекте обычно указываются только
+									<code className='mx-1 text-indigo-300'>
+										client_id / client_secret
+									</code>
+									, а redirect URI и остальные параметры приоритетно берутся из
+									настроек приложения на сайте Вондик.
+								</p>
+							</div>
+							<div className='mb-6'>
+								<h3 className='text-xl font-semibold mb-2 text-white'>
+									Шаг 1: получить code
+								</h3>
+								<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+									{`GET /oauth/authorize?client_id={client_id}&redirect_uri={redirect_uri}&response_type=code&state={state}`}
+								</pre>
+								<p className='mt-2 text-sm text-gray-400'>
+									Пользователь видит специальную страницу подтверждения доступа
+									(экран consent в стиле Google/Yandex) с кнопками
+									<code className='mx-1 text-indigo-300'>Разрешить</code> /
+									<code className='mx-1 text-indigo-300'>Отказать</code>.
+								</p>
+							</div>
+							<div className='mb-6'>
+								<h3 className='text-xl font-semibold mb-2 text-white'>
+									Шаг 2: обмен code на access_token
+								</h3>
+								<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+									{`curl -X POST https://vondic.knopusmedia.ru/oauth/token \\
+  -H "Content-Type: application/x-www-form-urlencoded" \\
+  -d "grant_type=authorization_code" \\
+  -d "code=AUTH_CODE" \\
+  -d "redirect_uri=https://app.example.com/callback" \\
+  -d "client_id=YOUR_CLIENT_ID" \\
+  -d "client_secret=YOUR_CLIENT_SECRET"`}
+								</pre>
+							</div>
+							<div className='mb-6'>
+								<h3 className='text-xl font-semibold mb-2 text-white'>
+									Шаг 3: userinfo
+								</h3>
+								<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+									{`curl https://vondic.knopusmedia.ru/oauth/userinfo \\
+  -H "Authorization: Bearer ACCESS_TOKEN"`}
+								</pre>
+							</div>
+							<div className='mb-6'>
+								<h3 className='text-xl font-semibold mb-2 text-white'>
+									Refresh token
+								</h3>
+								<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+									{`curl -X POST https://vondic.knopusmedia.ru/oauth/token \\
+  -H "Content-Type: application/x-www-form-urlencoded" \\
+  -d "grant_type=refresh_token" \\
+  -d "refresh_token=OLD_ACCESS_TOKEN" \\
+  -d "client_id=YOUR_CLIENT_ID" \\
+  -d "client_secret=YOUR_CLIENT_SECRET"`}
+								</pre>
+							</div>
+							<div className='mb-6'>
+								<h3 className='text-xl font-semibold mb-2 text-white'>
+									Пример интеграции (Node.js/Express)
+								</h3>
+								<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+									{`app.get("/oauth/login", (req, res) => {
+  const state = crypto.randomUUID();
+  req.session.oauthState = state;
+  const qs = new URLSearchParams({
+    client_id: process.env.VONDIC_CLIENT_ID,
+    redirect_uri: "http://localhost:3000/oauth/callback",
+    response_type: "code",
+    state,
+  });
+  res.redirect("https://vondic.knopusmedia.ru/oauth/authorize?" + qs);
+});
+
+app.get("/oauth/callback", async (req, res) => {
+  const { code, state } = req.query;
+  if (state !== req.session.oauthState) return res.status(400).send("Invalid state");
+  // exchange code on /oauth/token, then call /oauth/userinfo
+});`}
+								</pre>
+							</div>
+							<div className='mb-6'>
+								<h3 className='text-xl font-semibold mb-2 text-white'>
+									Popup flow (как Google/Yandex)
+								</h3>
+								<p className='mb-2 text-sm text-gray-400'>
+									Рекомендуемый UX: открывайте
+									<code className='mx-1 text-indigo-300'>/oauth/authorize</code> в
+									новом окне, а на странице callback отправляйте
+									<code className='mx-1 text-indigo-300'>code/state</code> в
+									родительское окно через
+									<code className='mx-1 text-indigo-300'>window.opener.postMessage</code>.
+								</p>
+								<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+									{`// 1) Frontend (кнопка "Войти через Вондик")
+const state = crypto.randomUUID();
+sessionStorage.setItem("vondic_oauth_state", state);
+
+const redirectUri = "https://app.example.com/oauth/callback";
+const authUrl =
+  "https://vondic.knopusmedia.ru/oauth/authorize?" +
+  new URLSearchParams({
+    client_id: process.env.NEXT_PUBLIC_VONDIC_CLIENT_ID!,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    state,
+  });
+
+const popup = window.open(
+  authUrl,
+  "vondic_oauth",
+  "width=520,height=720,menubar=no,toolbar=no,location=no,status=no"
+);
+
+if (!popup) {
+  // fallback, если popup заблокирован
+  window.location.href = authUrl;
+}
+
+window.addEventListener("message", async (event) => {
+  if (event.origin !== "https://app.example.com") return;
+  const { type, code, state: returnedState, error } = event.data || {};
+  if (type !== "vondic_oauth_result") return;
+
+  if (error) {
+    console.error("OAuth denied:", error);
+    return;
+  }
+
+  const expectedState = sessionStorage.getItem("vondic_oauth_state");
+  if (!expectedState || expectedState !== returnedState) {
+    console.error("Invalid OAuth state");
+    return;
+  }
+
+  // 2) Обмен code -> access_token
+  const tokenResp = await fetch("/api/oauth/exchange", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code, redirect_uri: redirectUri }),
+  });
+  const tokenData = await tokenResp.json();
+  console.log("OAuth token:", tokenData.access_token);
+});`}
+								</pre>
+								<pre className='mt-3 bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+									{`// 3) Страница callback: https://app.example.com/oauth/callback
+// (если это Next.js page/component, этот код выполняется в браузере)
+const params = new URLSearchParams(window.location.search);
+const code = params.get("code");
+const state = params.get("state");
+const error = params.get("error");
+
+if (window.opener && !window.opener.closed) {
+  window.opener.postMessage(
+    {
+      type: "vondic_oauth_result",
+      code,
+      state,
+      error,
+    },
+    window.location.origin
+  );
+  window.close();
+}`}
+								</pre>
+							</div>
+							<div className='mb-6'>
+								<h3 className='text-xl font-semibold mb-2 text-white'>
+									Управление OAuth-клиентами
+								</h3>
+								<div className='space-y-2 text-sm text-gray-300'>
+									<div className='rounded-lg border border-white/10 bg-white/5 px-3 py-2'>
+										<code className='text-green-400'>GET</code>{' '}
+										<code>/oauth/clients</code> - получить свои приложения
+									</div>
+									<div className='rounded-lg border border-white/10 bg-white/5 px-3 py-2'>
+										<code className='text-blue-400'>POST</code>{' '}
+										<code>/oauth/clients</code> - создать приложение (name,
+										description, redirect_uris, logo_url, default_scopes)
+									</div>
+									<div className='rounded-lg border border-white/10 bg-white/5 px-3 py-2'>
+										<code className='text-yellow-400'>PUT</code>{' '}
+										<code>/oauth/clients/{'{client_id}'}</code> - обновить
+										настройки приложения (в т.ч. logo_url и default_scopes)
+									</div>
+									<div className='rounded-lg border border-white/10 bg-white/5 px-3 py-2'>
+										<code className='text-red-400'>DELETE</code>{' '}
+										<code>/oauth/clients/{'{client_id}'}</code> - удалить
+										приложение
+									</div>
+								</div>
+							</div>
+						</section>
+					</div>
+				)
+
 			case 'botiksdk':
 				return (
 					<div className='space-y-6'>
 						<section>
 							<h2 className='text-2xl font-bold mb-4 text-white'>BotikSDK</h2>
 							<p className='mb-4 text-gray-300'>
-								BotikSDK - это библиотека Python для создания и управления
-								Telegram-ботами с расширенными возможностями.
+								Подробная документация Python SDK для разработки ботов Вондик:
+								фильтры, callbacks, FSM, клавиатуры, OAuth/API key интеграция и
+								готовые примеры для продакшена.
 							</p>
 
 							<div className='mb-6'>
@@ -950,16 +1175,26 @@ const ApiDocumentationPage = () => {
 									Быстрый старт
 								</h3>
 								<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
-									{`from botiksdk import Bot, Router, Message
-                  
-router = Router()
+									{`import asyncio
+from botiksdk import Bot, Dispatcher, Command
 
-@router.message_handler(commands=['start'])
-async def start_command(message: Message):
-    await message.reply("Привет! Это мой первый бот с BotikSDK.")
+dp = Dispatcher()
+bot = Bot(token="YOUR_BOT_TOKEN", base_url="https://vondic.knopusmedia.ru")
 
-bot = Bot(token="YOUR_BOT_TOKEN", router=router)
-bot.run()`}
+@dp.message(Command("start"))
+async def start_command(message, bot, state):
+    await bot.send_message(str(message.chat.id), "Привет из BotikSDK!")
+
+@dp.message()
+async def echo(message, bot, state):
+    if message.text:
+        await bot.send_message(str(message.chat.id), f"Echo: {message.text}")
+
+async def main():
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())`}
 								</pre>
 							</div>
 
@@ -993,6 +1228,103 @@ async def attachment_handler(message: Message):
         await message.answer("Я получил фото!")
     elif message.document:
         await message.answer("Я получил документ!")`}
+								</pre>
+							</div>
+							<div className='mb-6'>
+								<h3 className='text-xl font-semibold mb-2 text-white'>
+									Фильтры (command/text/regex/F)
+								</h3>
+								<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+									{`from botiksdk import Command, Text, Regex, F
+
+@dp.message(Command("help"))
+async def cmd_help(message, bot, state): ...
+
+@dp.message(Text(equals="Привет"))
+async def exact_text(message, bot, state): ...
+
+@dp.message(Regex(r"^\\d+$"))
+async def only_numbers(message, bot, state): ...
+
+@dp.message(F.message.text.contains("купить"))
+async def buy_intent(message, bot, state): ...`}
+								</pre>
+							</div>
+							<div className='mb-6'>
+								<h3 className='text-xl font-semibold mb-2 text-white'>
+									Inline keyboard + callback
+								</h3>
+								<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+									{`from botiksdk import InlineKeyboardBuilder, InlineKeyboardButton
+
+@dp.message(Command("menu"))
+async def menu(message, bot, state):
+    kb = InlineKeyboardBuilder()
+    kb.row(
+        InlineKeyboardButton(text="FAQ", callback_data="faq"),
+        InlineKeyboardButton(text="Support", callback_data="support"),
+    )
+    kb.add(InlineKeyboardButton(text="Сайт", url="https://vondic.knopusmedia.ru"))
+    await bot.send_message(str(message.chat.id), "Выберите:", reply_markup=kb.as_markup())
+
+@dp.callback_query(lambda c: c.data in ["faq", "support"])
+async def on_click(callback, bot, state):
+    await bot.answer_callback_query(callback.id)
+    await bot.send_message(str(callback.message.chat.id), f"Вы нажали: {callback.data}")`}
+								</pre>
+							</div>
+							<div className='mb-6'>
+								<h3 className='text-xl font-semibold mb-2 text-white'>
+									FSM (состояния диалога)
+								</h3>
+								<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+									{`class RegStates:
+    EMAIL = "email"
+    PASSWORD = "password"
+
+@dp.message(Command("register"))
+async def reg_start(message, bot, state):
+    await state.set_state(RegStates.EMAIL)
+    await bot.send_message(str(message.chat.id), "Введите email")
+
+@dp.message(state=RegStates.EMAIL)
+async def reg_email(message, bot, state):
+    await state.update_data(email=message.text)
+    await state.set_state(RegStates.PASSWORD)
+    await bot.send_message(str(message.chat.id), "Введите пароль")
+
+@dp.message(state=RegStates.PASSWORD)
+async def reg_password(message, bot, state):
+    data = await state.get_data()
+    await state.clear()
+    await bot.send_message(str(message.chat.id), f"Готово: {data.get('email')}")`}
+								</pre>
+							</div>
+							<div className='mb-6'>
+								<h3 className='text-xl font-semibold mb-2 text-white'>
+									BotikSDK + OAuth Вондик
+								</h3>
+								<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+									{`import requests
+from botiksdk.client import PublicAPIClient
+
+# 1. exchange authorization code to access_token
+token_resp = requests.post("https://vondic.knopusmedia.ru/oauth/token", data={
+    "grant_type": "authorization_code",
+    "code": "AUTH_CODE",
+    "redirect_uri": "https://app.example.com/callback",
+    "client_id": "YOUR_CLIENT_ID",
+    "client_secret": "YOUR_CLIENT_SECRET",
+})
+access_token = token_resp.json()["access_token"]
+
+# 2. get api key by oauth token
+client = PublicAPIClient(base_url="https://vondic.knopusmedia.ru")
+api_key = client.get_api_key(access_token=access_token)["api_key"]
+
+# 3. list bots / generate bot token
+bots = client.list_bots(api_key=api_key)
+print("bots:", bots)`}
 								</pre>
 							</div>
 						</section>

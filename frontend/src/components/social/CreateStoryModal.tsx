@@ -13,8 +13,9 @@ import { createPortal } from 'react-dom'
 interface CreateStoryModalProps {
 	isOpen: boolean
 	onClose: () => void
-	onUpload: (file: File, text: string) => Promise<void>
+	onUpload: (file: File, text: string, hiddenFrom: string[]) => Promise<void>
 	isUploading: boolean
+	friends?: Array<{ id: string; username: string; avatar_url?: string | null }>
 }
 
 export default function CreateStoryModal({
@@ -22,10 +23,13 @@ export default function CreateStoryModal({
 	onClose,
 	onUpload,
 	isUploading,
+	friends,
 }: CreateStoryModalProps) {
 	const [selectedFile, setSelectedFile] = useState<File | null>(null)
 	const [previewUrl, setPreviewUrl] = useState<string>('')
 	const [storyText, setStoryText] = useState('')
+	const [excludeQuery, setExcludeQuery] = useState('')
+	const [hiddenFrom, setHiddenFrom] = useState<string[]>([])
 	const [mounted, setMounted] = useState(false)
 
 	useEffect(() => {
@@ -48,7 +52,7 @@ export default function CreateStoryModal({
 
 	const handleUpload = async () => {
 		if (!selectedFile) return
-		await onUpload(selectedFile, storyText)
+		await onUpload(selectedFile, storyText, hiddenFrom)
 		resetState()
 	}
 
@@ -56,7 +60,15 @@ export default function CreateStoryModal({
 		setSelectedFile(null)
 		setPreviewUrl('')
 		setStoryText('')
+		setExcludeQuery('')
+		setHiddenFrom([])
 	}
+
+	const filteredFriends = (friends || []).filter(friend => {
+		const q = excludeQuery.trim().toLowerCase()
+		if (!q) return true
+		return friend.username.toLowerCase().includes(q)
+	})
 
 	const handleClose = () => {
 		resetState()
@@ -151,6 +163,51 @@ export default function CreateStoryModal({
 									className='w-full rounded-2xl border border-gray-700 bg-gray-800/50 px-5 py-4 text-white focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all resize-none'
 									rows={3}
 								/>
+							</div>
+							<div className='space-y-2'>
+								<label className='text-sm font-medium text-gray-400 px-1'>
+									Исключения (кто не может смотреть)
+								</label>
+								<input
+									value={excludeQuery}
+									onChange={e => setExcludeQuery(e.target.value)}
+									placeholder='Поиск пользователя...'
+									className='w-full rounded-2xl border border-gray-700 bg-gray-800/50 px-4 py-2.5 text-white focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all'
+								/>
+								<div className='max-h-32 overflow-y-auto rounded-2xl border border-gray-700 bg-gray-800/30 p-2 space-y-1'>
+									{filteredFriends.length === 0 ? (
+										<div className='px-2 py-1.5 text-xs text-gray-500'>
+											Пользователи не найдены
+										</div>
+									) : (
+										filteredFriends.map(friend => {
+											const selected = hiddenFrom.includes(friend.id)
+											return (
+												<button
+													key={friend.id}
+													type='button'
+													onClick={() =>
+														setHiddenFrom(prev =>
+															selected
+																? prev.filter(id => id !== friend.id)
+																: [...prev, friend.id],
+														)
+													}
+													className={`w-full flex items-center justify-between rounded-xl px-2 py-1.5 text-sm transition ${
+														selected
+															? 'bg-red-500/20 text-red-200'
+															: 'text-gray-200 hover:bg-white/5'
+													}`}
+												>
+													<span>{friend.username}</span>
+													<span className='text-xs'>
+														{selected ? 'Скрыто' : 'Виден'}
+													</span>
+												</button>
+											)
+										})
+									)}
+								</div>
 							</div>
 
 							<div className='flex gap-3'>

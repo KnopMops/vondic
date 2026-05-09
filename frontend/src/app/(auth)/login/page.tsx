@@ -3,15 +3,18 @@
 import { useAuth } from '@/lib/AuthContext'
 import SmartCaptcha from '@/components/auth/SmartCaptcha'
 import { motion } from 'framer-motion'
+import { setUser } from '@/lib/features/authSlice'
+import { useAppDispatch } from '@/lib/hooks'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 export default function LoginPage() {
 	const [email, setEmail] = useState('')
 	const [password, setPassword] = useState('')
-	const { login, loginWithYandex, isLoading } = useAuth()
-	const router = useRouter()
+	const { loginWithYandex, isLoading } = useAuth()
+	const dispatch = useAppDispatch()
+	const captchaSiteKey =
+		process.env.NEXT_PUBLIC_YANDEX_SMARTCAPTCHA_SITE_KEY || ''
 
 	const [twoFactorRequired, setTwoFactorRequired] = useState(false)
 	const [twoFactorMethod, setTwoFactorMethod] = useState<'email' | 'totp'>(
@@ -40,6 +43,10 @@ export default function LoginPage() {
 	const handleEmailLogin = async (e: React.FormEvent) => {
 		e.preventDefault()
 		setLoginError(null)
+		if (captchaSiteKey && !captchaToken.trim()) {
+			setLoginError('Подтвердите, что вы не робот')
+			return
+		}
 		try {
 			const res = await fetch('/api/auth/login', {
 				method: 'POST',
@@ -47,7 +54,7 @@ export default function LoginPage() {
 				body: JSON.stringify({
 					email,
 					password,
-					smart_captcha_token: captchaToken,
+					smart_captcha_token: captchaToken || undefined,
 				}),
 			})
 			const data = await res.json().catch(() => ({}))
@@ -55,12 +62,19 @@ export default function LoginPage() {
 				if (data?.two_factor_required) {
 					setTwoFactorRequired(true)
 					setTwoFactorMethod(data.method === 'totp' ? 'totp' : 'email')
+					setCaptchaToken('')
 					return
 				}
 				setLoginError(data?.error || 'Ошибка входа')
 				return
 			}
-			router.push('/feed')
+			if (data.user) {
+				const userData = { ...data.user }
+				if (data.access_token) userData.access_token = data.access_token
+				dispatch(setUser(userData))
+				localStorage.setItem('user', JSON.stringify(userData))
+			}
+			window.location.assign('/feed')
 		} catch (err: any) {
 			setLoginError(err.message || 'Ошибка входа')
 		}
@@ -69,6 +83,10 @@ export default function LoginPage() {
 	const handleEmailTwoFactor = async (e: React.FormEvent) => {
 		e.preventDefault()
 		setLoginError(null)
+		if (captchaSiteKey && !captchaToken.trim()) {
+			setLoginError('Подтвердите, что вы не робот')
+			return
+		}
 		try {
 			const body: any = { email, password }
 			if (twoFactorMethod === 'email') body.email_code = twoFactorCode
@@ -86,7 +104,13 @@ export default function LoginPage() {
 				setLoginError(data?.error || 'Неверный код')
 				return
 			}
-			router.push('/feed')
+			if (data.user) {
+				const userData = { ...data.user }
+				if (data.access_token) userData.access_token = data.access_token
+				dispatch(setUser(userData))
+				localStorage.setItem('user', JSON.stringify(userData))
+			}
+			window.location.assign('/feed')
 		} catch (err: any) {
 			setLoginError(err.message || 'Ошибка подтверждения')
 		}
@@ -189,12 +213,18 @@ export default function LoginPage() {
 								</div>
 							)}
 						</div>
-						<SmartCaptcha onTokenChange={setCaptchaToken} />
+						<SmartCaptcha
+							key={twoFactorRequired ? 'twofactor' : 'password'}
+							onTokenChange={setCaptchaToken}
+						/>
 
 						<div className='space-y-4'>
 							<button
 								type='submit'
-								disabled={isLoading || !captchaToken}
+								disabled={
+									isLoading ||
+									(!!captchaSiteKey && !captchaToken.trim())
+								}
 								className='group relative flex w-full justify-center rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-3 text-sm font-semibold text-white hover:shadow-lg hover:shadow-indigo-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed'
 							>
 								{isLoading

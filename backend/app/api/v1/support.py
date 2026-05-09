@@ -13,6 +13,8 @@ from app.models.notification import Notification
 from app.models.post_report import PostReport
 from app.models.post import Post
 from app.models.support_chat_message import SupportChatMessage
+from app.models.user import User
+from app.services.email_service import EmailService
 from app.services.post_service import PostService
 from app.utils.decorators import token_required
 from flask import Blueprint, jsonify, request
@@ -105,7 +107,8 @@ def notify_user(
         user_id: str,
         msg: str,
         title: str | None = None,
-        notification_type: str = "system"):
+        notification_type: str = "system",
+        send_email_copy: bool = False):
     content_hash = hashlib.sha256(
         f"{user_id}|{msg}|{time.time()}".encode("utf-8")).hexdigest()
     db.session.add(
@@ -118,6 +121,16 @@ def notify_user(
         )
     )
     db.session.commit()
+
+    if send_email_copy:
+        try:
+            u = User.query.get(str(user_id))
+            if u and getattr(u, "email", None):
+                EmailService.send_system_notification_email(
+                    u.email, u.username or str(u.id), msg
+                )
+        except Exception as e:
+            print(f"notify_user email_copy failed: {e}")
 
 
 def set_post_report_status(
@@ -672,7 +685,7 @@ def admin_post_report_action(current_user):
             f"{reason}. Подробнее: {post_url}. "
             "Пожалуйста, удалите контент в течение 24 часов."
         )
-        notify_user(author_id, msg)
+        notify_user(author_id, msg, send_email_copy=True)
         status = "removal_requested"
         if report_id is not None:
             try:
@@ -693,7 +706,7 @@ def admin_post_report_action(current_user):
             "Ваш пост был удален администрацией. "
             f"Подробнее: {post_url}. Причина: {reason}."
         )
-        notify_user(author_id, msg)
+        notify_user(author_id, msg, send_email_copy=True)
         status = "deleted"
         if report_id is not None:
             try:
@@ -710,6 +723,11 @@ def admin_post_report_action(current_user):
         if error:
             status_code = 404 if error == "Post not found" else 403
             return jsonify({"error": error}), status_code
+        ln = (
+            "Ваш пост был удалён администрацией (основание: законодательство). "
+            f"{post_url}. Причина: {legal_reason}."
+        )
+        notify_user(author_id, ln, send_email_copy=True)
         status = "legal_deleted"
         if report_id is not None:
             try:

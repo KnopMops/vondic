@@ -12,7 +12,7 @@ import {
 	togglePinChat,
 } from '@/lib/chatUtils'
 import { useChannels } from '@/lib/hooks/useChannels'
-import { useChat } from '@/lib/hooks/useChat'
+import { decryptDmPreviewText, useChat } from '@/lib/hooks/useChat'
 import { useCommunities } from '@/lib/hooks/useCommunities'
 import { useDebounce } from '@/lib/hooks/useDebounce'
 import { useGroups } from '@/lib/hooks/useGroups'
@@ -90,26 +90,47 @@ const formatLastSeen = (lastSeen?: string | Date): string => {
 	})
 }
 
-const getLastMessage = (friendId: string, messages: Message[]): string => {
-	// Filter only direct messages (no channel_id or group_id) between current user and friend
-	const friendMessages = (messages || []).filter(
+const getLastMessage = (
+	friendId: string,
+	messages: Message[],
+	selfId?: string,
+): string => {
+	const thread = (messages || []).filter(
 		m =>
 			m &&
-			// Direct message: no channel or group
 			(m.channel_id === undefined || m.channel_id === null) &&
 			(m.group_id === undefined || m.group_id === null) &&
-			// Messages from this friend in current direct context
-			m.sender_id === friendId,
+			selfId &&
+			(m.sender_id === friendId || m.sender_id === selfId),
 	)
+	const friendMessages = selfId
+		? thread
+		: (messages || []).filter(
+				m =>
+					m &&
+					(m.channel_id === undefined || m.channel_id === null) &&
+					(m.group_id === undefined || m.group_id === null) &&
+					m.sender_id === friendId,
+			)
 	if (friendMessages.length === 0) return ''
 
-	const lastMessage = friendMessages[friendMessages.length - 1]
+	const sorted = [...friendMessages].sort((a, b) => {
+		const ta = new Date(a.timestamp || 0).getTime()
+		const tb = new Date(b.timestamp || 0).getTime()
+		return ta - tb
+	})
+	const lastMessage = sorted[sorted.length - 1]
 	if (!lastMessage) return ''
 	if (lastMessage.type === 'voice') return 'Голосовое сообщение'
 	if (lastMessage.type === 'image') return 'Фото'
 	if (lastMessage.type === 'file') return 'Файл'
+	if (lastMessage.type === 'call_invite')
+		return (lastMessage.content || '').slice(0, 80)
 
-	const content = lastMessage.content || ''
+	let content = lastMessage.content || ''
+	if (selfId && content.startsWith('e2e:')) {
+		content = decryptDmPreviewText(selfId, friendId, content)
+	}
 	return content.length > 30 ? content.substring(0, 30) + '...' : content
 }
 
@@ -1987,6 +2008,7 @@ export default function MessengerPage() {
 			}
 		}
 
+		socket.on('user_status_changed', handleStatusChange)
 		socket.on('user_status_change', handleStatusChange)
 		socket.on('user_connected', handleUserConnected)
 		socket.on('user_disconnected', handleUserDisconnected)
@@ -2009,6 +2031,7 @@ export default function MessengerPage() {
 		}, 30000) // Update every 30 seconds
 
 		return () => {
+			socket.off('user_status_changed', handleStatusChange)
 			socket.off('user_status_change', handleStatusChange)
 			socket.off('user_connected', handleUserConnected)
 			socket.off('user_disconnected', handleUserDisconnected)
@@ -3831,7 +3854,7 @@ export default function MessengerPage() {
 	const getSidebarPreview = useCallback(
 		(friend: User) => {
 			if (selectedFriend?.id === friend.id) {
-				return getLastMessage(friend.id, messages)
+				return getLastMessage(friend.id, messages, user?.id)
 			}
 			const recentMeta = recentContactsById.get(String(friend.id))
 			const raw =
@@ -3840,10 +3863,13 @@ export default function MessengerPage() {
 				recentMeta?.last_message ||
 				recentMeta?.preview ||
 				''
-			const text = String(raw || '')
+			let text = String(raw || '')
+			if (user?.id && text.startsWith('e2e:')) {
+				text = decryptDmPreviewText(String(user.id), String(friend.id), text)
+			}
 			return text.length > 30 ? `${text.substring(0, 30)}...` : text
 		},
-		[messages, recentContactsById, selectedFriend?.id],
+		[messages, recentContactsById, selectedFriend?.id, user?.id],
 	)
 	const getSidebarPreviewTime = useCallback(
 		(friend: User) => {

@@ -189,6 +189,7 @@ def create_app(config_class=Config):
     from app.api.public.v1.messages import public_messages_bp
     from app.api.public.v1.posts import public_posts_bp
     from app.api.public.v1.users import public_users_bp
+    from app.api.oauth import oauth_bp
     from app.api.v1.auth import auth_bp
     from app.api.v1.bots import bots_bp
     from app.api.v1.channels import channels_bp
@@ -218,6 +219,7 @@ def create_app(config_class=Config):
     app.register_blueprint(public_messages_bp)
     app.register_blueprint(public_posts_bp)
     app.register_blueprint(public_users_bp)
+    app.register_blueprint(oauth_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(bots_bp)
     app.register_blueprint(channels_bp)

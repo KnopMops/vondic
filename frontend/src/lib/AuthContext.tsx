@@ -12,7 +12,11 @@ import { User } from './types'
 
 interface AuthContextType {
 	user: User | null
-	login: (email: string, password: string) => Promise<void>
+	login: (
+		email: string,
+		password: string,
+		opts?: { smartCaptchaToken?: string },
+	) => Promise<void>
 	loginWithYandex: () => Promise<void>
 	register: (
 		email: string,
@@ -87,13 +91,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		root.style.colorScheme = ''
 	}, [])
 
-	const login = async (email: string, password: string) => {
+	const login = async (
+		email: string,
+		password: string,
+		opts?: { smartCaptchaToken?: string },
+	) => {
 		try {
+			const body: Record<string, string> = { email, password }
+			const cap = opts?.smartCaptchaToken
+			if (cap) body.smart_captcha_token = cap
 			// Запрос к нашему API Proxy (который установит cookies)
 			const response = await fetch('/api/auth/login', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ email, password }),
+				body: JSON.stringify(body),
 			})
 
 			const data = await response.json()
@@ -111,7 +122,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 			// Токены теперь в httpOnly cookies, не сохраняем их в localStorage
 
-			router.push('/feed')
+			if (typeof window !== 'undefined') {
+				window.location.assign('/feed')
+			} else {
+				router.push('/feed')
+			}
 		} catch (error) {
 			alert(error instanceof Error ? error.message : 'Произошла ошибка')
 		}
@@ -184,22 +199,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 	const logout = async () => {
 		try {
-			// Set status to offline before logout
-			if (user?.access_token) {
-				try {
-					await fetch('/api/v1/users/status', {
-						method: 'POST',
-						headers: {
-							'Content-Type': 'application/json',
-							'Authorization': `Bearer ${user.access_token}`,
-						},
-						body: JSON.stringify({ status: 'offline' }),
-					})
-				} catch (e) {
-					console.error('Не удалось установить статус offline:', e)
-				}
+			if (typeof window !== 'undefined') {
+				window.dispatchEvent(new CustomEvent('vondic-before-logout'))
 			}
-			
+			try {
+				
+				await fetch('/api/v1/users/status', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ status: 'offline' }),
+					credentials: 'include',
+				})
+			} catch (e) {
+				console.error('Не удалось установить статус offline:', e)
+			}
+
 			await fetch('/api/auth/logout', { method: 'POST' })
 		} catch (e) {
 			console.error(e)
@@ -209,7 +223,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		// Удаляем токены из localStorage на всякий случай, если они там были
 		localStorage.removeItem('access_token')
 		localStorage.removeItem('refresh_token')
-		router.push('/')
+		if (typeof window !== 'undefined') {
+			window.location.assign('/')
+		} else {
+			router.push('/')
+		}
 	}
 
 	return (

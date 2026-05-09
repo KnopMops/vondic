@@ -53,15 +53,19 @@ class SignalingService:
 
     def _broadcast_status(self, user_id, status):
         try:
-            friends_sockets = self.broker.repo.get_user_friends_sockets(
-                user_id)
-            if friends_sockets:
-                for socket_id in friends_sockets:
-                    self.io.emit(
-                        "user_status_changed",
-                        {"user_id": user_id, "status": status},
-                        room=socket_id
-                    )
+            sockets = set()
+            for sid in self.broker.repo.get_user_friends_sockets(user_id):
+                if sid:
+                    sockets.add(sid)
+            for sid in self.broker.repo.get_recent_dm_partner_sockets(user_id):
+                if sid:
+                    sockets.add(sid)
+            for socket_id in sockets:
+                self.io.emit(
+                    "user_status_changed",
+                    {"user_id": user_id, "status": status},
+                    room=socket_id,
+                )
         except Exception as e:
             logger.error(f"Error broadcasting status for {user_id}: {e}")
 
@@ -99,6 +103,7 @@ class SignalingService:
         self.io.on_event("get_group_history", self.on_get_group_history)
         self.io.on_event("get_history", self.on_get_history)
         self.io.on_event("authenticate", self.on_authenticate)
+        self.io.on_event("get_online_users", self.on_get_online_users)
         self.io.on_event("video_state_changed", self.on_video_state_changed)
         self.io.on_event(
             "screen_share_state_changed",
@@ -157,7 +162,7 @@ class SignalingService:
                 "401 Unauthorized: Ошибка регистрации")
 
         session["user_id"] = user_info["id"]
-        self._broadcast_status(user_info["id"], 'Online')
+        self._broadcast_status(user_info["id"], "online")
 
         join_room(user_info["id"])
         logger.info(
@@ -176,7 +181,7 @@ class SignalingService:
     def on_disconnect(self):
         user_id = self.broker.close_session(request.sid)
         if user_id:
-            self._broadcast_status(user_id, 'Offline')
+            self._broadcast_status(user_id, "offline")
 
     def on_authenticate(self, payload):
         if not payload:
@@ -199,8 +204,10 @@ class SignalingService:
 
         session["user_id"] = user_info["id"]
 
-        self.broker.repo.bind_socket(user_info["id"], request.sid)
-        self._broadcast_status(user_info["id"], 'Online')
+        sid = request.sid
+        self.broker.repo.bind_socket(user_info["id"], sid)
+        self.broker.remember_sid_user(sid, user_info["id"])
+        self._broadcast_status(user_info["id"], "online")
 
         join_room(user_info["id"])
 
@@ -218,6 +225,118 @@ class SignalingService:
                 "role": user_info.get("role", "User"),
             },
         )
+
+    def on_get_online_users(self, _payload=None):
+        try:
+            ids = self.broker.repo.get_online_user_ids()
+            emit("online_users", ids)
+        except Exception as e:
+            logger.error(f"get_online_users error: {e}")
+
+    def _persist_dm_call_notice(
+        self,
+        caller_id,
+        target_user_id,
+        caller_username,
+    ):
+        message_id = str(uuid.uuid4())
+        timestamp = datetime.utcnow().isoformat()
+        label = (caller_username or "Пользователь").strip()
+        content = (
+            f"📞 Входящий звонок от {label}. Ответьте во всплывающем окне "
+            "или отклоните вызов."
+        )
+        msg_data = {
+            "id": message_id,
+            "sender_id": caller_id,
+            "target_id": target_user_id,
+            "content": content,
+            "attachments": None,
+            "type": "call_invite",
+            "timestamp": timestamp,
+        }
+        saved, error = self.broker.repo.save_message(msg_data)
+        if not saved:
+            logger.warning(f"call notice DM not saved: {error}")
+            return
+        target_socket = self.broker.get_user_socket(target_user_id)
+        full_message_payload = {
+            "id": message_id,
+            "sender_id": caller_id,
+            "target_id": target_user_id,
+            "content": content,
+            "attachments": None,
+            "type": "call_invite",
+            "timestamp": timestamp,
+            "is_read": 0,
+        }
+        emit(
+            "message_sent",
+            {"status": "delivered", "message": full_message_payload},
+        )
+        if target_socket:
+            emit(
+                "receive_message",
+                full_message_payload,
+                room=target_socket,
+            )
+        else:
+            emit(
+                "message_sent",
+                {"status": "saved", "message": full_message_payload},
+            )
+
+    def _persist_group_call_notice(
+        self,
+        group_id,
+        sender_id_real,
+        poster_id,
+        caller_username,
+    ):
+        message_id = str(uuid.uuid4())
+        timestamp = datetime.utcnow().isoformat()
+        label = (caller_username or "Участник").strip()
+        content = (
+            f"📞 Входящий групповой звонок (от {label}). "
+            "Принять можно во всплывающем окне."
+        )
+        msg_data = {
+            "id": message_id,
+            "sender_id": poster_id,
+            "group_id": group_id,
+            "content": content,
+            "attachments": None,
+            "type": "call_invite",
+            "timestamp": timestamp,
+        }
+        saved, error = self.broker.repo.save_message(msg_data)
+        if not saved:
+            logger.warning(f"call notice group not saved: {error}")
+            return
+        full_message_payload = {
+            "id": message_id,
+            "sender_id": poster_id,
+            "group_id": group_id,
+            "content": content,
+            "attachments": None,
+            "type": "call_invite",
+            "timestamp": timestamp,
+            "is_read": 0,
+        }
+        emit(
+            "message_sent",
+            {"status": "delivered", "message": full_message_payload},
+        )
+        participants = self.broker.repo.get_group_participants(group_id)
+        for pid in participants:
+            pid_socket = self.broker.get_user_socket(pid)
+            if not pid_socket:
+                continue
+            emit(
+                "receive_message",
+                full_message_payload,
+                room=pid_socket,
+            )
 
     def on_ping(self, payload):
         emit("pong_stability", {"timestamp": payload.get("timestamp")})
@@ -312,6 +431,15 @@ class SignalingService:
             if offer_sdp:
                 incoming_payload["offer"] = offer_sdp
             emit("incoming_call", incoming_payload, room=target_user_id)
+            if caller and caller.get("id"):
+                try:
+                    self._persist_dm_call_notice(
+                        str(caller.get("id")),
+                        str(target_user_id),
+                        caller.get("username"),
+                    )
+                except Exception as e:
+                    logger.error(f"dm call chat notice failed: {e}")
         else:
             emit(
                 "call_failed", {
@@ -406,6 +534,19 @@ class SignalingService:
 
         for p in online_participants:
             emit("incoming_group_call", incoming_payload, room=p["socket_id"])
+
+        if online_participants and sender:
+            owner_gid = self.broker.repo.get_group_owner(group_id)
+            poster_id = str(owner_gid) if owner_gid else str(sender_id)
+            try:
+                self._persist_group_call_notice(
+                    group_id,
+                    str(sender_id),
+                    poster_id,
+                    sender.get("username") if sender else None,
+                )
+            except Exception as e:
+                logger.error(f"group call chat notice failed: {e}")
 
         emit(
             "group_call_started",
