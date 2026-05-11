@@ -32,12 +32,27 @@ type PostReport = {
 	removal_time_left?: number | null
 }
 
+type UserReport = {
+	id: number
+	reporter_id?: string
+	reporter_login?: string
+	target_user_id: string
+	target_user_login?: string | null
+	description: string
+	attachments?: string[]
+	created_at: any
+	status?: string
+	verdict_at?: number | null
+}
+
 export default function AdminSupportPage() {
 	const { user, logout } = useAuth()
 	const router = useRouter()
 	const [items, setItems] = useState<Escalation[]>([])
 	const [postReports, setPostReports] = useState<PostReport[]>([])
 	const [postReportsLoading, setPostReportsLoading] = useState(false)
+	const [userReports, setUserReports] = useState<UserReport[]>([])
+	const [userReportsLoading, setUserReportsLoading] = useState(false)
 	const [postDetailsOpen, setPostDetailsOpen] = useState(false)
 	const [postDetailsId, setPostDetailsId] = useState<string | null>(null)
 	const [violationOpen, setViolationOpen] = useState(false)
@@ -149,6 +164,107 @@ export default function AdminSupportPage() {
 		})
 	}
 
+	const formatReportDate = (value: any) => {
+		if (!value) return null
+		// Backend may return unix seconds, unix ms, or ISO string
+		const dt =
+			typeof value === 'number'
+				? new Date(value > 1e12 ? value : value * 1000)
+				: new Date(String(value))
+		if (Number.isNaN(dt.getTime())) return null
+		return dt.toLocaleString()
+	}
+
+	const getExt = (urlOrName: string) => {
+		const clean = (urlOrName || '').split('?')[0].split('#')[0]
+		const last = clean.split('/').pop() || clean
+		const ext = last.includes('.') ? last.split('.').pop() || '' : ''
+		return ext.toLowerCase()
+	}
+
+	const isImage = (x: string) =>
+		['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(getExt(x))
+	const isVideo = (x: string) => ['mp4', 'mov', 'webm', 'mkv', 'avi'].includes(getExt(x))
+	const isAudio = (x: string) =>
+		['mp3', 'wav', 'ogg', 'flac', 'm4a', 'webm'].includes(getExt(x))
+
+	const renderAttachmentsPreview = (attachments?: string[]) => {
+		if (!attachments || attachments.length === 0) return null
+		return (
+			<div className='space-y-2'>
+				<div className='text-xs text-gray-400'>Вложения:</div>
+				<div className='grid grid-cols-1 sm:grid-cols-2 gap-2'>
+					{attachments.map(a => {
+						const src = getAttachmentUrl(a)
+						return (
+							<div
+								key={a}
+								className='rounded-lg border border-white/10 bg-black/20 p-2'
+							>
+								{isImage(a) ? (
+									<img
+										src={src}
+										alt='attachment'
+										className='h-40 w-full rounded-md object-cover cursor-pointer'
+										onClick={() => window.open(src, '_blank', 'noopener,noreferrer')}
+									/>
+								) : isVideo(a) ? (
+									<video
+										controls
+										preload='metadata'
+										src={src}
+										className='h-40 w-full rounded-md object-cover'
+									/>
+								) : isAudio(a) ? (
+									<audio controls preload='none' src={src} className='w-full' />
+								) : (
+									<a
+										href={src}
+										target='_blank'
+										rel='noreferrer'
+										className='block text-xs text-indigo-300 hover:text-indigo-200 break-all'
+									>
+										{a}
+									</a>
+								)}
+							</div>
+						)
+					})}
+				</div>
+			</div>
+		)
+	}
+
+	const submitUserReportAction = async (
+		reportId: number,
+		action: 'no_violation' | 'close',
+	) => {
+		try {
+			const res = await fetch('/api/support/admin/user-reports/action', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ report_id: reportId, action }),
+			})
+			const text = await res.text()
+			let data: any = {}
+			try {
+				data = JSON.parse(text)
+			} catch {}
+			if (!res.ok || !data?.ok) {
+				throw new Error(data?.error || text || 'Ошибка выполнения действия')
+			}
+			if (data?.removed) {
+				setUserReports(prev => prev.filter(r => r.id !== reportId))
+			} else if (data?.status) {
+				setUserReports(prev =>
+					prev.map(r => (r.id === reportId ? { ...r, status: data.status } : r)),
+				)
+			}
+		} catch (e: any) {
+			alert(e?.message || 'Ошибка выполнения действия')
+		}
+	}
+
 	const formatTimeLeft = (deadline?: number | null) => {
 		if (!deadline) return null
 		const diff = Math.max(0, deadline * 1000 - nowTs)
@@ -200,6 +316,28 @@ export default function AdminSupportPage() {
 			console.error('Admin post reports load error', e)
 		} finally {
 			setPostReportsLoading(false)
+		}
+	}
+
+	const loadUserReports = async () => {
+		setUserReportsLoading(true)
+		try {
+			const res = await fetch('/api/support/admin/user-reports')
+			const text = await res.text()
+			let data: any = {}
+			try {
+				data = JSON.parse(text)
+			} catch {
+				console.error('Invalid JSON from backend /user-reports:', text)
+				return
+			}
+			if (data?.ok && Array.isArray(data.reports)) {
+				setUserReports(data.reports)
+			}
+		} catch (e) {
+			console.error('Admin user reports load error', e)
+		} finally {
+			setUserReportsLoading(false)
 		}
 	}
 
@@ -682,6 +820,7 @@ export default function AdminSupportPage() {
 		if (!roleAllowed) return
 		loadEscalations()
 		loadPostReports()
+		loadUserReports()
 	}, [roleAllowed])
 
 	useEffect(() => {
@@ -793,11 +932,9 @@ export default function AdminSupportPage() {
 															<div className='font-semibold text-white'>
 																Жалоба #{r.id}
 															</div>
-															{r.created_at && (
+															{formatReportDate(r.created_at) && (
 																<div className='text-xs text-gray-500'>
-																	{new Date(
-																		r.created_at * 1000,
-																	).toLocaleString()}
+																	{formatReportDate(r.created_at)}
 																</div>
 															)}
 														</div>
@@ -826,26 +963,7 @@ export default function AdminSupportPage() {
 														<div className='text-gray-200 whitespace-pre-wrap'>
 															{r.description}
 														</div>
-														{r.attachments && r.attachments.length > 0 && (
-															<div className='space-y-1'>
-																<div className='text-xs text-gray-400'>
-																	Вложения:
-																</div>
-																<div className='space-y-1'>
-																	{r.attachments.map(a => (
-																		<a
-																			key={a}
-																			href={getAttachmentUrl(a)}
-																			target='_blank'
-																			rel='noreferrer'
-																			className='block text-xs text-indigo-300 hover:text-indigo-200 truncate'
-																		>
-																			{a}
-																		</a>
-																	))}
-																</div>
-															</div>
-														)}
+														{renderAttachmentsPreview(r.attachments)}
 														<div className='flex flex-wrap gap-2 pt-2'>
 															<button
 																onClick={() =>
@@ -902,6 +1020,83 @@ export default function AdminSupportPage() {
 																	</button>
 																</>
 															)}
+														</div>
+													</div>
+												))}
+											</div>
+										)}
+									</div>
+
+									<div className='rounded-xl border border-gray-800 bg-gray-950 p-4'>
+										<div className='flex items-center justify-between mb-3'>
+											<div className='text-sm font-semibold text-white'>
+												Жалобы на пользователей
+											</div>
+											<div className='text-xs text-gray-400'>
+												Поступившие обращения на аккаунты
+											</div>
+										</div>
+										{userReportsLoading ? (
+											<div className='text-xs text-gray-500'>
+												Загрузка жалоб...
+											</div>
+										) : userReports.length === 0 ? (
+											<div className='text-sm text-gray-400'>Нет жалоб</div>
+										) : (
+											<div className='space-y-3'>
+												{userReports.map(r => (
+													<div
+														key={r.id}
+														className='rounded-lg border border-gray-800 bg-gray-900/60 p-4 text-sm text-gray-200 space-y-2'
+													>
+														<div className='flex items-center justify-between'>
+															<div className='font-semibold text-white'>
+																Жалоба #{r.id}
+															</div>
+															{formatReportDate(r.created_at) && (
+																<div className='text-xs text-gray-500'>
+																	{formatReportDate(r.created_at)}
+																</div>
+															)}
+														</div>
+														<div className='text-gray-400'>
+															Цель: {r.target_user_login || r.target_user_id}
+														</div>
+														{r.reporter_login && (
+															<div className='text-gray-400'>
+																Отправил: {r.reporter_login}
+															</div>
+														)}
+														{r.status && (
+															<div className='text-xs text-gray-500'>
+																Статус: {r.status}
+															</div>
+														)}
+														<div className='text-gray-200 whitespace-pre-wrap'>
+															{r.description}
+														</div>
+														{renderAttachmentsPreview(r.attachments)}
+														<div className='flex flex-wrap gap-2 pt-2'>
+															<a
+																href={`/feed/profile/${r.target_user_id}`}
+																className='rounded-md border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs font-medium text-gray-200 hover:bg-gray-800'
+															>
+																Перейти на страницу
+															</a>
+															<button
+																onClick={() =>
+																	submitUserReportAction(r.id, 'no_violation')
+																}
+																className='rounded-md border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs font-medium text-gray-200 hover:bg-gray-800'
+															>
+																Нарушение не найдено
+															</button>
+															<button
+																onClick={() => submitUserReportAction(r.id, 'close')}
+																className='rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-200 hover:bg-emerald-500/20'
+															>
+																Закрыть
+															</button>
 														</div>
 													</div>
 												))}

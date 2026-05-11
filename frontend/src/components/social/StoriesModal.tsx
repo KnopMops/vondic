@@ -28,7 +28,22 @@ type Props = {
 	onViewed?: (storyId: string) => void
 }
 
-const REACTIONS = ['❤️', '😂', '🔥', '😮', '😢', '👍']
+const REACTIONS = [
+	'❤️',
+	'😂',
+	'🔥',
+	'😍',
+	'😮',
+	'🤯',
+	'😢',
+	'😡',
+	'👍',
+	'👏',
+	'🙏',
+	'💯',
+	'🎉',
+	'🤔',
+]
 
 export default function StoriesModal({
 	isOpen,
@@ -46,6 +61,11 @@ export default function StoriesModal({
 	const [storyItems, setStoryItems] = useState<Item[]>(items)
 	const [progress, setProgress] = useState(0)
 	const [isPaused, setIsPaused] = useState(false)
+	const [replyText, setReplyText] = useState('')
+	const [isSendingReply, setIsSendingReply] = useState(false)
+	const [zoom, setZoom] = useState(1)
+	const [pan, setPan] = useState({ x: 0, y: 0 })
+	const panRef = useRef({ x: 0, y: 0, startX: 0, startY: 0, dragging: false })
 	const videoRef = useRef<HTMLVideoElement | null>(null)
 	const pausedRef = useRef(false)
 
@@ -87,7 +107,7 @@ export default function StoriesModal({
 	}
 	useEffect(() => {
 		if (isOpen) {
-			setStoryItems(items)
+			setStoryItems((items || []).filter(it => it && typeof it.url === 'string' && it.url))
 			const initialIndex = initialStoryId
 				? Math.max(
 						0,
@@ -96,8 +116,17 @@ export default function StoriesModal({
 				: 0
 			setIndex(initialIndex)
 			setProgress(0)
+			setZoom(1)
+			setPan({ x: 0, y: 0 })
 		}
 	}, [items, isOpen, initialStoryId])
+
+	useEffect(() => {
+		if (!isOpen) return
+		setZoom(1)
+		setPan({ x: 0, y: 0 })
+		panRef.current = { x: 0, y: 0, startX: 0, startY: 0, dragging: false }
+	}, [index, isOpen])
 
 	useEffect(() => {
 		if (isOpen && current?.id && onViewed) {
@@ -173,6 +202,45 @@ export default function StoriesModal({
 
 	const isOwner = user?.id === ownerId
 
+	const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
+	const setZoomClamped = (value: number) => setZoom(clamp(value, 1, 3))
+	const resetView = () => {
+		setZoom(1)
+		setPan({ x: 0, y: 0 })
+		panRef.current = { x: 0, y: 0, startX: 0, startY: 0, dragging: false }
+	}
+
+	const handleSendReply = async () => {
+		const text = replyText.trim()
+		if (!text || !ownerId) return
+		if (!user) return
+		if (isSendingReply) return
+		setIsSendingReply(true)
+		try {
+			const meRes = await fetch('/api/auth/me', { method: 'GET' })
+			const meData = await meRes.json().catch(() => ({}))
+			const token = meData?.user?.access_token || meData?.access_token
+			if (!token) return
+			const backendUrl =
+				process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+			const res = await fetch(`${backendUrl}/api/v1/dm/${ownerId}/messages`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`,
+				},
+				body: JSON.stringify({ content: text }),
+			})
+			if (res.ok) {
+				setReplyText('')
+			}
+		} catch {
+			// ignore
+		} finally {
+			setIsSendingReply(false)
+		}
+	}
+
 	const handleDelete = async () => {
 		if (!current?.id) return
 		const res = await fetch('/api/storis/delete', {
@@ -245,13 +313,48 @@ export default function StoriesModal({
 							/>
 						)}
 
-						<div className='relative h-full w-full p-3'>
+						<div
+							className='relative h-full w-full p-3'
+							onWheel={e => {
+								if (!mediaUrl) return
+								e.preventDefault()
+								const delta = e.deltaY > 0 ? -0.15 : 0.15
+								setZoomClamped(zoom + delta)
+							}}
+							onPointerDown={e => {
+								if (zoom <= 1) return
+								panRef.current.dragging = true
+								panRef.current.startX = e.clientX
+								panRef.current.startY = e.clientY
+							}}
+							onPointerMove={e => {
+								if (!panRef.current.dragging || zoom <= 1) return
+								const dx = e.clientX - panRef.current.startX
+								const dy = e.clientY - panRef.current.startY
+								panRef.current.startX = e.clientX
+								panRef.current.startY = e.clientY
+								panRef.current.x += dx
+								panRef.current.y += dy
+								setPan({ x: panRef.current.x, y: panRef.current.y })
+							}}
+							onPointerUp={() => {
+								panRef.current.dragging = false
+							}}
+							onPointerCancel={() => {
+								panRef.current.dragging = false
+							}}
+							style={{ touchAction: zoom > 1 ? 'none' : 'auto' }}
+						>
 							{mediaUrl ? (
 								isVideo ? (
 									<video
 										ref={videoRef}
 										src={mediaUrl}
 										className='h-full w-full object-contain'
+										style={{
+											transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+											transformOrigin: 'center',
+										}}
 										autoPlay
 										playsInline
 										muted={false}
@@ -262,13 +365,49 @@ export default function StoriesModal({
 										src={mediaUrl}
 										alt='story'
 										className='h-full w-full object-contain'
+										style={{
+											transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+											transformOrigin: 'center',
+										}}
 									/>
 								)
 							) : (
 								<div className='flex h-full w-full items-center justify-center bg-gray-900'>
-									<div className='text-gray-500'>Нет контента</div>
+									<div className='text-gray-300 text-sm'>История недоступна</div>
 								</div>
 							)}
+							<div className='absolute bottom-5 right-5 flex items-center gap-2 z-20'>
+								<button
+									type='button'
+									onClick={e => {
+										e.stopPropagation()
+										setZoomClamped(zoom + 0.25)
+									}}
+									className='px-3 py-2 rounded-xl bg-black/50 backdrop-blur-md text-white text-xs font-semibold hover:bg-black/70 transition'
+								>
+									+
+								</button>
+								<button
+									type='button'
+									onClick={e => {
+										e.stopPropagation()
+										setZoomClamped(zoom - 0.25)
+									}}
+									className='px-3 py-2 rounded-xl bg-black/50 backdrop-blur-md text-white text-xs font-semibold hover:bg-black/70 transition'
+								>
+									−
+								</button>
+								<button
+									type='button'
+									onClick={e => {
+										e.stopPropagation()
+										resetView()
+									}}
+									className='px-3 py-2 rounded-xl bg-black/50 backdrop-blur-md text-white text-xs font-semibold hover:bg-black/70 transition'
+								>
+									Сброс
+								</button>
+							</div>
 							<div className='absolute inset-0 flex'>
 								<button
 									type='button'
@@ -364,6 +503,29 @@ export default function StoriesModal({
 										{index + 1} / {storyItems.length}
 									</div>
 								)}
+
+							{!isOwner && (
+								<div className='absolute bottom-3 left-3 right-3'>
+									<div className='flex items-center gap-2 rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 px-3 py-2'>
+										<input
+											value={replyText}
+											onChange={e => setReplyText(e.target.value)}
+											onFocus={() => setIsPaused(true)}
+											onBlur={() => setIsPaused(false)}
+											placeholder='Ответить в сообщения...'
+											className='flex-1 bg-transparent outline-none text-sm text-white placeholder:text-gray-300'
+										/>
+										<button
+											type='button'
+											disabled={!replyText.trim() || isSendingReply}
+											onClick={handleSendReply}
+											className='px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold'
+										>
+											Отправить
+										</button>
+									</div>
+								</div>
+							)}
 							</div>
 						</div>
 					</div>

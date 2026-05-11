@@ -10,6 +10,7 @@ import {
 
 const hasCryptoSubtle =
 	typeof crypto !== 'undefined' && typeof crypto.subtle !== 'undefined'
+const HISTORY_PAGE_SIZE = 30
 
 const base64FromBytes = (bytes: Uint8Array) => {
 	let binary = ''
@@ -711,7 +712,7 @@ export const useChat = (
 				if (groupId && socket) {
 					socket.emit('get_group_history', {
 						group_id: groupId,
-						limit: 50,
+						limit: HISTORY_PAGE_SIZE,
 						offset: 0,
 					})
 
@@ -743,8 +744,8 @@ export const useChat = (
 									new Date(b.timestamp).getTime(),
 							)
 							setMessages(decryptedHistory as Message[])
-							setOffset(50)
-							setHasMore(decryptedHistory.length >= 50)
+							setOffset(HISTORY_PAGE_SIZE)
+							setHasMore(decryptedHistory.length >= HISTORY_PAGE_SIZE)
 							setIsLoading(false)
 							socket.off('group_history', handleHistory)
 						}
@@ -761,7 +762,7 @@ export const useChat = (
 					? '/api/channels/history'
 					: '/api/messages/history'
 				const body: any = {
-					limit: 50,
+					limit: HISTORY_PAGE_SIZE,
 					offset: 0,
 				}
 				if (channelId) {
@@ -806,8 +807,8 @@ export const useChat = (
 							new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
 					)
 					setMessages(decryptedHistory as Message[])
-					setOffset(50)
-					setHasMore(decryptedHistory.length >= 50)
+					setOffset(HISTORY_PAGE_SIZE)
+					setHasMore(decryptedHistory.length >= HISTORY_PAGE_SIZE)
 				}
 			} catch (err) {
 				console.error('Error loading history:', err)
@@ -842,7 +843,7 @@ export const useChat = (
 			if (groupId && socket) {
 				socket.emit('get_group_history', {
 					group_id: groupId,
-					limit: 50,
+					limit: HISTORY_PAGE_SIZE,
 					offset: offset,
 				})
 
@@ -868,7 +869,7 @@ export const useChat = (
 							decryptMessage(msg),
 						)
 
-						if (decryptedHistory.length < 50) {
+						if (decryptedHistory.length < HISTORY_PAGE_SIZE) {
 							setHasMore(false)
 						}
 
@@ -879,7 +880,7 @@ export const useChat = (
 						)
 
 						setMessages(prev => [...(decryptedHistory as Message[]), ...prev])
-						setOffset(prev => prev + 50)
+						setOffset(prev => prev + HISTORY_PAGE_SIZE)
 						setIsLoading(false)
 						socket.off('group_history', handleMoreHistory)
 					}
@@ -894,7 +895,7 @@ export const useChat = (
 				? '/api/channels/history'
 				: '/api/messages/history'
 			const body: any = {
-				limit: 50,
+				limit: HISTORY_PAGE_SIZE,
 				offset: offset,
 			}
 			if (channelId) {
@@ -937,7 +938,7 @@ export const useChat = (
 					: []
 				const decryptedHistory = newOldMessages.map(msg => decryptMessage(msg))
 
-				if (decryptedHistory.length < 50) {
+				if (decryptedHistory.length < HISTORY_PAGE_SIZE) {
 					setHasMore(false)
 				}
 
@@ -947,7 +948,7 @@ export const useChat = (
 				)
 
 				setMessages(prev => [...(decryptedHistory as Message[]), ...prev])
-				setOffset(prev => prev + 50)
+				setOffset(prev => prev + HISTORY_PAGE_SIZE)
 			}
 		} catch (err) {
 			console.error('Error loading more messages:', err)

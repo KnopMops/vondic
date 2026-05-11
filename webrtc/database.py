@@ -12,7 +12,7 @@ from sqlalchemy import Integer, String, Text, create_engine, func, or_
 from sqlalchemy import text
 from sqlalchemy.orm import Mapped, Session, declarative_base, mapped_column, sessionmaker
 
-from config import Config
+from webrtc.config import Config
 
 logger = logging.getLogger(__name__)
 Base = declarative_base()
@@ -272,11 +272,30 @@ class UserRepository:
                 return value
         return value
 
+    @staticmethod
+    def _hash_token(token):
+        if not token:
+            return None
+        return hashlib.sha256(str(token).encode("utf-8")).hexdigest()
+
     def fetch_user_by_token(self, token):
         try:
+            token_hash = self._hash_token(token)
             with self._session() as session:
-                row = session.query(User).filter(
-                    User.access_token == token).first()
+                row = None
+                if token_hash:
+                    row = session.query(User).filter(
+                        User.access_token == token_hash).first()
+                # Legacy fallback (plain token stored) with auto-upgrade.
+                if not row and token:
+                    legacy = session.query(User).filter(
+                        User.access_token == str(token)).first()
+                    if legacy and token_hash:
+                        try:
+                            legacy.access_token = token_hash
+                        except Exception:
+                            pass
+                        row = legacy
                 return self._model_to_dict(row) if row else None
         except Exception as e:
             logger.error(f"DB Error fetch_user_by_token: {e}")

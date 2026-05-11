@@ -91,13 +91,11 @@ export default function LoginPage() {
 			const body: any = { email, password }
 			if (twoFactorMethod === 'email') body.email_code = twoFactorCode
 			else body.totp_code = twoFactorCode
+			if (captchaToken.trim()) body.smart_captcha_token = captchaToken.trim()
 			const res = await fetch('/api/auth/login', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					...body,
-					smart_captcha_token: captchaToken,
-				}),
+				body: JSON.stringify(body),
 			})
 			const data = await res.json().catch(() => ({}))
 			if (!res.ok) {
@@ -213,17 +211,29 @@ export default function LoginPage() {
 								</div>
 							)}
 						</div>
+<<<<<<< Updated upstream
 						<SmartCaptcha
 							key={twoFactorRequired ? 'twofactor' : 'password'}
 							onTokenChange={setCaptchaToken}
 						/>
+=======
+						{!twoFactorRequired && (
+							<SmartCaptcha key='password' onTokenChange={setCaptchaToken} />
+						)}
+>>>>>>> Stashed changes
 
 						<div className='space-y-4'>
 							<button
 								type='submit'
 								disabled={
 									isLoading ||
+<<<<<<< Updated upstream
 									(!!captchaSiteKey && !captchaToken.trim())
+=======
+									(!twoFactorRequired &&
+										!!captchaSiteKey &&
+										!captchaToken.trim())
+>>>>>>> Stashed changes
 								}
 								className='group relative flex w-full justify-center rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-3 text-sm font-semibold text-white hover:shadow-lg hover:shadow-indigo-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed'
 							>

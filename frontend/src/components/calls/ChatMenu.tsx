@@ -17,6 +17,7 @@ interface ChatMenuProps {
     isPinned?: boolean
     isMuted?: boolean
     isOnline?: boolean
+    isArchived?: boolean
     onPin?: () => void
     onMute?: () => void
     onCall?: () => void
@@ -31,6 +32,7 @@ export const ChatMenu: React.FC<ChatMenuProps> = ({
     isPinned = false,
     isMuted = false,
     isOnline = false,
+    isArchived = false,
     onPin,
     onMute,
     onCall,
@@ -179,7 +181,7 @@ export const ChatMenu: React.FC<ChatMenuProps> = ({
                         type='button'
                     >
                         <Archive className='w-4 h-4' />
-                        <span>Архивировать</span>
+                        <span>{isArchived ? 'Убрать из архива' : 'Архивировать'}</span>
                     </button>
 
                     

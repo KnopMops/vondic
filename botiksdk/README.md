@@ -49,6 +49,11 @@ if __name__ == "__main__":
 - **FSM (Finite State Machine)** - машина состояний для диалогов
 - **Filters** - фильтры для сообщений и callback query
 - **Inline Keyboard** - конструктор кнопок
+- **Async-first Bot API** - `await bot.send_message(...)` без `to_thread`
+- **Error Handlers** - единая обработка исключений через `@dp.errors()`
+- **Middlewares** - pre/post обработка событий через `@dp.message_middleware()`
+- **Handler Priority** - приоритетный роутинг и управление propagation
+- **RateLimit** - встроенный anti-flood фильтр
 
 ## Классы
 
@@ -89,6 +94,11 @@ async def buy_handler(callback, bot, state):
 @dp.message(lambda m: m.text is not None, state="some_state")
 async def state_handler(message, bot, state):
     ...
+
+# higher priority + propagate дальше (не блокировать следующие хендлеры)
+@dp.message(Command("debug"), priority=100, blocking=False)
+async def debug_handler(message, bot):
+    ...
 ```
 
 ### FSMContext
@@ -117,6 +127,30 @@ async def receive_email(message, bot, state):
 - `Regex(r"\d+")` - регулярное выражение
 - `F.message.text.contains("hello")` - фильтр по полю
 - `lambda c: c.data.startswith("buy_")` - lambda фильтр
+- `Command("start") & Text(contains="promo")` - композиция AND
+- `Command("start") | Command("help")` - композиция OR
+- `~Regex(r"spam")` - инверсия условия
+- `RateLimit(window_seconds=1.5, key="user")` - anti-flood по юзеру
+
+### Middleware
+
+```python
+@dp.message_middleware()
+async def audit_middleware(event, bot, call_next):
+    # before handler
+    result = await call_next()
+    # after handler
+    return result
+```
+
+### Обработка ошибок
+
+```python
+@dp.errors()
+async def on_error(exception, update, bot):
+    # например, отправить себе алерт или записать метрику
+    print(f"Ошибка в update={update.update_id}: {exception}")
+```
 
 ### InlineKeyboardBuilder
 

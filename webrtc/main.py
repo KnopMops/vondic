@@ -8,10 +8,10 @@ from flask_cors import CORS
 from flask_socketio import SocketIO
 from prometheus_client import Counter, Gauge, Histogram, generate_latest
 
-from config import Config
-from database import UserRepository
-from proxy import ConnectionBroker
-from signaling import SignalingService
+from webrtc.config import Config
+from webrtc.database import UserRepository
+from webrtc.proxy import ConnectionBroker
+from webrtc.signaling import SignalingService
 
 logging.basicConfig(
     level=logging.INFO,
@@ -114,10 +114,11 @@ def create_app():
     app.config.from_object(Config)
 
     allowed_origins = _build_allowed_origins()
+    async_mode = os.getenv("SOCKETIO_ASYNC_MODE", "eventlet")
     socketio = SocketIO(
         app,
         cors_allowed_origins=allowed_origins,
-        async_mode="threading",
+        async_mode=async_mode,
         logger=True,
         engineio_logger=True,
     )

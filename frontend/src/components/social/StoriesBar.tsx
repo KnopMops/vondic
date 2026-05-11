@@ -135,6 +135,10 @@ export default function StoriesBar({ onCreateStory }: Props) {
 		file: File,
 		text: string,
 		hiddenFrom: string[] = [],
+<<<<<<< Updated upstream
+=======
+		visibility: 'public' | 'friends' = 'friends',
+>>>>>>> Stashed changes
 	) => {
 		setIsUploading(true)
 		try {
@@ -164,7 +168,17 @@ export default function StoriesBar({ onCreateStory }: Props) {
 			const storyRes = await fetch('/api/storis/create', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
+<<<<<<< Updated upstream
 				body: JSON.stringify({ url, type, text, hidden_from: hiddenFrom }),
+=======
+				body: JSON.stringify({
+					url,
+					type,
+					text,
+					hidden_from: hiddenFrom,
+					visibility,
+				}),
+>>>>>>> Stashed changes
 			})
 
 			if (storyRes.ok) {

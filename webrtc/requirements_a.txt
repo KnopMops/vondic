@@ -27,3 +27,4 @@ asyncpg
 user-agents
 pika
 uvicorn
+gunicorn==23.0.0

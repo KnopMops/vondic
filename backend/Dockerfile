@@ -23,5 +23,5 @@ WORKDIR /app/backend
 
 EXPOSE 5050
 
-# Запускаем приложение (файл run.py теперь лежит в /app/backend)
-CMD ["python", "run.py"]
+# Продовый запуск через gunicorn (Flask/WSGI)
+CMD ["python", "-m", "gunicorn", "-w", "4", "-b", "0.0.0.0:5050", "run:app"]

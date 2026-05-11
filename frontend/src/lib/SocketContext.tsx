@@ -56,6 +56,14 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 		}
 
 		const onBeforeLogout = () => {
+<<<<<<< Updated upstream
+=======
+			try {
+				socketRef.current?.emit('logout')
+			} catch {
+				void 0
+			}
+>>>>>>> Stashed changes
 			forceDisconnect(socketRef.current)
 			socketRef.current = null
 			setSocket(null)

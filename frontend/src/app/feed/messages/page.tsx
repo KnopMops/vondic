@@ -32,6 +32,7 @@ import { useToast } from '@/lib/ToastContext'
 import { Channel, Group, Message, User } from '@/lib/types'
 import { apiUrl, webrtcUrl } from '@/lib/url-fallback'
 import { getAttachmentUrl, getAvatarUrl } from '@/lib/utils'
+import { restoreAllKeysFromServer } from '@/lib/e2eKeySync'
 import Link from 'next/link'
 import {
 	useCallback,
@@ -1176,6 +1177,20 @@ export default function MessengerPage() {
 		return []
 	})
 	const [isPinnedChatsOpen, setIsPinnedChatsOpen] = useState(false)
+	const [archivedChatIds, setArchivedChatIds] = useState<string[]>(() => {
+		if (typeof window !== 'undefined') {
+			const saved = localStorage.getItem('archived_chats')
+			if (saved) {
+				try {
+					return JSON.parse(saved)
+				} catch {
+					return []
+				}
+			}
+		}
+		return []
+	})
+	const [showArchivedChats, setShowArchivedChats] = useState(false)
 
 	// Save pinned chats to localStorage when changed
 	useEffect(() => {
@@ -1183,6 +1198,11 @@ export default function MessengerPage() {
 			localStorage.setItem('pinned_chats', JSON.stringify(pinnedChatIds))
 		}
 	}, [pinnedChatIds])
+	useEffect(() => {
+		if (typeof window !== 'undefined') {
+			localStorage.setItem('archived_chats', JSON.stringify(archivedChatIds))
+		}
+	}, [archivedChatIds])
 	const stickerUploadRef = useRef<HTMLInputElement>(null)
 	const messageInputRef = useRef<HTMLTextAreaElement>(null)
 
@@ -1729,6 +1749,8 @@ export default function MessengerPage() {
 
 	const isAiChat = selectedFriend?.id === aiUser.id
 	const isBotChat = selectedFriend?.is_bot === true && !isAiChat
+	const isBlockedChat =
+		!!selectedFriend && Boolean((selectedFriend as any).is_blocked)
 	const targetUserId = selectedFriend?.id
 	const hasActiveChat = !!(selectedFriend || selectedChannel || selectedGroup)
 	const canWriteToSelectedChannel = !selectedChannel
@@ -2086,7 +2108,7 @@ export default function MessengerPage() {
 			return
 		}
 		try {
-			const res = await fetch(`/api/v1/dm/recent?limit=50`, {
+			const res = await fetch(`/api/v1/dm/recent?limit=30`, {
 				headers: {
 					Authorization: `Bearer ${accessToken}`,
 				},
@@ -2119,6 +2141,37 @@ export default function MessengerPage() {
 			active = false
 		}
 	}, [fetchRecent])
+
+	// E2E: restore all keys so DM previews decrypt in list.
+	useEffect(() => {
+		if (!accessToken || !user?.id) return
+		let cancelled = false
+		const base64FromBytes = (bytes: Uint8Array) => {
+			let binary = ''
+			for (let i = 0; i < bytes.length; i++) {
+				binary += String.fromCharCode(bytes[i])
+			}
+			return btoa(binary)
+		}
+		;(async () => {
+			try {
+				const keys = await restoreAllKeysFromServer(accessToken)
+				if (cancelled) return
+				for (const [keyId, keyBytes] of keys.entries()) {
+					try {
+						localStorage.setItem(`e2e_key_${keyId}`, base64FromBytes(keyBytes))
+					} catch {
+						// ignore storage errors
+					}
+				}
+			} catch {
+				// ignore
+			}
+		})()
+		return () => {
+			cancelled = true
+		}
+	}, [accessToken, user?.id])
 
 	// Listen for new messages to update recent contacts
 	useEffect(() => {
@@ -2927,6 +2980,10 @@ export default function MessengerPage() {
 			showToast('В этом канале писать может только владелец', 'error')
 			return
 		}
+		if (isBlockedChat) {
+			showToast('Пользователь заблокирован, отправка сообщений недоступна', 'error')
+			return
+		}
 		const hasText = !!input.trim()
 		if (!hasText && files.length === 0) return
 		if (isUploading) return
@@ -2983,6 +3040,11 @@ export default function MessengerPage() {
 		if (isUploading) return
 		if (!canWriteToSelectedChannel) {
 			showToast('В этом канале писать может только владелец', 'error')
+			setIsPickerOpen(false)
+			return
+		}
+		if (isBlockedChat) {
+			showToast('Пользователь заблокирован, отправка сообщений недоступна', 'error')
 			setIsPickerOpen(false)
 			return
 		}
@@ -3821,13 +3883,8 @@ export default function MessengerPage() {
 			}
 		}
 
-		// 2. Append friends who are NOT in recent contacts
-		for (const friend of otherFriends) {
-			if (friend && friend.id && !addedIds.has(friend.id)) {
-				list.push(friend)
-				addedIds.add(friend.id)
-			}
-		}
+		// Keep sidebar lightweight: load/display only recent by default.
+		// Full contact discovery is available via search.
 
 		// 3. Sort with pinned chats first
 		const finalUser =
@@ -3835,14 +3892,19 @@ export default function MessengerPage() {
 			(typeof window !== 'undefined'
 				? JSON.parse(localStorage.getItem('user') || 'null')
 				: null)
-		return sortChatsWithPinned(list, pinnedChatIds, finalUser)
+		const sorted = sortChatsWithPinned(list, pinnedChatIds, finalUser)
+		const archivedSet = new Set((archivedChatIds || []).map(String))
+		return showArchivedChats
+			? sorted.filter(u => archivedSet.has(String(u.id)))
+			: sorted.filter(u => !archivedSet.has(String(u.id)))
 	}, [
 		normalizedSearch,
 		searchResultsWithBot,
 		recentContacts,
-		otherFriends,
 		pinnedChatIds,
 		user,
+		archivedChatIds,
+		showArchivedChats,
 	])
 	const recentContactsById = useMemo(() => {
 		const map = new Map<string, any>()
@@ -4061,7 +4123,7 @@ export default function MessengerPage() {
 				<div className='flex-1 overflow-y-auto custom-scrollbar px-2 space-y-1 pb-4'>
 					{activeTab === 'direct' ? (
 						<>
-							{aiFriend && !searchQuery && (
+							{aiFriend && !searchQuery && !showArchivedChats && (
 								<div
 									onClick={() => {
 										setSelectedFriend(aiFriend)
@@ -4113,7 +4175,7 @@ export default function MessengerPage() {
 									</div>
 								</div>
 							)}
-							{botFriend && showBotInHistory && (
+							{botFriend && showBotInHistory && !showArchivedChats && (
 								<div
 									onClick={() => {
 										setSelectedFriend(botFriend)
@@ -4255,6 +4317,7 @@ export default function MessengerPage() {
 											chatId={friend.id}
 											chatType='user'
 											isPinned={pinnedChatIds.includes(friend.id)}
+											isArchived={archivedChatIds.includes(friend.id)}
 											isOnline={friend.status?.toLowerCase() === 'online'}
 											canPin={canPinChats(user)}
 											onPin={() => {
@@ -4302,6 +4365,15 @@ export default function MessengerPage() {
 											onVideoCall={() => {
 												console.log('Video call to:', friend.id)
 											}}
+											onArchive={() => {
+												setArchivedChatIds(prev => {
+													const id = String(friend.id)
+													const set = new Set((prev || []).map(String))
+													if (set.has(id)) set.delete(id)
+													else set.add(id)
+													return Array.from(set)
+												})
+											}}
 										/>
 									</div>
 								</div>
@@ -4309,6 +4381,19 @@ export default function MessengerPage() {
 
 							{!searchQuery && (
 								<div className='mt-4 px-2'>
+									<button
+										type='button'
+										onClick={() => setShowArchivedChats(v => !v)}
+										className='w-full mb-3 px-3 py-2.5 rounded-xl bg-gray-900 hover:bg-gray-800 text-gray-200 flex items-center justify-between transition-colors'
+										title='Показать/скрыть архив'
+									>
+										<span className='text-sm font-medium'>
+											{showArchivedChats ? 'Все чаты' : 'Архив'}
+										</span>
+										<span className='text-xs text-gray-400'>
+											{archivedChatIds.length}
+										</span>
+									</button>
 									<div className='flex items-center justify-between mb-2 px-2'>
 										<h3 className='text-xs font-semibold text-gray-500 uppercase tracking-wider'>
 											Группы
@@ -4316,17 +4401,19 @@ export default function MessengerPage() {
 										<div className='flex gap-1'>
 											<button
 												onClick={() => setIsJoinGroupOpen(true)}
-												className='p-1 hover:bg-gray-800 rounded-md transition-colors text-gray-400 hover:text-white'
+												className='px-3 py-2 hover:bg-gray-800 rounded-lg transition-colors text-gray-200 hover:text-white text-xs font-semibold flex items-center gap-2'
 												title='Вступить в группу'
 											>
-												<LogInIcon className='w-3 h-3' />
+												<LogInIcon className='w-4 h-4' />
+												<span>Вступить</span>
 											</button>
 											<button
 												onClick={() => setIsCreateGroupOpen(true)}
-												className='p-1 hover:bg-gray-800 rounded-md transition-colors text-gray-400 hover:text-white'
+												className='px-3 py-2 hover:bg-gray-800 rounded-lg transition-colors text-gray-200 hover:text-white text-xs font-semibold flex items-center gap-2'
 												title='Создать группу'
 											>
-												<PlusIcon className='w-3 h-3' />
+												<PlusIcon className='w-4 h-4' />
+												<span>Создать</span>
 											</button>
 										</div>
 									</div>
@@ -4403,10 +4490,11 @@ export default function MessengerPage() {
 											<div className='flex gap-1'>
 												<button
 													onClick={() => setIsJoinChannelOpen(true)}
-													className='p-1 hover:bg-gray-800 rounded-md transition-colors text-gray-400 hover:text-white'
+													className='px-3 py-2 hover:bg-gray-800 rounded-lg transition-colors text-gray-200 hover:text-white text-xs font-semibold flex items-center gap-2'
 													title='Вступить в канал'
 												>
-													<LogInIcon className='w-3 h-3' />
+													<LogInIcon className='w-4 h-4' />
+													<span>Вступить</span>
 												</button>
 												<button
 													onClick={() => {
@@ -4414,10 +4502,11 @@ export default function MessengerPage() {
 														setNewChannelName('')
 														setNewChannelDesc('')
 													}}
-													className='p-1 hover:bg-gray-800 rounded-md transition-colors text-gray-400 hover:text-white'
+													className='px-3 py-2 hover:bg-gray-800 rounded-lg transition-colors text-gray-200 hover:text-white text-xs font-semibold flex items-center gap-2'
 													title='Создать канал'
 												>
-													<PlusIcon className='w-3 h-3' />
+													<PlusIcon className='w-4 h-4' />
+													<span>Создать</span>
 												</button>
 											</div>
 										</div>
@@ -6113,6 +6202,7 @@ export default function MessengerPage() {
 										<>
 											<button
 												onClick={handlePickFiles}
+												disabled={isBlockedChat || !canWriteToSelectedChannel || isUploading}
 												className={`p-2.5 text-gray-400 hover:bg-gray-700/50 rounded-full transition-all ${currentBackground.accentColor.replace('text-', 'hover:text-')}`}
 											>
 												<PaperclipIcon className='w-5 h-5' />
@@ -6139,6 +6229,7 @@ export default function MessengerPage() {
 																</span>
 																<button
 																	onClick={() => removeFile(idx)}
+																	disabled={isBlockedChat || !canWriteToSelectedChannel}
 																	className='rounded-md px-2 py-1 text-gray-400 hover:bg-gray-800 hover:text-white transition-colors'
 																	type='button'
 																>
@@ -6292,12 +6383,14 @@ export default function MessengerPage() {
 													}
 												}}
 												rows={1}
-												disabled={!canWriteToSelectedChannel}
+												disabled={!canWriteToSelectedChannel || isBlockedChat}
 												className='flex-1 bg-transparent border-none text-white placeholder-gray-500 focus:ring-0 resize-none py-2.5 max-h-32 min-h-[44px] custom-scrollbar'
 												placeholder={
-													canWriteToSelectedChannel
-														? 'Напишите сообщение...'
-														: 'В этом канале писать может только владелец'
+													!canWriteToSelectedChannel
+														? 'В этом канале писать может только владелец'
+														: isBlockedChat
+															? 'Пользователь заблокирован'
+															: 'Напишите сообщение...'
 												}
 												style={{ height: 'auto', minHeight: '44px' }}
 												onInput={e => {
@@ -6314,7 +6407,8 @@ export default function MessengerPage() {
 												onClick={() => {
 													setIsPickerOpen(!isPickerOpen)
 												}}
-												className={`p-2.5 text-gray-400 hover:bg-gray-700/50 rounded-full transition-all ${
+												disabled={isBlockedChat || !canWriteToSelectedChannel}
+												className={`p-2.5 text-gray-400 hover:bg-gray-700/50 rounded-full transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
 													isPickerOpen
 														? 'text-indigo-400 bg-gray-700/50'
 														: 'hover:text-indigo-400'
@@ -6324,11 +6418,13 @@ export default function MessengerPage() {
 												<SmileIcon className='w-6 h-6' />
 											</button>
 
-											{input.trim() ? (
+											{input.trim() || files.length > 0 ? (
 												<button
 													onClick={handleSendMessage}
-													disabled={!canWriteToSelectedChannel}
-													className={`p-3 rounded-2xl transition-all duration-300 shadow-lg flex items-center justify-center ${currentBackground.buttonBg} ${currentBackground.buttonHover} text-white translate-x-0 rotate-0`}
+													disabled={
+														!canWriteToSelectedChannel || isBlockedChat || isUploading
+													}
+													className={`p-3 rounded-2xl transition-all duration-300 shadow-lg flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed ${currentBackground.buttonBg} ${currentBackground.buttonHover} text-white translate-x-0 rotate-0`}
 												>
 													<SendIcon className='w-5 h-5' />
 												</button>

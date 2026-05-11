@@ -2,6 +2,7 @@
 
 import Header from '@/components/social/Header'
 import { useAuth } from '@/lib/AuthContext'
+import { useToast } from '@/lib/ToastContext'
 import { useMusicPlayerStore } from '@/lib/stores/musicPlayerStore'
 import { audioManager } from '@/lib/services/musicPlayer'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -59,6 +60,7 @@ interface Playlist {
 export default function MusicPage() {
 	const { user, isLoading: isAuthLoading, isInitialized } = useAuth()
 	const router = useRouter()
+	const { showToast } = useToast()
 	
 	// Global player store integration
 	const { 
@@ -98,6 +100,7 @@ export default function MusicPage() {
 	const [pinnedPlaylists, setPinnedPlaylists] = useState<string[]>([])
 	const [isLoading, setIsLoading] = useState(false)
 	const [uploadingFiles, setUploadingFiles] = useState<Set<string>>(new Set())
+	const [pendingAddToPlaylist, setPendingAddToPlaylist] = useState<Set<string>>(new Set())
 	const [borrowRequests, setBorrowRequests] = useState<any[]>([])
 	const [showBorrowRequests, setShowBorrowRequests] = useState(false)
 	const [processingBorrowId, setProcessingBorrowId] = useState<string | null>(null)
@@ -258,7 +261,7 @@ export default function MusicPage() {
 				await loadPlaylistsFromBackend()
 			} else {
 				const t = await res.text()
-				alert(t || 'Не удалось синхронизировать')
+				showToast(t || 'Не удалось синхронизировать', 'error')
 			}
 		} finally {
 			setIsLoading(false)
@@ -374,6 +377,10 @@ export default function MusicPage() {
 	}
 
 	const handleUploadMusic = async (e: React.ChangeEvent<HTMLInputElement>) => {
+		if (isLoading) {
+			showToast('Подождите завершения текущей загрузки', 'info')
+			return
+		}
 		const files = e.target.files
 		if (!files || files.length === 0) return
 
@@ -381,7 +388,7 @@ export default function MusicPage() {
 			file.type.startsWith('audio/'),
 		)
 		if (fileList.length === 0) {
-			alert('Пожалуйста, выберите аудиофайлы (MP3, WAV, OGG, WEBM, M4A)')
+			showToast('Пожалуйста, выберите аудиофайлы (MP3, WAV, OGG, WEBM, M4A)', 'error')
 			return
 		}
 
@@ -439,8 +446,9 @@ export default function MusicPage() {
 				setTracks(prev => [...prev, newTrack])
 			} catch (error) {
 				console.error('Failed to upload track:', file.name, error)
-				alert(
+				showToast(
 					`Ошибка при загрузке ${file.name}: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`,
+					'error',
 				)
 			} finally {
 				setUploadingFiles(prev => {
@@ -469,7 +477,7 @@ export default function MusicPage() {
 
 				// Add to backend
 				try {
-					await fetch(`/api/playlists/${currentPlaylistId}/add-tracks`, {
+					const addTracksResponse = await fetch(`/api/playlists/${currentPlaylistId}/add-tracks`, {
 						method: 'POST',
 						headers: { 'Content-Type': 'application/json' },
 						body: JSON.stringify({
@@ -482,8 +490,14 @@ export default function MusicPage() {
 							})),
 						}),
 					})
+					if (!addTracksResponse.ok) {
+						const errText = await addTracksResponse.text().catch(() => '')
+						throw new Error(errText || 'Не удалось сохранить треки в плейлист')
+					}
 				} catch (error) {
 					console.error('Failed to add tracks to playlist:', error)
+					showToast('Не удалось сохранить треки в плейлист. Перезагружаю данные с сервера.', 'error')
+					await loadPlaylistsFromBackend()
 				}
 			} else {
 				// If no playlist active, add to "Моя музыка" or create it
@@ -534,7 +548,7 @@ export default function MusicPage() {
 					)
 
 					try {
-						await fetch(`/api/playlists/${myMusicPlaylist.id}/add-tracks`, {
+						const addTracksResponse = await fetch(`/api/playlists/${myMusicPlaylist.id}/add-tracks`, {
 							method: 'POST',
 							headers: { 'Content-Type': 'application/json' },
 							body: JSON.stringify({
@@ -547,15 +561,21 @@ export default function MusicPage() {
 								})),
 							}),
 						})
+						if (!addTracksResponse.ok) {
+							const errText = await addTracksResponse.text().catch(() => '')
+							throw new Error(errText || 'Не удалось сохранить треки в "Моя музыка"')
+						}
 					} catch (error) {
 						console.error('Failed to add tracks to "Моя музыка":', error)
+						showToast('Не удалось сохранить треки в "Моя музыка". Перезагружаю данные с сервера.', 'error')
+						await loadPlaylistsFromBackend()
 					}
 				}
 			}
 
 			// Show success message
 			const trackWord = uploadedTracks.length === 1 ? 'трек' : uploadedTracks.length < 5 ? 'трека' : 'треков'
-			alert(`Успешно загружено ${uploadedTracks.length} ${trackWord}!`)
+			showToast(`Успешно загружено ${uploadedTracks.length} ${trackWord}!`, 'success')
 		}
 
 		setIsLoading(false)
@@ -602,7 +622,7 @@ export default function MusicPage() {
 		// Validate playlist has tracks before exporting
 		const trackCount = playlist.trackIds?.length || 0
 		if (trackCount === 0) {
-			alert('Нельзя выгрузить пустой плейлист. Добавьте хотя бы один трек.')
+			showToast('Нельзя выгрузить пустой плейлист. Добавьте хотя бы один трек.', 'error')
 			return
 		}
 
@@ -623,18 +643,20 @@ export default function MusicPage() {
 				setPlaylists(prev =>
 					prev.map(p => (p.id === playlistId ? { ...p, is_public: true } : p)),
 				)
-				alert(
+				showToast(
 					`Плейлист "${playlist.name}" успешно выгружен в профиль! Теперь он доступен другим пользователям.`,
+					'success',
 				)
 			} else {
 				const errorData = await response.json().catch(() => ({}))
-				alert(
+				showToast(
 					`Не удалось выгрузить плейлист в профиль: ${errorData.error || 'Неизвестная ошибка'}`,
+					'error',
 				)
 			}
 		} catch (error) {
 			console.error('Error exporting playlist:', error)
-			alert('Ошибка при выгрузке плейлиста. Проверьте подключение к интернету.')
+			showToast('Ошибка при выгрузке плейлиста. Проверьте подключение к интернету.', 'error')
 		} finally {
 			setIsLoading(false)
 		}
@@ -799,11 +821,11 @@ export default function MusicPage() {
 				setShowCreatePlaylist(false)
 			} else {
 				console.error('Failed to create playlist')
-				alert('Не удалось создать плейлист')
+				showToast('Не удалось создать плейлист', 'error')
 			}
 		} catch (error) {
 			console.error('Error creating playlist:', error)
-			alert('Ошибка при создании плейлиста')
+			showToast('Ошибка при создании плейлиста', 'error')
 		} finally {
 			setIsLoading(false)
 		}
@@ -824,15 +846,21 @@ export default function MusicPage() {
 				setShowDeletePlaylistModal(null)
 			} else {
 				console.error('Failed to delete playlist')
-				alert('Не удалось удалить плейлист')
+				showToast('Не удалось удалить плейлист', 'error')
 			}
 		} catch (error) {
 			console.error('Error deleting playlist:', error)
-			alert('Ошибка при удалении плейлиста')
+			showToast('Ошибка при удалении плейлиста', 'error')
 		}
 	}
 
 	const handleAddToPlaylist = async (trackId: string, playlistId: string) => {
+		const addKey = `${trackId}:${playlistId}`
+		if (pendingAddToPlaylist.has(addKey)) {
+			showToast('Этот трек уже добавляется в плейлист', 'info')
+			return
+		}
+		setPendingAddToPlaylist(prev => new Set(prev).add(addKey))
 		// Update local state first
 		setPlaylists(prev =>
 			prev.map(playlist => {
@@ -879,14 +907,22 @@ export default function MusicPage() {
 
 				if (!response.ok) {
 					console.error('Failed to add track to playlist on backend')
+					showToast('Не удалось добавить трек в плейлист', 'error')
 					// Revert local state on failure
 					loadPlaylistsFromBackend()
 				}
 			}
 		} catch (error) {
 			console.error('Error adding track to playlist:', error)
+			showToast('Ошибка при добавлении трека в плейлист', 'error')
 			// Revert local state on error
 			loadPlaylistsFromBackend()
+		} finally {
+			setPendingAddToPlaylist(prev => {
+				const next = new Set(prev)
+				next.delete(addKey)
+				return next
+			})
 		}
 
 		setShowAddToPlaylist(null)

@@ -605,7 +605,13 @@ export default function ShopPage() {
 												Зайдите во вкладку <strong>Мессенджер</strong>
 											</li>
 											<li>
-												В поиске чатов напишите <strong className='text-indigo-500'>Вондик BOT</strong>
+												Откройте чат с{' '}
+												<a
+													href='/feed/messages?bot_id=vondic_bot'
+													className='font-semibold text-indigo-500 hover:text-indigo-400 underline underline-offset-2'
+												>
+													Вондик BOT
+												</a>
 											</li>
 											<li>
 												Напишите ему команду <code className='rounded bg-gray-100 px-1.5 py-0.5 text-xs font-mono dark:bg-gray-700'>/start</code>

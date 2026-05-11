@@ -146,11 +146,19 @@ export default function FriendsPage() {
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ friend_id: friendId }),
 			})
-			if (!res.ok) throw new Error('Failed to add friend')
+			if (!res.ok) {
+				const text = await res.text()
+				let msg = text || 'Не удалось отправить заявку'
+				try {
+					const data = JSON.parse(text)
+					msg = data?.error || data?.message || msg
+				} catch {}
+				throw new Error(msg)
+			}
 			alert('Заявка отправлена!')
 		} catch (error) {
 			console.error(error)
-			alert('Ошибка при отправке заявки')
+			alert((error as any)?.message || 'Ошибка при отправке заявки')
 		}
 	}
 

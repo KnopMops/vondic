@@ -8,6 +8,8 @@ RUN pip install --no-cache-dir -r requirements_a.txt
 # Копируем код webrtc в подпапку /app/webrtc
 COPY webrtc/ /app/webrtc/
 
+RUN pip install --no-cache-dir gunicorn==23.0.0
+
 # Убедимся, что есть __init__.py для возможности импорта (если нужно),
 # но мы будем запускать напрямую, без модуля
 # RUN touch /app/webrtc/__init__.py   # раскомментируйте, если хотите использовать -m
@@ -19,5 +21,5 @@ WORKDIR /app
 
 EXPOSE 5000
 
-# Запускаем main.py из папки webrtc
-CMD ["python", "webrtc/main.py"]
+# Продовый запуск через gunicorn + eventlet (Flask-SocketIO)
+CMD ["python", "-m", "gunicorn", "-k", "eventlet", "-w", "1", "-b", "0.0.0.0:5000", "webrtc.wsgi:app"]

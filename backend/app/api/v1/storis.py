@@ -54,6 +54,15 @@ def normalize_storis(items):
             item["reactions"] = []
             changed = True
 
+<<<<<<< Updated upstream
+=======
+        # Visibility: "public" (everyone) | "friends" (friends only)
+        visibility = item.get("visibility")
+        if visibility not in ("public", "friends"):
+            item["visibility"] = "public"
+            changed = True
+
+>>>>>>> Stashed changes
         if "hidden_from" not in item:
             item["hidden_from"] = []
             changed = True
@@ -112,6 +121,12 @@ def create_storis(current_user):
     media_type = data.get("type") or "image"
     text = (data.get("text") or "").strip()
     hidden_from = data.get("hidden_from", [])
+<<<<<<< Updated upstream
+=======
+    visibility = data.get("visibility") or ("friends" if data.get("friends_only") else "public")
+    if visibility not in ("public", "friends"):
+        visibility = "public"
+>>>>>>> Stashed changes
     if not media_url:
         return jsonify({"error": "url is required"}), 400
     try:
@@ -130,6 +145,10 @@ def create_storis(current_user):
             or datetime.now(timezone.utc).isoformat(),
             "reactions": [],
             "hidden_from": hidden_from,
+<<<<<<< Updated upstream
+=======
+            "visibility": visibility,
+>>>>>>> Stashed changes
         }
         if text:
             item["text"] = text
@@ -180,9 +199,17 @@ def user_storis(current_user):
         user.storis = items
         db.session.commit()
     if str(user_id) != str(current_user.id):
+<<<<<<< Updated upstream
         items = [
             item for item in items
             if str(current_user.id) not in (item.get("hidden_from") or [])
+=======
+        is_friend = FriendshipService.are_friends(current_user.id, user_id)
+        items = [
+            item for item in items
+            if str(current_user.id) not in (item.get("hidden_from") or [])
+            and (is_friend or item.get("visibility") != "friends")
+>>>>>>> Stashed changes
         ]
     return jsonify(items), 200
 

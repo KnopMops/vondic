@@ -31,3 +31,4 @@ nudenetv2
 pika
 uvicorn
 prometheus-client
+gunicorn==23.0.0

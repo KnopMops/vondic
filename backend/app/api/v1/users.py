@@ -412,7 +412,11 @@ def set_user_status(current_user):
     try:
         current_user.status = status
         current_user.last_seen = datetime.utcnow()
+<<<<<<< Updated upstream
 
+=======
+        
+>>>>>>> Stashed changes
         if status == "offline":
             current_user.socket_id = None
         db.session.commit()

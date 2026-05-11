@@ -6,7 +6,7 @@ import RightPanel from '@/components/social/RightPanel'
 import { useAuth } from '@/lib/AuthContext'
 import { FiPaperclip as Paperclip } from 'react-icons/fi'
 import { LuLoader as Loader2 } from 'react-icons/lu'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 type RagMessage = {
@@ -97,8 +97,15 @@ export default function SupportPage() {
 	}
 	const fileInputRef = useRef<HTMLInputElement>(null)
 	const ragPollRef = useRef<number | null>(null)
+	const chatBoxRef = useRef<HTMLDivElement | null>(null)
 	const BACKEND_URL =
 		process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:5050'
+
+	const [chats, setChats] = useState<
+		{ id: number; question: string; status: string; created_at: number }[]
+	>([])
+	const [selectedEsc, setSelectedEsc] = useState<number | null>(null)
+	const [newChatMode, setNewChatMode] = useState(false)
 
 	const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0]
@@ -155,7 +162,10 @@ export default function SupportPage() {
 				return
 			}
 			if (data?.ok && Array.isArray(data.messages)) {
-				setRagMessages(data.messages)
+				const sorted = [...data.messages].sort(
+					(a: any, b: any) => (a.created_at || 0) - (b.created_at || 0),
+				)
+				setRagMessages(sorted)
 			}
 		} catch (e) {
 			console.error('RAG history error', e)
@@ -185,7 +195,9 @@ export default function SupportPage() {
 					const map = new Map<number, RagMessage>()
 					for (const m of prev) map.set(m.id, m)
 					for (const m of mapped) map.set(m.id, m)
-					return Array.from(map.values())
+					return Array.from(map.values()).sort(
+						(a, b) => (a.created_at || 0) - (b.created_at || 0),
+					)
 				})
 			}
 		} catch (e) {
@@ -216,7 +228,9 @@ export default function SupportPage() {
 				body: JSON.stringify(
 					selectedEsc && selectedEsc !== -1
 						? { message: text, esc_id: selectedEsc }
-						: { message: text, new_chat: true },
+						: newChatMode || selectedEsc === -1
+							? { message: text, new_chat: true }
+							: { message: text },
 				),
 			})
 			const respText = await res.text()
@@ -268,11 +282,21 @@ export default function SupportPage() {
 		}
 	}, [])
 
-	const [chats, setChats] = useState<
-		{ id: number; question: string; status: string; created_at: number }[]
-	>([])
-	const [selectedEsc, setSelectedEsc] = useState<number | null>(null)
-	const [newChatMode, setNewChatMode] = useState(false)
+	const displayedMessages = useMemo(() => {
+		const esc = selectedEsc
+		const filtered =
+			esc === null || esc === undefined
+				? ragMessages
+				: ragMessages.filter(m => m.escalation_id === esc)
+		return [...filtered].sort(
+			(a, b) => (a.created_at || 0) - (b.created_at || 0),
+		)
+	}, [ragMessages, selectedEsc])
+
+	useEffect(() => {
+		if (!chatBoxRef.current) return
+		chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight
+	}, [displayedMessages.length, selectedEsc])
 	const loadChats = async () => {
 		try {
 			const res = await fetch('/api/support/chats')
@@ -361,7 +385,11 @@ export default function SupportPage() {
 									<div className='bg-gray-950/60 border border-gray-800 rounded-xl p-3 h-[50vh] flex flex-col'>
 										<div className='flex items-center justify-between mb-2'>
 											<div className='text-sm text-gray-300'>
-												{selectedEsc ? `Чат #${selectedEsc}` : 'Все чаты'}
+												{selectedEsc === -1
+													? 'Новый чат'
+													: selectedEsc
+														? `Чат #${selectedEsc}`
+														: 'Все чаты'}
 											</div>
 											<div className='flex gap-2'>
 												<button
@@ -395,12 +423,9 @@ export default function SupportPage() {
 										<div
 											className='flex-1 overflow-y-auto space-y-2 custom-scrollbar'
 											id='rag-chat-box'
+											ref={chatBoxRef}
 										>
-											{ragMessages
-												.filter(m =>
-													selectedEsc ? m.escalation_id === selectedEsc : true,
-												)
-												.map(m => (
+											{displayedMessages.map(m => (
 													<div
 														key={`${m.id}-${m.sender}-${m.created_at}`}
 														className={`flex ${

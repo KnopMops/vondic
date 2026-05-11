@@ -4,6 +4,9 @@ import { useState } from 'react'
 
 const ApiDocumentationPage = () => {
 	const [activeTab, setActiveTab] = useState('overview')
+	const [botikSdkVersion, setBotikSdkVersion] = useState<'0.2.0' | '0.1.1'>(
+		'0.2.0',
+	)
 
 	const tabs = [
 		{ id: 'overview', label: 'Обзор' },
@@ -1162,6 +1165,209 @@ if (window.opener && !window.opener.closed) {
 							</p>
 
 							<div className='mb-6'>
+								<div className='flex flex-wrap items-center gap-2'>
+									<button
+										onClick={() => setBotikSdkVersion('0.2.0')}
+										className={`px-3 py-1.5 rounded-lg text-sm font-semibold border transition-colors ${
+											botikSdkVersion === '0.2.0'
+												? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+												: 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10'
+										}`}
+									>
+										v0.2.0 (текущая)
+									</button>
+									<button
+										onClick={() => setBotikSdkVersion('0.1.1')}
+										className={`px-3 py-1.5 rounded-lg text-sm font-semibold border transition-colors ${
+											botikSdkVersion === '0.1.1'
+												? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+												: 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10'
+										}`}
+									>
+										v0.1.1 (legacy)
+									</button>
+									<span className='text-xs text-gray-400 ml-1'>
+										Версию можно закрепить через <code>pip install botiksdk==X.Y.Z</code>
+									</span>
+								</div>
+							</div>
+
+							{botikSdkVersion === '0.2.0' ? (
+								<>
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Установка
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`pip install botiksdk==0.2.0
+# или
+pip install botiksdk`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Быстрый старт
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`import asyncio
+from botiksdk import (
+    Bot,
+    Dispatcher,
+    Command,
+    InlineKeyboardBuilder,
+    InlineKeyboardButton,
+)
+
+dp = Dispatcher()
+bot = Bot(token="your-bot-token", base_url="https://vondic.knopusmedia.ru")
+
+@dp.message(Command("start"))
+async def cmd_start(message, bot, state):
+    kb = InlineKeyboardBuilder()
+    kb.add(InlineKeyboardButton(text="Нажми меня", callback_data="pressed"))
+    await bot.send_message(
+        str(message.chat.id),
+        "Привет!",
+        reply_markup=kb.as_markup(),
+    )
+
+@dp.callback_query(lambda c: c.data == "pressed")
+async def on_pressed(callback, bot, state):
+    await bot.send_message(str(callback.message.chat.id), "Кнопка нажата!")
+    await bot.answer_callback_query(callback.id)
+
+async def main():
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Возможности
+										</h3>
+										<ul className='list-disc pl-5 space-y-2 text-gray-300'>
+											<li>
+												<strong className='text-white'>Dispatcher</strong> — диспетчер
+												для обработки обновлений
+											</li>
+											<li>
+												<strong className='text-white'>Router</strong> — группировка
+												хендлеров
+											</li>
+											<li>
+												<strong className='text-white'>FSM</strong> — состояния диалога
+											</li>
+											<li>
+												<strong className='text-white'>Filters</strong> — фильтры сообщений
+												и callback query
+											</li>
+											<li>
+												<strong className='text-white'>Inline Keyboard</strong> — конструктор
+												кнопок
+											</li>
+											<li>
+												<strong className='text-white'>Async-first</strong> — все API через
+												<code className='mx-1 text-indigo-300'>await</code>
+											</li>
+											<li>
+												<strong className='text-white'>Error Handlers</strong> — единая
+												обработка исключений через <code className='mx-1 text-indigo-300'>@dp.errors()</code>
+											</li>
+											<li>
+												<strong className='text-white'>Middlewares</strong> — pre/post
+												обработка событий
+											</li>
+											<li>
+												<strong className='text-white'>RateLimit</strong> — встроенный anti-flood
+											</li>
+										</ul>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>Фильтры</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`from botiksdk import Command, Text, Regex, F, RateLimit
+
+@dp.message(Command("help"))
+async def cmd_help(message, bot, state): ...
+
+@dp.message(Text(equals="Привет"))
+async def exact_text(message, bot, state): ...
+
+@dp.message(Regex(r"^\\d+$"))
+async def only_numbers(message, bot, state): ...
+
+@dp.message(F.message.text.contains("купить"))
+async def buy_intent(message, bot, state): ...
+
+@dp.message(RateLimit(window_seconds=1.5, key="user"))
+async def antiflood(message, bot, state): ...`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											FSM (состояния диалога)
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`class States:
+    email = "email"
+    password = "password"
+
+@dp.message(Command("login"))
+async def login_start(message, bot, state):
+    await state.set_state(States.email)
+    await bot.send_message(str(message.chat.id), "Введите email:")
+
+@dp.message(lambda m: m.text is not None, state=States.email)
+async def login_email(message, bot, state):
+    await state.update_data(email=message.text)
+    await state.set_state(States.password)
+    await bot.send_message(str(message.chat.id), "Введите пароль:")
+
+@dp.message(lambda m: m.text is not None, state=States.password)
+async def login_password(message, bot, state):
+    data = await state.get_data()
+    await state.clear()
+    await bot.send_message(str(message.chat.id), f"Готово: {data.get('email')}")`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											BotikSDK + OAuth Вондик
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`import requests
+from botiksdk.client import PublicAPIClient
+
+# 1) exchange authorization code -> access_token
+token_resp = requests.post("https://vondic.knopusmedia.ru/oauth/token", data={
+    "grant_type": "authorization_code",
+    "code": "AUTH_CODE",
+    "redirect_uri": "https://app.example.com/callback",
+    "client_id": "YOUR_CLIENT_ID",
+    "client_secret": "YOUR_CLIENT_SECRET",
+})
+access_token = token_resp.json()["access_token"]
+
+# 2) get api key by oauth token
+client = PublicAPIClient(base_url="https://vondic.knopusmedia.ru")
+api_key = client.get_api_key(access_token=access_token)["api_key"]
+
+# 3) list bots / generate bot token
+bots = client.list_bots(api_key=api_key)
+print("bots:", bots)`}
+										</pre>
+									</div>
+								</>
+							) : (
+								<>
+							<div className='mb-6'>
 								<h3 className='text-xl font-semibold mb-2 text-white'>
 									Установка
 								</h3>
@@ -1327,6 +1533,11 @@ bots = client.list_bots(api_key=api_key)
 print("bots:", bots)`}
 								</pre>
 							</div>
+<<<<<<< Updated upstream
+=======
+								</>
+							)}
+>>>>>>> Stashed changes
 						</section>
 					</div>
 				)

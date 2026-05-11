@@ -59,7 +59,7 @@ class User(db.Model):
 
     @property
     def disk_limit(self):
-        base = 5 * 1024 * 1024 * 1024 if self.premium else 1 * 1024 * 1024 * 1024
+        base = 2 * 1024 * 1024 * 1024 if self.premium else 1 * 1024 * 1024 * 1024
         return base + (self.storage_bonus or 0)
 
     def set_password(self, password):

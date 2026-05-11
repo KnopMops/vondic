@@ -1,12 +1,14 @@
 import asyncio
+import inspect
 import logging
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Dict, Iterable, Optional, Mapping
 
 from botiksdk.bot_types import CallbackQuery, Message, Update
 from botiksdk.filters import BaseFilter
 from botiksdk.router import Handler, Router
 
 logger = logging.getLogger(__name__)
+MiddlewareCallable = Any
 
 
 class FSMContext:
@@ -74,39 +76,81 @@ class Dispatcher:
     def __init__(self):
         self._routers = [Router()]
         self._fsm_storage = FSMStorage()
+        self._error_handlers = []
+        self._message_middlewares = []
+        self._callback_middlewares = []
 
     def include_router(self, router: Router):
         self._routers.append(router)
         return self
 
-    def message(self, *filters: BaseFilter, state: Optional[str] = None):
-        return self._routers[0].message(*filters, state=state)
+    def message(
+        self,
+        *filters: BaseFilter,
+        state: Optional[str] = None,
+        priority: int = 0,
+        blocking: bool = True,
+    ):
+        return self._routers[0].message(
+            *filters, state=state, priority=priority, blocking=blocking
+        )
 
-    def callback_query(self, *filters: BaseFilter, state: Optional[str] = None):
-        return self._routers[0].callback_query(*filters, state=state)
+    def callback_query(
+        self,
+        *filters: BaseFilter,
+        state: Optional[str] = None,
+        priority: int = 0,
+        blocking: bool = True,
+    ):
+        return self._routers[0].callback_query(
+            *filters, state=state, priority=priority, blocking=blocking
+        )
 
     def fsm_context(self, user_id: str, chat_id: str) -> FSMContext:
         return FSMContext(self._fsm_storage, user_id, chat_id)
 
+    def errors(self):
+        def decorator(func):
+            self._error_handlers.append(func)
+            return func
+
+        return decorator
+
+    def message_middleware(self):
+        def decorator(func):
+            self._message_middlewares.append(func)
+            return func
+
+        return decorator
+
+    def callback_query_middleware(self):
+        def decorator(func):
+            self._callback_middlewares.append(func)
+            return func
+
+        return decorator
+
     async def feed_update(self, bot, update: Update):
         if update is None:
             return
+        try:
+            # Handle callback query
+            if update.callback_query:
+                await self._dispatch_callback_query(bot, update.callback_query)
+                return
 
-        # Handle callback query
-        if update.callback_query:
-            await self._dispatch_callback_query(bot, update.callback_query)
-            return
-
-        # Handle message
-        message = update.message
-        if message is not None:
-            logger.info(
-                "botiksdk_update_received bot_id=%s update_id=%s text=%s",
-                getattr(bot, "bot_id", None),
-                update.update_id,
-                message.text,
-            )
-            await self._dispatch_message(bot, message)
+            # Handle message
+            message = update.message
+            if message is not None:
+                logger.info(
+                    "botiksdk_update_received bot_id=%s update_id=%s text=%s",
+                    getattr(bot, "bot_id", None),
+                    update.update_id,
+                    message.text,
+                )
+                await self._dispatch_message(bot, message)
+        except Exception as exc:
+            await self._handle_error(exc, update, bot)
 
     async def _dispatch_message(self, bot, message: Message):
         user_id = str(message.from_user.id) if message.from_user else ""
@@ -114,8 +158,8 @@ class Dispatcher:
         fsm = self.fsm_context(user_id, chat_id)
         current_state = await fsm.get_state()
 
-        for router in self._routers:
-            for handler in router.message_handlers:
+        handlers = self._sorted_handlers("message")
+        for handler in handlers:
                 # Check state filter
                 if handler.state is not None and handler.state != current_state:
                     continue
@@ -127,8 +171,16 @@ class Dispatcher:
                         message.text,
                         current_state,
                     )
-                    await handler.callback(message, bot, fsm)
-                    return  # Only one handler per message
+                    handled = await self._run_middlewares(
+                        "message",
+                        event=message,
+                        bot=bot,
+                        state=fsm,
+                        current_state=current_state,
+                        handler=handler,
+                    )
+                    if handled and handler.blocking:
+                        return
 
     async def _dispatch_callback_query(self, bot, callback_query: CallbackQuery):
         user_id = str(callback_query.from_user.id) if callback_query.from_user else ""
@@ -136,8 +188,8 @@ class Dispatcher:
         fsm = self.fsm_context(user_id, chat_id)
         current_state = await fsm.get_state()
 
-        for router in self._routers:
-            for handler in router.callback_handlers:
+        handlers = self._sorted_handlers("callback_query")
+        for handler in handlers:
                 # Check state filter
                 if handler.state is not None and handler.state != current_state:
                     continue
@@ -149,15 +201,195 @@ class Dispatcher:
                         callback_query.data,
                         current_state,
                     )
-                    await handler.callback(callback_query, bot, fsm)
-                    return  # Only one handler per callback
+                    handled = await self._run_middlewares(
+                        "callback_query",
+                        event=callback_query,
+                        bot=bot,
+                        state=fsm,
+                        current_state=current_state,
+                        handler=handler,
+                    )
+                    if handled and handler.blocking:
+                        return
+
+    def _sorted_handlers(self, event_name: str):
+        handlers = []
+        for router in self._routers:
+            if event_name == "message":
+                handlers.extend(router.message_handlers)
+            else:
+                handlers.extend(router.callback_handlers)
+        return sorted(handlers, key=lambda h: h.priority, reverse=True)
+
+    async def _run_middlewares(
+        self,
+        event_name: str,
+        *,
+        event,
+        bot,
+        state: FSMContext,
+        current_state: Optional[str],
+        handler: Handler,
+    ) -> bool:
+        middlewares = (
+            self._message_middlewares
+            if event_name == "message"
+            else self._callback_middlewares
+        )
+        context = {
+            "event": event,
+            event_name: event,
+            "bot": bot,
+            "state": state,
+            "current_state": current_state,
+            "handler": handler,
+            "dispatcher": self,
+        }
+        return await self._execute_middleware_chain(
+            middlewares=middlewares,
+            context=context,
+            handler=handler,
+            event_name=event_name,
+            event=event,
+            bot=bot,
+            state=state,
+        )
+
+    async def _execute_middleware_chain(
+        self,
+        *,
+        middlewares,
+        context: Dict[str, Any],
+        handler: Handler,
+        event_name: str,
+        event,
+        bot,
+        state: FSMContext,
+    ) -> bool:
+        async def call_handler():
+            await self._invoke_handler(
+                handler,
+                event=event,
+                bot=bot,
+                state=state,
+                event_name=event_name,
+            )
+            return True
+
+        next_callable = call_handler
+        for middleware in reversed(middlewares):
+            current_next = next_callable
+
+            async def wrapped(mw=middleware, nxt=current_next):
+                return await self._invoke_middleware(mw, context, nxt)
+
+            next_callable = wrapped
+        return await next_callable()
+
+    async def _invoke_middleware(
+        self,
+        middleware: MiddlewareCallable,
+        context: Dict[str, Any],
+        call_next,
+    ):
+        signature = inspect.signature(middleware)
+        kwargs: Dict[str, Any] = {}
+        for param in signature.parameters.values():
+            if param.name == "call_next":
+                kwargs[param.name] = call_next
+            elif param.name in context:
+                kwargs[param.name] = context[param.name]
+        result = middleware(**kwargs)
+        if inspect.isawaitable(result):
+            return await result
+        return result
+
+    async def _invoke_handler(
+        self,
+        handler: Handler,
+        *,
+        event,
+        bot,
+        state: FSMContext,
+        event_name: str,
+    ):
+        callback = handler.callback
+        signature = inspect.signature(callback)
+        args = []
+        kwargs: Dict[str, Any] = {}
+
+        reserved_names: Mapping[str, Any] = {
+            event_name: event,
+            "event": event,
+            "message": event if event_name == "message" else None,
+            "callback": event if event_name == "callback_query" else None,
+            "callback_query": event if event_name == "callback_query" else None,
+            "bot": bot,
+            "state": state,
+            "fsm": state,
+            "dispatcher": self,
+            "dp": self,
+        }
+
+        for param in signature.parameters.values():
+            value = reserved_names.get(param.name, None)
+            if value is None and param.name in ("message", "callback", "callback_query"):
+                continue
+            if param.kind in (
+                inspect.Parameter.POSITIONAL_ONLY,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            ):
+                if value is not None:
+                    args.append(value)
+                elif param.default is inspect.Parameter.empty:
+                    if param.name in ("message", "callback", "callback_query", "event"):
+                        args.append(event)
+                    elif param.name in ("bot",):
+                        args.append(bot)
+                    elif param.name in ("state", "fsm"):
+                        args.append(state)
+            elif param.kind == inspect.Parameter.KEYWORD_ONLY and value is not None:
+                kwargs[param.name] = value
+
+        result = callback(*args, **kwargs)
+        if inspect.isawaitable(result):
+            await result
+
+    async def _handle_error(self, exc: Exception, update: Update, bot):
+        logger.exception(
+            "botiksdk_dispatch_exception bot_id=%s update_id=%s",
+            getattr(bot, "bot_id", None),
+            getattr(update, "update_id", None),
+            exc_info=exc,
+        )
+        if not self._error_handlers:
+            raise exc
+
+        for callback in self._error_handlers:
+            signature = inspect.signature(callback)
+            kwargs: Dict[str, Any] = {}
+            for param in signature.parameters.values():
+                if param.name in ("exception", "error", "exc"):
+                    kwargs[param.name] = exc
+                elif param.name == "update":
+                    kwargs[param.name] = update
+                elif param.name == "bot":
+                    kwargs[param.name] = bot
+                elif param.name in ("dispatcher", "dp"):
+                    kwargs[param.name] = self
+            result = callback(**kwargs)
+            if inspect.isawaitable(result):
+                await result
 
     async def _check_filters(
             self,
             filters: Iterable[BaseFilter],
             obj) -> bool:
         for f in filters:
-            result = f(obj)
+            predicate = f
+            if not callable(predicate):
+                return False
+            result = predicate(obj)
             if asyncio.iscoroutine(result):
                 result = await result
             if not result:
@@ -180,7 +412,7 @@ class Dispatcher:
         offset = 0
         while True:
             try:
-                updates = bot.get_updates(offset=offset, timeout=20, limit=100)
+                updates = await bot.get_updates(offset=offset, timeout=20, limit=100)
             except Exception:
                 logger.exception(
                     "botiksdk_poll_error bot_id=%s", getattr(

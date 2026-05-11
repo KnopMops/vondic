@@ -11,6 +11,8 @@ class Handler:
     filters: List[BaseFilter]
     callback: HandlerCallable
     state: Optional[str] = None
+    priority: int = 0
+    blocking: bool = True
 
 
 class Router:
@@ -18,18 +20,44 @@ class Router:
         self.message_handlers: List[Handler] = []
         self.callback_handlers: List[Handler] = []
 
-    def message(self, *filters: BaseFilter, state: Optional[str] = None):
+    def message(
+        self,
+        *filters: BaseFilter,
+        state: Optional[str] = None,
+        priority: int = 0,
+        blocking: bool = True,
+    ):
         def decorator(func: HandlerCallable):
             self.message_handlers.append(
-                Handler(filters=list(filters), callback=func, state=state))
+                Handler(
+                    filters=list(filters),
+                    callback=func,
+                    state=state,
+                    priority=priority,
+                    blocking=blocking,
+                )
+            )
             return func
 
         return decorator
 
-    def callback_query(self, *filters: BaseFilter, state: Optional[str] = None):
+    def callback_query(
+        self,
+        *filters: BaseFilter,
+        state: Optional[str] = None,
+        priority: int = 0,
+        blocking: bool = True,
+    ):
         def decorator(func: HandlerCallable):
             self.callback_handlers.append(
-                Handler(filters=list(filters), callback=func, state=state))
+                Handler(
+                    filters=list(filters),
+                    callback=func,
+                    state=state,
+                    priority=priority,
+                    blocking=blocking,
+                )
+            )
             return func
 
         return decorator

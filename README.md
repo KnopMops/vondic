@@ -1,52 +1,91 @@
-# Vondic
-
 <div align="center">
-  <img src="frontend/src/app/favicon.ico" width="96" height="96" alt="Vondic Botik" />
-  <h3>Коммуникационная платформа с чатами, сообществами и WebRTC‑звонками</h3>
-  <p>
-    <img src="https://img.shields.io/badge/Next.js-16.1.6-000000?style=for-the-badge&logo=next.js" />
-    <img src="https://img.shields.io/badge/Flask-3.0.3-0A0A0A?style=for-the-badge&logo=flask" />
-    <img src="https://img.shields.io/badge/Socket.IO-4.8.3-1d1d1d?style=for-the-badge&logo=socket.io" />
-    <img src="https://img.shields.io/badge/WebRTC-Real--time-7b2cbf?style=for-the-badge" />
-  </p>
+  <img src="frontend/src/app/favicon.ico" width="96" height="96" alt="Vondic" />
+  <h2>Vondic</h2>
+  <p>Коммуникационная платформа: чаты, сообщества, голосовые каналы и WebRTC‑звонки.</p>
 </div>
 
 ---
 
-## ✨ О проекте
+## 🎯 Что внутри
 
-Vondic — модульная экосистема с веб‑клиентом, бэкендом, WebRTC‑сигналингом, бот‑SDK и вспомогательными сервисами. Поддерживает личные чаты, группы, сообщества, голосовые каналы и расширяемую инфраструктуру.
-
----
-
-## 🧩 Компоненты
-
-| Модуль         | Назначение                     | Путь              |
-| -------------- | ------------------------------ | ----------------- |
-| Frontend       | Next.js веб‑клиент             | `frontend/`       |
-| Backend        | Flask API и доменная логика    | `backend/`        |
-| WebRTC         | Сигналинг и звонки             | `webrtc/`         |
-| Proxy Receiver | TCP‑прокси и защищённые каналы | `proxy_receiver/` |
-| Support API    | RAG/поддержка                  | `support-api/`    |
-| Video Checker  | Асинхронные проверки           | `video_checker/`  |
-| Bot            | Сервис бота                    | `bot/`            |
-| Botik SDK      | SDK для ботов                  | `botiksdk/`       |
-| Extension      | Расширение браузера            | `extension/`      |
+Vondic — моно‑репозиторий с несколькими сервисами (веб‑клиент, API, WebRTC‑сигналинг, бот и инфраструктура). Основной способ запуска для разработки/стенда — через `docker-compose.yml`.
 
 ---
 
-## 🌈 Основные возможности
+## 🧱 Структура репозитория
 
-- Личные сообщения, группы и сообщества
-- Текстовые и голосовые каналы
-- WebRTC‑звонки и демонстрация экрана
-- Поддержка ботов и SDK
-- Прокси‑модуль для защищённого трафика
-- Инструменты модерации и поддержки
+| Модуль | Назначение | Путь |
+| --- | --- | --- |
+| Frontend | Next.js веб‑клиент | `frontend/` |
+| Backend | Flask API, доменная логика | `backend/` |
+| WebRTC | сигналинг/звонки | `webrtc/` |
+| Bot | сервис бота | `bot/` |
+| Nginx | reverse‑proxy/SSL | `nginx/` |
+| Static Nginx | раздача `uploads`/static | `nginx-static/` |
+| PgBouncer | пул соединений Postgres | `pgbouncer/` |
+| Botik SDK | SDK для ботов | `botiksdk/` |
+| (прочее) | экспериментальные/вспомогательные модули | `support-api/`, `proxy_receiver/`, `video_checker/`, `extension/`, `test/` |
 
 ---
 
-## 🚀 Быстрый старт
+## 🚀 Быстрый старт (Docker Compose)
+
+### Требования
+
+- Docker + Docker Compose v2
+
+### 1) Подготовить `.env` файлы
+
+`docker-compose.yml` ожидает реальные файлы (не `.example`):
+
+```bash
+cp backend/.env.backend.example backend/.env.backend
+cp webrtc/.env.webrtc.example webrtc/.env.webrtc
+cp bot/.env.bot.example bot/.env.bot
+cp frontend/.env.example frontend/.env
+```
+
+### 2) Запуск
+
+```bash
+docker compose up -d --build
+```
+
+### 3) Проверка портов
+
+- **Frontend**: `http://localhost:3000`
+- **Backend API**: `http://localhost:5050`
+- **WebRTC service**: `http://localhost:5000`
+- **Static files**: `http://localhost:8080`
+- **Nginx**: `http://localhost` и `https://localhost` (если настроен SSL)
+- **RabbitMQ UI**: `http://localhost:15672`
+- **Postgres**: `localhost:5432`
+- **PgBouncer**: `localhost:6432`
+- **Redis**: `localhost:6379`
+
+Остановить:
+
+```bash
+docker compose down
+```
+
+---
+
+## 🔐 Важное про TURN / WebRTC
+
+В `docker-compose.yml` сервис `turn` (coturn) запускается с параметрами прямо в `command`. Для реального окружения **обязательно вынесите креды/realm/external‑ip в переменные окружения** и не храните секреты в открытом виде.
+
+Также убедитесь, что:
+
+- в `turn` корректно указан `--external-ip` (публичный IP/1:1 NAT),
+- проброшены UDP порты (см. `50000-50050`),
+- домен/realm совпадает с окружением.
+
+---
+
+## 🧑‍💻 Локальная разработка (без Docker)
+
+Если нужно поднимать сервисы по отдельности:
 
 ### Frontend
 
@@ -63,7 +102,7 @@ cd backend
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-python -m app
+python run.py
 ```
 
 ### WebRTC
@@ -78,41 +117,12 @@ python main.py
 
 ---
 
-## 🔐 Конфигурация
+## 📚 Документация и ссылки
 
-Каждый модуль использует собственные `.env` или параметры запуска.
-Рекомендуется начать с:
-
-- `backend/.env.backend.example`
-- `webrtc/.env.webrtc.example`
-- `bot/.env.bot.example`
-- `frontend/.env.example`
-
----
-
-## 🎨 Визуальные материалы
-
-<p>
-  <img src="frontend/static/gifts/star.png" width="72" alt="Star" />
-  <img src="frontend/static/gifts/crown.png" width="72" alt="Crown" />
-  <img src="frontend/static/gifts/firework.png" width="72" alt="Firework" />
-</p>
-
----
-
-## 📦 Сборка
-
-```bash
-cd frontend
-bun run build
-```
-
----
-
-## 📌 Полезные ссылки
-
-- Web клиент: `frontend/`
-- API: `backend/`
-- WebRTC: `webrtc/`
-- Bot: `bot/`
-- Proxy Receiver: `proxy_receiver/`
+- **Botik SDK**: `https://vondic.knopusmedia.ru/api-docs`
+- **OAuth заметки**: `https://vondic.knopusmedia.ru/api-docs`
+- **README по модулям**:
+  - `frontend/README.md`
+  - `backend/README.md`
+  - `webrtc/README.md`
+  - `bot/README.md`

@@ -5,7 +5,7 @@ from app.core.extensions import db
 from app.models.group import Group
 from app.models.message import Message
 from app.models.user import User
-from sqlalchemy import or_
+from sqlalchemy import case, func, or_
 
 
 class MessageService:
@@ -151,25 +151,56 @@ class MessageService:
     @staticmethod
     def get_recent_contacts(user_id, limit=30):
         try:
-            query = Message.query.filter(
-                Message.group_id.is_(None), Message.target_id.isnot(None), or_(
-                    Message.sender_id == user_id, Message.target_id == user_id), ).order_by(
-                Message.created_at.desc())
-            messages = query.limit(max(limit * 5, limit)).all()
-            seen = {}
-            last_payload_by_user = {}
-            ordered = []
-            for msg in messages:
-                other_id = (
-                    msg.target_id if str(msg.sender_id) == str(
-                        user_id) else msg.sender_id
+            uid = str(user_id)
+            limit = int(limit or 30)
+            if limit < 1:
+                limit = 1
+            if limit > 100:
+                limit = 100
+
+            other_id_expr = case(
+                (Message.sender_id == uid, Message.target_id),
+                else_=Message.sender_id,
+            )
+
+            base = (
+                db.session.query(
+                    other_id_expr.label("other_id"),
+                    func.max(Message.created_at).label("last_at"),
                 )
-                if not other_id or str(other_id) == str(user_id):
+                .filter(
+                    Message.group_id.is_(None),
+                    Message.channel_id.is_(None),
+                    Message.target_id.isnot(None),
+                    or_(Message.sender_id == uid, Message.target_id == uid),
+                )
+                .group_by(other_id_expr)
+                .subquery()
+            )
+
+            # Join back to the latest message per dialog partner.
+            latest_rows = (
+                db.session.query(Message, base.c.other_id, base.c.last_at)
+                .join(
+                    base,
+                    (base.c.last_at == Message.created_at)
+                    & (base.c.other_id == other_id_expr),
+                )
+                .order_by(base.c.last_at.desc())
+                .limit(limit)
+                .all()
+            )
+
+            ordered_ids: list[str] = []
+            last_meta: dict[str, dict] = {}
+            for msg, other_id, last_at in latest_rows:
+                if not other_id:
                     continue
-                other_id_str = str(other_id)
-                if other_id_str in seen:
+                other_id = str(other_id)
+                if other_id == uid:
                     continue
-                seen[other_id_str] = msg.created_at
+                if other_id in last_meta:
+                    continue
                 content = (msg.content or "").strip()
                 if msg.type == "voice":
                     preview = "🎤 Голосовое сообщение"
@@ -179,31 +210,29 @@ class MessageService:
                     preview = "📎 Файл"
                 else:
                     preview = content
-                last_payload_by_user[other_id_str] = {
+                last_meta[other_id] = {
+                    "last_message_at": last_at.isoformat() if last_at else None,
                     "last_message_text": preview,
                     "last_message_type": msg.type or "text",
                 }
-                ordered.append(other_id_str)
-                if len(ordered) >= limit:
-                    break
-            if not ordered:
+                ordered_ids.append(other_id)
+
+            if not ordered_ids:
                 return []
-            users = User.query.filter(User.id.in_(ordered)).all()
+
+            users = User.query.filter(User.id.in_(ordered_ids)).all()
             users_map = {str(u.id): u for u in users}
+
             result = []
-            for uid in ordered:
-                user = users_map.get(uid)
-                if not user:
+            for oid in ordered_ids:
+                u = users_map.get(oid)
+                if not u:
                     continue
-                data = user.to_dict()
-                last_at = seen.get(uid)
-                if last_at:
-                    data["last_message_at"] = last_at.isoformat()
-                payload = last_payload_by_user.get(uid) or {}
-                if payload.get("last_message_text"):
-                    data["last_message_text"] = payload["last_message_text"]
-                if payload.get("last_message_type"):
-                    data["last_message_type"] = payload["last_message_type"]
+                data = u.to_dict()
+                meta = last_meta.get(oid) or {}
+                for k, v in meta.items():
+                    if v is not None:
+                        data[k] = v
                 result.append(data)
             return result
         except Exception as e:

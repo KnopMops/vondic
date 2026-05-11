@@ -11,6 +11,7 @@ from app.core.extensions import db
 from app.models.escalation import Escalation
 from app.models.notification import Notification
 from app.models.post_report import PostReport
+from app.models.user_report import UserReport
 from app.models.post import Post
 from app.models.support_chat_message import SupportChatMessage
 from app.models.user import User
@@ -150,6 +151,108 @@ def delete_post_report(report_id: int):
     if report:
         db.session.delete(report)
     db.session.commit()
+
+
+@support_bp.route("/user-reports", methods=["POST"])
+@token_required
+def create_user_report(current_user):
+    data = request.get_json(force=True) or {}
+    target_user_id = str(data.get("target_user_id") or "").strip()
+    target_user_login = str(data.get("target_user_login") or "").strip()
+    description = str(data.get("description") or "").strip()
+    attachments = data.get("attachments") or []
+    if not target_user_id or not description:
+        return jsonify({"error": "Отсутствуют обязательные поля"}), 400
+    if not isinstance(attachments, list):
+        attachments = []
+    report = UserReport(
+        reporter_id=str(current_user.id),
+        reporter_login=str(current_user.username or ""),
+        target_user_id=target_user_id,
+        target_user_login=target_user_login or None,
+        description=description,
+        attachments=json.dumps(attachments),
+        status="pending",
+    )
+    db.session.add(report)
+    db.session.commit()
+    return jsonify({"ok": True, "id": report.id}), 201
+
+
+@support_bp.route("/admin/user-reports", methods=["GET"])
+@token_required
+def admin_user_reports(current_user):
+    role = str(current_user.role or "").strip().lower()
+    if role not in ("support", "admin"):
+        return jsonify({"error": "Доступ запрещён"}), 403
+    rows = UserReport.query.order_by(UserReport.created_at.desc()).all()
+    reports = []
+    for r in rows:
+        attachments = []
+        try:
+            attachments = json.loads(r.attachments or "[]")
+        except Exception:
+            attachments = []
+        reports.append(
+            {
+                "id": r.id,
+                "reporter_id": r.reporter_id,
+                "reporter_login": r.reporter_login,
+                "target_user_id": r.target_user_id,
+                "target_user_login": r.target_user_login,
+                "description": r.description,
+                "attachments": attachments,
+                "created_at": r.created_at,
+                "status": r.status or "pending",
+                "verdict_at": r.verdict_at,
+            }
+        )
+    return jsonify({"ok": True, "reports": reports})
+
+
+@support_bp.route("/admin/user-reports/action", methods=["POST"])
+@token_required
+def admin_user_reports_action(current_user):
+    role = str(current_user.role or "").strip().lower()
+    if role not in ("support", "admin"):
+        return jsonify({"error": "Доступ запрещён"}), 403
+
+    data = request.get_json(force=True) or {}
+    action = str(data.get("action") or "").strip().lower()
+    report_id = data.get("report_id")
+
+    if report_id is None:
+        return jsonify({"error": "Требуется report_id"}), 400
+    try:
+        report_id = int(report_id)
+    except Exception:
+        return jsonify({"error": "Invalid report_id"}), 400
+
+    if action not in ("no_violation", "close"):
+        return jsonify({"error": "Недопустимое действие"}), 400
+
+    report = UserReport.query.get(report_id)
+    if not report:
+        return jsonify({"error": "Не найдено"}), 404
+
+    if action == "no_violation":
+        try:
+            db.session.delete(report)
+            db.session.commit()
+            return jsonify({"ok": True, "removed": True})
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({"error": str(e)}), 500
+
+    # close
+    try:
+        report.status = "closed"
+        report.verdict_at = int(time.time())
+        db.session.commit()
+        return jsonify({"ok": True, "status": "closed"})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
 
 
 @support_bp.route("/chat/send", methods=["POST"])

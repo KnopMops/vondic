@@ -19,6 +19,7 @@ from .subscription import Subscription
 from .support_chat_message import SupportChatMessage
 from .user import User
 from .user_file import UserFile
+from .user_report import UserReport
 from .video import Video
 from .video_check import VideoCheck
 from .video_comment import VideoComment
@@ -44,6 +45,7 @@ __all__ = [
     "SupportChatMessage",
     "User",
     "UserFile",
+    "UserReport",
     "Video",
     "VideoCheck",
     "VideoComment",

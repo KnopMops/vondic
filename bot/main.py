@@ -4,19 +4,11 @@ import asyncio
 import logging
 import os
 import sys
+import requests
 
 from dotenv import load_dotenv
 
-from botiksdk import (
-    Bot,
-    CallbackQuery,
-    Command,
-    Dispatcher,
-    FSMContext,
-    InlineKeyboardBuilder,
-    InlineKeyboardButton,
-    Message,
-)
+from botiksdk import Bot, CallbackQuery, Command, Dispatcher, FSMContext, InlineKeyboardBuilder, InlineKeyboardButton, Message
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -57,6 +49,33 @@ async def get_file_mock(bot, file_id: str):
     return {"file_id": file_id, "file_path": ""}
 
 
+async def http_get(url: str, timeout: int = 5):
+    return await asyncio.to_thread(requests.get, url, timeout=timeout)
+
+
+async def http_post(url: str, json: dict, timeout: int = 10):
+    return await asyncio.to_thread(requests.post, url, json=json, timeout=timeout)
+
+
+async def send_text(
+    bot: Bot,
+    chat_id: str,
+    text: str,
+    parse_mode: Optional[str] = None,
+    reply_markup: Optional[dict] = None,
+):
+    try:
+        return await bot.send_message(
+            chat_id,
+            text,
+            parse_mode=parse_mode,
+            reply_markup=reply_markup,
+        )
+    except Exception as e:
+        logger.error(f"Failed to send message to {chat_id}: {e}")
+        return None
+
+
 @dp.message(Command("start"))
 async def cmd_start(message: Message, bot: Bot, state: FSMContext):
     builder = InlineKeyboardBuilder()
@@ -65,7 +84,7 @@ async def cmd_start(message: Message, bot: Bot, state: FSMContext):
             text="💰 Пополнить баланс (скоро)",
             callback_data="coins_unavailable"))
 
-    safe_send_message(
+    await send_text(
         bot,
         str(message.chat.id),
         "👋 Добро пожаловать в Vondic Bot!\n\n"
@@ -81,22 +100,11 @@ async def safe_answer_callback_query(
         text: Optional[str] = None,
         show_alert: bool = False):
     try:
-        import inspect
-
-        res = bot.answer_callback_query(
-            callback_id, text=text, show_alert=show_alert)
-        if inspect.iscoroutine(res):
-            await res
+        await bot.answer_callback_query(
+            callback_id, text=text, show_alert=show_alert
+        )
     except Exception as e:
         logger.error(f"Failed to answer callback query {callback_id}: {e}")
-
-
-def safe_send_message(bot: Bot, chat_id: str, text: str, **kwargs):
-    try:
-        return bot.send_message(chat_id, text, **kwargs)
-    except Exception as e:
-        logger.error(f"Failed to send message to {chat_id}: {e}")
-        return None
 
 
 @dp.callback_query(lambda c: c.data == "buy_premium_tg")
@@ -104,7 +112,7 @@ async def buy_premium_tg_start(
         callback: CallbackQuery,
         bot: Bot,
         state: FSMContext):
-    safe_send_message(
+    await send_text(
         bot,
         str(callback.message.chat.id),
         "⏳ Покупка Vondic Premium временно недоступна.",
@@ -117,7 +125,7 @@ async def premium_unavailable(
         callback: CallbackQuery,
         bot: Bot,
         state: FSMContext):
-    safe_send_message(
+    await send_text(
         bot,
         str(callback.message.chat.id),
         "⏳ Покупка Vondic Premium временно недоступна.",
@@ -127,7 +135,7 @@ async def premium_unavailable(
 
 @dp.callback_query(lambda c: c.data == "buy_coins")
 async def buy_coins_menu(callback: CallbackQuery, bot: Bot, state: FSMContext):
-    safe_send_message(
+    await send_text(
         bot,
         str(callback.message.chat.id),
         "⏳ Покупка Vondic Coins временно недоступна.",
@@ -140,7 +148,7 @@ async def coins_unavailable(
         callback: CallbackQuery,
         bot: Bot,
         state: FSMContext):
-    safe_send_message(
+    await send_text(
         bot,
         str(callback.message.chat.id),
         "⏳ Покупка Vondic Coins временно недоступна.",
@@ -153,9 +161,7 @@ async def buy_coins_tg(callback: CallbackQuery, bot: Bot, state: FSMContext):
     user_id = str(callback.from_user.id)
     linked_user = None
     try:
-        import requests
-
-        response = requests.get(
+        response = await http_get(
             f"{BACKEND_URL}/api/v1/users/by-telegram/{user_id}", timeout=5
         )
         if response.status_code == 200:
@@ -173,7 +179,7 @@ async def buy_coins_tg(callback: CallbackQuery, bot: Bot, state: FSMContext):
             InlineKeyboardButton(
                 text="✅ Регистрация",
                 callback_data="register"))
-        safe_send_message(
+        await send_text(
             bot,
             str(callback.message.chat.id),
             "Сначала привяжите или зарегистрируйте аккаунт, чтобы купить Vondic Coins.",
@@ -198,7 +204,7 @@ async def buy_coins_tg(callback: CallbackQuery, bot: Bot, state: FSMContext):
             callback_data=f"buy_coins_pack:{target_user_id}:2000:15000",
         ),
     )
-    safe_send_message(
+    await send_text(
         bot,
         str(callback.message.chat.id),
         "Выберите пакет Vondic Coins:",
@@ -212,7 +218,7 @@ async def buy_coins_email_start(
     callback: CallbackQuery, bot: Bot, state: FSMContext
 ):
     await state.set_state(CoinsStates.email)
-    safe_send_message(
+    await send_text(
         bot,
         str(callback.message.chat.id),
         "📧 Введите email аккаунта Vondic/Yandex для покупки монет:",
@@ -224,9 +230,7 @@ async def buy_coins_email_start(
 async def buy_coins_pack(callback: CallbackQuery, bot: Bot, state: FSMContext):
     try:
         _, user_id, coins, amount = callback.data.split(":")
-        import requests
-
-        response = requests.post(
+        response = await http_post(
             f"{BACKEND_URL}/api/v1/payments/create-coins-session",
             json={
                 "buyer_id": user_id,
@@ -245,29 +249,27 @@ async def buy_coins_pack(callback: CallbackQuery, bot: Bot, state: FSMContext):
                 builder.add(
                     InlineKeyboardButton(text="💳 Оплатить", url=url)
                 )
-                safe_send_message(
+                await send_text(
                     bot,
                     str(callback.message.chat.id),
                     "Перейдите к оплате:",
                     reply_markup=builder.as_markup(),
                 )
             else:
-                safe_send_message(
+                await send_text(
                     bot,
                     str(callback.message.chat.id),
                     "Ошибка получения ссылки."
                 )
         else:
-            safe_send_message(
+            await send_text(
                 bot,
                 str(callback.message.chat.id),
                 "Ошибка сервиса оплаты."
             )
     except Exception as e:
         logger.error(f"buy_coins_pack error: {e}")
-        safe_send_message(bot,
-                          str(callback.message.chat.id),
-                          "Произошла ошибка.")
+        await send_text(bot, str(callback.message.chat.id), "Произошла ошибка.")
     await safe_answer_callback_query(bot, callback.id)
 
 
@@ -278,9 +280,7 @@ async def buy_coins_email_entered(
     email = message.text.strip()
     await state.clear()
     try:
-        import requests
-
-        response = requests.get(
+        response = await http_get(
             f"{BACKEND_URL}/api/v1/users/by-email/{email}", timeout=5
         )
         if response.status_code == 200:
@@ -301,22 +301,21 @@ async def buy_coins_email_entered(
                     callback_data=f"buy_coins_pack:{user_id}:2000:15000",
                 ),
             )
-            safe_send_message(
+            await send_text(
                 bot,
                 str(message.chat.id),
                 f"Аккаунт найден: {user.get('username') or email}\nВыберите пакет монет:",
                 reply_markup=builder.as_markup(),
             )
         else:
-            safe_send_message(
+            await send_text(
                 bot,
                 str(message.chat.id),
                 "Аккаунт не найден. Проверьте email или зарегистрируйтесь на сайте.",
             )
     except Exception as e:
         logger.error(f"buy_coins_email_entered error: {e}")
-        safe_send_message(bot, str(message.chat.id),
-                          f"Ошибка проверки email: {str(e)}")
+        await send_text(bot, str(message.chat.id), f"Ошибка проверки email: {str(e)}")
 
 
 @dp.callback_query(lambda c: c.data == "register")
@@ -331,7 +330,7 @@ async def register_user(callback: CallbackQuery, bot: Bot, state: FSMContext):
         logger.error(f"Не удалось получить аватарку: {e}")
 
     if bcrypter.is_user_registered(user_id):
-        safe_send_message(
+        await send_text(
             bot,
             str(callback.message.chat.id),
             "Вы уже зарегистрированы. Используйте 'Войти / Восстановить ключ', если забыли ключ.",
@@ -341,14 +340,14 @@ async def register_user(callback: CallbackQuery, bot: Bot, state: FSMContext):
 
     key = bcrypter.register_user(user_id, username, avatar_url)
     if key:
-        safe_send_message(
+        await send_text(
             bot,
             str(callback.message.chat.id),
             f"✅ Вы успешно зарегистрированы!\n\n🔑 Ваш секретный ключ:\n`{user_id}:{key}`\n\n⚠️ Сохраните его, он показывается только один раз!\nИспользуйте этот ключ для авторизации на сайте.",
             parse_mode="Markdown",
         )
     else:
-        safe_send_message(
+        await send_text(
             bot,
             str(callback.message.chat.id),
             "❌ Произошла ошибка при регистрации. Возможно, такое имя пользователя уже занято.",
@@ -363,7 +362,7 @@ async def restore_key(callback: CallbackQuery, bot: Bot, state: FSMContext):
     avatar_url = None
 
     if not bcrypter.is_user_registered(user_id):
-        safe_send_message(
+        await send_text(
             bot,
             str(callback.message.chat.id),
             "⚠️ Вы еще не зарегистрированы. Нажмите 'Регистрация'.",
@@ -373,14 +372,14 @@ async def restore_key(callback: CallbackQuery, bot: Bot, state: FSMContext):
 
     key = bcrypter.rotate_key(user_id, avatar_url)
     if key:
-        safe_send_message(
+        await send_text(
             bot,
             str(callback.message.chat.id),
             f"🔄 Ваш ключ был обновлен!\n\n🔑 Новый секретный ключ:\n`{user_id}:{key}`\n\n⚠️ Старый ключ больше недействителен.",
             parse_mode="Markdown",
         )
     else:
-        safe_send_message(
+        await send_text(
             bot,
             str(callback.message.chat.id),
             "❌ Произошла ошибка при обновлении ключа."
@@ -394,7 +393,7 @@ async def auth_email_start(
         bot: Bot,
         state: FSMContext):
     await state.set_state(AuthStates.email)
-    safe_send_message(
+    await send_text(
         bot,
         str(callback.message.chat.id),
         "📧 Введите ваш email:",
@@ -407,7 +406,7 @@ async def auth_email_entered(message: Message, bot: Bot, state: FSMContext):
     email = message.text.strip()
     await state.update_data(email=email)
     await state.set_state(AuthStates.password)
-    safe_send_message(bot, str(message.chat.id), "🔑 Введите ваш пароль:")
+    await send_text(bot, str(message.chat.id), "🔑 Введите ваш пароль:")
 
 
 @dp.message(lambda m: m.text is not None, state=AuthStates.password)
@@ -429,7 +428,7 @@ async def auth_password_entered(message: Message, bot: Bot, state: FSMContext):
             )
         )
 
-        safe_send_message(
+        await send_text(
             bot,
             str(message.chat.id),
             f"✅ Успешная авторизация!\nВы вошли как: {user['username']}",
@@ -441,7 +440,7 @@ async def auth_password_entered(message: Message, bot: Bot, state: FSMContext):
             InlineKeyboardButton(
                 text="Попробовать снова",
                 callback_data="auth_email"))
-        safe_send_message(
+        await send_text(
             bot,
             str(message.chat.id),
             "❌ Неверный email или пароль.",
@@ -454,9 +453,7 @@ async def buy_premium(callback: CallbackQuery, bot: Bot, state: FSMContext):
     try:
         user_id = callback.data.split(":")[1]
 
-        import requests
-
-        response = requests.post(
+        response = await http_post(
             f"{BACKEND_URL}/api/v1/payments/create-checkout-session",
             json={"user_id": user_id},
             timeout=10,
@@ -471,14 +468,14 @@ async def buy_premium(callback: CallbackQuery, bot: Bot, state: FSMContext):
                         text="💳 Перейти к оплате", url=payment_url
                     )
                 )
-                safe_send_message(
+                await send_text(
                     bot,
                     str(callback.message.chat.id),
                     "Для оплаты Vondic Premium нажмите на кнопку ниже:",
                     reply_markup=builder.as_markup(),
                 )
             else:
-                safe_send_message(
+                await send_text(
                     bot,
                     str(callback.message.chat.id),
                     "❌ Ошибка получения ссылки на оплату.",
@@ -486,7 +483,7 @@ async def buy_premium(callback: CallbackQuery, bot: Bot, state: FSMContext):
         else:
             error_text = response.text
             logger.error(f"Backend error: {error_text}")
-            safe_send_message(
+            await send_text(
                 bot,
                 str(callback.message.chat.id),
                 "❌ Ошибка сервиса оплаты."
@@ -494,9 +491,7 @@ async def buy_premium(callback: CallbackQuery, bot: Bot, state: FSMContext):
 
     except Exception as e:
         logger.error(f"Error buying premium: {e}")
-        safe_send_message(bot,
-                          str(callback.message.chat.id),
-                          "❌ Произошла ошибка.")
+        await send_text(bot, str(callback.message.chat.id), "❌ Произошла ошибка.")
 
     await safe_answer_callback_query(bot, callback.id)
 

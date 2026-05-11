@@ -20,7 +20,8 @@ import {
 	LuUpload as UploadCloud,
 } from 'react-icons/lu'
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { FiPaperclip as Paperclip } from 'react-icons/fi'
+import { useEffect, useRef, useState } from 'react'
 import Post from './Post'
 import StoriesModal from './StoriesModal'
 
@@ -113,6 +114,17 @@ export default function UserProfile({ user, currentUser }: Props) {
 	const [linkKey, setLinkKey] = useState<string | null>(null)
 	const [isShareModalOpen, setIsShareModalOpen] = useState(false)
 	const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false)
+<<<<<<< Updated upstream
+=======
+	const [isUserReportOpen, setIsUserReportOpen] = useState(false)
+	const [userReportText, setUserReportText] = useState('')
+	const [userReportBusy, setUserReportBusy] = useState(false)
+	const [userReportUploading, setUserReportUploading] = useState(false)
+	const [userReportAttachments, setUserReportAttachments] = useState<
+		{ url: string; name: string; ext?: string }[]
+	>([])
+	const userReportFileInputRef = useRef<HTMLInputElement | null>(null)
+>>>>>>> Stashed changes
 	const [privacySettings, setPrivacySettings] = useState({
 		show_email: true,
 		show_online_status: true,
@@ -652,11 +664,19 @@ export default function UserProfile({ user, currentUser }: Props) {
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ friend_id: user.id }),
 			})
-			if (!res.ok) throw new Error('Failed to add friend')
+			if (!res.ok) {
+				const text = await res.text()
+				let msg = text || 'Не удалось отправить заявку'
+				try {
+					const data = JSON.parse(text)
+					msg = data?.error || data?.message || msg
+				} catch {}
+				throw new Error(msg)
+			}
 			alert('Заявка отправлена!')
 		} catch (error) {
 			console.error(error)
-			alert('Ошибка при отправке заявки')
+			alert((error as any)?.message || 'Ошибка при отправке заявки')
 		} finally {
 			setLoading(false)
 		}
@@ -1046,7 +1066,11 @@ export default function UserProfile({ user, currentUser }: Props) {
 							)}
 						</div>
 
+<<<<<<< Updated upstream
 						<div className='flex items-center gap-2'>
+=======
+						<div className='flex flex-wrap items-center gap-2 justify-start sm:justify-end w-full sm:w-auto'>
+>>>>>>> Stashed changes
 							<motion.button
 								whileHover={{ scale: 1.05 }}
 								whileTap={{ scale: 0.95 }}
@@ -1077,6 +1101,19 @@ export default function UserProfile({ user, currentUser }: Props) {
 									</motion.button>
 								</>
 							)}
+<<<<<<< Updated upstream
+=======
+							{!isMe && (
+								<motion.button
+									whileHover={{ scale: 1.05 }}
+									whileTap={{ scale: 0.95 }}
+									onClick={() => setIsUserReportOpen(true)}
+									className='rounded-xl bg-rose-500/10 border border-rose-500/20 px-4 py-2 text-sm font-semibold text-rose-300 hover:bg-rose-500/20 transition-all shadow-lg'
+								>
+									Пожаловаться
+								</motion.button>
+							)}
+>>>>>>> Stashed changes
 						</div>
 
 						<AnimatePresence>
@@ -1296,7 +1333,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 						</AnimatePresence>
 
 						{!isMe && currentUser && !checkingStatus && (
-							<div className='flex flex-wrap gap-3'>
+							<div className='mt-4 flex flex-wrap gap-3 w-full'>
 								{isFriend ? (
 									<motion.button
 										whileHover={{ scale: 1.05 }}
@@ -1485,6 +1522,215 @@ export default function UserProfile({ user, currentUser }: Props) {
 						</motion.div>
 					</motion.div>
 				)}
+<<<<<<< Updated upstream
+=======
+
+				{isUserReportOpen && (
+					<div className='fixed inset-0 z-[99999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4'>
+						<div className='w-full max-w-md rounded-2xl bg-gray-900/95 border border-white/10 p-6 shadow-2xl'>
+							<div className='text-lg font-semibold text-white'>Жалоба</div>
+							<div className='text-xs text-gray-400 mt-1'>
+								На пользователя: {user.username}
+							</div>
+							<div className='mt-3 flex items-center gap-2'>
+								<input
+									ref={userReportFileInputRef}
+									type='file'
+									multiple
+									className='hidden'
+									onChange={async e => {
+										const files = Array.from(e.target.files || [])
+										if (!files.length) return
+										setUserReportUploading(true)
+										for (const file of files) {
+											if (file.size > 20 * 1024 * 1024) {
+												alert('Файл слишком большой (макс 20МБ)')
+												continue
+											}
+											try {
+												const base64 = await new Promise<string>(
+													(resolve, reject) => {
+														const reader = new FileReader()
+														reader.onload = () =>
+															resolve(reader.result as string)
+														reader.onerror = () => reject(new Error('read_error'))
+														reader.readAsDataURL(file)
+													},
+												)
+												const res = await fetch('/api/v1/upload/file', {
+													method: 'POST',
+													headers: { 'Content-Type': 'application/json' },
+													body: JSON.stringify({
+														file: base64,
+														filename: file.name,
+													}),
+												})
+												const data = await res.json().catch(() => ({}))
+												if (!res.ok || !data.url) {
+													alert(data.error || 'Ошибка загрузки файла')
+													continue
+												}
+												setUserReportAttachments(prev => [
+													...prev,
+													{ url: data.url, name: file.name, ext: data.ext },
+												])
+											} catch {
+												alert('Ошибка загрузки файла')
+											}
+										}
+										setUserReportUploading(false)
+										if (userReportFileInputRef.current) {
+											userReportFileInputRef.current.value = ''
+										}
+									}}
+								/>
+								<button
+									type='button'
+									onClick={() => userReportFileInputRef.current?.click()}
+									disabled={userReportUploading}
+									className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white hover:bg-white/10 disabled:opacity-60'
+								>
+									<Paperclip className='h-4 w-4' />
+									<span>
+										{userReportUploading ? 'Загрузка...' : 'Прикрепить файлы'}
+									</span>
+								</button>
+								{userReportAttachments.length > 0 && (
+									<span className='text-xs text-gray-400'>
+										{userReportAttachments.length} шт.
+									</span>
+								)}
+							</div>
+							{userReportAttachments.length > 0 && (
+								<div className='mt-3 grid grid-cols-2 gap-2'>
+									{userReportAttachments.map(a => {
+										const src = getAttachmentUrl(a.url)
+										const ext = (a.ext || a.name.split('.').pop() || '').toLowerCase()
+										const isImg = [
+											'jpg',
+											'jpeg',
+											'png',
+											'gif',
+											'webp',
+											'svg',
+										].includes(ext)
+										const isVid = ['mp4', 'mov', 'webm', 'mkv', 'avi'].includes(ext)
+										const isAud = ['mp3', 'wav', 'ogg', 'flac', 'm4a', 'webm'].includes(
+											ext,
+										)
+										return (
+											<div
+												key={a.url}
+												className='rounded-xl border border-white/10 bg-black/30 p-2'
+											>
+												<div className='flex items-center justify-between gap-2'>
+													<div className='text-[10px] text-gray-300 truncate'>
+														{a.name}
+													</div>
+													<button
+														type='button'
+														className='text-[10px] text-rose-300 hover:text-rose-200'
+														onClick={() =>
+															setUserReportAttachments(prev =>
+																prev.filter(x => x.url !== a.url),
+															)
+														}
+													>
+														Удалить
+													</button>
+												</div>
+												<div className='mt-2'>
+													{isImg ? (
+														<img
+															src={src}
+															alt='attachment'
+															className='h-24 w-full rounded-lg object-cover cursor-pointer'
+															onClick={() =>
+																window.open(
+																	src,
+																	'_blank',
+																	'noopener,noreferrer',
+																)
+															}
+														/>
+													) : isVid ? (
+														<video
+															controls
+															preload='metadata'
+															src={src}
+															className='h-24 w-full rounded-lg object-cover'
+														/>
+													) : isAud ? (
+														<audio controls preload='none' src={src} className='w-full' />
+													) : (
+														<a
+															href={src}
+															target='_blank'
+															rel='noreferrer'
+															className='text-xs text-indigo-300 hover:text-indigo-200 break-all'
+														>
+															Открыть
+														</a>
+													)}
+												</div>
+											</div>
+										)
+									})}
+								</div>
+							)}
+							<textarea
+								value={userReportText}
+								onChange={e => setUserReportText(e.target.value)}
+								className='mt-4 w-full min-h-[120px] rounded-xl border border-gray-700 bg-black/40 px-4 py-3 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-rose-500/30'
+								placeholder='Опишите проблему...'
+							/>
+							<div className='mt-4 flex gap-2'>
+								<button
+									type='button'
+									onClick={() => setIsUserReportOpen(false)}
+									className='flex-1 rounded-xl bg-gray-800 hover:bg-gray-700 text-white py-2.5'
+								>
+									Отмена
+								</button>
+								<button
+									type='button'
+									disabled={
+										userReportBusy || userReportUploading || !userReportText.trim()
+									}
+									onClick={async () => {
+										if (!authUser) return
+										const description = userReportText.trim()
+										if (!description) return
+										setUserReportBusy(true)
+										try {
+											const res = await fetch('/api/support/user-reports', {
+												method: 'POST',
+												headers: { 'Content-Type': 'application/json' },
+												body: JSON.stringify({
+													target_user_id: user.id,
+													target_user_login: user.username,
+													description,
+													attachments: userReportAttachments.map(a => a.url),
+												}),
+											})
+											if (res.ok) {
+												setUserReportText('')
+												setUserReportAttachments([])
+												setIsUserReportOpen(false)
+											}
+										} finally {
+											setUserReportBusy(false)
+										}
+									}}
+									className='flex-1 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 font-semibold'
+								>
+									Отправить
+								</button>
+							</div>
+						</div>
+					</div>
+				)}
+>>>>>>> Stashed changes
 			</AnimatePresence>
 			<AnimatePresence>
 				{isPrivacyModalOpen && (

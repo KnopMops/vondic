@@ -13,7 +13,16 @@ import { createPortal } from 'react-dom'
 interface CreateStoryModalProps {
 	isOpen: boolean
 	onClose: () => void
+<<<<<<< Updated upstream
 	onUpload: (file: File, text: string, hiddenFrom: string[]) => Promise<void>
+=======
+	onUpload: (
+		file: File,
+		text: string,
+		hiddenFrom: string[],
+		visibility: 'public' | 'friends',
+	) => Promise<void>
+>>>>>>> Stashed changes
 	isUploading: boolean
 	friends?: Array<{ id: string; username: string; avatar_url?: string | null }>
 }
@@ -30,6 +39,10 @@ export default function CreateStoryModal({
 	const [storyText, setStoryText] = useState('')
 	const [excludeQuery, setExcludeQuery] = useState('')
 	const [hiddenFrom, setHiddenFrom] = useState<string[]>([])
+<<<<<<< Updated upstream
+=======
+	const [visibility, setVisibility] = useState<'public' | 'friends'>('friends')
+>>>>>>> Stashed changes
 	const [mounted, setMounted] = useState(false)
 
 	useEffect(() => {
@@ -52,7 +65,11 @@ export default function CreateStoryModal({
 
 	const handleUpload = async () => {
 		if (!selectedFile) return
+<<<<<<< Updated upstream
 		await onUpload(selectedFile, storyText, hiddenFrom)
+=======
+		await onUpload(selectedFile, storyText, hiddenFrom, visibility)
+>>>>>>> Stashed changes
 		resetState()
 	}
 
@@ -62,6 +79,10 @@ export default function CreateStoryModal({
 		setStoryText('')
 		setExcludeQuery('')
 		setHiddenFrom([])
+<<<<<<< Updated upstream
+=======
+		setVisibility('friends')
+>>>>>>> Stashed changes
 	}
 
 	const filteredFriends = (friends || []).filter(friend => {
@@ -166,6 +187,38 @@ export default function CreateStoryModal({
 							</div>
 							<div className='space-y-2'>
 								<label className='text-sm font-medium text-gray-400 px-1'>
+<<<<<<< Updated upstream
+=======
+									Приватность
+								</label>
+								<div className='flex items-center gap-2 rounded-2xl border border-gray-700 bg-gray-800/30 p-2'>
+									<button
+										type='button'
+										onClick={() => setVisibility('friends')}
+										className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold transition ${
+											visibility === 'friends'
+												? 'bg-indigo-600 text-white'
+												: 'text-gray-300 hover:bg-white/5'
+										}`}
+									>
+										Только друзья
+									</button>
+									<button
+										type='button'
+										onClick={() => setVisibility('public')}
+										className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold transition ${
+											visibility === 'public'
+												? 'bg-indigo-600 text-white'
+												: 'text-gray-300 hover:bg-white/5'
+										}`}
+									>
+										Публично
+									</button>
+								</div>
+							</div>
+							<div className='space-y-2'>
+								<label className='text-sm font-medium text-gray-400 px-1'>
+>>>>>>> Stashed changes
 									Исключения (кто не может смотреть)
 								</label>
 								<input

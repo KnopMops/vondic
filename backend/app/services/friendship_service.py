@@ -8,6 +8,26 @@ from sqlalchemy import or_
 
 class FriendshipService:
     @staticmethod
+    def are_friends(user_id, other_id) -> bool:
+        user_id = str(user_id)
+        other_id = str(other_id)
+        if not user_id or not other_id or user_id == other_id:
+            return False
+        try:
+            existing = Friendship.query.filter(
+                or_(
+                    (Friendship.requester_id == user_id)
+                    & (Friendship.addressee_id == other_id),
+                    (Friendship.requester_id == other_id)
+                    & (Friendship.addressee_id == user_id),
+                ),
+                Friendship.status == "accepted",
+            ).first()
+            return existing is not None
+        except Exception:
+            return False
+
+    @staticmethod
     def send_request(requester_id, addressee_id):
         requester_id = str(requester_id)
         addressee_id = str(addressee_id)
@@ -18,6 +38,15 @@ class FriendshipService:
         addressee = User.query.get(addressee_id)
         if not addressee:
             return None, "User not found"
+
+        # Respect privacy setting: disallow friend requests
+        try:
+            privacy = getattr(addressee, "privacy_settings", None) or {}
+            allow_requests = privacy.get("allow_friend_requests", True)
+            if allow_requests is False:
+                return None, "Пользователь запретил заявки в друзья"
+        except Exception:
+            pass
 
         existing = Friendship.query.filter(
             or_(

@@ -7,10 +7,10 @@ from datetime import datetime
 from threading import Lock
 
 from flask import request, session
-from flask_socketio import ConnectionRefusedError, emit, join_room
+from flask_socketio import ConnectionRefusedError, disconnect, emit, join_room
 
-from config import Config
-from proxy import ConnectionBroker
+from webrtc.config import Config
+from webrtc.proxy import ConnectionBroker
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +72,7 @@ class SignalingService:
     def _bind_events(self):
         self.io.on_event("connect", self.on_connect)
         self.io.on_event("disconnect", self.on_disconnect)
+        self.io.on_event("logout", self.on_logout)
         self.io.on_event("ping_stability", self.on_ping)
         self.io.on_event("offer", self.on_offer)
         self.io.on_event("answer", self.on_answer)
@@ -182,6 +183,20 @@ class SignalingService:
         user_id = self.broker.close_session(request.sid)
         if user_id:
             self._broadcast_status(user_id, "offline")
+<<<<<<< Updated upstream
+=======
+
+    def on_logout(self, payload=None):
+        """Explicit logout event from client before disconnect.
+        Ensures presence is updated even if disconnect races with navigation."""
+        user_id = self.broker.close_session(request.sid)
+        if user_id:
+            self._broadcast_status(user_id, "offline")
+        try:
+            disconnect()
+        except Exception:
+            pass
+>>>>>>> Stashed changes
 
     def on_authenticate(self, payload):
         if not payload:

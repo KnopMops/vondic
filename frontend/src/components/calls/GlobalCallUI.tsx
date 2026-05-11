@@ -4,6 +4,7 @@ import React from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useCallStore } from '../../lib/stores/callStore'
 import { useToast } from '../../lib/ToastContext'
+import ActiveCall from './ActiveCall'
 import ActiveGroupCall from './ActiveGroupCall'
 import { FloatingCallBar } from './FloatingCallBar'
 import IncomingCallModal from './IncomingCallModal'
@@ -71,7 +72,8 @@ export const GlobalCallUI: React.FC = () => {
 		await toggleVideo()
 	}
 
-	const hasDirectCall = Array.from(activeCalls.values()).some(c => !c.isGroupCall)
+	const activeDirectCall = Array.from(activeCalls.values()).find(c => !c.isGroupCall)
+	const hasDirectCall = !!activeDirectCall
 	const isMessagesPage = pathname?.startsWith('/feed/messages')
 
 	return (
@@ -108,8 +110,34 @@ export const GlobalCallUI: React.FC = () => {
 				/>
 			)}
 
+			{activeDirectCall && !activeGroupCallId && !isMessagesPage && (
+				<ActiveCall
+					callInfo={activeDirectCall}
+					localStream={localStream}
+					screenStream={screenStream}
+					remoteStream={remoteStreams.get(activeDirectCall.socketId) || null}
+					videoStream={webRTCService?.getVideoStream() || null}
+					onEndCall={endCall}
+					onMuteToggle={handleMuteToggle}
+					onScreenShareToggle={toggleScreenShare}
+					onVideoToggle={handleVideoToggle}
+					isMuted={isMuted}
+					isScreenSharing={isScreenSharing}
+					isVideoEnabled={isVideoEnabled()}
+					isScreenShareSupported={isScreenShareSupported}
+				/>
+			)}
+
 			{hasDirectCall && !activeGroupCallId && !isMessagesPage && (
-				<FloatingCallBar onReturnToCall={() => router.push('/feed/messages')} />
+				<FloatingCallBar
+					onReturnToCall={() => {
+						if (activeDirectCall?.userId) {
+							router.push(`/feed/messages?direct_id=${encodeURIComponent(activeDirectCall.userId)}`)
+							return
+						}
+						router.push('/feed/messages')
+					}}
+				/>
 			)}
 		</>
 	)

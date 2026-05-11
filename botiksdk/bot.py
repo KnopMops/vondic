@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from typing import Any, Dict, List, Optional
 
 from botiksdk.client import PublicAPIClient
@@ -86,7 +87,7 @@ class Bot:
         if not self.token:
             raise ValueError("bot token is required")
 
-    def get_updates(
+    def get_updates_sync(
             self,
             *,
             offset: int = 0,
@@ -101,7 +102,20 @@ class Bot:
             timeout=timeout,
         )
 
-    def send_message(
+    async def get_updates(
+            self,
+            *,
+            offset: int = 0,
+            limit: int = 100,
+            timeout: int = 20):
+        return await asyncio.to_thread(
+            self.get_updates_sync,
+            offset=offset,
+            limit=limit,
+            timeout=timeout,
+        )
+
+    def send_message_sync(
         self,
         chat_id: str,
         text: str,
@@ -128,7 +142,22 @@ class Bot:
         logger.info("botiksdk_send_message_result bot_id=%s result=%s", self.bot_id, result)
         return result
 
-    def answer_callback_query(
+    async def send_message(
+        self,
+        chat_id: str,
+        text: str,
+        parse_mode: Optional[str] = None,
+        reply_markup: Optional[Dict[str, Any]] = None,
+    ):
+        return await asyncio.to_thread(
+            self.send_message_sync,
+            chat_id,
+            text,
+            parse_mode=parse_mode,
+            reply_markup=reply_markup,
+        )
+
+    def answer_callback_query_sync(
         self,
         callback_query_id: str,
         text: Optional[str] = None,
@@ -143,16 +172,30 @@ class Bot:
             show_alert=show_alert,
         )
 
+    async def answer_callback_query(
+        self,
+        callback_query_id: str,
+        text: Optional[str] = None,
+        show_alert: bool = False,
+    ):
+        return await asyncio.to_thread(
+            self.answer_callback_query_sync,
+            callback_query_id,
+            text=text,
+            show_alert=show_alert,
+        )
+
     async def get_user_profile_photos(self, user_id: str, limit: int = 1):
         """Get user profile photos (returns mock data for local development)"""
         self._ensure_ready()
         try:
-            result = self.public.get_user_profile_photos(
+            result = await asyncio.to_thread(
+                self.public.get_user_profile_photos,
                 self.bot_id,
                 self.token,
                 user_id,
-                offset=0,
-                limit=limit,
+                0,
+                limit,
             )
             return result
         except Exception:
@@ -166,7 +209,9 @@ class Bot:
         """Get file by ID (returns mock data for local development)"""
         self._ensure_ready()
         try:
-            return self.public.get_file(self.bot_id, self.token, file_id)
+            return await asyncio.to_thread(
+                self.public.get_file, self.bot_id, self.token, file_id
+            )
         except Exception:
             # Return mock data for local development
             return {
