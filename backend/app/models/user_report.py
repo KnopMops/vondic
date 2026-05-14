@@ -14,8 +14,7 @@ class UserReport(db.Model):
     target_user_id = db.Column(TEXT, nullable=False)
     target_user_login = db.Column(TEXT, nullable=True)
     description = db.Column(TEXT, nullable=True)
-    attachments = db.Column(TEXT, nullable=True)  # JSON list
+    attachments = db.Column(TEXT, nullable=True)
     status = db.Column(TEXT, default="pending")
     created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
     verdict_at = db.Column(INTEGER, nullable=True)
-

@@ -26,7 +26,8 @@ class User(Base):
     username: Mapped[str | None] = mapped_column(String, nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     access_token: Mapped[str | None] = mapped_column(Text, nullable=True)
-    access_token_lookup: Mapped[str | None] = mapped_column(String, nullable=True)
+    access_token_lookup: Mapped[str | None] = mapped_column(
+        String, nullable=True)
     socket_id: Mapped[str | None] = mapped_column(String, nullable=True)
     status: Mapped[str | None] = mapped_column(String, nullable=True)
     is_blocked: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -144,9 +145,7 @@ class UserRepository:
                 conn.execute(
                     text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS forwarded_from_id TEXT"))
                 conn.execute(
-                    text(
-                        "ALTER TABLE users ADD COLUMN IF NOT EXISTS access_token_lookup TEXT"
-                    ))
+                    text("ALTER TABLE users ADD COLUMN IF NOT EXISTS access_token_lookup TEXT"))
 
                 conn.execute(
                     text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_read INTEGER"))
