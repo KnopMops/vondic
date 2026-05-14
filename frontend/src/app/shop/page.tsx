@@ -37,8 +37,18 @@ export default function ShopPage() {
 	const [friendsLoading, setFriendsLoading] = useState(false)
 	const [friendsError, setFriendsError] = useState<string | null>(null)
 	const [recipientId, setRecipientId] = useState<string | null>(null)
+	const [recipientSearch, setRecipientSearch] = useState('')
+	const [userSearchHits, setUserSearchHits] = useState<any[]>([])
+	const [userSearchLoading, setUserSearchLoading] = useState(false)
 	const [giftComment, setGiftComment] = useState('')
 	const [showHowToModal, setShowHowToModal] = useState(false)
+	const [premiumGiftOpen, setPremiumGiftOpen] = useState(false)
+	const [premiumRecipientId, setPremiumRecipientId] = useState<string | null>(null)
+	const [premiumSearch, setPremiumSearch] = useState('')
+	const [premiumHits, setPremiumHits] = useState<any[]>([])
+	const [premiumSearchLoading, setPremiumSearchLoading] = useState(false)
+	const [premiumGiftLoading, setPremiumGiftLoading] = useState(false)
+	const [premiumGiftError, setPremiumGiftError] = useState<string | null>(null)
 
 	const backendUrl =
 		process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
@@ -86,12 +96,94 @@ export default function ShopPage() {
 		fetchGifts()
 	}, [backendUrl])
 
+	useEffect(() => {
+		if (!giftMode || !recipientSearch.trim()) {
+			setUserSearchHits([])
+			return
+		}
+		const q = recipientSearch.trim()
+		const t = setTimeout(async () => {
+			setUserSearchLoading(true)
+			try {
+				const meRes = await fetch('/api/auth/me', { method: 'GET' })
+				if (!meRes.ok) {
+					setUserSearchHits([])
+					return
+				}
+				const meData = await meRes.json()
+				const token = meData?.user?.access_token || meData?.access_token
+				if (!token) {
+					setUserSearchHits([])
+					return
+				}
+				const res = await fetch(`${backendUrl}/api/v1/users/search`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ access_token: token, query: q }),
+				})
+				if (!res.ok) {
+					setUserSearchHits([])
+					return
+				}
+				const data = await res.json()
+				setUserSearchHits(Array.isArray(data) ? data : [])
+			} catch {
+				setUserSearchHits([])
+			} finally {
+				setUserSearchLoading(false)
+			}
+		}, 400)
+		return () => clearTimeout(t)
+	}, [recipientSearch, giftMode, backendUrl])
+
+	useEffect(() => {
+		if (!premiumGiftOpen || !premiumSearch.trim()) {
+			setPremiumHits([])
+			return
+		}
+		const q = premiumSearch.trim()
+		const t = setTimeout(async () => {
+			setPremiumSearchLoading(true)
+			try {
+				const meRes = await fetch('/api/auth/me', { method: 'GET' })
+				if (!meRes.ok) {
+					setPremiumHits([])
+					return
+				}
+				const meData = await meRes.json()
+				const token = meData?.user?.access_token || meData?.access_token
+				if (!token) {
+					setPremiumHits([])
+					return
+				}
+				const res = await fetch(`${backendUrl}/api/v1/users/search`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ access_token: token, query: q }),
+				})
+				if (!res.ok) {
+					setPremiumHits([])
+					return
+				}
+				const data = await res.json()
+				setPremiumHits(Array.isArray(data) ? data : [])
+			} catch {
+				setPremiumHits([])
+			} finally {
+				setPremiumSearchLoading(false)
+			}
+		}, 400)
+		return () => clearTimeout(t)
+	}, [premiumSearch, premiumGiftOpen, backendUrl])
+
 	const openGiftModal = (gift: any) => {
 		setSelectedGift(gift)
 		setQuantity(1)
 		setGiftError(null)
 		setGiftMode(false)
 		setRecipientId(null)
+		setRecipientSearch('')
+		setUserSearchHits([])
 		setIsModalOpen(true)
 	}
 
@@ -99,9 +191,15 @@ export default function ShopPage() {
 		setIsModalOpen(false)
 		setSelectedGift(null)
 		setGiftError(null)
+		setRecipientSearch('')
+		setUserSearchHits([])
 	}
 
 	const toggleGiftMode = async () => {
+		if (giftMode) {
+			setRecipientSearch('')
+			setUserSearchHits([])
+		}
 		if (!giftMode) {
 			setFriendsError(null)
 			setFriendsLoading(true)
@@ -131,9 +229,62 @@ export default function ShopPage() {
 		setGiftMode(prev => !prev)
 	}
 
+	const openPremiumGiftModal = () => {
+		setPremiumGiftOpen(true)
+		setPremiumRecipientId(null)
+		setPremiumSearch('')
+		setPremiumHits([])
+		setPremiumGiftError(null)
+	}
+
+	const closePremiumGiftModal = () => {
+		setPremiumGiftOpen(false)
+		setPremiumRecipientId(null)
+		setPremiumGiftError(null)
+	}
+
+	const sendPremiumGift = async () => {
+		if (!premiumRecipientId) {
+			setPremiumGiftError('Выберите получателя')
+			return
+		}
+		setPremiumGiftLoading(true)
+		setPremiumGiftError(null)
+		try {
+			const meRes = await fetch('/api/auth/me', { method: 'GET' })
+			if (!meRes.ok) throw new Error('Требуется авторизация')
+			const meData = await meRes.json()
+			const token = meData?.user?.access_token || meData?.access_token
+			if (!token) throw new Error('Требуется авторизация')
+			const res = await fetch(`${backendUrl}/api/v1/users/gift-premium-coins`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`,
+				},
+				body: JSON.stringify({
+					access_token: token,
+					target_user_id: premiumRecipientId,
+				}),
+			})
+			const data = await res.json().catch(() => ({}))
+			if (!res.ok) {
+				throw new Error(data.error || data.message || 'Не удалось подарить Premium')
+			}
+			setBalanceOverride(typeof data.balance === 'number' ? data.balance : null)
+			setPremiumNote('Premium подарен получателю на 30 дней.')
+			closePremiumGiftModal()
+			router.refresh()
+		} catch (e: any) {
+			setPremiumGiftError(e.message || 'Ошибка')
+		} finally {
+			setPremiumGiftLoading(false)
+		}
+	}
+
 	const sendGiftToFriend = async () => {
 		if (!selectedGift || !recipientId) {
-			setGiftError('Выберите друга для подарка')
+			setGiftError('Выберите получателя (друг или по поиску)')
 			return
 		}
 		setGiftLoading(true)
@@ -321,6 +472,13 @@ export default function ShopPage() {
 										>
 											{premiumLoading ? 'Оформление…' : 'Купить за 50 коинов'}
 										</button>
+										<button
+											type='button'
+											onClick={openPremiumGiftModal}
+											className='mt-3 block w-full rounded-xl border border-amber-400/50 px-5 py-2.5 text-sm font-semibold text-amber-100 hover:bg-amber-500/10 transition-colors'
+										>
+											Подарить Premium за 50 коинов (любому пользователю)
+										</button>
 									</div>
 								</div>
 							</div>
@@ -330,7 +488,7 @@ export default function ShopPage() {
 									Подарки
 								</div>
 								<div className='mt-1 text-sm text-gray-500 dark:text-gray-400'>
-									Отправляйте виртуальные подарки друзьям
+									Отправляйте подарки любому пользователю (поиск по нику или друг)
 								</div>
 								<div className='mt-4 grid grid-cols-2 gap-3'>
 									{(showAll ? gifts : gifts.slice(0, 4)).map(g => {
@@ -408,6 +566,82 @@ export default function ShopPage() {
 							</div>
 						</div>
 
+						{premiumGiftOpen && (
+							<div className='fixed inset-0 z-[1000] flex items-center justify-center bg-black/50'>
+								<div className='w-full max-w-md rounded-2xl border border-amber-400/40 bg-gray-900 p-6 shadow-xl text-white'>
+									<div className='flex items-center gap-3'>
+										<div className='flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/20'>
+											<Crown className='h-5 w-5 text-amber-300' />
+										</div>
+										<div className='text-lg font-semibold'>Подарить Premium</div>
+									</div>
+									<p className='mt-2 text-sm text-gray-400'>
+										30 дней за 50 коинов. Найдите пользователя по нику или вставьте
+										его ID.
+									</p>
+									<div className='mt-4'>
+										<label className='text-sm text-gray-300'>Поиск по username</label>
+										<input
+											type='text'
+											value={premiumSearch}
+											onChange={e => setPremiumSearch(e.target.value)}
+											placeholder='Например: vondic'
+											className='mt-2 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white'
+										/>
+										<div className='mt-2 max-h-36 overflow-y-auto rounded-lg border border-white/10'>
+											{premiumSearchLoading ? (
+												<div className='p-2 text-xs text-gray-500'>Поиск…</div>
+											) : premiumHits.length === 0 ? (
+												<div className='p-2 text-xs text-gray-500'>
+													{premiumSearch.trim() ? 'Никого не найдено' : 'Введите запрос'}
+												</div>
+											) : (
+												<div className='divide-y divide-white/10'>
+													{premiumHits.map((u: any) => (
+														<button
+															key={u.id}
+															type='button'
+															onClick={() => setPremiumRecipientId(String(u.id))}
+															className={`flex w-full items-center justify-between p-2 text-left text-sm hover:bg-white/5 ${premiumRecipientId === String(u.id) ? 'bg-amber-500/10' : ''}`}
+														>
+															<span>{u.username}</span>
+															<span className='text-xs text-gray-500'>
+																{premiumRecipientId === String(u.id)
+																	? 'Выбран'
+																	: 'Выбрать'}
+															</span>
+														</button>
+													))}
+												</div>
+											)}
+										</div>
+									</div>
+									{premiumGiftError && (
+										<div className='mt-3 rounded-lg border border-red-500/50 bg-red-900/20 px-3 py-2 text-sm text-red-300'>
+											{premiumGiftError}
+										</div>
+									)}
+									<div className='mt-6 flex gap-3'>
+										<button
+											type='button'
+											disabled={premiumGiftLoading || !premiumRecipientId}
+											onClick={sendPremiumGift}
+											className='flex-1 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 px-4 py-2 text-sm font-semibold text-black disabled:opacity-50'
+										>
+											{premiumGiftLoading ? 'Отправка…' : 'Подарить за 50 коинов'}
+										</button>
+										<button
+											type='button'
+											onClick={closePremiumGiftModal}
+											className='rounded-xl border border-white/20 px-4 py-2 text-sm hover:bg-white/5'
+										>
+											Отмена
+										</button>
+									</div>
+								</div>
+							</div>
+						)}
+
 						{isModalOpen && selectedGift && (
 							<div className='fixed inset-0 z-[1000] flex items-center justify-center bg-black/50'>
 								<div className='w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-800'>
@@ -477,14 +711,59 @@ export default function ShopPage() {
 													onClick={toggleGiftMode}
 													className='rounded-lg border border-gray-300 px-3 py-1 text-sm dark:border-gray-600'
 												>
-													{giftMode ? 'Подарить другу' : 'Подарить'}
+													{giftMode ? 'Только купить' : 'Подарить'}
 												</button>
 											</div>
 											{giftMode && (
 												<div className='mt-3 space-y-3'>
 													<div>
 														<div className='text-sm text-gray-900 dark:text-gray-200'>
-															Выберите друга
+															Поиск получателя по нику
+														</div>
+														<input
+															type='text'
+															value={recipientSearch}
+															onChange={e => setRecipientSearch(e.target.value)}
+															placeholder='Начните вводить username…'
+															className='mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100'
+														/>
+														<div className='mt-2 max-h-32 overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-700'>
+															{userSearchLoading ? (
+																<div className='p-2 text-xs text-gray-500'>Поиск…</div>
+															) : userSearchHits.length === 0 ? (
+																<div className='p-2 text-xs text-gray-500'>
+																	{recipientSearch.trim()
+																		? 'Никого не найдено'
+																		: 'Введите запрос'}
+																</div>
+															) : (
+																<div className='divide-y divide-gray-200 dark:divide-gray-700'>
+																	{userSearchHits.map((u: any) => (
+																		<button
+																			key={u.id}
+																			type='button'
+																			onClick={() =>
+																				setRecipientId(String(u.id))
+																			}
+																			className={`flex w-full items-center gap-2 p-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-white/10 ${recipientId === String(u.id) ? 'bg-gray-100 dark:bg-white/10' : ''}`}
+																		>
+																			<span className='font-medium text-gray-900 dark:text-gray-100'>
+																				{u.username}
+																			</span>
+																			<span className='ml-auto text-xs text-gray-500'>
+																				{recipientId === String(u.id)
+																					? 'Выбран'
+																					: 'Выбрать'}
+																			</span>
+																		</button>
+																	))}
+																</div>
+															)}
+														</div>
+													</div>
+													<div>
+														<div className='text-sm text-gray-900 dark:text-gray-200'>
+															Или выберите из друзей
 														</div>
 														{friendsError && (
 															<div className='mt-2 rounded-lg border border-red-500 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-600 dark:bg-red-900/30 dark:text-red-300'>

@@ -244,7 +244,6 @@ def admin_user_reports_action(current_user):
             db.session.rollback()
             return jsonify({"error": str(e)}), 500
 
-    # close
     try:
         report.status = "closed"
         report.verdict_at = int(time.time())
@@ -681,6 +680,12 @@ def admin_post_reports(current_user):
     role = str(current_user.role or "").strip().lower()
     if role not in ("support", "admin"):
         return jsonify({"error": "Доступ запрещён"}), 403
+    from app.services.removal_deadline_service import enforce_removal_deadlines
+
+    try:
+        enforce_removal_deadlines()
+    except Exception:
+        pass
     rows = PostReport.query.order_by(PostReport.created_at.desc()).all()
     reports = []
     now_ts = int(time.time())

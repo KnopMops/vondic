@@ -16,9 +16,16 @@ logger = logging.getLogger(__name__)
 
 
 class SignalingService:
-    def __init__(self, socket_server, broker: ConnectionBroker):
+    def __init__(
+        self,
+        socket_server,
+        broker: ConnectionBroker,
+        *,
+        bind_disconnect: bool = True,
+    ):
         self.io = socket_server
         self.broker = broker
+        self._bind_disconnect = bind_disconnect
         self.group_calls = {}
         self.voice_channel_calls = {}
         self._connect_buckets = defaultdict(deque)
@@ -71,7 +78,8 @@ class SignalingService:
 
     def _bind_events(self):
         self.io.on_event("connect", self.on_connect)
-        self.io.on_event("disconnect", self.on_disconnect)
+        if self._bind_disconnect:
+            self.io.on_event("disconnect", self.on_disconnect)
         self.io.on_event("logout", self.on_logout)
         self.io.on_event("ping_stability", self.on_ping)
         self.io.on_event("offer", self.on_offer)
@@ -183,8 +191,6 @@ class SignalingService:
         user_id = self.broker.close_session(request.sid)
         if user_id:
             self._broadcast_status(user_id, "offline")
-<<<<<<< Updated upstream
-=======
 
     def on_logout(self, payload=None):
         """Explicit logout event from client before disconnect.
@@ -196,7 +202,6 @@ class SignalingService:
             disconnect()
         except Exception:
             pass
->>>>>>> Stashed changes
 
     def on_authenticate(self, payload):
         if not payload:

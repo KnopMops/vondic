@@ -10,8 +10,6 @@ logger = logging.getLogger(__name__)
 class ConnectionBroker:
     def __init__(self, repo: UserRepository):
         self.repo = repo
-        # Карта активных SID → user id (disconnect всегда знает пользователя даже если в БД «левый» socket_id)
-        self._sid_to_user: dict[str, str] = {}
 
         self._sid_to_user: dict[str, str] = {}
 
@@ -46,11 +44,7 @@ class ConnectionBroker:
         if released_user_id:
             user_id = released_user_id
         elif remembered:
-<<<<<<< Updated upstream
 
-=======
-            
->>>>>>> Stashed changes
             forced = self.repo.force_user_offline(remembered)
             user_id = remembered if forced else None
             if forced:

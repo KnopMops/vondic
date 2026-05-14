@@ -199,11 +199,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 	const logout = async () => {
 		try {
-			if (typeof window !== 'undefined') {
-				window.dispatchEvent(new CustomEvent('vondic-before-logout'))
-			}
 			try {
-				
 				await fetch('/api/v1/users/status', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
@@ -212,6 +208,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				})
 			} catch (e) {
 				console.error('Не удалось установить статус offline:', e)
+			}
+
+			if (typeof window !== 'undefined') {
+				window.dispatchEvent(new CustomEvent('vondic-before-logout'))
+				// SocketContext отключает сокет с небольшой задержкой после emit('logout')
+				await new Promise<void>(resolve => setTimeout(resolve, 280))
 			}
 
 			await fetch('/api/auth/logout', { method: 'POST' })

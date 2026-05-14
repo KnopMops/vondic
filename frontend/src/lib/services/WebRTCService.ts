@@ -1,6 +1,9 @@
 import { Socket } from 'socket.io-client'
 import { AudioProcessor, getDiscordLikeAudioConstraints } from './AudioProcessor'
 
+/** Внутренний coturn (LAN). Переопределение: NEXT_PUBLIC_INTERNAL_TURN_HOST */
+const DEFAULT_INTERNAL_TURN_HOST = '192.168.120.248'
+
 export interface WebRTCConfig {
 	iceServers: RTCIceServer[]
 }
@@ -35,6 +38,8 @@ export class WebRTCService {
 	private forceRelay: boolean = false
 	private turnTested: boolean = false
 	private useInternalTurnOnly: boolean = false
+	/** Резолвнутый хост internal TURN (для фильтра iceServers и логов) */
+	private internalTurnHostResolved: string = DEFAULT_INTERNAL_TURN_HOST
 	private audioProcessor: AudioProcessor | null = null
 	private iceDisconnectTimeouts: Map<string, NodeJS.Timeout> = new Map()
 
@@ -62,6 +67,7 @@ export class WebRTCService {
 			],
 		}
 		try {
+			console.log('[WebRTC] Проверка доступа к TURN…')
 			let turnUrl =
 				typeof process !== 'undefined'
 					? (process.env.NEXT_PUBLIC_TURN_URL as string | undefined)
@@ -84,10 +90,13 @@ export class WebRTCService {
 				typeof process !== 'undefined'
 					? (process.env.NEXT_PUBLIC_INTERNAL_TURN_HOST as string | undefined)
 					: undefined
-			const internalTurnUrl = `turn:${internalTurnHost || '192.168.20.31'}:3478?transport=udp`
+			this.internalTurnHostResolved = (
+				internalTurnHost ||
+				DEFAULT_INTERNAL_TURN_HOST
+			).trim()
 			const internalTurnUrls = [
-				`turn:${internalTurnHost || '192.168.20.31'}:3478?transport=udp`,
-				`turn:${internalTurnHost || '192.168.20.31'}:3478?transport=tcp`,
+				`turn:${this.internalTurnHostResolved}:3478?transport=udp`,
+				`turn:${this.internalTurnHostResolved}:3478?transport=tcp`,
 			]
 			
 			const turnRawList: string[] = []
@@ -130,14 +139,16 @@ export class WebRTCService {
 					} as any)
 					this.hasTurn = true
 					
-					// Add internal TURN (192.168.20.31) as fallback
+					// Add internal TURN (LAN) as fallback
 					;(this.configuration.iceServers as RTCIceServer[]).push({
 						urls: internalTurnUrls,
 						username: turnUser,
 						credential: turnPass,
 					} as any)
-					
-					console.log('[WebRTC] TURN configured with internal fallback (192.168.20.31)')
+
+					console.log(
+						`[WebRTC] TURN: внешний + internal fallback (${this.internalTurnHostResolved})`,
+					)
 				}
 			} else if (turnUser && turnPass) {
 				// Only internal TURN if no external configured
@@ -147,9 +158,24 @@ export class WebRTCService {
 					credential: turnPass,
 				} as any)
 				this.hasTurn = true
-				console.log('[WebRTC] Using internal TURN server (192.168.20.31)')
+				console.log(
+					`[WebRTC] Подключено к internal TURN (${this.internalTurnHostResolved})`,
+				)
 			}
-			
+
+			const useExternalTurn =
+				turnRawList.length > 0 && Boolean(turnUser) && Boolean(turnPass)
+			if (useExternalTurn && this.hasTurn) {
+				queueMicrotask(() => {
+					void this.testTurnAndFallback().then(() => {
+						if (this.useInternalTurnOnly) {
+							console.log(
+								`[WebRTC] Подключено к internal TURN (${this.internalTurnHostResolved})`,
+							)
+						}
+					})
+				})
+			}			
 			const fr =
 				typeof process !== 'undefined'
 					? (process.env.NEXT_PUBLIC_FORCE_RELAY as string | undefined)
@@ -914,12 +940,16 @@ export class WebRTCService {
 		let iceServers = this.configuration.iceServers
 
 		if (this.useInternalTurnOnly) {
-			// Filter to only internal TURN (192.168.20.31)
+			// Только internal TURN (LAN)
 			iceServers = this.configuration.iceServers.filter(server => {
 				const urls = Array.isArray(server.urls) ? server.urls : [server.urls]
-				return urls.some(url => String(url).includes('192.168.20.31'))
+				return urls.some(url =>
+					String(url).includes(this.internalTurnHostResolved),
+				)
 			})
-			console.log('[WebRTC] Using internal TURN only (192.168.20.31)')
+			console.log(
+				`[WebRTC] Используется только internal TURN (${this.internalTurnHostResolved})`,
+			)
 		}
 
 		const baseConfig: any = { iceServers }
@@ -1227,7 +1257,9 @@ export class WebRTCService {
 			console.error('Failed to accept call:', error)
 			// Handle failed ICE negotiation by forcing internal TURN and renegotiation
 			if (this.hasTurn) {
-				console.log(`[WebRTC] Accept call failed, forcing internal TURN (192.168.20.31) for ${callerSocketId}`)
+					console.log(
+						`[WebRTC] Accept call failed, переключение на internal TURN (${this.internalTurnHostResolved}) для ${callerSocketId}`,
+					)
 				this.useInternalTurnOnly = true
 				this.renegotiateWithRelay(callerSocketId).catch(err =>
 					console.error('Relay fallback failed:', err),
@@ -1410,7 +1442,9 @@ export class WebRTCService {
 									.getReceivers()
 									.some(r => r.track && r.track.kind === 'audio')
 								if (stillNoAudio) {
-									console.log(`[WebRTC] No audio receiver, forcing internal TURN (192.168.20.31) for ${data.sender_socket_id}`)
+									console.log(
+										`[WebRTC] No audio receiver, internal TURN (${this.internalTurnHostResolved}) для ${data.sender_socket_id}`,
+									)
 									this.useInternalTurnOnly = true
 									this.renegotiateWithRelay(data.sender_socket_id).catch(err =>
 										console.error(
@@ -1431,7 +1465,9 @@ export class WebRTCService {
 							console.log(
 								`[WebRTC] Connection failed, attempting TURN relay fallback for ${data.sender_socket_id}`,
 							)
-							console.log(`[WebRTC] Connection failed, forcing internal TURN (192.168.20.31) for ${data.sender_socket_id}`)
+							console.log(
+								`[WebRTC] Connection failed, internal TURN (${this.internalTurnHostResolved}) для ${data.sender_socket_id}`,
+							)
 							this.useInternalTurnOnly = true
 							this.renegotiateWithRelay(data.sender_socket_id).catch(err =>
 								console.error('Relay fallback failed:', err),
@@ -1635,7 +1671,9 @@ export class WebRTCService {
 				console.error('[WebRTC] ICE restart failed:', e)
 				// Fall back to full reconnect with internal TURN only
 				if (this.hasTurn) {
-					console.log(`[WebRTC] ICE restart failed, forcing internal TURN (192.168.20.31) for ${targetSocketId}`)
+					console.log(
+						`[WebRTC] ICE restart failed, internal TURN (${this.internalTurnHostResolved}) для ${targetSocketId}`,
+					)
 					this.useInternalTurnOnly = true
 					await this.renegotiateWithRelay(targetSocketId)
 				}
@@ -1680,7 +1718,7 @@ export class WebRTCService {
 	}
 
 	/**
-	 * Test TURN server connectivity and switch to internal (192.168.20.31) if external fails
+	 * Проверка внешнего TURN; при сбое — только internal (LAN).
 	 */
 	async testTurnAndFallback(): Promise<void> {
 		if (this.turnTested) {
@@ -1694,7 +1732,7 @@ export class WebRTCService {
 			return
 		}
 
-		console.log('[WebRTC] Testing TURN server connectivity...')
+		console.log('[WebRTC] Проверка внешнего TURN (relay)…')
 
 		// Create test peer connection
 		const testPc = new RTCPeerConnection({
@@ -1717,11 +1755,13 @@ export class WebRTCService {
 
 				if (state === 'connected' || state === 'completed') {
 					cleanup()
-					console.log('[WebRTC] External TURN server is working')
+					console.log('[WebRTC] Внешний TURN доступен')
 					resolve()
 				} else if (state === 'failed' || state === 'closed') {
 					cleanup()
-					console.warn('[WebRTC] External TURN server failed, switching to internal (192.168.20.31)')
+					console.warn(
+						`[WebRTC] Внешний TURN недоступен, переключение на internal (${this.internalTurnHostResolved})`,
+					)
 					this.useInternalTurnOnly = true
 					
 					// Recreate all peer connections with internal TURN
@@ -1743,7 +1783,9 @@ export class WebRTCService {
 			setTimeout(() => {
 				if (testPc.iceConnectionState === 'new' || testPc.iceConnectionState === 'checking') {
 					cleanup()
-					console.warn('[WebRTC] TURN server timeout, switching to internal (192.168.20.31)')
+					console.warn(
+						`[WebRTC] Таймаут TURN, переключение на internal (${this.internalTurnHostResolved})`,
+					)
 					this.useInternalTurnOnly = true
 				}
 				resolve()
@@ -1752,11 +1794,13 @@ export class WebRTCService {
 	}
 
 	/**
-	 * Force use internal TURN server (192.168.20.31)
+	 * Принудительно только internal TURN.
 	 */
 	forceInternalTurn(): void {
 		this.useInternalTurnOnly = true
-		console.log('[WebRTC] Forced to use internal TURN (192.168.20.31)')
+		console.log(
+			`[WebRTC] Принудительно internal TURN (${this.internalTurnHostResolved})`,
+		)
 		
 		// Recreate all peer connections
 		const oldConnections = Array.from(this.peerConnections.entries())

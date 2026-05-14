@@ -1533,11 +1533,8 @@ bots = client.list_bots(api_key=api_key)
 print("bots:", bots)`}
 								</pre>
 							</div>
-<<<<<<< Updated upstream
-=======
 								</>
 							)}
->>>>>>> Stashed changes
 						</section>
 					</div>
 				)

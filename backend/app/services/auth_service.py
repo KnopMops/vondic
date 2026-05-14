@@ -9,6 +9,7 @@ from app.core.extensions import cache, db
 from app.models.user import User
 from app.services.email_service import EmailService
 from email_validator import EmailNotValidError, validate_email
+from werkzeug.security import check_password_hash, generate_password_hash
 
 
 class AuthService:
@@ -17,6 +18,17 @@ class AuthService:
         if not token:
             return None
         return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _issue_tokens(user: User) -> tuple[str, str]:
+        """Persist slow password-style hashes; return raw bearer strings once."""
+        raw_access = f"{secrets.token_hex(16)}.{secrets.token_urlsafe(40)}"
+        raw_refresh = f"{secrets.token_hex(16)}.{secrets.token_urlsafe(40)}"
+        user.access_token_lookup = raw_access.split(".", 1)[0]
+        user.refresh_token_lookup = raw_refresh.split(".", 1)[0]
+        user.access_token = generate_password_hash(raw_access)
+        user.refresh_token = generate_password_hash(raw_refresh)
+        return raw_access, raw_refresh
 
     @staticmethod
     def _validate_registration_email(email_raw):
@@ -63,11 +75,7 @@ class AuthService:
         try:
             new_user = User(email=email, username=username, is_verified=0)
             new_user.set_password(password)
-            access_token = secrets.token_hex(32)
-            refresh_token = secrets.token_hex(32)
-            # Store only hashes in DB; return raw tokens to client once.
-            new_user.access_token = AuthService._hash_token(access_token)
-            new_user.refresh_token = AuthService._hash_token(refresh_token)
+            raw_access, raw_refresh = AuthService._issue_tokens(new_user)
             db.session.add(new_user)
             db.session.commit()
 
@@ -84,9 +92,8 @@ class AuthService:
                     new_user,
                     "User registered, but failed to send verification email",
                 )
-            # Attach raw tokens for response usage (not persisted).
-            new_user.access_token = access_token
-            new_user.refresh_token = refresh_token
+            new_user.access_token = raw_access
+            new_user.refresh_token = raw_refresh
             return (new_user, None)
         except Exception as e:
             db.session.rollback()
@@ -94,29 +101,90 @@ class AuthService:
 
     @staticmethod
     def get_user_by_token(access_token):
-        token_hash = AuthService._hash_token(access_token)
+        token = (access_token or "").strip()
+        if not token:
+            return None, "Invalid or expired token"
         user = None
-        if token_hash:
-            user = User.query.filter_by(access_token=token_hash).first()
-        # Legacy fallback (plain token stored) with auto-upgrade.
-        if not user and access_token:
-            legacy = User.query.filter_by(access_token=access_token).first()
+        if "." in token:
+            lookup, _, _sec = token.partition(".")
+            if lookup and _sec and "." not in _sec:
+                cand = User.query.filter_by(access_token_lookup=lookup).first()
+                if (
+                    cand
+                    and cand.access_token
+                    and check_password_hash(cand.access_token, token)
+                ):
+                    user = cand
+        if not user:
+            token_hash = AuthService._hash_token(token)
+            if token_hash:
+                user = User.query.filter_by(access_token=token_hash).first()
+        if not user:
+            legacy = User.query.filter_by(access_token=token).first()
             if legacy:
                 try:
-                    legacy.access_token = token_hash
+                    legacy.access_token = AuthService._hash_token(token)
                     db.session.commit()
                 except Exception:
                     db.session.rollback()
                 user = legacy
         if not user:
             return None, "Invalid or expired token"
-        token_hash = hashlib.sha256(access_token.encode("utf-8")).hexdigest()
+        fp = AuthService._hash_token(token)
         revoked = cache.get(f"revoked_tokens:{user.id}") or []
-        if isinstance(revoked, list) and token_hash in revoked:
+        if isinstance(revoked, list) and fp and fp in revoked:
             return None, "Invalid or expired token"
         if user.is_blocked:
             return None, "User is blocked"
         return user, None
+
+    @staticmethod
+    def refresh_with_refresh_token(refresh_token: str | None):
+        token = (refresh_token or "").strip()
+        if not token:
+            return None, "Invalid refresh token"
+        user = None
+        if "." in token:
+            lookup, _, _sec = token.partition(".")
+            if lookup and _sec and "." not in _sec:
+                cand = User.query.filter_by(
+                    refresh_token_lookup=lookup).first()
+                if (
+                    cand
+                    and cand.refresh_token
+                    and check_password_hash(cand.refresh_token, token)
+                ):
+                    user = cand
+        if not user:
+            th = AuthService._hash_token(token)
+            if th:
+                user = User.query.filter_by(refresh_token=th).first()
+        if not user:
+            legacy = User.query.filter_by(refresh_token=token).first()
+            if legacy:
+                user = legacy
+        if not user:
+            return None, "Invalid refresh token"
+        fp = AuthService._hash_token(token)
+        revoked = cache.get(f"revoked_tokens:{user.id}") or []
+        if isinstance(revoked, list) and fp and fp in revoked:
+            return None, "Invalid refresh token"
+        if user.is_blocked:
+            return None, "User is blocked"
+        raw_access, raw_refresh = AuthService._issue_tokens(user)
+        try:
+            db.session.commit()
+            return (
+                {
+                    "user": user,
+                    "access_token": raw_access,
+                    "refresh_token": raw_refresh,
+                },
+                None,
+            )
+        except Exception as e:
+            db.session.rollback()
+            return None, str(e)
 
     @staticmethod
     def get_yandex_auth_url():
@@ -182,19 +250,13 @@ class AuthService:
 
             user = User(email=email, username=username, is_verified=1)
             user.set_password(secrets.token_hex(16))
-            raw_access = secrets.token_hex(32)
-            raw_refresh = secrets.token_hex(32)
-            user.access_token = AuthService._hash_token(raw_access)
-            user.refresh_token = AuthService._hash_token(raw_refresh)
+            raw_access, raw_refresh = AuthService._issue_tokens(user)
             user.avatar_url = avatar_url
             db.session.add(user)
         else:
             if user.is_blocked:
                 return None, "User is blocked"
-            raw_access = secrets.token_hex(32)
-            raw_refresh = secrets.token_hex(32)
-            user.access_token = AuthService._hash_token(raw_access)
-            user.refresh_token = AuthService._hash_token(raw_refresh)
+            raw_access, raw_refresh = AuthService._issue_tokens(user)
 
         try:
             db.session.commit()
@@ -248,10 +310,7 @@ class AuthService:
             return None, "User not found"
         if getattr(user, "is_blocked", False):
             return None, "User is blocked"
-        access_token = secrets.token_hex(32)
-        refresh_token = secrets.token_hex(32)
-        user.access_token = AuthService._hash_token(access_token)
-        user.refresh_token = AuthService._hash_token(refresh_token)
+        raw_access, raw_refresh = AuthService._issue_tokens(user)
         try:
             db.session.commit()
 
@@ -272,8 +331,8 @@ class AuthService:
             return (
                 {
                     "user": user,
-                    "access_token": access_token,
-                    "refresh_token": refresh_token,
+                    "access_token": raw_access,
+                    "refresh_token": raw_refresh,
                 },
                 None,
             )
@@ -313,17 +372,14 @@ class AuthService:
                 if not AuthService.verify_totp(
                         user.two_factor_secret, totp_code):
                     return (None, "InvalidTwoFactorCode")
-        access_token = secrets.token_hex(32)
-        refresh_token = secrets.token_hex(32)
-        user.access_token = AuthService._hash_token(access_token)
-        user.refresh_token = AuthService._hash_token(refresh_token)
+        raw_access, raw_refresh = AuthService._issue_tokens(user)
         try:
             db.session.commit()
             return (
                 {
                     "user": user,
-                    "access_token": access_token,
-                    "refresh_token": refresh_token,
+                    "access_token": raw_access,
+                    "refresh_token": raw_refresh,
                 },
                 None,
             )

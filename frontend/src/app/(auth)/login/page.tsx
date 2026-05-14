@@ -62,7 +62,6 @@ export default function LoginPage() {
 				if (data?.two_factor_required) {
 					setTwoFactorRequired(true)
 					setTwoFactorMethod(data.method === 'totp' ? 'totp' : 'email')
-					setCaptchaToken('')
 					return
 				}
 				setLoginError(data?.error || 'Ошибка входа')
@@ -83,10 +82,6 @@ export default function LoginPage() {
 	const handleEmailTwoFactor = async (e: React.FormEvent) => {
 		e.preventDefault()
 		setLoginError(null)
-		if (captchaSiteKey && !captchaToken.trim()) {
-			setLoginError('Подтвердите, что вы не робот')
-			return
-		}
 		try {
 			const body: any = { email, password }
 			if (twoFactorMethod === 'email') body.email_code = twoFactorCode
@@ -211,29 +206,18 @@ export default function LoginPage() {
 								</div>
 							)}
 						</div>
-<<<<<<< Updated upstream
-						<SmartCaptcha
-							key={twoFactorRequired ? 'twofactor' : 'password'}
-							onTokenChange={setCaptchaToken}
-						/>
-=======
 						{!twoFactorRequired && (
 							<SmartCaptcha key='password' onTokenChange={setCaptchaToken} />
 						)}
->>>>>>> Stashed changes
 
 						<div className='space-y-4'>
 							<button
 								type='submit'
 								disabled={
 									isLoading ||
-<<<<<<< Updated upstream
-									(!!captchaSiteKey && !captchaToken.trim())
-=======
 									(!twoFactorRequired &&
 										!!captchaSiteKey &&
 										!captchaToken.trim())
->>>>>>> Stashed changes
 								}
 								className='group relative flex w-full justify-center rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-3 text-sm font-semibold text-white hover:shadow-lg hover:shadow-indigo-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed'
 							>

@@ -56,18 +56,27 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 		}
 
 		const onBeforeLogout = () => {
-<<<<<<< Updated upstream
-=======
+			const s = socketRef.current
 			try {
-				socketRef.current?.emit('logout')
+				if (s?.connected) {
+					s.emit('logout')
+				}
 			} catch {
 				void 0
 			}
->>>>>>> Stashed changes
-			forceDisconnect(socketRef.current)
-			socketRef.current = null
-			setSocket(null)
-			setIsConnected(false)
+			if (typeof window !== 'undefined') {
+				window.setTimeout(() => {
+					forceDisconnect(s)
+					socketRef.current = null
+					setSocket(null)
+					setIsConnected(false)
+				}, 200)
+			} else {
+				forceDisconnect(s)
+				socketRef.current = null
+				setSocket(null)
+				setIsConnected(false)
+			}
 		}
 		if (typeof window !== 'undefined') {
 			window.addEventListener('vondic-before-logout', onBeforeLogout)
@@ -84,9 +93,12 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 			}
 
 			try {
-				const res = await fetch('/api/auth/socket-token')
+				const res = await fetch('/api/auth/socket-token', {
+					credentials: 'include',
+				})
 				if (!res.ok || cancelled) return
-				const { token } = await res.json()
+				const body = await res.json()
+				const token = body?.token ?? body?.access_token
 
 				if (!token) {
 					return
@@ -156,7 +168,22 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 				socketInstance.on('connect', () => {
 					console.log('Socket connected')
 					setIsConnected(true)
-					socketInstance?.emit('authenticate', { access_token: token })
+					// Свежий токен из cookie (после refresh / гонки эффектов), иначе authenticate может вернуть «Не авторизовано».
+					void (async () => {
+						try {
+							const r = await fetch('/api/auth/socket-token', {
+								credentials: 'include',
+							})
+							if (!r.ok || cancelled) return
+							const b = await r.json()
+							const accessToken = b?.token ?? b?.access_token ?? token
+							socketInstance?.emit('authenticate', {
+								access_token: accessToken,
+							})
+						} catch {
+							socketInstance?.emit('authenticate', { access_token: token })
+						}
+					})()
 				})
 
 				socketInstance.on('disconnect', reason => {

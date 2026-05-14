@@ -114,8 +114,6 @@ export default function UserProfile({ user, currentUser }: Props) {
 	const [linkKey, setLinkKey] = useState<string | null>(null)
 	const [isShareModalOpen, setIsShareModalOpen] = useState(false)
 	const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false)
-<<<<<<< Updated upstream
-=======
 	const [isUserReportOpen, setIsUserReportOpen] = useState(false)
 	const [userReportText, setUserReportText] = useState('')
 	const [userReportBusy, setUserReportBusy] = useState(false)
@@ -124,7 +122,6 @@ export default function UserProfile({ user, currentUser }: Props) {
 		{ url: string; name: string; ext?: string }[]
 	>([])
 	const userReportFileInputRef = useRef<HTMLInputElement | null>(null)
->>>>>>> Stashed changes
 	const [privacySettings, setPrivacySettings] = useState({
 		show_email: true,
 		show_online_status: true,
@@ -142,6 +139,9 @@ export default function UserProfile({ user, currentUser }: Props) {
 	const [userPlaylists, setUserPlaylists] = useState<any[]>([])
 	const [loadingMusic, setLoadingMusic] = useState(false)
 	const [addingPlaylistId, setAddingPlaylistId] = useState<string | null>(null)
+	const [giftPremiumLoading, setGiftPremiumLoading] = useState(false)
+	const [giftPremiumError, setGiftPremiumError] = useState<string | null>(null)
+
 	const giftsCatalog = [
 		{ id: 'newyear_fireworks', name: 'Новогодний салют', icon: Flame },
 		{ id: 'valentine_heart', name: 'Валентинка', icon: Heart },
@@ -156,6 +156,44 @@ export default function UserProfile({ user, currentUser }: Props) {
 		{ id: 'partner_badge', name: 'Наш партнёр', icon: Crown },
 		{ id: 'gold_star', name: 'Золотая звезда', icon: Star },
 	]
+	const sendGiftPremium = async () => {
+		if (!authUser) {
+			setGiftPremiumError('Требуется авторизация')
+			return
+		}
+		setGiftPremiumLoading(true)
+		setGiftPremiumError(null)
+		try {
+			const backendUrl =
+				process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+			const meRes = await fetch('/api/auth/me', { method: 'GET' })
+			if (!meRes.ok) throw new Error('Требуется авторизация')
+			const meData = await meRes.json()
+			const token = meData?.user?.access_token || meData?.access_token
+			if (!token) throw new Error('Требуется авторизация')
+			const res = await fetch(`${backendUrl}/api/v1/users/gift-premium-coins`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`,
+				},
+				body: JSON.stringify({
+					access_token: token,
+					target_user_id: user.id,
+				}),
+			})
+			const data = await res.json().catch(() => ({}))
+			if (!res.ok) {
+				throw new Error(data.error || data.message || 'Не удалось подарить Premium')
+			}
+			alert('Premium подарен на 30 дней!')
+		} catch (e: any) {
+			setGiftPremiumError(e.message || 'Ошибка')
+		} finally {
+			setGiftPremiumLoading(false)
+		}
+	}
+
 	const sendGift = async (giftId: string) => {
 		if (!authUser) {
 			setGiftError('Требуется авторизация')
@@ -1066,11 +1104,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 							)}
 						</div>
 
-<<<<<<< Updated upstream
-						<div className='flex items-center gap-2'>
-=======
 						<div className='flex flex-wrap items-center gap-2 justify-start sm:justify-end w-full sm:w-auto'>
->>>>>>> Stashed changes
 							<motion.button
 								whileHover={{ scale: 1.05 }}
 								whileTap={{ scale: 0.95 }}
@@ -1101,8 +1135,6 @@ export default function UserProfile({ user, currentUser }: Props) {
 									</motion.button>
 								</>
 							)}
-<<<<<<< Updated upstream
-=======
 							{!isMe && (
 								<motion.button
 									whileHover={{ scale: 1.05 }}
@@ -1113,7 +1145,6 @@ export default function UserProfile({ user, currentUser }: Props) {
 									Пожаловаться
 								</motion.button>
 							)}
->>>>>>> Stashed changes
 						</div>
 
 						<AnimatePresence>
@@ -1386,6 +1417,15 @@ export default function UserProfile({ user, currentUser }: Props) {
 								>
 									Подарить
 								</motion.button>
+								<motion.button
+									whileHover={{ scale: 1.05 }}
+									whileTap={{ scale: 0.95 }}
+									onClick={sendGiftPremium}
+									disabled={loading || giftPremiumLoading}
+									className='rounded-xl bg-amber-500/25 border border-amber-400/50 px-4 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-500/35 transition-all disabled:opacity-50'
+								>
+									{giftPremiumLoading ? '…' : 'Premium 50'}
+								</motion.button>
 
 								{isAdmin && (
 									<>
@@ -1411,6 +1451,11 @@ export default function UserProfile({ user, currentUser }: Props) {
 											</motion.button>
 										)}
 									</>
+								)}
+								{giftPremiumError && (
+									<p className='w-full basis-full text-sm text-red-400 mt-1'>
+										{giftPremiumError}
+									</p>
 								)}
 							</div>
 						)}
@@ -1522,8 +1567,6 @@ export default function UserProfile({ user, currentUser }: Props) {
 						</motion.div>
 					</motion.div>
 				)}
-<<<<<<< Updated upstream
-=======
 
 				{isUserReportOpen && (
 					<div className='fixed inset-0 z-[99999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4'>
@@ -1730,7 +1773,6 @@ export default function UserProfile({ user, currentUser }: Props) {
 						</div>
 					</div>
 				)}
->>>>>>> Stashed changes
 			</AnimatePresence>
 			<AnimatePresence>
 				{isPrivacyModalOpen && (

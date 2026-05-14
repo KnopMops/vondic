@@ -287,6 +287,43 @@ def login():
     )
 
 
+@auth_bp.route("/refresh", methods=["POST"])
+def refresh_session():
+    auth_header = request.headers.get("Authorization", "")
+    token = None
+    if auth_header.startswith("Bearer "):
+        token = auth_header.split(" ", 1)[1].strip()
+    if not token:
+        body = request.get_json(silent=True) or {}
+        token = (body.get("refresh_token") or "").strip()
+    if not token:
+        return jsonify({"error": "Требуется refresh_token"}), 400
+    result, error = AuthService.refresh_with_refresh_token(token)
+    if error:
+        return jsonify({"error": error}), 401
+    try:
+        _store_login_session(
+            result["user"], result["access_token"], result["refresh_token"]
+        )
+    except Exception:
+        pass
+    ud = user_schema.dump(result["user"])
+    ud["moderation_warnings"] = (
+        getattr(result["user"], "moderation_warnings", None) or []
+    )
+    return (
+        jsonify(
+            {
+                "message": "Токены обновлены",
+                "access_token": result["access_token"],
+                "refresh_token": result["refresh_token"],
+                "user": ud,
+            }
+        ),
+        200,
+    )
+
+
 @auth_bp.route("/me", methods=["GET", "POST"])
 def me():
     token = _extract_access_token()
@@ -298,12 +335,16 @@ def me():
     if error:
         return jsonify({"error": error, "is_authenticated": False}), 401
 
+    payload = user_schema.dump(user)
+    payload["moderation_warnings"] = getattr(
+        user, "moderation_warnings", None) or []
+
     return (
         jsonify(
             {
                 "message": "Пользователь авторизован",
                 "is_authenticated": True,
-                "user": user_schema.dump(user),
+                "user": payload,
             }
         ),
         200,

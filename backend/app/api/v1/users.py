@@ -223,6 +223,62 @@ def buy_premium_coins(current_user):
         return jsonify({"error": str(e)}), 500
 
 
+@users_bp.route("/gift-premium-coins", methods=["POST"])
+@token_required
+def gift_premium_coins(current_user):
+    """Подарить Vondic Premium (30 дней) за коины любому пользователю по ID."""
+    data = request.get_json() or {}
+    target_user_id = data.get("target_user_id")
+    if not target_user_id:
+        return jsonify({"error": "Требуется target_user_id"}), 400
+    if str(target_user_id) == str(current_user.id):
+        return jsonify({"error": "Нельзя подарить Premium самому себе"}), 400
+    price = PREMIUM_COIN_PRICE
+    if (current_user.balance or 0) < price:
+        return jsonify({"error": "Недостаточно коинов"}), 400
+    recipient = User.query.get(target_user_id)
+    if not recipient:
+        return jsonify({"error": "Получатель не найден"}), 404
+    try:
+        now = datetime.utcnow()
+        base = now
+        if (
+            getattr(recipient, "premium", 0)
+            and recipient.premium_expired_at
+            and recipient.premium_expired_at > now
+        ):
+            base = recipient.premium_expired_at
+        new_expiry = base + timedelta(days=PREMIUM_DURATION_DAYS)
+        current_user.balance = (current_user.balance or 0) - price
+        recipient.premium = 1
+        if not recipient.premium_started_at:
+            recipient.premium_started_at = now
+        recipient.premium_expired_at = new_expiry
+        db.session.commit()
+        try:
+            from app.api.v1.support import notify_user
+
+            notify_user(
+                str(recipient.id),
+                f"Вам подарили Vondic Premium на 30 дней от @{current_user.username}.",
+                title="Подарок — Premium",
+                notification_type="system",
+                send_email_copy=True,
+            )
+        except Exception:
+            pass
+        return jsonify(
+            {
+                "success": True,
+                "balance": current_user.balance,
+                "recipient_premium_expired_at": new_expiry.isoformat(),
+            }
+        ), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
 @users_bp.route("/purchase-gift", methods=["POST"])
 @token_required
 def purchase_gift(current_user):
@@ -327,6 +383,8 @@ def send_gift(current_user):
         quantity = 1
     if not gift_id or quantity <= 0 or not target_user_id:
         return jsonify({"error": "Неверные параметры"}), 400
+    if str(target_user_id) == str(current_user.id):
+        return jsonify({"error": "Нельзя отправить подарок самому себе"}), 400
     from app.models.gift_catalog import GiftCatalog
 
     catalog_item = GiftCatalog.query.get(gift_id)
@@ -412,11 +470,7 @@ def set_user_status(current_user):
     try:
         current_user.status = status
         current_user.last_seen = datetime.utcnow()
-<<<<<<< Updated upstream
 
-=======
-        
->>>>>>> Stashed changes
         if status == "offline":
             current_user.socket_id = None
         db.session.commit()

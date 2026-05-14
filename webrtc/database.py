@@ -11,6 +11,7 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from sqlalchemy import Integer, String, Text, create_engine, func, or_
 from sqlalchemy import text
 from sqlalchemy.orm import Mapped, Session, declarative_base, mapped_column, sessionmaker
+from werkzeug.security import check_password_hash
 
 from webrtc.config import Config
 
@@ -25,6 +26,7 @@ class User(Base):
     username: Mapped[str | None] = mapped_column(String, nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     access_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    access_token_lookup: Mapped[str | None] = mapped_column(String, nullable=True)
     socket_id: Mapped[str | None] = mapped_column(String, nullable=True)
     status: Mapped[str | None] = mapped_column(String, nullable=True)
     is_blocked: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -141,6 +143,10 @@ class UserRepository:
                     text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to_id TEXT"))
                 conn.execute(
                     text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS forwarded_from_id TEXT"))
+                conn.execute(
+                    text(
+                        "ALTER TABLE users ADD COLUMN IF NOT EXISTS access_token_lookup TEXT"
+                    ))
 
                 conn.execute(
                     text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_read INTEGER"))
@@ -279,14 +285,33 @@ class UserRepository:
         return hashlib.sha256(str(token).encode("utf-8")).hexdigest()
 
     def fetch_user_by_token(self, token):
+        """Согласовано с backend AuthService.get_user_by_token: lookup + password hash,
+        затем SHA256 в колонке, затем legacy plaintext."""
         try:
+            token = (token or "").strip()
+            if not token:
+                return None
             token_hash = self._hash_token(token)
             with self._session() as session:
                 row = None
-                if token_hash:
+                if "." in token:
+                    lookup, _, sec = token.partition(".")
+                    if lookup and sec and "." not in sec:
+                        cand = (
+                            session.query(User)
+                            .filter(User.access_token_lookup == lookup)
+                            .first()
+                        )
+                        if (
+                            cand
+                            and cand.access_token
+                            and check_password_hash(cand.access_token, token)
+                        ):
+                            row = cand
+                if not row and token_hash:
                     row = session.query(User).filter(
                         User.access_token == token_hash).first()
-                # Legacy fallback (plain token stored) with auto-upgrade.
+
                 if not row and token:
                     legacy = session.query(User).filter(
                         User.access_token == str(token)).first()

@@ -51,6 +51,15 @@ def notify_all_users(
 @posts_bp.route("/", methods=["GET"])
 def get_posts():
     page = request.args.get("page", 1, type=int)
+    if page == 1:
+        try:
+            from app.services.removal_deadline_service import (
+                enforce_removal_deadlines_throttled,
+            )
+
+            enforce_removal_deadlines_throttled()
+        except Exception:
+            pass
     per_page = request.args.get("per_page", 5, type=int)
     user_id = request.args.get("user_id", type=str)
     kind = (request.args.get("kind") or "").strip().lower()

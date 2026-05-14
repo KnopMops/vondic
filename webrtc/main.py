@@ -125,7 +125,13 @@ def create_app():
     user_repo = UserRepository()
     logger.info("WebRTC Server initialized. Message encryption enabled.")
     broker = ConnectionBroker(user_repo)
-    SignalingService(socketio, broker)
+    signaling = SignalingService(socketio, broker, bind_disconnect=False)
+
+    @socketio.on("disconnect")
+    def on_socket_disconnect():
+        """Метрики + сброс presence в одном месте (раньше был второй @disconnect только с dec)."""
+        WEBSOCKET_CONNECTIONS.dec()
+        signaling.on_disconnect()
 
     @app.route("/api/online-users", methods=["GET"])
     def get_online_users():
@@ -457,10 +463,6 @@ def create_app():
     @socketio.on("connect")
     def on_connect():
         WEBSOCKET_CONNECTIONS.inc()
-
-    @socketio.on("disconnect")
-    def on_disconnect():
-        WEBSOCKET_CONNECTIONS.dec()
 
     return (app, socketio)
 

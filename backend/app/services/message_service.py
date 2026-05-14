@@ -178,7 +178,6 @@ class MessageService:
                 .subquery()
             )
 
-            # Join back to the latest message per dialog partner.
             latest_rows = (
                 db.session.query(Message, base.c.other_id, base.c.last_at)
                 .join(

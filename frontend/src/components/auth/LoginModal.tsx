@@ -71,7 +71,6 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 				if (data?.two_factor_required) {
 					setTwoFactorRequired(true)
 					setTwoFactorMethod(data.method === 'totp' ? 'totp' : 'email')
-					setCaptchaToken('')
 					return
 				}
 				setLoginError(data?.error || 'Ошибка входа')
@@ -95,21 +94,13 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 	const handleEmailTwoFactor = async (e: React.FormEvent) => {
 		e.preventDefault()
 		setLoginError(null)
-		if (captchaSiteKey && !captchaToken.trim()) {
-			setLoginError('Подтвердите, что вы не робот')
-			return
-		}
 		try {
 			const body: Record<string, string> = { email, password }
 			if (twoFactorMethod === 'email') body.email_code = twoFactorCode
 			else body.totp_code = twoFactorCode
-<<<<<<< Updated upstream
-			if (captchaToken) body.smart_captcha_token = captchaToken
-=======
 			// Бэкенд валидирует SmartCaptcha на /auth/login всегда (если включено),
 			// поэтому прокидываем токен и на шаг 2FA, если он уже был получен.
 			if (captchaToken.trim()) body.smart_captcha_token = captchaToken.trim()
->>>>>>> Stashed changes
 			const res = await fetch('/api/auth/login', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -227,19 +218,12 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 								)}
 							</div>
 						)}
-<<<<<<< Updated upstream
-						<SmartCaptcha
-							key={twoFactorRequired ? 'twofactor' : 'password'}
-							onTokenChange={setCaptchaToken}
-						/>
-=======
 						{!twoFactorRequired && (
 							<SmartCaptcha
 								key='password'
 								onTokenChange={setCaptchaToken}
 							/>
 						)}
->>>>>>> Stashed changes
 					</div>
 
 					<div className='space-y-4 pt-2'>
@@ -247,13 +231,9 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 							type='submit'
 							disabled={
 								isLoading ||
-<<<<<<< Updated upstream
-								(!!captchaSiteKey && !captchaToken.trim())
-=======
 								(!twoFactorRequired &&
 									!!captchaSiteKey &&
 									!captchaToken.trim())
->>>>>>> Stashed changes
 							}
 							className='group relative flex w-full justify-center rounded-xl bg-indigo-600 px-4 py-3.5 text-sm font-bold text-white hover:bg-indigo-500 disabled:opacity-50 transition-all shadow-lg shadow-indigo-500/20 active:scale-[0.98]'
 						>

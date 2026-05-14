@@ -5,7 +5,6 @@ import time
 from flasgger import Swagger
 from flask import Flask, Response, request
 from prometheus_client import Counter, Gauge, Histogram, generate_latest
-from sqlalchemy import text
 
 from app.core.config import Config
 from app.core.extensions import cache, cors, db, ma, mail, migrate
@@ -121,32 +120,17 @@ def create_app(config_class=Config):
     mail.init_app(app)
 
     importlib.import_module("app.models")
+    try:
+        importlib.import_module("app.api.oauth")
+    except Exception as e:
+        print(f"[DB] Предупреждение: не удалось загрузить модели OAuth: {e}")
 
     with app.app_context():
         if not os.environ.get("SKIP_DB_BOOTSTRAP"):
+            print("[DB] Создание таблиц по моделям SQLAlchemy (create_all)…")
             db.create_all()
             db.session.rollback()
-
-            try:
-                with db.engine.begin() as conn:
-                    conn.execute(
-                        text("ALTER TABLE users ADD COLUMN IF NOT EXISTS description TEXT"))
-                    conn.execute(
-                        text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to_id TEXT"))
-                    conn.execute(
-                        text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS forwarded_from_id TEXT"))
-                    conn.execute(
-                        text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_read INTEGER"))
-                    conn.execute(
-                        text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN"))
-                    conn.execute(
-                        text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS pinned_by TEXT"))
-                    conn.execute(
-                        text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS reactions JSONB"))
-                    conn.execute(
-                        text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS read_by JSONB"))
-            except Exception as e:
-                print(f"Failed to ensure messages schema: {e}")
+            print("[DB] Таблицы проверены/созданы.")
 
             try:
                 from app.models.gift_catalog import GiftCatalog
@@ -182,6 +166,15 @@ def create_app(config_class=Config):
                 OllamaService.get_ai_user()
             except Exception as e:
                 print(f"Failed to ensure AI user: {e}")
+
+        try:
+            from app.services.db_schema_bootstrap import ensure_users_extended_columns
+
+            ensure_users_extended_columns(db.engine)
+            print(
+                "[DB] Дополнительные колонки users проверены (lookup / moderation_warnings).")
+        except Exception as e:
+            print(f"[DB] ensure_users_extended_columns: {e}")
 
     from app.api.public.v1.account import public_account_bp
     from app.api.public.v1.bots import public_bots_bp

@@ -39,7 +39,6 @@ class FriendshipService:
         if not addressee:
             return None, "User not found"
 
-        # Respect privacy setting: disallow friend requests
         try:
             privacy = getattr(addressee, "privacy_settings", None) or {}
             allow_requests = privacy.get("allow_friend_requests", True)

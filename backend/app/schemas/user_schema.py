@@ -12,6 +12,9 @@ class UserSchema(ma.SQLAlchemyAutoSchema):
             "password_hash",
             "access_token",
             "refresh_token",
+            "access_token_lookup",
+            "refresh_token_lookup",
+            "moderation_warnings",
             "api_key_hash",
             "api_key",
         )
@@ -40,6 +43,9 @@ class SafeUserSchema(ma.SQLAlchemyAutoSchema):
             "password_hash",
             "access_token",
             "refresh_token",
+            "access_token_lookup",
+            "refresh_token_lookup",
+            "moderation_warnings",
             "api_key_hash",
             "api_key",
         )
