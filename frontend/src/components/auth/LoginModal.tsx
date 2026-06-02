@@ -71,6 +71,8 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 				if (data?.two_factor_required) {
 					setTwoFactorRequired(true)
 					setTwoFactorMethod(data.method === 'totp' ? 'totp' : 'email')
+					setCaptchaToken('')
+					if (data?.error) setLoginError(data.error)
 					return
 				}
 				setLoginError(data?.error || 'Ошибка входа')
@@ -98,9 +100,6 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 			const body: Record<string, string> = { email, password }
 			if (twoFactorMethod === 'email') body.email_code = twoFactorCode
 			else body.totp_code = twoFactorCode
-			// Бэкенд валидирует SmartCaptcha на /auth/login всегда (если включено),
-			// поэтому прокидываем токен и на шаг 2FA, если он уже был получен.
-			if (captchaToken.trim()) body.smart_captcha_token = captchaToken.trim()
 			const res = await fetch('/api/auth/login', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },

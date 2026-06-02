@@ -86,3 +86,44 @@ class EmailService:
         except Exception as e:
             print(f"Error sending login alert: {e}")
             return False
+
+    @staticmethod
+    def generate_password_reset_token(email):
+        serializer = URLSafeTimedSerializer(current_app.config["SECRET_KEY"])
+        return serializer.dumps(email, salt="password-reset-salt")
+
+    @staticmethod
+    def confirm_password_reset_token(token, expiration=3600):
+        serializer = URLSafeTimedSerializer(current_app.config["SECRET_KEY"])
+        try:
+            email = serializer.loads(
+                token, salt="password-reset-salt", max_age=expiration
+            )
+        except Exception:
+            return False
+        return email
+
+    @staticmethod
+    def send_password_reset_email(to_email, token):
+        frontend_url = current_app.config.get(
+            "FRONTEND_URL") or "http://localhost:3000"
+        reset_url = f"{frontend_url}/reset-password?token={token}"
+        html = (
+            f'<p>Вы запросили сброс пароля для аккаунта Vondic.</p>'
+            f'<p>Перейдите по ссылке для смены пароля:</p>'
+            f'<p><a href="{reset_url}">{reset_url}</a></p>'
+            f'<br>'
+            f'<p>Ссылка действительна в течение 1 часа.</p>'
+            f'<p>Если вы не запрашивали сброс пароля, проигнорируйте это письмо.</p>'
+        )
+        msg = Message(
+            subject="Сброс пароля Vondic",
+            recipients=[to_email],
+            html=html,
+        )
+        try:
+            mail.send(msg)
+            return True
+        except Exception as e:
+            print(f"Error sending password reset email: {e}")
+            return False

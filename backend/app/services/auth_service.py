@@ -2,6 +2,7 @@ import hashlib
 import os
 import secrets
 import sys
+from datetime import datetime, timedelta
 
 import requests
 from app.core.config import Config
@@ -128,6 +129,12 @@ class AuthService:
                 except Exception:
                     db.session.rollback()
                 user = legacy
+        if not user:
+            # Try OAuth access token
+            from app.api.oauth import OAuthAccessToken
+            oauth_token = OAuthAccessToken.query.filter_by(token=token).first()
+            if oauth_token and not oauth_token.is_expired():
+                user = User.query.get(oauth_token.user_id)
         if not user:
             return None, "Invalid or expired token"
         fp = AuthService._hash_token(token)
@@ -305,6 +312,98 @@ class AuthService:
             return (False, str(e))
 
     @staticmethod
+    def request_password_reset(email):
+        user = User.query.filter_by(email=email).first()
+        if not user:
+            return (False, "User not found")
+        raw_token = EmailService.generate_password_reset_token(email)
+        user.reset_password_token = AuthService._hash_token(raw_token)
+        user.reset_password_expires = datetime.utcnow() + timedelta(hours=1)
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            return (False, str(e))
+        if not EmailService.send_password_reset_email(email, raw_token):
+            return (False, "Failed to send email")
+        return (True, "Password reset email sent")
+
+    @staticmethod
+    def reset_password(token, new_password):
+        email = EmailService.confirm_password_reset_token(token)
+        if not email:
+            return (False, "Invalid or expired token")
+        user = User.query.filter_by(email=email).first()
+        if not user:
+            return (False, "User not found")
+        token_hash = AuthService._hash_token(token)
+        if (
+            not user.reset_password_token
+            or user.reset_password_token != token_hash
+        ):
+            return (False, "Invalid or expired token")
+        if user.reset_password_expires and user.reset_password_expires < datetime.utcnow():
+            return (False, "Invalid or expired token")
+        user.set_password(new_password)
+        user.reset_password_token = None
+        user.reset_password_expires = None
+        try:
+            db.session.commit()
+            return (True, "Password reset successfully")
+        except Exception as e:
+            db.session.rollback()
+            return (False, str(e))
+
+    @staticmethod
+    def logout_user(user, access_token=None, refresh_token=None):
+        from app.core.extensions import cache
+
+        revoked_key = f"revoked_tokens:{user.id}"
+        revoked = cache.get(revoked_key) or []
+        if not isinstance(revoked, list):
+            revoked = []
+
+        if access_token:
+            access_hash = AuthService._hash_token(access_token)
+            if access_hash and access_hash not in revoked:
+                revoked.append(access_hash)
+        if refresh_token:
+            refresh_hash = AuthService._hash_token(refresh_token)
+            if refresh_hash and refresh_hash not in revoked:
+                revoked.append(refresh_hash)
+
+        if revoked:
+            cache.set(revoked_key, revoked[:200], timeout=2592000)
+
+        cache.delete(f"sessions:{user.id}")
+        cache.delete(f"sessions_json:{user.id}")
+
+        user.access_token = None
+        user.refresh_token = None
+        user.access_token_lookup = None
+        user.refresh_token_lookup = None
+        try:
+            db.session.commit()
+            return True, None
+        except Exception as e:
+            db.session.rollback()
+            return False, str(e)
+
+    @staticmethod
+    def change_password(user, current_password, new_password):
+        if not user.check_password(current_password):
+            return False, "Invalid current password"
+        if len(new_password) < 6:
+            return False, "Password must be at least 6 characters"
+        user.set_password(new_password)
+        try:
+            db.session.commit()
+            return True, None
+        except Exception as e:
+            db.session.rollback()
+            return False, str(e)
+
+    @staticmethod
     def login_with_user(user):
         if not user:
             return None, "User not found"
@@ -354,24 +453,25 @@ class AuthService:
         if not user.is_verified:
             return (None, "Email not verified")
         if user.two_factor_enabled:
-            if (user.email or "").endswith("@yandex.ru"):
-                pass
-            method = user.two_factor_method
-            if method == "email":
-                email_code = data.get("email_code")
-                if not email_code:
-                    return (None, "TwoFactorEmailRequired")
-                success, err = AuthService.verify_2fa_email_code(
-                    user, email_code)
-                if not success:
-                    return (None, "InvalidTwoFactorCode")
-            elif method == "totp":
-                totp_code = data.get("totp_code")
-                if not totp_code:
-                    return (None, "TwoFactorTotpRequired")
-                if not AuthService.verify_totp(
-                        user.two_factor_secret, totp_code):
-                    return (None, "InvalidTwoFactorCode")
+            if not (user.email or "").endswith("@yandex.ru"):
+                method = (user.two_factor_method or "email").strip().lower()
+                if method == "totp" and not user.two_factor_secret:
+                    return (None, "TwoFactorTotpNotConfigured")
+                if method == "email":
+                    email_code = data.get("email_code")
+                    if not email_code:
+                        return (None, "TwoFactorEmailRequired")
+                    success, err = AuthService.verify_2fa_email_code(
+                        user, email_code)
+                    if not success:
+                        return (None, "InvalidTwoFactorCode")
+                elif method == "totp":
+                    totp_code = data.get("totp_code")
+                    if not totp_code:
+                        return (None, "TwoFactorTotpRequired")
+                    if not AuthService.verify_totp(
+                            user.two_factor_secret, totp_code):
+                        return (None, "InvalidTwoFactorCode")
         raw_access, raw_refresh = AuthService._issue_tokens(user)
         try:
             db.session.commit()
@@ -388,16 +488,17 @@ class AuthService:
             return (None, str(e))
 
     @staticmethod
-    def setup_2fa(current_user, method, enable):
+    def setup_2fa(current_user, method, enable, regenerate_secret=False):
         email = current_user.email or ""
         if enable and email.endswith("@yandex.ru"):
             return None, "для yandex аккаунта это не недоступно"
         if enable:
+            method = (method or "email").strip().lower()
             current_user.two_factor_enabled = 1
             current_user.two_factor_method = method
             if method == "totp":
-                secret = secrets.token_hex(20)
-                current_user.two_factor_secret = secret
+                if regenerate_secret or not current_user.two_factor_secret:
+                    current_user.two_factor_secret = secrets.token_hex(20)
                 current_user.two_factor_email_code = None
                 current_user.two_factor_email_code_expires = None
             elif method == "email":
@@ -418,17 +519,19 @@ class AuthService:
             return None, str(e)
 
     @staticmethod
-    def send_2fa_email_code(current_user):
+    def send_2fa_email_code(current_user, for_login=False):
         if not current_user.email:
             return False, "Email not set"
         if current_user.email.endswith("@yandex.ru"):
             return False, "для yandex аккаунта это не недоступно"
+        if for_login:
+            if (current_user.two_factor_method or "").strip().lower() != "email":
+                return False, "2FA method is not email"
+        else:
+            current_user.two_factor_enabled = 1
+            current_user.two_factor_method = "email"
+            current_user.two_factor_secret = None
         code = "".join(secrets.choice("0123456789") for _ in range(6))
-        current_user.two_factor_enabled = 1
-        current_user.two_factor_method = "email"
-        current_user.two_factor_secret = None
-        from datetime import datetime, timedelta
-
         current_user.two_factor_email_code = code
         current_user.two_factor_email_code_expires = datetime.utcnow() + timedelta(
             minutes=10
@@ -444,8 +547,6 @@ class AuthService:
 
     @staticmethod
     def verify_2fa_email_code(current_user, code):
-        from datetime import datetime
-
         if current_user.two_factor_method != "email":
             return False, "2FA method is not email"
         if (

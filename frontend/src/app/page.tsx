@@ -1,6 +1,5 @@
 'use client'
 
-import LoginModal from '@/components/auth/LoginModal'
 import BrandLogo from '@/components/social/BrandLogo'
 import { useAuth } from '@/lib/AuthContext'
 import { motion } from 'framer-motion'
@@ -18,7 +17,6 @@ import { useEffect, useRef, useState } from 'react'
 
 export default function Home() {
 	const { user } = useAuth()
-	const [isLoginModalOpen, setIsLoginModalOpen] = useState(false)
 	const [onlineCount, setOnlineCount] = useState<number | null>(null)
 	const cursorRef = useRef<HTMLDivElement | null>(null)
 
@@ -84,12 +82,12 @@ export default function Home() {
 						</Link>
 					) : (
 						<>
-							<button
-								onClick={() => setIsLoginModalOpen(true)}
+							<Link
+								href='/login'
 								className='text-sm font-medium text-gray-300 transition-colors hover:text-white hidden sm:block'
 							>
 								Войти
-							</button>
+							</Link>
 							<Link
 								href='/register'
 								className='px-6 py-2.5 text-sm font-medium text-white transition-all bg-white/10 rounded-full hover:bg-white/20 backdrop-blur-sm border border-white/10 hover:border-white/20'
@@ -153,12 +151,12 @@ export default function Home() {
 						)}
 
 						{!user && (
-							<button
-								onClick={() => setIsLoginModalOpen(true)}
+							<Link
+								href='/login'
 								className='w-full sm:w-auto px-8 py-4 text-lg font-semibold text-white transition-all bg-gray-800/50 backdrop-blur-sm rounded-full hover:bg-gray-800 border border-gray-700 hover:border-gray-600 flex items-center justify-center'
 							>
 								У меня есть аккаунт
-							</button>
+							</Link>
 						)}
 					</div>
 
@@ -267,10 +265,7 @@ export default function Home() {
 				<p className='text-gray-600 text-sm'>&copy; 2026 Вондик</p>
 			</footer>
 
-			<LoginModal
-				isOpen={isLoginModalOpen}
-				onClose={() => setIsLoginModalOpen(false)}
-			/>
+
 		</div>
 	)
 }

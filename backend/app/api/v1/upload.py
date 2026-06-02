@@ -106,9 +106,23 @@ def upload_voice(current_user):
 
         file_url = _save_upload(file_bytes, ext, "voice")
 
-        current_user.disk_usage += file_size
-        from app.core.extensions import db
+        try:
+            from app.core.extensions import db
+            from app.models.user_file import UserFile
 
+            db.session.add(
+                UserFile(
+                    user_id=current_user.id,
+                    name=filename,
+                    url=file_url,
+                    size=file_size,
+                )
+            )
+            db.session.flush()
+        except Exception:
+            pass
+
+        current_user.disk_usage += file_size
         db.session.commit()
 
         return jsonify(
@@ -218,9 +232,23 @@ def upload_video(current_user):
 
         file_url = _save_upload(file_bytes, ext, "video")
 
-        current_user.disk_usage += file_size
-        from app.core.extensions import db
+        try:
+            from app.core.extensions import db
+            from app.models.user_file import UserFile
 
+            db.session.add(
+                UserFile(
+                    user_id=current_user.id,
+                    name=filename,
+                    url=file_url,
+                    size=file_size,
+                )
+            )
+            db.session.flush()
+        except Exception:
+            pass
+
+        current_user.disk_usage += file_size
         db.session.commit()
 
         return jsonify(

@@ -56,3 +56,49 @@ class CommunityService:
         except Exception as e:
             db.session.rollback()
             return None, str(e)
+
+    @staticmethod
+    def update_community(community_id, data):
+        community = Community.query.get(community_id)
+        if not community:
+            return None, "Community not found"
+        if data.get("name") is not None:
+            community.name = data["name"]
+        if data.get("description") is not None:
+            community.description = data["description"]
+        if data.get("avatar_url") is not None:
+            community.avatar_url = data["avatar_url"]
+        try:
+            db.session.commit()
+            return community, None
+        except Exception as e:
+            db.session.rollback()
+            return None, str(e)
+
+    @staticmethod
+    def leave_community(community_id, user_id):
+        community = Community.query.get(community_id)
+        if not community:
+            return None, "Community not found"
+        user = User.query.get(user_id)
+        if not user:
+            return None, "User not found"
+        if user not in community.members:
+            return None, "Not a member"
+        try:
+            community.members.remove(user)
+            db.session.commit()
+            return community, None
+        except Exception as e:
+            db.session.rollback()
+            return None, str(e)
+
+    @staticmethod
+    def search_communities(query, user_id):
+        user = User.query.get(user_id)
+        if not user:
+            return []
+        results = Community.query.filter(
+            (Community.name.ilike(f"%{query}%")) | (Community.description.ilike(f"%{query}%"))
+        ).all()
+        return [c for c in results if user not in c.members]

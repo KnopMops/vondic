@@ -5,13 +5,24 @@ import { getBackendUrl } from './url-fallback'
 
 const ACCESS_TOKEN_KEY = 'access_token'
 const REFRESH_TOKEN_KEY = 'refresh_token'
+/** 3 дня — после этого нужен повторный вход */
+const SESSION_MAX_AGE_SECONDS = 3 * 24 * 60 * 60
 
 
 export async function getAccessToken(
 	req?: NextRequest,
 ): Promise<string | undefined> {
 	if (req) {
-		return req.cookies.get(ACCESS_TOKEN_KEY)?.value
+		// 1) Cookies (desktop / web)
+		const cookieToken = req.cookies.get(ACCESS_TOKEN_KEY)?.value
+		if (cookieToken) return cookieToken
+
+		// 2) Authorization header (mobile / React Native)
+		const authHeader = req.headers.get('authorization') || ''
+		if (authHeader.startsWith('Bearer ')) {
+			return authHeader.slice(7).trim()
+		}
+		return undefined
 	}
 	const cookieStore = await cookies()
 	return cookieStore.get(ACCESS_TOKEN_KEY)?.value
@@ -45,7 +56,7 @@ export function setTokens(
 		secure: process.env.NODE_ENV === 'production',
 		path: '/',
 		sameSite: 'lax',
-		maxAge: 24 * 60 * 60, 
+		maxAge: SESSION_MAX_AGE_SECONDS,
 		...(domain && { domain }),
 	})
 
@@ -56,7 +67,7 @@ export function setTokens(
 		secure: process.env.NODE_ENV === 'production',
 		path: '/',
 		sameSite: 'lax',
-		maxAge: 30 * 24 * 60 * 60, 
+		maxAge: SESSION_MAX_AGE_SECONDS,
 		...(domain && { domain }),
 	})
 
@@ -65,8 +76,30 @@ export function setTokens(
 
 
 export function clearTokens(res: NextResponse): NextResponse {
-	res.cookies.delete(ACCESS_TOKEN_KEY)
-	res.cookies.delete(REFRESH_TOKEN_KEY)
+	const domain = process.env.NEXT_PUBLIC_FRONTEND_URL
+		? new URL(process.env.NEXT_PUBLIC_FRONTEND_URL).hostname
+		: undefined
+
+	res.cookies.set({
+		name: ACCESS_TOKEN_KEY,
+		value: '',
+		httpOnly: true,
+		secure: process.env.NODE_ENV === 'production',
+		path: '/',
+		sameSite: 'lax',
+		maxAge: 0,
+		...(domain && { domain }),
+	})
+	res.cookies.set({
+		name: REFRESH_TOKEN_KEY,
+		value: '',
+		httpOnly: true,
+		secure: process.env.NODE_ENV === 'production',
+		path: '/',
+		sameSite: 'lax',
+		maxAge: 0,
+		...(domain && { domain }),
+	})
 	return res
 }
 

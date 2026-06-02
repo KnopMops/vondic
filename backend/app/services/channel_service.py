@@ -82,3 +82,52 @@ class ChannelService:
         if not channel:
             return False
         return str(channel.owner_id) == str(user_id)
+
+    @staticmethod
+    def update_channel(channel_id, data):
+        channel = Channel.query.get(channel_id)
+        if not channel:
+            return None, "Channel not found"
+        if data.get("name") is not None:
+            channel.name = data["name"]
+        if data.get("description") is not None:
+            channel.description = data["description"]
+        if data.get("avatar_url") is not None:
+            channel.avatar_url = data["avatar_url"]
+        if data.get("type") is not None:
+            channel.type = data["type"]
+        try:
+            db.session.commit()
+            return channel, None
+        except Exception as e:
+            db.session.rollback()
+            return None, str(e)
+
+    @staticmethod
+    def leave_channel(channel_id, user_id):
+        channel = Channel.query.get(channel_id)
+        if not channel:
+            return None, "Channel not found"
+        user = User.query.get(user_id)
+        if not user:
+            return None, "User not found"
+        if user not in channel.participants:
+            return None, "Not a participant"
+        try:
+            channel.participants.remove(user)
+            db.session.commit()
+            return channel, None
+        except Exception as e:
+            db.session.rollback()
+            return None, str(e)
+
+    @staticmethod
+    def search_channels(query, user_id):
+        user = User.query.get(user_id)
+        if not user:
+            return []
+        # Search by name or description, return channels user is NOT in
+        results = Channel.query.filter(
+            (Channel.name.ilike(f"%{query}%")) | (Channel.description.ilike(f"%{query}%"))
+        ).all()
+        return [ch for ch in results if user not in ch.participants]

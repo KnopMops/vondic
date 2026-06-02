@@ -67,6 +67,8 @@ export interface Channel {
 	owner_id: string
 	participants_count: number
 	community_id?: string | null
+	avatar_url?: string | null
+	type?: 'text' | 'broadcast'
 }
 
 export interface Group {
@@ -117,6 +119,8 @@ export interface Message {
 	type?: 'text' | 'voice' | 'image' | 'file'
 	attachments?: Attachment[] | string
 	is_deleted?: boolean
+	sender_username?: string
+	sender_avatar?: string | null
 	forwarded_from?: {
 		sender_id: string
 		sender_name: string

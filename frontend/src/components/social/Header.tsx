@@ -1,13 +1,21 @@
 'use client'
 
+import { useAuth } from '@/lib/AuthContext'
 import { useAppSelector } from '@/lib/hooks'
 import { useSocket } from '@/lib/SocketContext'
 import { User } from '@/lib/types'
 import { getAttachmentUrl, getAvatarUrl, formatMskDateTime } from '@/lib/utils'
+import {
+	getSavedAccounts,
+	removeSavedAccount,
+	type SavedAccount,
+} from '@/lib/savedAccounts'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import BrandLogo from './BrandLogo'
-import { LuSearch as Search } from 'react-icons/lu'
+import { sidebarItems } from './sidebar.items'
+import { LuSearch as Search, LuMenu as Menu, LuX as CloseIcon } from 'react-icons/lu'
 
 type SearchResult = {
 	results: any[]
@@ -22,9 +30,17 @@ type Props = {
 export default function Header({ email, onLogout }: Props) {
 	const { user } = useAppSelector(state => state.auth)
 	const { isConnected } = useSocket()
+	const { logout, loginWithYandex } = useAuth()
+	const pathname = usePathname()
 	const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+	const [showAccountSwitcher, setShowAccountSwitcher] = useState(false)
+	const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>([])
 
-	
+	const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000
+	const isStale = (account: SavedAccount) =>
+		Date.now() - account.last_login_at > THREE_DAYS_MS
+
 	const [searchQuery, setSearchQuery] = useState('')
 	const [searchResults, setSearchResults] = useState<SearchResult | null>(null)
 	const [isSearching, setIsSearching] = useState(false)
@@ -43,6 +59,14 @@ export default function Header({ email, onLogout }: Props) {
 		document.addEventListener('mousedown', handleClickOutside)
 		return () => document.removeEventListener('mousedown', handleClickOutside)
 	}, [])
+
+	useEffect(() => {
+		if (isDropdownOpen) {
+			setSavedAccounts(getSavedAccounts())
+		} else {
+			setShowAccountSwitcher(false)
+		}
+	}, [isDropdownOpen])
 
 	const handleSearch = async (query: string) => {
 		setSearchQuery(query)
@@ -217,33 +241,148 @@ export default function Header({ email, onLogout }: Props) {
 						</button>
 
 						{isDropdownOpen && (
-							<div className='absolute right-0 mt-2 w-48 origin-top-right rounded-xl bg-black/40 backdrop-blur-xl py-1 shadow-2xl ring-1 ring-white/10 focus:outline-none z-50'>
-								<div className='px-4 py-3 text-sm text-gray-200 border-b border-white/10'>
-									<div className='font-medium'>Привет,</div>
-									<div className='font-bold text-indigo-400 truncate'>
-										{user?.username || 'Гость'}
+							<div className='absolute right-0 mt-2 w-56 origin-top-right rounded-xl bg-gray-900 py-1 shadow-2xl ring-1 ring-white/10 focus:outline-none z-50'>
+								{showAccountSwitcher ? (
+									<div className='p-2 space-y-1'>
+										<div className='px-2 py-1.5 text-sm font-medium text-gray-200 border-b border-white/10 mb-1'>
+											Выберите аккаунт
+										</div>
+										{savedAccounts.map(account => (
+											<div
+												key={account.id}
+												className='group relative flex items-center gap-3 rounded-lg p-2 hover:bg-white/5 cursor-pointer transition-colors'
+													onClick={() => {
+														if (account.auth_provider === 'yandex') {
+															localStorage.setItem('post_logout_provider', 'yandex')
+														}
+														if (isStale(account)) {
+															logout('/login')
+														} else {
+															window.location.assign(`/login?switch=1&email=${encodeURIComponent(account.email)}`)
+														}
+													}}
+											>
+												<div className='w-8 h-8 rounded-full overflow-hidden bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm shrink-0'>
+													{account.avatar_url ? (
+														<img
+															src={account.avatar_url}
+															alt={account.username}
+															className='w-full h-full object-cover'
+														/>
+													) : (
+														account.username.charAt(0).toUpperCase()
+													)}
+												</div>
+												<div className='flex-1 min-w-0'>
+													<p className='text-sm text-white font-medium truncate'>
+														{account.username}
+													</p>
+													<p className='text-xs text-gray-400 truncate'>
+														{account.email}
+													</p>
+												</div>
+												<button
+													type='button'
+													onClick={e => {
+														e.stopPropagation()
+														removeSavedAccount(account.id)
+														setSavedAccounts(prev => prev.filter(a => a.id !== account.id))
+													}}
+													className='p-1 rounded-full text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all'
+													title='Удалить аккаунт'
+												>
+													<svg
+														xmlns='http://www.w3.org/2000/svg'
+														width='12'
+														height='12'
+														viewBox='0 0 24 24'
+														fill='none'
+														stroke='currentColor'
+														strokeWidth='2'
+														strokeLinecap='round'
+														strokeLinejoin='round'
+														>
+														<line x1='18' y1='6' x2='6' y2='18' />
+														<line x1='6' y1='6' x2='18' y2='18' />
+													</svg>
+												</button>
+											</div>
+										))}
+										<button
+											type='button'
+											onClick={() => {
+												logout('/login')
+											}}
+											className='flex w-full items-center gap-3 rounded-lg p-2 text-left hover:bg-white/5 transition-colors'
+										>
+											<div className='w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0'>
+												<svg
+													xmlns='http://www.w3.org/2000/svg'
+													width='16'
+													height='16'
+													viewBox='0 0 24 24'
+													fill='none'
+													stroke='currentColor'
+													strokeWidth='2'
+													strokeLinecap='round'
+													strokeLinejoin='round'
+													className='text-gray-400'
+												>
+													<line x1='12' y1='5' x2='12' y2='19' />
+													<line x1='5' y1='12' x2='19' y2='12' />
+												</svg>
+											</div>
+											<span className='text-sm text-white font-medium'>
+												Войти в другой аккаунт
+											</span>
+										</button>
+										<button
+											type='button'
+											onClick={() => setShowAccountSwitcher(false)}
+											className='w-full text-center text-xs text-indigo-400 hover:text-indigo-300 transition-colors pt-1'
+										>
+											← Назад
+										</button>
 									</div>
-								</div>
-								<Link
-									href={`/feed/profile/${user?.id}`}
-									className='block w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors'
-									onClick={() => setIsDropdownOpen(false)}
-								>
-									Моя страница
-								</Link>
-								<Link
-									href='/feed/settings'
-									className='block w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors'
-									onClick={() => setIsDropdownOpen(false)}
-								>
-									Настройки
-								</Link>
-								<button
-									onClick={onLogout}
-									className='block w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors'
-								>
-									Выйти
-								</button>
+								) : (
+									<>
+										<div className='px-4 py-3 text-sm text-gray-200 border-b border-white/10'>
+											<div className='font-medium'>Привет,</div>
+											<div className='font-bold text-indigo-400 truncate'>
+												{user?.username || 'Гость'}
+											</div>
+										</div>
+										<Link
+											href={`/feed/profile/${user?.id}`}
+											className='block w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors'
+											onClick={() => setIsDropdownOpen(false)}
+										>
+											Моя страница
+										</Link>
+										<Link
+											href='/feed/settings'
+											className='block w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors'
+											onClick={() => setIsDropdownOpen(false)}
+										>
+											Настройки
+										</Link>
+										{savedAccounts.length > 0 && (
+											<button
+												type='button'
+												onClick={() => setShowAccountSwitcher(true)}
+												className='block w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors'
+											>
+												Сменить аккаунт
+											</button>
+										)}
+										<button
+											onClick={onLogout}
+											className='block w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors'
+										>
+											Выйти
+										</button>
+									</>
+								)}
 							</div>
 						)}
 					</div>
@@ -256,6 +395,63 @@ export default function Header({ email, onLogout }: Props) {
 					)}
 				</div>
 			</div>
+
+			{isMobileMenuOpen && (
+				<div className='fixed inset-0 z-[9999] md:hidden'>
+					<div
+						className='absolute inset-0 bg-black/60 backdrop-blur-sm'
+						onClick={() => setIsMobileMenuOpen(false)}
+					/>
+					<div className='absolute left-0 top-0 bottom-0 w-64 max-w-[80vw] bg-gray-950 border-r border-white/10 p-4 flex flex-col animate-in slide-in-from-left duration-200'>
+						<div className='flex items-center justify-between mb-6'>
+							<BrandLogo size={28} />
+							<button
+								onClick={() => setIsMobileMenuOpen(false)}
+								className='p-2 text-gray-400 hover:text-white transition-colors'
+								aria-label='Закрыть'
+							>
+								<CloseIcon className='h-5 w-5' />
+							</button>
+						</div>
+						<nav className='flex flex-col gap-2'>
+							{sidebarItems.map(item => {
+								const Icon = (item as any).icon
+								let href = item.href
+								if (href === '/feed/profile' && user?.id) {
+									href = `/feed/profile/${user.id}`
+								}
+								if (href === '/friends') {
+									href = '/feed/friends'
+								}
+								return (
+									<Link
+										key={item.label}
+										href={href}
+										onClick={() => setIsMobileMenuOpen(false)}
+										className={`flex items-center gap-4 rounded-xl px-3 py-3 text-gray-300 hover:bg-white/10 hover:text-white transition-colors ${
+											pathname?.startsWith(href) ? 'bg-white/15 text-white' : ''
+										}`}
+									>
+										<Icon className='h-5 w-5' />
+										<span className='text-sm font-medium'>{item.label}</span>
+									</Link>
+								)
+							})}
+							{(user?.role === 'Support' || user?.role === 'Admin') && (
+								<Link
+									href='/feed/admin'
+									onClick={() => setIsMobileMenuOpen(false)}
+									className={`flex items-center gap-4 rounded-xl px-3 py-3 text-gray-300 hover:bg-white/10 hover:text-white transition-colors ${
+										pathname?.startsWith('/feed/admin') ? 'bg-white/15 text-white' : ''
+									}`}
+								>
+									<span className='text-sm font-medium'>Админка</span>
+								</Link>
+							)}
+						</nav>
+					</div>
+				</div>
+			)}
 		</header>
 	)
 }

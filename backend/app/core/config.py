@@ -92,8 +92,12 @@ class Config:
     OLLAMA_API_URL = os.environ.get(
         "OLLAMA_API_URL") or "http://localhost:11434"
     OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL") or "llama3.1"
-    SESSION_TTL_SECONDS = int(os.environ.get("SESSION_TTL_SECONDS", "2592000"))
+    SESSION_TTL_SECONDS = int(os.environ.get("SESSION_TTL_SECONDS", "259200"))
     FRONTEND_URL = os.environ.get("FRONTEND_URL") or "http://localhost:3000"
+    MESSAGE_ENCRYPTION_KEY = os.environ.get(
+        "MESSAGE_ENCRYPTION_KEY",
+        "mPuUjRV-t-5eeaSrEFhVh4yZud-L7rv31SjYdXx9uIU=",
+    )
 
     CACHE_REDIS_URL = _build_redis_url()
 

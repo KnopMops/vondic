@@ -302,7 +302,7 @@ export default function Post({
 		if (user?.role === 'admin' || user?.role === 'Admin') {
 			if (window.confirm('Вы уверены, что хотите удалить этот комментарий?')) {
 				deleteComment(
-					{ id: comment.id, userId: user.id, isAdmin: true },
+					{ id: comment.id, userId: user.id, isAdmin: true, reason: deleteReason || 'Удалено администратором' },
 					{
 						onSuccess: () => {
 							setCommentCount(prev => prev - 1)

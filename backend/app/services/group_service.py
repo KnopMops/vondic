@@ -66,15 +66,23 @@ class GroupService:
         return user.groups
 
     @staticmethod
-    def add_participant(group_id, target_user_id, requester_id):
+    def add_participant(
+        group_id, target_user_id=None, requester_id=None, target_username=None
+    ):
         group = Group.query.get(group_id)
         if not group:
             return None, "Group not found"
 
-        if str(group.owner_id) != str(requester_id):
-            return None, "Only owner can add participants"
+        requester = User.query.get(requester_id)
+        if not requester or requester not in group.participants:
+            return None, "Only participants can add participants"
 
-        user_to_add = User.query.get(target_user_id)
+        user_to_add = None
+        if target_user_id:
+            user_to_add = User.query.get(target_user_id)
+        if not user_to_add and target_username:
+            user_to_add = User.query.filter_by(username=target_username).first()
+
         if not user_to_add:
             return None, "User not found"
 
@@ -95,3 +103,49 @@ class GroupService:
         if not group:
             return False
         return str(group.owner_id) == str(user_id)
+
+    @staticmethod
+    def update_group(group_id, data):
+        group = Group.query.get(group_id)
+        if not group:
+            return None, "Group not found"
+        if data.get("name") is not None:
+            group.name = data["name"]
+        if data.get("description") is not None:
+            group.description = data["description"]
+        if data.get("avatar_url") is not None:
+            group.avatar_url = data["avatar_url"]
+        try:
+            db.session.commit()
+            return group, None
+        except Exception as e:
+            db.session.rollback()
+            return None, str(e)
+
+    @staticmethod
+    def leave_group(group_id, user_id):
+        group = Group.query.get(group_id)
+        if not group:
+            return None, "Group not found"
+        user = User.query.get(user_id)
+        if not user:
+            return None, "User not found"
+        if user not in group.participants:
+            return None, "Not a participant"
+        try:
+            group.participants.remove(user)
+            db.session.commit()
+            return group, None
+        except Exception as e:
+            db.session.rollback()
+            return None, str(e)
+
+    @staticmethod
+    def search_groups(query, user_id):
+        user = User.query.get(user_id)
+        if not user:
+            return []
+        results = Group.query.filter(
+            (Group.name.ilike(f"%{query}%")) | (Group.description.ilike(f"%{query}%"))
+        ).all()
+        return [g for g in results if user not in g.participants]

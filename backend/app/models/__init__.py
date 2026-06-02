@@ -1,3 +1,4 @@
+from .block import Block
 from .bot import Bot
 from .channel import Channel
 from .comment import Comment
@@ -27,6 +28,7 @@ from .video_like import VideoLike
 from .video_view import VideoView
 
 __all__ = [
+    "Block",
     "Bot",
     "Channel",
     "Comment",

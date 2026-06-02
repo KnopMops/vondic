@@ -50,7 +50,7 @@ export default function Sidebar() {
 	return (
 		<>
 			<aside
-				className={`sticky top-20 flex h-[calc(100vh-10rem)] flex-col rounded-xl border border-white/10 bg-gray-900/40 backdrop-blur-md py-4 transition-all duration-300 ml-4 ${
+				className={`sticky top-20 hidden md:flex h-[calc(100vh-10rem)] flex-col rounded-xl border border-white/10 bg-gray-900/40 backdrop-blur-md py-4 transition-all duration-300 ml-4 ${
 					isExpanded ? 'w-44' : 'w-16'
 				}`}
 			>

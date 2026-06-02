@@ -34,6 +34,14 @@ def ensure_users_extended_columns(engine) -> None:
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS moderation_warnings "
                 "JSONB DEFAULT '[]'::jsonb NOT NULL"
             )
+        if "reset_password_token" not in names:
+            run(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_token TEXT"
+            )
+        if "reset_password_expires" not in names:
+            run(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_expires TIMESTAMP"
+            )
         run(
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_users_access_token_lookup "
             "ON users (access_token_lookup) "

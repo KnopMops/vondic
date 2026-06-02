@@ -53,6 +53,8 @@ class User(db.Model):
     cloud_password_hash = db.Column(TEXT, default=None)
     cloud_password_reset_month = db.Column(INTEGER, default=None)
     cloud_password_reset_count = db.Column(INTEGER, default=0)
+    reset_password_token = db.Column(TEXT, default=None)
+    reset_password_expires = db.Column(TIMESTAMP, default=None)
     video_likes = db.Column(TEXT, default=None)
     video_watch_later = db.Column(TEXT, default=None)
     video_history = db.Column(TEXT, default=None)

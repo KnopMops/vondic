@@ -35,6 +35,7 @@ interface Track {
 	title: string
 	artist: string
 	duration: string
+	durationSec?: number
 	file?: File
 	url: string
 	// Backend track structure
@@ -376,6 +377,20 @@ export default function MusicPage() {
 		return `${minutes}:${seconds.toString().padStart(2, '0')}`
 	}
 
+	const getAudioDuration = (file: File): Promise<number> => {
+		return new Promise(resolve => {
+			const audio = new Audio(URL.createObjectURL(file))
+			audio.onloadedmetadata = () => {
+				URL.revokeObjectURL(audio.src)
+				resolve(audio.duration || 0)
+			}
+			audio.onerror = () => {
+				URL.revokeObjectURL(audio.src)
+				resolve(0)
+			}
+		})
+	}
+
 	const handleUploadMusic = async (e: React.ChangeEvent<HTMLInputElement>) => {
 		if (isLoading) {
 			showToast('Подождите завершения текущей загрузки', 'info')
@@ -397,8 +412,13 @@ export default function MusicPage() {
 
 		for (const file of fileList) {
 			try {
+				// Generate track id early so we can track upload state
+				const trackId = `track_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 				// Add file to uploading state
-				setUploadingFiles(prev => new Set(prev).add(file.name))
+				setUploadingFiles(prev => new Set(prev).add(trackId))
+
+				// Get duration before upload
+				const durationSec = await getAudioDuration(file)
 
 				// 1. Convert file to data URL for upload
 				const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -433,10 +453,11 @@ export default function MusicPage() {
 				// 3. Create track object with backend URL
 				const name = file.name.replace(/\.[^/.]+$/, '')
 				const newTrack: Track = {
-					id: `track_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+					id: trackId,
 					title: name,
 					artist: 'Неизвестный исполнитель',
-					duration: formatTime(0),
+					duration: formatTime(durationSec),
+					durationSec,
 					url: fileUrl.startsWith('http') ? fileUrl : `${backendUrl}${fileUrl}`,
 				}
 
@@ -1002,7 +1023,7 @@ export default function MusicPage() {
 			: tracks
 
 	const renderTrackList = (tracksToRender: Track[]) => (
-		<div className='space-y-1'>
+		<div className='space-y-0.5'>
 			{tracksToRender.length === 0 ? (
 				<div className='text-center py-12 text-gray-400'>
 					<Music className='w-12 h-12 mx-auto mb-3 opacity-50' />
@@ -1019,109 +1040,133 @@ export default function MusicPage() {
 					)}
 				</div>
 			) : (
-				tracksToRender.map((track, index) => (
-					<div
-						key={track.id}
-						className={`flex items-center gap-4 p-2 rounded-xl group transition-all duration-200 ${
-							currentTrackId === track.id
-								? 'bg-emerald-600/20 border border-emerald-600/30'
-								: 'hover:bg-white/5 border border-transparent'
-						}`}
-					>
-						<div className='relative w-10 h-10 flex-shrink-0'>
-							<button
-								onClick={() => handlePlayTrack(track.id)}
-								className={`w-full h-full flex items-center justify-center rounded-lg transition-all duration-200 ${
-									currentTrackId === track.id
-										? 'bg-emerald-600 text-white'
-										: 'bg-gray-800 text-gray-400 group-hover:bg-emerald-600 group-hover:text-white'
+				tracksToRender.map((track, index) => {
+					const isCurrent = currentTrackId === track.id
+					const isUploadingTrack = uploadingFiles.has(track.id)
+					return (
+						<div
+							key={track.id}
+							className={`group flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-200 cursor-pointer ${
+								isCurrent
+									? 'bg-emerald-600/10'
+									: 'hover:bg-white/5'
 								}`}
-							>
-								{currentTrackId === track.id && isPlaying ? (
-									<Pause className='w-4 h-4' />
+							onDoubleClick={() => handlePlayTrack(track.id)}
+						>
+							{/* Index / Play / Equalizer */}
+							<div className='w-8 text-center flex-shrink-0'>
+								{isUploadingTrack ? (
+									<div className='h-4 w-4 mx-auto animate-spin rounded-full border-2 border-emerald-500 border-t-transparent' />
+								) : isCurrent && isPlaying ? (
+									<div className='flex items-end justify-center gap-0.5 h-4'>
+										<span className='w-0.5 bg-emerald-500 rounded-full animate-[bounce_1s_infinite]' style={{ height: '40%' }} />
+										<span className='w-0.5 bg-emerald-500 rounded-full animate-[bounce_1.2s_infinite]' style={{ height: '70%' }} />
+										<span className='w-0.5 bg-emerald-500 rounded-full animate-[bounce_0.8s_infinite]' style={{ height: '50%' }} />
+									</div>
 								) : (
-									<Play className='w-4 h-4 ml-0.5' />
+									<span className={`text-sm ${isCurrent ? 'text-emerald-500' : 'text-gray-500 group-hover:hidden'}`}>
+										{index + 1}
+									</span>
 								)}
-							</button>
-						</div>
-						<div className='flex-1 min-w-0'>
-							<div
-								className={`font-medium truncate ${currentTrackId === track.id ? 'text-emerald-500' : 'text-white'}`}
-							>
-								{track.title}
-							</div>
-							<div className='text-sm text-gray-400 truncate'>
-								{track.artist}
-							</div>
-						</div>
-						<div className='flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity'>
-							{activeView === 'playlist' && currentPlaylistId && (
-								<button
-									onClick={() =>
-										handleRemoveFromPlaylist(track.id, currentPlaylistId)
-									}
-									className='p-2 text-gray-400 hover:text-red-500 transition-colors'
-									title='Удалить из плейлиста'
-								>
-									<X className='w-4 h-4' />
-								</button>
-							)}
-							{activeView === 'tracks' && (
-								<div className='relative'>
+								{!isUploadingTrack && !(isCurrent && isPlaying) && (
 									<button
-										onClick={() =>
-											setShowAddToPlaylist(
-												showAddToPlaylist === track.id ? null : track.id,
-											)
-										}
-										className='p-2 text-gray-400 hover:text-white transition-colors'
-										title='Добавить в плейлист'
+										onClick={() => handlePlayTrack(track.id)}
+										className='hidden group-hover:block mx-auto text-white'
 									>
-										<Plus className='w-4 h-4' />
+										<Play className='w-4 h-4 fill-current' />
 									</button>
-									<AnimatePresence>
-										{showAddToPlaylist === track.id && (
-											<motion.div
-												initial={{ opacity: 0, scale: 0.95, y: 10 }}
-												animate={{ opacity: 1, scale: 1, y: 0 }}
-												exit={{ opacity: 0, scale: 0.95, y: 10 }}
-												className='absolute right-0 bottom-full mb-2 w-48 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl overflow-hidden z-20'
-											>
-												{playlists.length === 0 ? (
-													<div className='p-3 text-sm text-gray-400'>
-														Нет плейлистов
-													</div>
-												) : (
-													playlists.map(playlist => (
-														<button
-															key={playlist.id}
-															onClick={() =>
-																handleAddToPlaylist(track.id, playlist.id)
-															}
-															className='w-full px-4 py-2 text-sm text-left text-white hover:bg-emerald-600 transition-colors'
-														>
-															{playlist.name}
-														</button>
-													))
-												)}
-											</motion.div>
-										)}
-									</AnimatePresence>
+								)}
+							</div>
+
+							{/* Title & Artist */}
+							<div className='flex-1 min-w-0'>
+								<div
+									className={`font-medium truncate text-sm ${isCurrent ? 'text-emerald-500' : 'text-white'}`}
+								>
+									{track.title}
 								</div>
-							)}
-							<button
-								onClick={() => handleDeleteTrack(track.id)}
-								className='p-2 text-gray-400 hover:text-red-500 transition-colors'
-								title='Удалить трек'
-							>
-								<Trash2 className='w-4 h-4' />
-							</button>
+								<div className='text-xs text-gray-400 truncate'>
+									{track.artist}
+								</div>
+							</div>
+
+							{/* Actions */}
+							<div className='flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity'>
+								{activeView === 'playlist' && currentPlaylistId && (
+									<button
+										onClick={(e) => {
+											e.stopPropagation()
+											handleRemoveFromPlaylist(track.id, currentPlaylistId)
+										}}
+										className='p-1.5 text-gray-400 hover:text-red-500 transition-colors'
+										title='Удалить из плейлиста'
+									>
+										<X className='w-4 h-4' />
+									</button>
+								)}
+								{activeView === 'tracks' && (
+									<div className='relative'>
+										<button
+											onClick={(e) => {
+												e.stopPropagation()
+												setShowAddToPlaylist(
+													showAddToPlaylist === track.id ? null : track.id,
+												)
+											}}
+											className='p-1.5 text-gray-400 hover:text-white transition-colors'
+											title='Добавить в плейлист'
+										>
+											<Plus className='w-4 h-4' />
+										</button>
+										<AnimatePresence>
+											{showAddToPlaylist === track.id && (
+												<motion.div
+													initial={{ opacity: 0, scale: 0.95, y: 10 }}
+													animate={{ opacity: 1, scale: 1, y: 0 }}
+													exit={{ opacity: 0, scale: 0.95, y: 10 }}
+													className='absolute right-0 bottom-full mb-2 w-48 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl overflow-hidden z-20'
+												>
+													{playlists.length === 0 ? (
+														<div className='p-3 text-sm text-gray-400'>
+															Нет плейлистов
+														</div>
+													) : (
+														playlists.map(playlist => (
+															<button
+																key={playlist.id}
+																onClick={() =>
+																	handleAddToPlaylist(track.id, playlist.id)
+																}
+																className='w-full px-4 py-2 text-sm text-left text-white hover:bg-emerald-600 transition-colors'
+															>
+																{playlist.name}
+															</button>
+														))
+													)}
+												</motion.div>
+											)}
+										</AnimatePresence>
+									</div>
+								)}
+								<button
+									onClick={(e) => {
+										e.stopPropagation()
+										handleDeleteTrack(track.id)
+									}}
+									className='p-1.5 text-gray-400 hover:text-red-500 transition-colors'
+									title='Удалить трек'
+								>
+									<Trash2 className='w-4 h-4' />
+								</button>
+							</div>
+
+							{/* Duration */}
+							<div className='text-xs text-gray-500 w-10 text-right tabular-nums'>
+								{formatTime(track.durationSec || 0)}
+							</div>
 						</div>
-						<div className='text-xs text-gray-500 w-10 text-right'>
-							{formatTime(0)}
-						</div>
-					</div>
-				))
+					)
+				})
 			)}
 		</div>
 	)
@@ -1135,7 +1180,7 @@ export default function MusicPage() {
 	}
 
 	return (
-		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white overflow-x-hidden relative'>
+		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white overflow-x-hidden relative pb-20 md:pb-0'>
 			{/* Background Effects */}
 			<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
 				<div className='absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-emerald-900/10 blur-[120px]' />
@@ -1190,17 +1235,7 @@ export default function MusicPage() {
 								<Music className='w-5 h-5' />
 								<span className='font-medium'>Все треки</span>
 							</button>
-							<button
-								onClick={() => setDisplayMode('classic')}
-								className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${
-									displayMode === 'classic'
-										? 'bg-white/10 text-white'
-										: 'text-gray-500 hover:text-white hover:bg-white/5'
-								}`}
-							>
-								<Layout className='w-5 h-5' />
-								<span className='font-medium'>Старый UI</span>
-							</button>
+
 							<button
 								onClick={() => setShowBorrowRequests(true)}
 								className='w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl transition-all text-gray-400 hover:text-white hover:bg-white/5'

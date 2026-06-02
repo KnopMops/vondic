@@ -62,8 +62,7 @@ export class WebRTCService {
 		this.userId = userId
 		this.configuration = {
 			iceServers: [
-				{ urls: 'stun:stun.l.google.com:19302' },
-				{ urls: 'stun:stun1.l.google.com:19302' },
+				{ urls: 'stun:192.168.120.248:3478' },
 			],
 		}
 		try {
@@ -1124,11 +1123,16 @@ export class WebRTCService {
 		const existingPc = this.peerConnections.get(callerSocketId)
 		if (existingPc) {
 			console.log(`PC already exists for ${callerSocketId}, state: ${existingPc.signalingState}`)
-			// If already connected, skip
 			if (existingPc.signalingState === 'stable') {
-				console.log(`Already connected to ${callerSocketId}, skipping incoming call`)
+				console.log(`[WebRTC] Existing PC in stable state for ${callerSocketId}, handling as renegotiation`)
+				return this.handleRenegotiationOffer(callerSocketId, offer)
+			}
+			if (existingPc.signalingState === 'have-remote-offer') {
+				console.log(`[WebRTC] Already have remote offer for ${callerSocketId}, skipping duplicate`)
 				return
 			}
+			console.log(`[WebRTC] Cannot handle incoming call: existing PC state is ${existingPc.signalingState}`)
+			return
 		}
 		
 		// Создаем peer connection для входящего звонка
@@ -1212,29 +1216,14 @@ export class WebRTCService {
 			
 			// Double-check state right before creating answer
 			if (pc.signalingState !== 'have-remote-offer') {
-				// If we're in stable state, it means we might have already processed the offer or it was processed elsewhere
-				if (pc.signalingState === 'stable') {
-					console.log(`PC is in stable state, cannot create answer for ${callerSocketId}`)
-					return
-				}
-				// If we're in have-local-offer, it means we already created an offer ourselves
-				else if (pc.signalingState === 'have-local-offer') {
-					console.log(`PC is in have-local-offer state, cannot create answer for ${callerSocketId}`)
-					return
-				}
-				// For other states, log and return
-				else {
-					console.log(`Cannot accept call: PC state is ${pc.signalingState}, expected 'have-remote-offer'`)
-					return
-				}
+				throw new Error(`Cannot accept call: PC state is ${pc.signalingState}, expected 'have-remote-offer'`)
 			}
 
 			// Создаем answer
 			const answer = await pc.createAnswer()
 			// Double-check state again before setting local description
 			if (pc.signalingState !== 'have-remote-offer') {
-				console.log(`State changed during answer creation, skipping for ${callerSocketId}`)
-				return
+				throw new Error(`State changed during answer creation for ${callerSocketId}: ${pc.signalingState}`)
 			}
 			await pc.setLocalDescription(answer)
 			console.log('Answer created and set as local description')
@@ -1742,7 +1731,7 @@ export class WebRTCService {
 
 		const iceTimeout = setTimeout(() => {
 			testPc.close()
-		}, 5000)
+		}, 3000)
 
 		return new Promise((resolve) => {
 			const cleanup = () => {
@@ -1789,7 +1778,7 @@ export class WebRTCService {
 					this.useInternalTurnOnly = true
 				}
 				resolve()
-			}, 5000)
+			}, 3000)
 		})
 	}
 

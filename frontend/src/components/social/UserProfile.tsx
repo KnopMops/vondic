@@ -7,23 +7,59 @@ import { User } from '@/lib/types'
 import { getAttachmentUrl, getAvatarUrl } from '@/lib/utils'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
+	LuBan as Ban,
+	LuBell as Bell,
+	LuBellOff as BellOff,
 	LuCoffee as Coffee,
 	LuCrown as Crown,
+	LuFlag as Flag,
 	LuFlame as Flame,
 	LuFlower as Flower,
 	LuGift as Gift,
 	LuHeart as Heart,
 	LuLink as LinkIcon,
+	LuEllipsisVertical as MoreVertical,
+	LuPencil as Pencil,
 	LuSettings as SettingsIcon,
 	LuShare2 as Share2,
+	LuShieldCheck as ShieldCheck,
 	LuStar as Star,
 	LuUpload as UploadCloud,
+	LuUserMinus as UserMinus,
+	LuUserPlus as UserPlus,
 } from 'react-icons/lu'
 import Link from 'next/link'
 import { FiPaperclip as Paperclip } from 'react-icons/fi'
 import { useEffect, useRef, useState } from 'react'
+import Cropper, { Area } from 'react-easy-crop'
 import Post from './Post'
 import StoriesModal from './StoriesModal'
+
+async function getCroppedImg(imageSrc: string, pixelCrop: Area): Promise<string> {
+	const image = new Image()
+	image.src = imageSrc
+	await new Promise<void>((resolve, reject) => {
+		image.onload = () => resolve()
+		image.onerror = reject
+	})
+	const canvas = document.createElement('canvas')
+	canvas.width = pixelCrop.width
+	canvas.height = pixelCrop.height
+	const ctx = canvas.getContext('2d')
+	if (!ctx) throw new Error('No canvas context')
+	ctx.drawImage(
+		image,
+		pixelCrop.x,
+		pixelCrop.y,
+		pixelCrop.width,
+		pixelCrop.height,
+		0,
+		0,
+		pixelCrop.width,
+		pixelCrop.height,
+	)
+	return canvas.toDataURL('image/jpeg', 0.95)
+}
 
 type Props = {
 	user: User
@@ -50,6 +86,8 @@ export default function UserProfile({ user, currentUser }: Props) {
 	const [blockedByAdmin, setBlockedByAdmin] = useState<string | null>(
 		(user as any).blocked_by_admin || null,
 	)
+	const [isBlockedByMe, setIsBlockedByMe] = useState(false)
+	const [hasBlockedMe, setHasBlockedMe] = useState(false)
 	const [loading, setLoading] = useState(false)
 	const [checkingStatus, setCheckingStatus] = useState(true)
 	const [activeTab, setActiveTab] = useState<
@@ -141,6 +179,14 @@ export default function UserProfile({ user, currentUser }: Props) {
 	const [addingPlaylistId, setAddingPlaylistId] = useState<string | null>(null)
 	const [giftPremiumLoading, setGiftPremiumLoading] = useState(false)
 	const [giftPremiumError, setGiftPremiumError] = useState<string | null>(null)
+	const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+	const menuRef = useRef<HTMLDivElement>(null)
+	const [isCropModalOpen, setIsCropModalOpen] = useState(false)
+	const [cropImage, setCropImage] = useState('')
+	const [crop, setCrop] = useState({ x: 0, y: 0 })
+	const [zoom, setZoom] = useState(1)
+	const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null)
+	const [cropLoading, setCropLoading] = useState(false)
 
 	const giftsCatalog = [
 		{ id: 'newyear_fireworks', name: 'Новогодний салют', icon: Flame },
@@ -447,6 +493,18 @@ export default function UserProfile({ user, currentUser }: Props) {
 						setIsSubscribed(isFollowing)
 					}
 				}
+
+				// 3. Check Block Status
+				const blockRes = await fetch('/api/users/block-status', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ user_id: user.id }),
+				})
+				if (blockRes.ok) {
+					const blockData = await blockRes.json()
+					setIsBlockedByMe(Boolean(blockData.is_blocked_by_me))
+					setHasBlockedMe(Boolean(blockData.has_blocked_me))
+				}
 			} catch (error) {
 				console.error('Error checking status:', error)
 			} finally {
@@ -456,6 +514,20 @@ export default function UserProfile({ user, currentUser }: Props) {
 
 		checkStatus()
 	}, [currentUser, user.id, isMe])
+
+	useEffect(() => {
+		const handleClickOutside = (event: MouseEvent) => {
+			if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+				setProfileMenuOpen(false)
+			}
+		}
+		if (profileMenuOpen) {
+			document.addEventListener('mousedown', handleClickOutside)
+		}
+		return () => {
+			document.removeEventListener('mousedown', handleClickOutside)
+		}
+	}, [profileMenuOpen])
 
 	useEffect(() => {
 		if (activeTab === 'friends' && friends.length === 0) {
@@ -695,6 +767,10 @@ export default function UserProfile({ user, currentUser }: Props) {
 
 	const handleAddFriend = async () => {
 		if (!currentUser) return
+		if (isBlockedByMe || hasBlockedMe) {
+			alert('Вы не можете отправить заявку в друзья этому пользователю')
+			return
+		}
 		setLoading(true)
 		try {
 			const res = await fetch('/api/friends/add', {
@@ -830,11 +906,61 @@ export default function UserProfile({ user, currentUser }: Props) {
 		}
 	}
 
+	const handleUserBlock = async () => {
+		if (!currentUser) return
+		if (!confirm('Заблокировать пользователя? Он не сможет писать вам и заходить на вашу страницу, а также будет удалён из друзей.')) return
+		setLoading(true)
+		try {
+			const res = await fetch('/api/users/block-user', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ user_id: user.id }),
+			})
+			if (!res.ok) {
+				const data = await res.json().catch(() => ({}))
+				if (data.error === 'Пользователь уже заблокирован') {
+					setIsBlockedByMe(true)
+					setIsFriend(false)
+					return
+				}
+				throw new Error('Failed to block')
+			}
+			alert('Пользователь заблокирован')
+			setIsBlockedByMe(true)
+			setIsFriend(false)
+		} catch (error) {
+			console.error(error)
+			alert('Ошибка блокировки')
+		} finally {
+			setLoading(false)
+		}
+	}
+
+	const handleUserUnblock = async () => {
+		if (!currentUser) return
+		if (!confirm('Разблокировать пользователя?')) return
+		setLoading(true)
+		try {
+			const res = await fetch('/api/users/unblock-user', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ user_id: user.id }),
+			})
+			if (!res.ok) throw new Error('Failed to unblock')
+			alert('Пользователь разблокирован')
+			setIsBlockedByMe(false)
+		} catch (error) {
+			console.error(error)
+			alert('Ошибка разблокировки')
+		} finally {
+			setLoading(false)
+		}
+	}
+
 	const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0]
 		if (!file) return
 
-		// Check file type (allow images and gifs)
 		if (!file.type.startsWith('image/')) {
 			alert('Пожалуйста, загрузите изображение (JPG, PNG, GIF)')
 			return
@@ -844,54 +970,42 @@ export default function UserProfile({ user, currentUser }: Props) {
 			return
 		}
 
-		setUploadingAvatar(true)
+		const reader = new FileReader()
+		reader.readAsDataURL(file)
+		reader.onload = () => {
+			setCropImage(reader.result as string)
+			setCrop({ x: 0, y: 0 })
+			setZoom(1)
+			setCroppedAreaPixels(null)
+			setIsCropModalOpen(true)
+		}
+	}
+
+	const handleCropConfirm = async () => {
+		if (!cropImage) return
+		setCropLoading(true)
 		try {
-			// Convert to base64
-			const reader = new FileReader()
-			reader.readAsDataURL(file)
-			reader.onload = async () => {
-				const base64File = reader.result as string
-
-				const res = await fetch('/api/upload/file', {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-						// Authorization header will be handled by nextjs middleware or proxy if configured,
-						// but usually client components use a proxy route.
-						// However, since we don't have a direct /api/upload/file proxy,
-						// we might need to assume there is one or call backend directly.
-						// Let's assume there is a Next.js route handler at /api/upload/file or similar,
-						// OR we use the same pattern as other calls.
-						// Given the project structure, let's try calling backend directly via a new Next.js route handler
-						// or assume one exists.
-						// WAIT: I should check if I need to create a route handler for upload.
-						// The previous search showed /api/posts route handler.
-						// Let's assume we need to implement a route handler for upload first.
-					},
-					body: JSON.stringify({
-						file: base64File,
-						filename: file.name,
-					}),
-				})
-
-				// Wait, I should probably create the route handler first.
-				// But let's write the frontend logic assuming it exists at /api/upload/file
-				// Actually, looking at other components, they use relative paths like /api/friends/list.
-				// I'll assume I need to create /src/app/api/upload/file/route.ts
-
-				if (!res.ok) {
-					const err = await res.json()
-					throw new Error(err.error || err.message || 'Upload failed')
-				}
-
-				const data = await res.json()
-				setAvatarUrl(data.url)
+			let base64File = cropImage
+			if (croppedAreaPixels) {
+				base64File = await getCroppedImg(cropImage, croppedAreaPixels)
 			}
+			const res = await fetch('/api/upload/file', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ file: base64File, filename: 'avatar.jpg' }),
+			})
+			if (!res.ok) {
+				const err = await res.json()
+				throw new Error(err.error || err.message || 'Upload failed')
+			}
+			const data = await res.json()
+			setAvatarUrl(data.url)
+			setIsCropModalOpen(false)
 		} catch (error: any) {
 			console.error(error)
 			alert(error.message || 'Ошибка загрузки аватара')
 		} finally {
-			setUploadingAvatar(false)
+			setCropLoading(false)
 		}
 	}
 
@@ -1105,37 +1219,205 @@ export default function UserProfile({ user, currentUser }: Props) {
 						</div>
 
 						<div className='flex flex-wrap items-center gap-2 justify-start sm:justify-end w-full sm:w-auto'>
-							<motion.button
-								whileHover={{ scale: 1.05 }}
-								whileTap={{ scale: 0.95 }}
-								onClick={() => setIsShareModalOpen(true)}
-								className='rounded-xl bg-white/10 border border-white/20 p-2.5 text-white hover:bg-white/20 backdrop-blur-md transition-all shadow-lg'
-								title='Поделиться страницей'
-							>
-								<Share2 className='h-4 w-4' />
-							</motion.button>
 							{isMe && (
-								<>
+								<div className='relative' ref={menuRef}>
 									<motion.button
 										whileHover={{ scale: 1.05 }}
 										whileTap={{ scale: 0.95 }}
-										onClick={() => setIsPrivacyModalOpen(true)}
+										onClick={() => setProfileMenuOpen(!profileMenuOpen)}
 										className='rounded-xl bg-white/10 border border-white/20 p-2.5 text-white hover:bg-white/20 backdrop-blur-md transition-all shadow-lg'
-										title='Конфиденциальность'
+										title='Действия'
 									>
-										<SettingsIcon className='h-4 w-4' />
+										<MoreVertical className='h-4 w-4' />
 									</motion.button>
+									{profileMenuOpen && (
+										<div className='absolute right-0 mt-2 w-56 rounded-xl bg-[#1a1a2e] border border-white/10 shadow-xl z-50 overflow-hidden py-1'>
+											<button
+												onClick={() => {
+													setIsShareModalOpen(true)
+													setProfileMenuOpen(false)
+												}}
+												className='w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-200 hover:bg-white/10 transition-colors text-left'
+											>
+												<Share2 className='h-4 w-4 shrink-0 text-gray-400' />
+												Поделиться
+											</button>
+											<button
+												onClick={() => {
+													setIsPrivacyModalOpen(true)
+													setProfileMenuOpen(false)
+												}}
+												className='w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-200 hover:bg-white/10 transition-colors text-left'
+											>
+												<SettingsIcon className='h-4 w-4 shrink-0 text-gray-400' />
+												Конфиденциальность
+											</button>
+											<button
+												onClick={() => {
+													setIsEditModalOpen(true)
+													setProfileMenuOpen(false)
+												}}
+												className='w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-200 hover:bg-white/10 transition-colors text-left'
+											>
+												<Pencil className='h-4 w-4 shrink-0 text-gray-400' />
+												Редактировать
+											</button>
+										</div>
+									)}
+								</div>
+							)}
+							{!isMe && currentUser && !checkingStatus && !hasBlockedMe && (
+								<div className='relative' ref={menuRef}>
 									<motion.button
 										whileHover={{ scale: 1.05 }}
 										whileTap={{ scale: 0.95 }}
-										onClick={() => setIsEditModalOpen(true)}
-										className='rounded-xl bg-white/10 border border-white/20 px-6 py-2 text-sm font-semibold text-white hover:bg-white/20 backdrop-blur-md transition-all shadow-lg'
+										onClick={() => setProfileMenuOpen(!profileMenuOpen)}
+										className='rounded-xl bg-white/10 border border-white/20 p-2.5 text-white hover:bg-white/20 backdrop-blur-md transition-all shadow-lg'
+										title='Действия'
 									>
-										Редактировать
+										<MoreVertical className='h-4 w-4' />
 									</motion.button>
-								</>
+									{profileMenuOpen && (
+										<div className='absolute right-0 mt-2 w-56 rounded-xl bg-[#1a1a2e] border border-white/10 shadow-xl z-50 overflow-hidden py-1'>
+											<button
+												onClick={() => {
+													setIsShareModalOpen(true)
+													setProfileMenuOpen(false)
+												}}
+												className='w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-200 hover:bg-white/10 transition-colors text-left'
+											>
+												<Share2 className='h-4 w-4 shrink-0 text-gray-400' />
+												Поделиться
+											</button>
+												{!isBlockedByMe && (
+													<>
+														{isFriend ? (
+															<button
+																onClick={() => {
+																	handleRemoveFriend()
+																	setProfileMenuOpen(false)
+																}}
+																disabled={loading}
+																className='w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-300 hover:bg-white/10 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed'
+															>
+																<UserMinus className='h-4 w-4 shrink-0 text-red-400' />
+																Удалить из друзей
+															</button>
+														) : (
+															<button
+																onClick={() => {
+																	handleAddFriend()
+																	setProfileMenuOpen(false)
+																}}
+																disabled={loading}
+																className='w-full flex items-center gap-3 px-4 py-2.5 text-sm text-indigo-200 hover:bg-white/10 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed'
+															>
+																<UserPlus className='h-4 w-4 shrink-0 text-indigo-400' />
+																Добавить в друзья
+															</button>
+														)}
+														{isSubscribed ? (
+															<button
+																onClick={() => {
+																	handleUnsubscribe()
+																	setProfileMenuOpen(false)
+																}}
+																disabled={loading}
+																className='w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-200 hover:bg-white/10 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed'
+															>
+																<BellOff className='h-4 w-4 shrink-0 text-slate-400' />
+																Отписаться
+															</button>
+														) : (
+															<button
+																onClick={() => {
+																	handleSubscribe()
+																	setProfileMenuOpen(false)
+																}}
+																disabled={loading}
+																className='w-full flex items-center gap-3 px-4 py-2.5 text-sm text-blue-200 hover:bg-white/10 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed'
+															>
+																<Bell className='h-4 w-4 shrink-0 text-blue-400' />
+																Подписаться
+															</button>
+														)}
+													</>
+												)}
+											<button
+												onClick={() => {
+													setIsUserReportOpen(true)
+													setProfileMenuOpen(false)
+												}}
+												className='w-full flex items-center gap-3 px-4 py-2.5 text-sm text-rose-300 hover:bg-white/10 transition-colors text-left'
+											>
+												<Flag className='h-4 w-4 shrink-0 text-rose-400' />
+												Пожаловаться
+											</button>
+											{isBlockedByMe ? (
+												<button
+													onClick={() => {
+														handleUserUnblock()
+														setProfileMenuOpen(false)
+													}}
+													disabled={loading}
+													className='w-full flex items-center gap-3 px-4 py-2.5 text-sm text-green-300 hover:bg-white/10 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed'
+												>
+													<ShieldCheck className='h-4 w-4 shrink-0 text-green-400' />
+													Разблокировать
+												</button>
+											) : (
+												<button
+													onClick={() => {
+														handleUserBlock()
+														setProfileMenuOpen(false)
+													}}
+													disabled={loading}
+													className='w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-300 hover:bg-white/10 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed'
+												>
+													<Ban className='h-4 w-4 shrink-0 text-red-400' />
+													Заблокировать
+												</button>
+											)}
+											{isAdmin && (
+												<>
+													<div className='my-1 h-px bg-white/10 mx-2' />
+													{isBlocked ? (
+														<button
+															onClick={() => {
+																handleUnblock()
+																setProfileMenuOpen(false)
+															}}
+															disabled={loading}
+															className='w-full flex items-center gap-3 px-4 py-2.5 text-sm text-orange-300 hover:bg-white/10 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed'
+														>
+															<Ban className='h-4 w-4 shrink-0 text-orange-400' />
+															Разбанить
+														</button>
+													) : (
+														<button
+															onClick={() => {
+																handleBlock()
+																setProfileMenuOpen(false)
+															}}
+															disabled={loading}
+															className='w-full flex items-center gap-3 px-4 py-2.5 text-sm text-orange-300 hover:bg-white/10 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed'
+														>
+															<Ban className='h-4 w-4 shrink-0 text-orange-400' />
+															Бан пользователя
+														</button>
+													)}
+												</>
+											)}
+											{giftPremiumError && (
+												<p className='px-4 py-1 text-xs text-red-400'>
+													{giftPremiumError}
+												</p>
+											)}
+										</div>
+									)}
+								</div>
 							)}
-							{!isMe && (
+							{!isMe && (!currentUser || checkingStatus) && (
 								<motion.button
 									whileHover={{ scale: 1.05 }}
 									whileTap={{ scale: 0.95 }}
@@ -1363,102 +1645,42 @@ export default function UserProfile({ user, currentUser }: Props) {
 							)}
 						</AnimatePresence>
 
-						{!isMe && currentUser && !checkingStatus && (
-							<div className='mt-4 flex flex-wrap gap-3 w-full'>
-								{isFriend ? (
-									<motion.button
-										whileHover={{ scale: 1.05 }}
-										whileTap={{ scale: 0.95 }}
-										onClick={handleRemoveFriend}
-										disabled={loading}
-										className='rounded-xl bg-red-500/15 border border-red-400/60 px-4 py-2 text-sm font-semibold text-red-200 hover:bg-red-500/25 transition-all disabled:opacity-50'
-									>
-										Удалить из друзей
-									</motion.button>
-								) : (
-									<motion.button
-										whileHover={{ scale: 1.05 }}
-										whileTap={{ scale: 0.95 }}
-										onClick={handleAddFriend}
-										disabled={loading}
-										className='rounded-xl bg-indigo-500/30 border border-indigo-300/40 px-4 py-2 text-sm font-semibold text-indigo-100 hover:bg-indigo-500/40 transition-all disabled:opacity-50'
-									>
-										Добавить в друзья
-									</motion.button>
-								)}
-
-								{isSubscribed ? (
-									<motion.button
-										whileHover={{ scale: 1.05 }}
-										whileTap={{ scale: 0.95 }}
-										onClick={handleUnsubscribe}
-										disabled={loading}
-										className='rounded-xl bg-slate-500/20 border border-slate-300/35 px-4 py-2 text-sm font-semibold text-slate-100 hover:bg-slate-500/30 transition-all disabled:opacity-50'
-									>
-										Отписаться
-									</motion.button>
-								) : (
-									<motion.button
-										whileHover={{ scale: 1.05 }}
-										whileTap={{ scale: 0.95 }}
-										onClick={handleSubscribe}
-										disabled={loading}
-										className='rounded-xl bg-blue-500/30 border border-blue-300/40 px-4 py-2 text-sm font-semibold text-blue-100 hover:bg-blue-500/40 transition-all disabled:opacity-50'
-									>
-										Подписаться
-									</motion.button>
-								)}
-								<motion.button
-									whileHover={{ scale: 1.05 }}
-									whileTap={{ scale: 0.95 }}
-									onClick={() => setIsGiftModalOpen(true)}
-									disabled={loading}
-									className='rounded-xl bg-pink-500/30 border border-pink-300/40 px-4 py-2 text-sm font-semibold text-pink-100 hover:bg-pink-500/40 transition-all disabled:opacity-50'
-								>
-									Подарить
-								</motion.button>
-								<motion.button
-									whileHover={{ scale: 1.05 }}
-									whileTap={{ scale: 0.95 }}
-									onClick={sendGiftPremium}
-									disabled={loading || giftPremiumLoading}
-									className='rounded-xl bg-amber-500/25 border border-amber-400/50 px-4 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-500/35 transition-all disabled:opacity-50'
-								>
-									{giftPremiumLoading ? '…' : 'Premium 50'}
-								</motion.button>
-
-								{isAdmin && (
-									<>
-										{isBlocked ? (
-											<motion.button
-												whileHover={{ scale: 1.05 }}
-												whileTap={{ scale: 0.95 }}
-												onClick={handleUnblock}
-												disabled={loading}
-												className='rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-500 transition-all disabled:opacity-50'
-											>
-												Разблокировать
-											</motion.button>
-										) : (
-											<motion.button
-												whileHover={{ scale: 1.05 }}
-												whileTap={{ scale: 0.95 }}
-												onClick={handleBlock}
-												disabled={loading}
-												className='rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-500 transition-all disabled:opacity-50'
-											>
-												Заблокировать
-											</motion.button>
-										)}
-									</>
-								)}
-								{giftPremiumError && (
-									<p className='w-full basis-full text-sm text-red-400 mt-1'>
-										{giftPremiumError}
-									</p>
-								)}
+						{isCropModalOpen && (
+							<div className='fixed inset-0 z-[999999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4'>
+								<div className='relative w-full max-w-sm aspect-[9/16] max-h-[80vh] rounded-2xl overflow-hidden bg-gray-900'>
+									<Cropper
+										image={cropImage}
+										crop={crop}
+										zoom={zoom}
+										aspect={9 / 16}
+										cropShape='round'
+										showGrid={false}
+										onCropChange={setCrop}
+										onZoomChange={setZoom}
+										onCropComplete={(_, area) => setCroppedAreaPixels(area)}
+										style={{
+											containerStyle: { background: '#000' },
+										}}
+									/>
+									<div className='absolute bottom-4 left-4 right-4 flex items-center justify-between z-10'>
+										<button
+											onClick={() => setIsCropModalOpen(false)}
+											className='rounded-xl bg-white/10 border border-white/20 px-4 py-2 text-sm font-semibold text-white hover:bg-white/20 transition-all'
+										>
+											Отмена
+										</button>
+										<button
+											onClick={handleCropConfirm}
+											disabled={cropLoading}
+											className='rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 transition-all disabled:opacity-50'
+										>
+											{cropLoading ? 'Загрузка...' : 'Обрезать'}
+										</button>
+									</div>
+								</div>
 							</div>
 						)}
+
 					</div>
 
 					{displayDescription && (

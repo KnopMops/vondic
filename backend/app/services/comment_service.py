@@ -14,7 +14,7 @@ class CommentService:
             return None
         if not isinstance(value, str):
             value = str(value)
-        return html.escape(value.strip(), quote=True)
+        return html.escape(value.strip(), quote=False)
 
     @staticmethod
     def get_comments_by_post(post_id):

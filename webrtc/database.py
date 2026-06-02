@@ -34,6 +34,22 @@ class User(Base):
     role: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
+class OAuthAccessToken(Base):
+    __tablename__ = "oauth_access_tokens"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    token: Mapped[str] = mapped_column(Text, nullable=False)
+    client_id: Mapped[str] = mapped_column(String, nullable=False)
+    user_id: Mapped[str] = mapped_column(String, nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    scope: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    def is_expired(self):
+        if not self.expires_at:
+            return False
+        return datetime.utcnow() > self.expires_at
+
+
 class Message(Base):
     __tablename__ = "messages"
 
@@ -320,6 +336,13 @@ class UserRepository:
                         except Exception:
                             pass
                         row = legacy
+                # Check OAuth access token (for mobile OAuth login)
+                if not row and token:
+                    oauth_token = session.query(OAuthAccessToken).filter(
+                        OAuthAccessToken.token == str(token)).first()
+                    if oauth_token and not oauth_token.is_expired():
+                        row = session.query(User).filter(
+                            User.id == oauth_token.user_id).first()
                 return self._model_to_dict(row) if row else None
         except Exception as e:
             logger.error(f"DB Error fetch_user_by_token: {e}")
@@ -333,6 +356,7 @@ class UserRepository:
                 if user:
                     user.socket_id = socket_id
                     user.status = "online"
+                    session.commit()
         except Exception as e:
             logger.error(f"DB Error bind_socket: {e}")
 
@@ -345,6 +369,7 @@ class UserRepository:
                     return None
                 user.socket_id = None
                 user.status = "offline"
+                session.commit()
                 return user.id
         except Exception as e:
             logger.error(f"DB Error release_socket: {e}")
@@ -360,6 +385,7 @@ class UserRepository:
                     return False
                 user.socket_id = None
                 user.status = "offline"
+                session.commit()
                 return True
         except Exception as e:
             logger.error(f"DB Error force_user_offline: {e}")

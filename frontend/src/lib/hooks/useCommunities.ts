@@ -201,6 +201,41 @@ export const useCommunities = () => {
 		}
 	}
 
+	const searchCommunities = async (query: string) => {
+		if (!user) throw new Error('User not authenticated')
+		const token = getAccessToken(user, 5)
+		if (!token) throw new Error('Токен доступа не найден')
+		const res = await fetch('/api/v1/communities/search', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ query, access_token: token }),
+		})
+		if (!res.ok) {
+			const errorData = await res.json().catch(() => ({}))
+			throw new Error(errorData.error || 'Не удалось найти сообщества')
+		}
+		const data = await res.json()
+		return data.communities || []
+	}
+
+	const updateCommunity = async (communityId: string, data: { name?: string; description?: string; avatar_url?: string }) => {
+		if (!user) throw new Error('User not authenticated')
+		const token = getAccessToken(user, 5)
+		if (!token) throw new Error('Токен доступа не найден')
+		const res = await fetch(`/api/v1/communities/${communityId}`, {
+			method: 'PUT',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ ...data, access_token: token }),
+		})
+		if (!res.ok) {
+			const errorData = await res.json().catch(() => ({}))
+			throw new Error(errorData.error || 'Не удалось обновить сообщество')
+		}
+		const updated = await res.json()
+		setCommunities(prev => prev.map(c => (c.id === communityId ? updated : c)))
+		return updated
+	}
+
 	useEffect(() => {
 		// Ждем пока пользователь загрузится
 		if (user) {
@@ -222,5 +257,7 @@ export const useCommunities = () => {
 		joinCommunity,
 		getCommunityDetails,
 		getCommunityInviteCode,
+		searchCommunities,
+		updateCommunity,
 	}
 }

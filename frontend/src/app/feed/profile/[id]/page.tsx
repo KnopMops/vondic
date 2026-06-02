@@ -54,7 +54,7 @@ export default function ProfileIdPage() {
 
 	if (error || !profileUser) {
 		return (
-			<div className='min-h-screen bg-black text-white'>
+			<div className='min-h-screen bg-black text-white pb-20 md:pb-0'>
 				<Header email={currentUser?.email} onLogout={logout} />
 				<div className='mx-auto flex max-w-7xl'>
 					<Sidebar />

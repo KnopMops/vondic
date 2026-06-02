@@ -73,3 +73,51 @@ def create_community_channel(current_user, community_id):
 def list_community_channels(current_user, community_id):
     items = CommunityChannelService.list_channels(community_id)
     return jsonify(community_channels_schema.dump(items)), 200
+
+
+@communities_bp.route("/<community_id>", methods=["PUT"])
+@token_required
+def update_community(current_user, community_id):
+    community = CommunityService.get_by_id(community_id)
+    if not community:
+        return jsonify({"error": "Community not found"}), 404
+    if str(community.owner_id) != str(current_user.id):
+        return jsonify({"error": "Only owner can update community"}), 403
+
+    data = request.get_json(force=True) or {}
+    community, err = CommunityService.update_community(community_id, data)
+    if err:
+        return jsonify({"error": err}), 400
+    return jsonify(community_schema.dump(community)), 200
+
+
+@communities_bp.route("/leave", methods=["POST"])
+@token_required
+def leave_community(current_user):
+    data = request.get_json(force=True) or {}
+    community_id = data.get("community_id")
+    if not community_id:
+        return jsonify({"error": "community_id is required"}), 400
+
+    community = CommunityService.get_by_id(community_id)
+    if not community:
+        return jsonify({"error": "Community not found"}), 404
+    if current_user not in community.members:
+        return jsonify({"error": "You are not a member"}), 403
+
+    community, err = CommunityService.leave_community(community_id, current_user.id)
+    if err:
+        return jsonify({"error": err}), 400
+    return jsonify({"success": True}), 200
+
+
+@communities_bp.route("/search", methods=["POST"])
+@token_required
+def search_communities(current_user):
+    data = request.get_json(force=True) or {}
+    query = data.get("query", "").strip().lower()
+    if not query:
+        return jsonify({"communities": []}), 200
+
+    results = CommunityService.search_communities(query, current_user.id)
+    return jsonify({"communities": communities_schema.dump(results)}), 200

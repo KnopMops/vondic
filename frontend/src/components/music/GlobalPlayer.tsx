@@ -157,14 +157,14 @@ export default function GlobalPlayer() {
 
   return (
     <div className='fixed top-0 left-0 right-0 z-50 bg-gray-950/90 backdrop-blur-xl border-b border-gray-800/50 shadow-[0_4px_20px_rgba(0,0,0,0.4)]'>
-      <div className='max-w-[1600px] mx-auto px-4 py-2'>
-        <div className='flex items-center gap-4'>
+      <div className='max-w-[1600px] mx-auto px-2 sm:px-4 py-2'>
+        <div className='flex items-center gap-2 sm:gap-4 flex-wrap sm:flex-nowrap'>
           {/* Track Info */}
           <div className='flex items-center gap-3 flex-shrink-0'>
             <div className='w-10 h-10 rounded-lg bg-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-600/20'>
               <Music className='w-5 h-5 text-white' />
             </div>
-            <div className='min-w-0 max-w-[200px]'>
+            <div className='min-w-0 max-w-[120px] sm:max-w-[200px]'>
               <div className='text-sm font-semibold text-white truncate'>
                 {currentTrack.title}
               </div>
@@ -273,7 +273,7 @@ export default function GlobalPlayer() {
           </div>
 
           {/* Volume & Actions */}
-          <div className='flex items-center gap-2 flex-shrink-0'>
+          <div className='hidden md:flex items-center gap-2 flex-shrink-0'>
             <button
               onClick={toggleMute}
               className='p-1.5 text-gray-400 hover:text-white transition-all hover:scale-110'

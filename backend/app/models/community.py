@@ -20,6 +20,7 @@ class Community(db.Model):
     id = db.Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
     name = db.Column(TEXT, nullable=False)
     description = db.Column(TEXT, nullable=True)
+    avatar_url = db.Column(TEXT, nullable=True)
     invite_code = db.Column(
         TEXT, unique=True, default=lambda: str(uuid.uuid4())[:8])
     owner_id = db.Column(TEXT, db.ForeignKey("users.id"), nullable=False)
@@ -43,6 +44,7 @@ class Community(db.Model):
             "id": self.id,
             "name": self.name,
             "description": self.description,
+            "avatar_url": self.avatar_url,
             "invite_code": self.invite_code,
             "owner_id": self.owner_id,
             "members_count": len(

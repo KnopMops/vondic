@@ -8,7 +8,7 @@ import { setUser } from '@/lib/features/authSlice'
 import { useAppDispatch } from '@/lib/hooks'
 import { useToast } from '@/lib/ToastContext'
 import { AnimatePresence, motion } from 'framer-motion'
-import { FiBell, FiCode, FiMail, FiMonitor, FiMessageCircle, FiMusic, FiPhoneCall, FiSettings, FiShield, FiVolume2 } from 'react-icons/fi'
+import { FiBell, FiCode, FiLock, FiMail, FiMonitor, FiMessageCircle, FiMusic, FiPhoneCall, FiSettings, FiShield, FiVolume2 } from 'react-icons/fi'
 import { HiOutlineColorSwatch } from 'react-icons/hi'
 import { useEffect, useState } from 'react'
 
@@ -127,6 +127,11 @@ export default function SettingsPage() {
 	const [terminatingSessionIds, setTerminatingSessionIds] = useState<string[]>(
 		[],
 	)
+	const [changePasswordOpen, setChangePasswordOpen] = useState(false)
+	const [currentPassword, setCurrentPassword] = useState('')
+	const [newPassword, setNewPassword] = useState('')
+	const [confirmPassword, setConfirmPassword] = useState('')
+	const [changePasswordLoading, setChangePasswordLoading] = useState(false)
 	const [activeTab, setActiveTab] = useState<'system' | 'interface' | 'sounds'>(
 		'system',
 	)
@@ -139,7 +144,11 @@ export default function SettingsPage() {
 	useEffect(() => {
 		if (user) {
 			setTwoFAEnabled(!!user.two_factor_enabled)
-			setTwoFAMethod((user.two_factor_method as any) || 'email')
+			const method =
+				user.two_factor_method === 'totp' || user.two_factor_secret
+					? 'totp'
+					: 'email'
+			setTwoFAMethod(method)
 			setSecretKey(user.two_factor_secret || null)
 			setLoginAlertEnabled(!!user.login_alert_enabled)
 			setDeveloperEnabled(!!user.is_developer)
@@ -324,7 +333,6 @@ export default function SettingsPage() {
 			return
 		}
 		setTwoFAMethod(m)
-		if (!twoFAEnabled) return
 		try {
 			const res = await fetch('/api/auth/2fa/setup', {
 				method: 'POST',
@@ -333,8 +341,15 @@ export default function SettingsPage() {
 			})
 			const data = await res.json()
 			if (!res.ok) throw new Error(data.error || 'Ошибка выбора метода 2FA')
+			setTwoFAEnabled(true)
 			setSecretKey(data.user?.two_factor_secret || null)
-			showToast('Метод 2FA обновлён', 'success')
+			if (m === 'email') setSecretKey(null)
+			showToast(
+				m === 'totp'
+					? 'Вход по секретному ключу (приложение аутентификации)'
+					: 'Вход по коду на почту',
+				'success',
+			)
 		} catch (e: any) {
 			showToast(e.message || 'Ошибка метода 2FA', 'error')
 		}
@@ -345,7 +360,11 @@ export default function SettingsPage() {
 			const res = await fetch('/api/auth/2fa/setup', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ method: 'totp', enable: true }),
+				body: JSON.stringify({
+					method: 'totp',
+					enable: true,
+					regenerate_secret: true,
+				}),
 			})
 			const data = await res.json()
 			if (!res.ok) throw new Error(data.error || 'Не удалось получить секрет')
@@ -538,6 +557,46 @@ export default function SettingsPage() {
 		}
 	}
 
+	const handleChangePassword = async () => {
+		if (!newPassword || !confirmPassword || !currentPassword) {
+			showToast('Заполните все поля', 'error')
+			return
+		}
+		if (newPassword !== confirmPassword) {
+			showToast('Пароли не совпадают', 'error')
+			return
+		}
+		if (newPassword.length < 6) {
+			showToast('Пароль должен быть не менее 6 символов', 'error')
+			return
+		}
+		setChangePasswordLoading(true)
+		try {
+			const res = await fetch('/api/auth/change-password', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					current_password: currentPassword,
+					new_password: newPassword,
+				}),
+			})
+			const data = await res.json().catch(() => ({}))
+			if (!res.ok) {
+				throw new Error(data.error || 'Не удалось сменить пароль')
+			}
+			showToast(data.message || 'Пароль изменён', 'success')
+			setCurrentPassword('')
+			setNewPassword('')
+			setConfirmPassword('')
+			setChangePasswordOpen(false)
+			logout()
+		} catch (e: any) {
+			showToast(e.message || 'Не удалось сменить пароль', 'error')
+		} finally {
+			setChangePasswordLoading(false)
+		}
+	}
+
 	const formatDateTime = (value?: string) => {
 		if (!value) return '—'
 		const date = new Date(value)
@@ -584,7 +643,7 @@ export default function SettingsPage() {
 	}
 
 	return (
-		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white overflow-x-hidden relative'>
+		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white overflow-x-hidden relative pb-20 md:pb-0'>
 			<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
 				<motion.div
 					initial={{ opacity: 0.2, scale: 0.9 }}
@@ -969,6 +1028,78 @@ export default function SettingsPage() {
 												</div>
 											)}
 										</div>
+									</div>
+								</motion.div>
+
+								<motion.div
+									initial={{ opacity: 0, y: 20 }}
+									animate={{ opacity: 1, y: 0 }}
+									transition={{ duration: 0.4 }}
+									className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
+								>
+									<motion.div
+										initial={{ opacity: 0.3 }}
+										animate={{ opacity: [0.3, 0.6, 0.3] }}
+										transition={{ duration: 5, repeat: Infinity }}
+										className='absolute -bottom-24 -left-24 w-64 h-64 bg-gradient-to-tr from-amber-500/10 to-orange-500/10 rounded-full blur-3xl'
+									/>
+									<div className='flex items-center gap-3 mb-4'>
+										<FiLock className='w-5 h-5 text-amber-400' />
+										<h2 className='text-xl font-semibold'>Пароль</h2>
+									</div>
+									<div className='space-y-4'>
+										{!changePasswordOpen ? (
+											<button
+												onClick={() => setChangePasswordOpen(true)}
+												className='rounded-lg bg-white/10 border border-white/20 px-4 py-2 text-sm text-white hover:bg-white/20 transition'
+											>
+												Сменить пароль
+											</button>
+										) : (
+											<div className='space-y-3'>
+												<input
+													type='password'
+													placeholder='Текущий пароль'
+													value={currentPassword}
+													onChange={e => setCurrentPassword(e.target.value)}
+													className='w-full rounded-lg border border-white/10 bg-black/30 p-3 text-sm text-white placeholder:text-gray-500 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition'
+												/>
+												<input
+													type='password'
+													placeholder='Новый пароль'
+													value={newPassword}
+													onChange={e => setNewPassword(e.target.value)}
+													className='w-full rounded-lg border border-white/10 bg-black/30 p-3 text-sm text-white placeholder:text-gray-500 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition'
+												/>
+												<input
+													type='password'
+													placeholder='Подтвердите новый пароль'
+													value={confirmPassword}
+													onChange={e => setConfirmPassword(e.target.value)}
+													className='w-full rounded-lg border border-white/10 bg-black/30 p-3 text-sm text-white placeholder:text-gray-500 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition'
+												/>
+												<div className='flex gap-3'>
+													<button
+														onClick={handleChangePassword}
+														disabled={changePasswordLoading}
+														className='rounded-lg bg-amber-500/20 border border-amber-500/40 px-4 py-2 text-sm text-white hover:bg-amber-500/30 transition disabled:opacity-60'
+													>
+														{changePasswordLoading ? 'Сохранение...' : 'Сохранить'}
+													</button>
+													<button
+														onClick={() => {
+															setChangePasswordOpen(false)
+															setCurrentPassword('')
+															setNewPassword('')
+															setConfirmPassword('')
+														}}
+														className='rounded-lg bg-white/5 border border-white/10 px-4 py-2 text-sm text-gray-300 hover:bg-white/10 transition'
+													>
+														Отмена
+													</button>
+												</div>
+											</div>
+										)}
 									</div>
 								</motion.div>
 							</>

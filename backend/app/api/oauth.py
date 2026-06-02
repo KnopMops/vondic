@@ -1,7 +1,7 @@
 import uuid
 from html import escape
 from datetime import datetime, timedelta
-from urllib.parse import urlencode, urlparse, urlunparse
+from urllib.parse import quote, urlencode, urlparse, urlunparse
 
 from flask import Blueprint, jsonify, make_response, redirect, request, url_for
 from sqlalchemy import TEXT, INTEGER, TIMESTAMP
@@ -158,6 +158,14 @@ def authorize():
                 httponly=True,
                 samesite="Lax",
             )
+            if result.get("refresh_token"):
+                response.set_cookie(
+                    "refresh_token",
+                    result["refresh_token"],
+                    max_age=30 * 24 * 60 * 60,
+                    httponly=True,
+                    samesite="Lax",
+                )
             return response
         login_error = escape(error or "Ошибка входа")
         return f"""
@@ -196,39 +204,16 @@ def authorize():
         </html>
         """, 401
     if not token and request.method == "GET":
-        return f"""
-        <!doctype html>
-        <html lang="ru">
-        <head>
-          <meta charset="utf-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1" />
-          <title>Вход в Вондик OAuth</title>
-          <style>
-            body {{ margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; background:#070b14; color:#e5e7eb; font-family:Inter,system-ui,sans-serif; padding:16px; }}
-            .card {{ width:min(460px,100%); border:1px solid rgba(255,255,255,0.14); border-radius:16px; background:rgba(19,26,41,0.92); padding:20px; }}
-            .label {{ font-size:13px; color:#9ca3af; margin-bottom:6px; display:block; }}
-            .input {{ width:100%; border:1px solid rgba(255,255,255,0.16); background:rgba(255,255,255,0.03); color:#e5e7eb; border-radius:10px; padding:10px 12px; margin-bottom:12px; }}
-            .btn {{ width:100%; border:none; border-radius:10px; padding:11px 12px; color:white; cursor:pointer; font-weight:700; background:linear-gradient(135deg, #6366f1, #8b5cf6); }}
-          </style>
-        </head>
-        <body>
-          <form class="card" method="POST">
-            <h1 style="margin:0 0 8px;font-size:22px;">Вход в Вондик</h1>
-            <p style="margin:0 0 16px;color:#9ca3af;">Авторизуйтесь, чтобы продолжить OAuth-подключение.</p>
-            <input type="hidden" name="action" value="login" />
-            <input type="hidden" name="client_id" value="{escape(client_id)}" />
-            <input type="hidden" name="redirect_uri" value="{escape(redirect_uri)}" />
-            <input type="hidden" name="scope" value="{escape(scope)}" />
-            <input type="hidden" name="state" value="{escape(state)}" />
-            <label class="label">Email</label>
-            <input class="input" type="email" name="email" required />
-            <label class="label">Пароль</label>
-            <input class="input" type="password" name="password" required />
-            <button class="btn" type="submit">Войти и продолжить</button>
-          </form>
-        </body>
-        </html>
-        """
+        q = urlencode(
+            {
+                "client_id": client_id,
+                "redirect_uri": redirect_uri,
+                "response_type": "code",
+                "scope": scope,
+                "state": state,
+            }
+        )
+        return redirect(f'/login?redirect={quote("/oauth/authorize?" + q, safe="")}')
     if not token:
         return jsonify({"error": "unauthorized",
                         "message": "User authentication required"}), 401

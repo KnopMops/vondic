@@ -156,6 +156,43 @@ def unblock_user(current_user):
     ), 200
 
 
+@users_bp.route("/block-user", methods=["POST"])
+@token_required
+def block_user_by_user(current_user):
+    data = request.get_json() or {}
+    blocked_id = data.get("user_id")
+    if not blocked_id:
+        return jsonify({"error": "Требуется user_id"}), 400
+    result, error = UserService.block_user_by_user(str(current_user.id), str(blocked_id))
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({"message": "Пользователь заблокирован"}), 200
+
+
+@users_bp.route("/unblock-user", methods=["POST"])
+@token_required
+def unblock_user_by_user(current_user):
+    data = request.get_json() or {}
+    blocked_id = data.get("user_id")
+    if not blocked_id:
+        return jsonify({"error": "Требуется user_id"}), 400
+    result, error = UserService.unblock_user_by_user(str(current_user.id), str(blocked_id))
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({"message": "Пользователь разблокирован"}), 200
+
+
+@users_bp.route("/block-status", methods=["POST"])
+@token_required
+def block_status(current_user):
+    data = request.get_json() or {}
+    target_id = data.get("user_id")
+    if not target_id:
+        return jsonify({"error": "Требуется user_id"}), 400
+    status = UserService.get_block_status(str(current_user.id), str(target_id))
+    return jsonify(status), 200
+
+
 @users_bp.route("/delete", methods=["DELETE"])
 @token_required
 def delete_user_account(current_user):
@@ -304,16 +341,21 @@ def purchase_gift(current_user):
         price = GIFT_PRICING.get(gift_id)
     if price is None:
         return jsonify({"error": "Неизвестный подарок"}), 400
+    # Limit to 1 per user
+    existing_gifts = list(current_user.gifts or [])
+    already_owned = any(g.get("gift_id") == gift_id for g in existing_gifts)
+    if already_owned:
+        return jsonify({"error": "У вас уже есть этот подарок"}), 400
     total = price * quantity
     if (current_user.balance or 0) < total:
         return jsonify({"error": "Недостаточно средств"}), 400
     try:
         current_user.balance = (current_user.balance or 0) - total
-        gifts = list(current_user.gifts or [])
+        gifts = list(existing_gifts)
         gifts.append(
             {
                 "gift_id": gift_id,
-                "quantity": quantity,
+                "quantity": 1,
                 "from_user_id": current_user.id,
                 "created_at": datetime.utcnow().isoformat(),
                 "is_displayed": False,

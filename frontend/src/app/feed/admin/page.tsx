@@ -89,6 +89,7 @@ export default function AdminSupportPage() {
 	const [newGiftDesc, setNewGiftDesc] = useState('')
 	const [newGiftImageUrl, setNewGiftImageUrl] = useState('')
 	const [newGiftTotalSupply, setNewGiftTotalSupply] = useState('')
+	const [editingGiftId, setEditingGiftId] = useState<string | null>(null)
 	const [giftUploading, setGiftUploading] = useState(false)
 	const giftFileInputRef = useRef<HTMLInputElement | null>(null)
 	const [nowTs, setNowTs] = useState(() => Date.now())
@@ -716,53 +717,82 @@ export default function AdminSupportPage() {
 		}
 	}
 
-	const createGift = async () => {
-		try {
-			const name = newGiftName.trim()
-			if (!name) {
-				setGiftsError('Введите название подарка')
-				return
-			}
-			const price = parseInt(newGiftPrice || '0', 10)
-			if (Number.isNaN(price) || price < 0) {
-				setGiftsError('Цена должна быть неотрицательным числом')
-				return
-			}
+		const startEditGift = (g: any) => {
+			setEditingGiftId(g.id)
+			setNewGiftName(g.name || '')
+			setNewGiftPrice(String(g.coin_price || 0))
+			setNewGiftIcon(g.icon || 'Gift')
+			setNewGiftDesc(g.description || '')
+			setNewGiftImageUrl(g.image_url || '')
+			setNewGiftTotalSupply(g.total_supply ? String(g.total_supply) : '')
 			setGiftsError(null)
-			const token = await ensureToken()
-			const res = await fetch(`${backendUrl}/api/v1/gifts/admin/create`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${token}`,
-				},
-				body: JSON.stringify({
+		}
+
+		const cancelEditGift = () => {
+			setEditingGiftId(null)
+			setNewGiftName('')
+			setNewGiftPrice('0')
+			setNewGiftIcon('Gift')
+			setNewGiftDesc('')
+			setNewGiftImageUrl('')
+			setNewGiftTotalSupply('')
+		}
+
+		const createGift = async () => {
+			try {
+				const name = newGiftName.trim()
+				if (!name) {
+					setGiftsError('Введите название подарка')
+					return
+				}
+				const price = parseInt(newGiftPrice || '0', 10)
+				if (Number.isNaN(price) || price < 0) {
+					setGiftsError('Цена должна быть неотрицательным числом')
+					return
+				}
+				setGiftsError(null)
+				const token = await ensureToken()
+				const isEditing = !!editingGiftId
+				const endpoint = isEditing
+					? `${backendUrl}/api/v1/gifts/admin/update`
+					: `${backendUrl}/api/v1/gifts/admin/create`
+				const body: any = {
 					name,
 					coin_price: price,
 					icon: newGiftIcon,
 					description: newGiftDesc.trim() || undefined,
 					image_url: newGiftImageUrl || undefined,
 					total_supply: newGiftTotalSupply.trim() || undefined,
-				}),
-			})
-			const text = await res.text()
-			let data: any = {}
-			try {
-				data = JSON.parse(text)
-			} catch {}
-			if (!res.ok || !data?.gift) {
-				throw new Error(data?.error || text || 'Не удалось создать подарок')
+				}
+				if (isEditing) {
+					body.id = editingGiftId
+				}
+				const res = await fetch(endpoint, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						Authorization: `Bearer ${token}`,
+					},
+					body: JSON.stringify(body),
+				})
+				const text = await res.text()
+				let data: any = {}
+				try {
+					data = JSON.parse(text)
+				} catch {}
+				if (!res.ok || !data?.gift) {
+					throw new Error(data?.error || text || (isEditing ? 'Не удалось обновить подарок' : 'Не удалось создать подарок'))
+				}
+				if (isEditing) {
+					setGifts(prev => prev.map(g => g.id === editingGiftId ? data.gift : g))
+				} else {
+					setGifts(prev => [...prev, data.gift])
+				}
+				cancelEditGift()
+			} catch (e: any) {
+				setGiftsError(e.message || 'Не удалось сохранить подарок')
 			}
-			setGifts(prev => [...prev, data.gift])
-			setNewGiftName('')
-			setNewGiftPrice('0')
-			setNewGiftDesc('')
-			setNewGiftImageUrl('')
-			setNewGiftTotalSupply('')
-		} catch (e: any) {
-			setGiftsError(e.message || 'Не удалось создать подарок')
 		}
-	}
 
 	const deleteGift = async (id: string) => {
 		try {
@@ -1215,13 +1245,21 @@ export default function AdminSupportPage() {
 														</span>
 													)}
 												</div>
-												<div className='flex justify-end'>
+												<div className='flex justify-end gap-2'>
+													{editingGiftId && (
+														<button
+															onClick={cancelEditGift}
+															className='rounded-md bg-gray-700 px-4 py-2 text-sm font-medium text-white hover:bg-gray-600'
+															>
+																Отмена
+															</button>
+														)}
 													<button
 														onClick={createGift}
 														className='rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-60'
 														disabled={giftsLoading}
 													>
-														Создать подарок
+														{editingGiftId ? 'Сохранить изменения' : 'Создать подарок'}
 													</button>
 												</div>
 											</div>
@@ -1240,20 +1278,28 @@ export default function AdminSupportPage() {
 																key={g.id}
 																className='flex items-center justify-between rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm'
 															>
-																<div>
-																	<div className='font-medium text-gray-100'>
-																		{g.name}
+																	<div>
+																		<div className='font-medium text-gray-100'>
+																			{g.name}
+																		</div>
+																		<div className='text-xs text-gray-400'>
+																			{g.coin_price} коинов · {g.icon}
+																		</div>
 																	</div>
-																	<div className='text-xs text-gray-400'>
-																		{g.coinPrice} коинов · {g.icon}
+																	<div className='flex items-center gap-2'>
+																		<button
+																			onClick={() => startEditGift(g)}
+																			className='text-xs text-indigo-400 hover:text-indigo-300'
+																			>
+																				Редактировать
+																			</button>
+																		<button
+																			onClick={() => deleteGift(g.id)}
+																			className='text-xs text-red-500 hover:text-red-600'
+																			>
+																				Удалить
+																			</button>
 																	</div>
-																</div>
-																<button
-																	onClick={() => deleteGift(g.id)}
-																	className='text-xs text-red-500 hover:text-red-600'
-																>
-																	Удалить
-																</button>
 															</div>
 														))}
 														{gifts.length === 0 && (

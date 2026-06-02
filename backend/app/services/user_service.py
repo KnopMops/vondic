@@ -5,6 +5,7 @@ from datetime import datetime
 
 from app.core.config import Config
 from app.core.extensions import db
+from app.models.block import Block
 from app.models.channel import Channel
 from app.models.comment import Comment
 from app.models.community import Community
@@ -243,6 +244,63 @@ class UserService:
         except Exception as e:
             db.session.rollback()
             return None, str(e)
+
+    @staticmethod
+    def block_user_by_user(blocker_id: str, blocked_id: str):
+        if blocker_id == blocked_id:
+            return None, "Нельзя заблокировать самого себя"
+        existing = Block.query.filter_by(
+            blocker_id=blocker_id, blocked_id=blocked_id
+        ).first()
+        if existing:
+            return None, "Пользователь уже заблокирован"
+        block = Block(blocker_id=blocker_id, blocked_id=blocked_id)
+        db.session.add(block)
+        # Remove from friends both ways
+        Friendship.query.filter(
+            or_(
+                (Friendship.requester_id == blocker_id) & (Friendship.addressee_id == blocked_id),
+                (Friendship.requester_id == blocked_id) & (Friendship.addressee_id == blocker_id),
+            )
+        ).delete(synchronize_session=False)
+        try:
+            db.session.commit()
+            return block, None
+        except Exception as e:
+            db.session.rollback()
+            return None, str(e)
+
+    @staticmethod
+    def unblock_user_by_user(blocker_id: str, blocked_id: str):
+        block = Block.query.filter_by(
+            blocker_id=blocker_id, blocked_id=blocked_id
+        ).first()
+        if not block:
+            return None, "Пользователь не найден в списке заблокированных"
+        db.session.delete(block)
+        try:
+            db.session.commit()
+            return True, None
+        except Exception as e:
+            db.session.rollback()
+            return None, str(e)
+
+    @staticmethod
+    def is_blocked(blocker_id: str, blocked_id: str) -> bool:
+        if not blocker_id or not blocked_id:
+            return False
+        return (
+            Block.query.filter_by(blocker_id=blocker_id, blocked_id=blocked_id).first()
+            is not None
+        )
+
+    @staticmethod
+    def get_block_status(viewer_id: str, target_id: str):
+        """Returns dict with is_blocked_by_me and has_blocked_me"""
+        return {
+            "is_blocked_by_me": UserService.is_blocked(viewer_id, target_id),
+            "has_blocked_me": UserService.is_blocked(target_id, viewer_id),
+        }
 
     @staticmethod
     def delete_user_account(user_id: str):

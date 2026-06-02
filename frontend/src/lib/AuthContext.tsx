@@ -9,6 +9,7 @@ import {
 } from './features/authSlice'
 import { useAppDispatch, useAppSelector } from './hooks'
 import { User } from './types'
+import { getSavedAccounts, saveAccount } from './savedAccounts'
 
 interface AuthContextType {
 	user: User | null
@@ -24,7 +25,7 @@ interface AuthContextType {
 		password: string,
 		captchaToken?: string,
 	) => Promise<void>
-	logout: () => void
+	logout: (redirectUrl?: string) => void
 	isLoading: boolean
 	isInitialized: boolean
 }
@@ -56,6 +57,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 					const userData = JSON.parse(decodeURIComponent(tempUserData))
 					dispatch(setUser(userData))
 					localStorage.setItem('user', JSON.stringify(userData))
+					saveAccount({
+						id: userData.id,
+						email: userData.email,
+						username: userData.username,
+						avatar_url: userData.avatar_url ?? null,
+						auth_provider: 'yandex',
+						last_login_at: Date.now(),
+						added_at: Date.now(),
+					})
 					// Удаляем cookie
 					document.cookie =
 						'temp_user_data=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;'
@@ -119,6 +129,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			}
 			dispatch(setUser(userData))
 			localStorage.setItem('user', JSON.stringify(userData))
+			saveAccount({
+				id: userData.id,
+				email: userData.email,
+				username: userData.username,
+				avatar_url: userData.avatar_url ?? null,
+				auth_provider: 'email',
+				last_login_at: Date.now(),
+				added_at: Date.now(),
+				refresh_token: data.refresh_token || undefined,
+			})
 
 			// Токены теперь в httpOnly cookies, не сохраняем их в localStorage
 
@@ -188,6 +208,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				}
 				dispatch(setUser(userData))
 				localStorage.setItem('user', JSON.stringify(userData))
+				saveAccount({
+					id: userData.id,
+					email: userData.email,
+					username: userData.username,
+					avatar_url: userData.avatar_url ?? null,
+					auth_provider: 'email',
+					last_login_at: Date.now(),
+					added_at: Date.now(),
+				})
 			}
 
 			// Перенаправляем на верификацию
@@ -197,7 +226,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		}
 	}
 
-	const logout = async () => {
+	const logout = async (redirectUrl?: string) => {
 		try {
 			try {
 				await fetch('/api/v1/users/status', {
@@ -220,15 +249,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		} catch (e) {
 			console.error(e)
 		}
+
+		if (user) {
+			const existing = getSavedAccounts().find(a => a.id === user.id)
+			saveAccount({
+				id: user.id,
+				email: user.email,
+				username: user.username,
+				avatar_url: user.avatar_url ?? null,
+				auth_provider: existing?.auth_provider,
+				last_login_at: existing?.last_login_at ?? Date.now(),
+				added_at: Date.now(),
+			})
+		}
+
 		dispatch(logoutAction())
 		localStorage.removeItem('user')
 		// Удаляем токены из localStorage на всякий случай, если они там были
 		localStorage.removeItem('access_token')
 		localStorage.removeItem('refresh_token')
 		if (typeof window !== 'undefined') {
-			window.location.assign('/')
+			window.location.assign(redirectUrl || '/')
 		} else {
-			router.push('/')
+			router.push(redirectUrl || '/')
 		}
 	}
 

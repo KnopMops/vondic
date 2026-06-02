@@ -375,6 +375,13 @@ export default function MemoryModal({ isOpen, onClose }: Props) {
 														alt={file.name}
 														className='w-full h-full object-cover group-hover:scale-110 transition-transform duration-500'
 													/>
+												) : isVideo(file.name) ? (
+													<video
+														controls
+														preload='metadata'
+														src={getAttachmentUrl(file.url)}
+														className='w-full h-full object-cover group-hover:scale-110 transition-transform duration-500'
+													/>
 												) : isAudio(file.name) ? (
 													<>
 														<div className='flex items-center justify-center'>

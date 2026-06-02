@@ -6,35 +6,50 @@ from flask import Blueprint, jsonify, request
 channels_bp = Blueprint("channels", __name__, url_prefix="/api/v1/channels")
 
 
-def validate_channel_input(data):
+def validate_channel_input(data, require_name=False):
     if not data:
         return None, "Request body is required"
 
     name = data.get("name")
     description = data.get("description", "")
+    avatar_url = data.get("avatar_url")
+    channel_type = data.get("type")
     errors = []
 
-    if not name:
+    if require_name and not name:
         errors.append("Channel name is required")
-    elif not isinstance(name, str):
-        errors.append("Channel name must be a string")
-    elif len(name.strip()) == 0:
-        errors.append("Channel name cannot be empty")
-    elif len(name) > 100:
-        errors.append("Channel name must not exceed 100 characters")
+    if name is not None:
+        if not isinstance(name, str):
+            errors.append("Channel name must be a string")
+        elif len(name.strip()) == 0:
+            errors.append("Channel name cannot be empty")
+        elif len(name) > 100:
+            errors.append("Channel name must not exceed 100 characters")
 
     if description and not isinstance(description, str):
         errors.append("Description must be a string")
     elif description and len(description) > 500:
         errors.append("Description must not exceed 500 characters")
 
+    if avatar_url is not None and not isinstance(avatar_url, str):
+        errors.append("avatar_url must be a string")
+
+    if channel_type is not None and channel_type not in ("text", "broadcast"):
+        errors.append("type must be 'text' or 'broadcast'")
+
     if errors:
         return None, "; ".join(errors)
 
-    return {
-        "name": name.strip(),
-        "description": description.strip() if description else None
-    }, None
+    result = {}
+    if name is not None:
+        result["name"] = name.strip()
+    if description is not None:
+        result["description"] = description.strip() if description else None
+    if avatar_url is not None:
+        result["avatar_url"] = avatar_url.strip() if avatar_url else None
+    if channel_type is not None:
+        result["type"] = channel_type
+    return result, None
 
 
 @channels_bp.route("/", methods=["POST"])
@@ -43,7 +58,7 @@ def create_channel(current_user):
     try:
         data = request.get_json()
 
-        validated_data, error = validate_channel_input(data)
+        validated_data, error = validate_channel_input(data, require_name=True)
         if error:
             return jsonify({"error": error, "code": "INVALID_INPUT"}), 400
 
@@ -98,3 +113,55 @@ def get_channel_details(current_user, channel_id):
         return jsonify({"error": "You are not a member of this channel"}), 403
 
     return jsonify(channel_schema.dump(channel)), 200
+
+
+@channels_bp.route("/<channel_id>", methods=["PUT"])
+@token_required
+def update_channel(current_user, channel_id):
+    channel = ChannelService.get_channel_by_id(channel_id)
+    if not channel:
+        return jsonify({"error": "Channel not found"}), 404
+    if not ChannelService.is_owner(channel_id, current_user.id):
+        return jsonify({"error": "Only owner can update channel"}), 403
+
+    data = request.get_json() or {}
+    validated_data, error = validate_channel_input(data)
+    if error:
+        return jsonify({"error": error}), 400
+
+    channel, error = ChannelService.update_channel(channel_id, validated_data)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify(channel_schema.dump(channel)), 200
+
+
+@channels_bp.route("/leave", methods=["POST"])
+@token_required
+def leave_channel(current_user):
+    data = request.get_json() or {}
+    channel_id = data.get("channel_id")
+    if not channel_id:
+        return jsonify({"error": "channel_id is required"}), 400
+
+    channel = ChannelService.get_channel_by_id(channel_id)
+    if not channel:
+        return jsonify({"error": "Channel not found"}), 404
+    if current_user not in channel.participants:
+        return jsonify({"error": "You are not a member of this channel"}), 403
+
+    channel, error = ChannelService.leave_channel(channel_id, current_user.id)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({"success": True}), 200
+
+
+@channels_bp.route("/search", methods=["POST"])
+@token_required
+def search_channels(current_user):
+    data = request.get_json() or {}
+    query = data.get("query", "").strip().lower()
+    if not query:
+        return jsonify({"channels": []}), 200
+
+    results = ChannelService.search_channels(query, current_user.id)
+    return jsonify({"channels": channels_schema.dump(results)}), 200

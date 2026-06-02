@@ -44,6 +44,9 @@ import {
 } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import MessageBubble from './MessageBubble'
+import DiscoveryModal from './DiscoveryModal'
+import ChannelSettingsModal from './ChannelSettingsModal'
+import CommunitySettingsModal from './CommunitySettingsModal'
 import { AppleEmoji } from '@/components/ui/AppleEmoji'
 import {
 	LuArrowLeft as ArrowLeft,
@@ -131,6 +134,9 @@ const getLastMessage = (
 	let content = lastMessage.content || ''
 	if (selfId && content.startsWith('e2e:')) {
 		content = decryptDmPreviewText(selfId, friendId, content)
+	}
+	if (content.startsWith('mt:')) {
+		content = '🔒 Зашифрованное сообщение'
 	}
 	return content.length > 30 ? content.substring(0, 30) + '...' : content
 }
@@ -547,6 +553,8 @@ export default function MessengerPage() {
 	const [friends, setFriends] = useState<User[]>([])
 	const [recentContacts, setRecentContacts] = useState<User[]>([])
 	const [selectedFriend, setSelectedFriend] = useState<User | null>(null)
+	const [isBlockedByMeChat, setIsBlockedByMeChat] = useState(false)
+	const [hasBlockedMeChat, setHasBlockedMeChat] = useState(false)
 	const [isRagOpen, setIsRagOpen] = useState(false)
 	const [isUserProfileModalOpen, setIsUserProfileModalOpen] = useState(false)
 	const [selectedUserForModal, setSelectedUserForModal] = useState<User | null>(
@@ -606,6 +614,36 @@ export default function MessengerPage() {
 		if (selectedFriend.id === botUser.id) return botCommands
 		return botCommandHintsById[selectedFriend.id] || []
 	}, [selectedFriend, botUser.id, botCommands, botCommandHintsById])
+
+	useEffect(() => {
+		if (!selectedFriend || !user) {
+			setIsBlockedByMeChat(false)
+			setHasBlockedMeChat(false)
+			return
+		}
+		let active = true
+		const checkBlock = async () => {
+			try {
+				const res = await fetch('/api/users/block-status', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ user_id: selectedFriend.id }),
+				})
+				if (!active) return
+				if (res.ok) {
+					const data = await res.json()
+					setIsBlockedByMeChat(Boolean(data.is_blocked_by_me))
+					setHasBlockedMeChat(Boolean(data.has_blocked_me))
+				}
+			} catch (e) {
+				console.error(e)
+			}
+		}
+		checkBlock()
+		return () => {
+			active = false
+		}
+	}, [selectedFriend?.id, user?.id])
 
 	useEffect(() => {
 		let active = true
@@ -938,6 +976,8 @@ export default function MessengerPage() {
 		joinCommunity,
 		getCommunityDetails,
 		getCommunityInviteCode,
+		searchCommunities,
+		updateCommunity,
 	} = communitiesHook
 	const [selectedGroup, setSelectedGroup] = useState<Group | null>(null)
 	const [groupParticipants, setGroupParticipants] = useState<
@@ -1025,12 +1065,19 @@ export default function MessengerPage() {
 		createChannel,
 		joinChannel,
 		getChannelInfo,
+		searchChannels,
+		updateChannel,
 	} = useChannels()
 	const { showToast } = useToast()
 	const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null)
 	const [isCreateChannelOpen, setIsCreateChannelOpen] = useState(false)
 	const [isJoinChannelOpen, setIsJoinChannelOpen] = useState(false)
 	const [isChannelInfoOpen, setIsChannelInfoOpen] = useState(false)
+	const [isDiscoveryOpen, setIsDiscoveryOpen] = useState(false)
+	const [isChannelSettingsOpen, setIsChannelSettingsOpen] = useState(false)
+	const [isCommunitySettingsOpen, setIsCommunitySettingsOpen] = useState(false)
+	const [isGroupInfoOpen, setIsGroupInfoOpen] = useState(false)
+	const [isCommunityInfoOpen, setIsCommunityInfoOpen] = useState(false)
 
 	// Channel Forms State
 	const [newChannelName, setNewChannelName] = useState('')
@@ -1681,18 +1728,35 @@ export default function MessengerPage() {
 	}
 
 	const handleAddMember = async (userId: string) => {
-		if (!selectedGroup) return
+		const entity = selectedGroup || selectedChannel || selectedCommunity
+		if (!entity) return
 		try {
-			const details = await getGroupDetails(selectedGroup.id)
-			if (!details || !details.invite_code) {
+			let inviteCode: string | undefined
+			let entityType = 'группе'
+			let entityName = entity.name
+
+			if (selectedGroup) {
+				const details = await getGroupDetails(selectedGroup.id)
+				inviteCode = details?.invite_code
+				entityType = 'группе'
+			} else if (selectedChannel) {
+				const details = await getChannelInfo(selectedChannel.id)
+				inviteCode = details?.invite_code
+				entityType = 'каналу'
+			} else if (selectedCommunity) {
+				const details = await getCommunityDetails(selectedCommunity.id)
+				inviteCode = details?.invite_code
+				entityType = 'сообществу'
+			}
+
+			if (!inviteCode) {
 				throw new Error('Не удалось получить код приглашения')
 			}
 
 			if (socket) {
 				socket.emit('send_message', {
-					group_id: selectedGroup.id,
 					target_user_id: userId,
-					content: `Привет! Присоединяйся к моей группе "${selectedGroup.name}"!\nКод приглашения: ${details.invite_code}`,
+					content: `Привет! Присоединяйся к ${entityType} "${entityName}"!\nКод приглашения: ${inviteCode}`,
 					attachments: [],
 				})
 				showToast('Приглашение отправлено!', 'success')
@@ -1751,11 +1815,13 @@ export default function MessengerPage() {
 	const isBotChat = selectedFriend?.is_bot === true && !isAiChat
 	const isBlockedChat =
 		!!selectedFriend && Boolean((selectedFriend as any).is_blocked)
+	const isBlockedUserChat = isBlockedByMeChat || hasBlockedMeChat
 	const targetUserId = selectedFriend?.id
 	const hasActiveChat = !!(selectedFriend || selectedChannel || selectedGroup)
 	const canWriteToSelectedChannel = !selectedChannel
 		? true
-		: !selectedChannel.owner_id ||
+		: selectedChannel.type !== 'broadcast' ||
+		  !selectedChannel.owner_id ||
 		  !user?.id ||
 		  String(selectedChannel.owner_id) === String(user.id)
 	const accessToken = (user as any)?.access_token as string | undefined
@@ -2155,7 +2221,7 @@ export default function MessengerPage() {
 		}
 		;(async () => {
 			try {
-				const keys = await restoreAllKeysFromServer(accessToken)
+				const keys = await restoreAllKeysFromServer(accessToken, user.id)
 				if (cancelled) return
 				for (const [keyId, keyBytes] of keys.entries()) {
 					try {
@@ -2980,8 +3046,14 @@ export default function MessengerPage() {
 			showToast('В этом канале писать может только владелец', 'error')
 			return
 		}
-		if (isBlockedChat) {
-			showToast('Пользователь заблокирован, отправка сообщений недоступна', 'error')
+		if (isBlockedChat || isBlockedUserChat) {
+			if (isBlockedByMeChat) {
+				showToast('Вы заблокировали этого пользователя', 'error')
+			} else if (hasBlockedMeChat) {
+				showToast('Пользователь заблокировал вас', 'error')
+			} else {
+				showToast('Пользователь заблокирован, отправка сообщений недоступна', 'error')
+			}
 			return
 		}
 		const hasText = !!input.trim()
@@ -3043,8 +3115,14 @@ export default function MessengerPage() {
 			setIsPickerOpen(false)
 			return
 		}
-		if (isBlockedChat) {
-			showToast('Пользователь заблокирован, отправка сообщений недоступна', 'error')
+		if (isBlockedChat || isBlockedUserChat) {
+			if (isBlockedByMeChat) {
+				showToast('Вы заблокировали этого пользователя', 'error')
+			} else if (hasBlockedMeChat) {
+				showToast('Пользователь заблокировал вас', 'error')
+			} else {
+				showToast('Пользователь заблокирован, отправка сообщений недоступна', 'error')
+			}
 			setIsPickerOpen(false)
 			return
 		}
@@ -3929,6 +4007,9 @@ export default function MessengerPage() {
 			if (user?.id && text.startsWith('e2e:')) {
 				text = decryptDmPreviewText(String(user.id), String(friend.id), text)
 			}
+			if (text.startsWith('mt:')) {
+				text = '🔒 Зашифрованное сообщение'
+			}
 			return text.length > 30 ? `${text.substring(0, 30)}...` : text
 		},
 		[messages, recentContactsById, selectedFriend?.id, user?.id],
@@ -4489,6 +4570,14 @@ export default function MessengerPage() {
 											</h3>
 											<div className='flex gap-1'>
 												<button
+													onClick={() => setIsDiscoveryOpen(true)}
+													className='px-3 py-2 hover:bg-gray-800 rounded-lg transition-colors text-gray-200 hover:text-white text-xs font-semibold flex items-center gap-2'
+													title='Найти канал'
+												>
+													<SearchIcon className='w-4 h-4' />
+													<span>Поиск</span>
+												</button>
+												<button
 													onClick={() => setIsJoinChannelOpen(true)}
 													className='px-3 py-2 hover:bg-gray-800 rounded-lg transition-colors text-gray-200 hover:text-white text-xs font-semibold flex items-center gap-2'
 													title='Вступить в канал'
@@ -4577,6 +4666,13 @@ export default function MessengerPage() {
 												Сообщества
 											</h3>
 											<div className='flex gap-1'>
+												<button
+													onClick={() => setIsDiscoveryOpen(true)}
+													className='p-1 hover:bg-gray-800 rounded-md transition-colors text-gray-400 hover:text-white'
+													title='Найти сообщество'
+												>
+													<SearchIcon className='w-3 h-3' />
+												</button>
 												<button
 													onClick={() => setIsJoinCommunityOpen(true)}
 													className='p-1 hover:bg-gray-800 rounded-md transition-colors text-gray-400 hover:text-white'
@@ -6202,7 +6298,7 @@ export default function MessengerPage() {
 										<>
 											<button
 												onClick={handlePickFiles}
-												disabled={isBlockedChat || !canWriteToSelectedChannel || isUploading}
+												disabled={isBlockedChat || isBlockedUserChat || !canWriteToSelectedChannel || isUploading}
 												className={`p-2.5 text-gray-400 hover:bg-gray-700/50 rounded-full transition-all ${currentBackground.accentColor.replace('text-', 'hover:text-')}`}
 											>
 												<PaperclipIcon className='w-5 h-5' />
@@ -6229,7 +6325,7 @@ export default function MessengerPage() {
 																</span>
 																<button
 																	onClick={() => removeFile(idx)}
-																	disabled={isBlockedChat || !canWriteToSelectedChannel}
+																	disabled={isBlockedChat || isBlockedUserChat || !canWriteToSelectedChannel}
 																	className='rounded-md px-2 py-1 text-gray-400 hover:bg-gray-800 hover:text-white transition-colors'
 																	type='button'
 																>
@@ -6383,13 +6479,17 @@ export default function MessengerPage() {
 													}
 												}}
 												rows={1}
-												disabled={!canWriteToSelectedChannel || isBlockedChat}
+												disabled={!canWriteToSelectedChannel || isBlockedChat || isBlockedUserChat}
 												className='flex-1 bg-transparent border-none text-white placeholder-gray-500 focus:ring-0 resize-none py-2.5 max-h-32 min-h-[44px] custom-scrollbar'
 												placeholder={
 													!canWriteToSelectedChannel
 														? 'В этом канале писать может только владелец'
-														: isBlockedChat
-															? 'Пользователь заблокирован'
+														: isBlockedChat || isBlockedUserChat
+															? isBlockedByMeChat
+																? 'Вы заблокировали этого пользователя'
+																: hasBlockedMeChat
+																	? 'Пользователь заблокировал вас'
+																	: 'Пользователь заблокирован'
 															: 'Напишите сообщение...'
 												}
 												style={{ height: 'auto', minHeight: '44px' }}
@@ -6422,7 +6522,7 @@ export default function MessengerPage() {
 												<button
 													onClick={handleSendMessage}
 													disabled={
-														!canWriteToSelectedChannel || isBlockedChat || isUploading
+														!canWriteToSelectedChannel || isBlockedChat || isBlockedUserChat || isUploading
 													}
 													className={`p-3 rounded-2xl transition-all duration-300 shadow-lg flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed ${currentBackground.buttonBg} ${currentBackground.buttonHover} text-white translate-x-0 rotate-0`}
 												>
@@ -7023,10 +7123,14 @@ export default function MessengerPage() {
 						</div>
 						<div className='space-y-6'>
 							<div className='flex items-center gap-4'>
-								<div className='w-16 h-16 rounded-full bg-gray-800 flex items-center justify-center ring-4 ring-gray-800/50'>
-									<HashIcon className='w-8 h-8 text-gray-400' />
+								<div className='w-16 h-16 rounded-full bg-gray-800 flex items-center justify-center ring-4 ring-gray-800/50 overflow-hidden'>
+									{selectedChannel.avatar_url ? (
+										<img src={getAvatarUrl(selectedChannel.avatar_url)} alt={selectedChannel.name} className='w-full h-full object-cover' />
+									) : (
+										<HashIcon className='w-8 h-8 text-gray-400' />
+									)}
 								</div>
-								<div>
+								<div className='flex-1 min-w-0'>
 									<h4 className='text-lg font-bold text-white'>
 										{selectedChannel.name}
 									</h4>
@@ -7037,6 +7141,17 @@ export default function MessengerPage() {
 											: ''}
 									</p>
 								</div>
+								{String(selectedChannel.owner_id) === String(user?.id) && (
+									<button
+										onClick={() => {
+											setIsChannelInfoOpen(false)
+											setIsChannelSettingsOpen(true)
+										}}
+										className='px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg transition-colors'
+									>
+										Редактировать
+									</button>
+								)}
 							</div>
 
 							{selectedChannel.description && (
@@ -7074,7 +7189,31 @@ export default function MessengerPage() {
 				</div>
 			)}
 
-			{isScreenViewerOpen && isScreenSharing && (
+			
+				<DiscoveryModal
+					isOpen={isDiscoveryOpen}
+					onClose={() => setIsDiscoveryOpen(false)}
+					searchChannels={searchChannels}
+					searchCommunities={searchCommunities}
+					joinChannel={joinChannel}
+					joinCommunity={joinCommunity}
+				/>
+
+				<ChannelSettingsModal
+					isOpen={isChannelSettingsOpen}
+					onClose={() => setIsChannelSettingsOpen(false)}
+					channel={selectedChannel}
+					onUpdate={updateChannel}
+				/>
+
+				<CommunitySettingsModal
+					isOpen={isCommunitySettingsOpen}
+					onClose={() => setIsCommunitySettingsOpen(false)}
+					community={selectedCommunity}
+					onUpdate={updateCommunity}
+				/>
+
+{isScreenViewerOpen && isScreenSharing && (
 				<ScreenShareViewer onClose={() => setIsScreenViewerOpen(false)} />
 			)}
 

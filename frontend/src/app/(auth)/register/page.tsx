@@ -11,6 +11,8 @@ export default function RegisterPage() {
 	const [username, setUsername] = useState('')
 	const [password, setPassword] = useState('')
 	const [captchaToken, setCaptchaToken] = useState('')
+	const captchaSiteKey =
+		process.env.NEXT_PUBLIC_YANDEX_SMARTCAPTCHA_SITE_KEY || ''
 	const { register, isLoading } = useAuth()
 
 	const handleSubmit = async (e: React.FormEvent) => {
@@ -95,7 +97,10 @@ export default function RegisterPage() {
 					<div>
 						<button
 							type='submit'
-							disabled={isLoading || !captchaToken}
+							disabled={
+								isLoading ||
+								(!!captchaSiteKey && !captchaToken.trim())
+							}
 							className='group relative flex w-full justify-center rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-3 text-sm font-semibold text-white hover:shadow-lg hover:shadow-indigo-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed'
 						>
 							{isLoading ? 'Создание...' : 'Зарегистрироваться'}

@@ -28,7 +28,6 @@ export default function ShopPage() {
 	const [balanceOverride, setBalanceOverride] = useState<number | null>(null)
 	const [isModalOpen, setIsModalOpen] = useState(false)
 	const [selectedGift, setSelectedGift] = useState<any | null>(null)
-	const [quantity, setQuantity] = useState(1)
 	const [giftLoading, setGiftLoading] = useState(false)
 	const [giftError, setGiftError] = useState<string | null>(null)
 	const [showAll, setShowAll] = useState(false)
@@ -178,7 +177,6 @@ export default function ShopPage() {
 
 	const openGiftModal = (gift: any) => {
 		setSelectedGift(gift)
-		setQuantity(1)
 		setGiftError(null)
 		setGiftMode(false)
 		setRecipientId(null)
@@ -304,7 +302,7 @@ export default function ShopPage() {
 					access_token: token,
 					target_user_id: recipientId,
 					gift_id: selectedGift.id,
-					quantity,
+					quantity: 1,
 					comment: giftComment.trim() || undefined,
 				}),
 			})
@@ -375,7 +373,7 @@ export default function ShopPage() {
 				body: JSON.stringify({
 					access_token: token,
 					gift_id: selectedGift.id,
-					quantity,
+					quantity: 1,
 				}),
 			})
 			if (!res.ok) {
@@ -678,30 +676,9 @@ export default function ShopPage() {
 									<div className='mt-2 text-sm text-gray-600 dark:text-gray-400'>
 										{selectedGift.desc}
 									</div>
-									<div className='mt-4'>
-										<div className='text-sm text-gray-900 dark:text-gray-200'>
-											Количество
-										</div>
-										<div className='mt-2 flex items-center gap-2'>
-											<button
-												onClick={() => setQuantity(q => Math.max(1, q - 1))}
-												className='rounded-lg border border-gray-300 px-3 py-1 dark:border-gray-600'
-											>
-												-
-											</button>
-											<div className='min-w-12 rounded-lg border border-gray-300 px-3 py-1 text-center dark:border-gray-600'>
-												{quantity}
-											</div>
-											<button
-												onClick={() => setQuantity(q => Math.min(20, q + 1))}
-												className='rounded-lg border border-gray-300 px-3 py-1 dark:border-gray-600'
-											>
-												+
-											</button>
-										</div>
-										<div className='mt-3 text-sm text-gray-600 dark:text-gray-400'>
-											Итого: {selectedGift.coinPrice * quantity} коинов
-										</div>
+									<div className='mt-3 text-sm text-gray-600 dark:text-gray-400'>
+										Цена: {selectedGift.coinPrice} коинов
+									</div>
 										<div className='mt-4'>
 											<div className='flex items-center justify-between'>
 												<div className='text-sm text-gray-900 dark:text-gray-200'>
@@ -829,7 +806,6 @@ export default function ShopPage() {
 												</div>
 											)}
 										</div>
-									</div>
 									{giftError && (
 										<div className='mt-3 rounded-lg border border-red-500 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-600 dark:bg-red-900/30 dark:text-red-300'>
 											{giftError}

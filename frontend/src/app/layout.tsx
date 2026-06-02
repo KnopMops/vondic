@@ -6,9 +6,11 @@ import { AuthProvider } from '@/lib/AuthContext'
 import ReactQueryProvider from '@/lib/ReactQueryProvider'
 import { SocketProvider } from '@/lib/SocketContext'
 import { ToastProvider } from '@/lib/ToastContext'
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
+import DesktopReleaseBanner from '@/components/DesktopReleaseBanner'
 import ThemeInit from '@/components/ThemeInit'
+import BottomNav from '@/components/social/BottomNav'
 import '../styles/calls.css'
 import './globals.css'
 import StoreProvider from './StoreProvider'
@@ -28,6 +30,14 @@ export const metadata: Metadata = {
 	description: 'Универсальный коммуникационный хаб',
 }
 
+export const viewport: Viewport = {
+	width: 'device-width',
+	initialScale: 1,
+	maximumScale: 1,
+	userScalable: false,
+	viewportFit: 'cover',
+}
+
 export default function RootLayout({
 	children,
 }: Readonly<{
@@ -39,6 +49,7 @@ export default function RootLayout({
 				className={`${geistSans.variable} ${geistMono.variable} antialiased`}
 			>
 				<ThemeInit />
+				<DesktopReleaseBanner />
 				<UrlFallbackProvider>
 					<StoreProvider>
 						<ReactQueryProvider>

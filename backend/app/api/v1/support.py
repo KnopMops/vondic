@@ -294,14 +294,14 @@ def chat_send(current_user):
 
     if new_chat:
         cnt = Escalation.query.filter(
-            Escalation.user_id == current_user.id,
+            Escalation.user_id == str(current_user.id),
             Escalation.status != "closed",
         ).count()
         if cnt >= 5:
             return jsonify(
                 {"ok": False, "error": "Достигнут лимит чатов (5)"}), 400
-        esc_id = save_escalation(current_user.id, question)
-        notify_admin(current_user.id, f"Новая заявка #{esc_id}: {question}")
+        esc_id = save_escalation(str(current_user.id), question)
+        notify_admin(str(current_user.id), f"Новая заявка #{esc_id}: {question}")
         db.session.add(
             SupportChatMessage(
                 escalation_id=esc_id,
@@ -316,7 +316,7 @@ def chat_send(current_user):
         )
         db.session.add(
             Notification(
-                user_id=current_user.id,
+                user_id=str(current_user.id),
                 title=f"Новая заявка #{esc_id}",
                 message=f"Новая заявка #{esc_id}: {question}",
                 type="system",
@@ -336,7 +336,7 @@ def chat_send(current_user):
 
     last_open = (
         Escalation.query.filter(
-            Escalation.user_id == current_user.id,
+            Escalation.user_id == str(current_user.id),
             Escalation.status != "closed",
         )
         .order_by(Escalation.created_at.desc())
@@ -367,14 +367,14 @@ def chat_send(current_user):
     )
     if needs_escalation:
         cnt = Escalation.query.filter(
-            Escalation.user_id == current_user.id,
+            Escalation.user_id == str(current_user.id),
             Escalation.status != "closed",
         ).count()
         if cnt >= 5:
             return jsonify(
                 {"ok": False, "error": "Достигнут лимит чатов (5)"}), 400
-        esc_id = save_escalation(current_user.id, question)
-        notify_admin(current_user.id, f"Новая заявка #{esc_id}: {question}")
+        esc_id = save_escalation(str(current_user.id), question)
+        notify_admin(str(current_user.id), f"Новая заявка #{esc_id}: {question}")
         db.session.add(
             SupportChatMessage(
                 escalation_id=esc_id,
@@ -389,7 +389,7 @@ def chat_send(current_user):
         )
         db.session.add(
             Notification(
-                user_id=current_user.id,
+                user_id=str(current_user.id),
                 title=f"Новая заявка #{esc_id}",
                 message=f"Новая заявка #{esc_id}: {question}",
                 type="system",
@@ -418,7 +418,7 @@ def chat_updates(current_user):
             Escalation) .join(
             Escalation,
             SupportChatMessage.escalation_id == Escalation.id) .filter(
-                Escalation.user_id == current_user.id,
+                Escalation.user_id == str(current_user.id),
                 SupportChatMessage.read.is_(False)) .order_by(
                     SupportChatMessage.created_at.asc()) .all())
     updates = [
@@ -445,7 +445,7 @@ def chat_updates(current_user):
 @token_required
 def notifications_updates(current_user):
     rows = (
-        Notification.query.filter_by(user_id=current_user.id, is_read=0)
+        Notification.query.filter_by(user_id=str(current_user.id), is_read=0)
         .order_by(Notification.created_at.desc())
         .all()
     )
@@ -473,7 +473,7 @@ def chat_history(current_user):
     rows = (
         db.session.query(SupportChatMessage)
         .join(Escalation, SupportChatMessage.escalation_id == Escalation.id)
-        .filter(Escalation.user_id == current_user.id)
+        .filter(Escalation.user_id == str(current_user.id))
         .order_by(SupportChatMessage.created_at.desc())
         .limit(50)
         .all()
@@ -618,7 +618,7 @@ def admin_escalation_close(current_user, esc_id: int):
 @token_required
 def user_chats(current_user):
     rows = (
-        Escalation.query.filter_by(user_id=current_user.id)
+        Escalation.query.filter_by(user_id=str(current_user.id))
         .order_by(Escalation.created_at.desc())
         .all()
     )
@@ -806,7 +806,7 @@ def admin_post_report_action(current_user):
         if not reason:
             return jsonify({"error": "Требуется причина"}), 400
         _, error = PostService.delete_post_by_admin(
-            post_id, current_user.id, reason)
+            post_id, str(current_user.id), reason)
         if error:
             status_code = 404 if error == "Post not found" else 403
             return jsonify({"error": error}), status_code
@@ -826,7 +826,7 @@ def admin_post_report_action(current_user):
     if action == "legal_remove":
         legal_reason = reason or "Нарушение законодательства РФ"
         _, error = PostService.delete_post_by_admin(
-            post_id, current_user.id, legal_reason
+            post_id, str(current_user.id), legal_reason
         )
         if error:
             status_code = 404 if error == "Post not found" else 403

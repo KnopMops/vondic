@@ -435,35 +435,29 @@ class SignalingService:
         if not target_user_id:
             emit("error", {"message": "Не указан target_user_id"})
             return
-        target_socket = self.broker.get_user_socket(target_user_id)
-        if target_socket and self.broker.resolve_recipient(target_socket):
-            logger.info(
-                f"Звонок от {
-                    request.sid} к пользователю {target_user_id} (socket: {target_socket})")
-            caller = self.broker.resolve_recipient(request.sid)
-            incoming_payload = {"caller_socket_id": request.sid}
-            if caller:
-                incoming_payload["caller_user_id"] = caller.get("id")
-                incoming_payload["caller_username"] = caller.get("username")
-                if caller.get("avatar_url"):
-                    incoming_payload["caller_avatar_url"] = caller.get(
-                        "avatar_url")
-            if offer_sdp:
-                incoming_payload["offer"] = offer_sdp
-            emit("incoming_call", incoming_payload, room=target_user_id)
-            if caller and caller.get("id"):
-                try:
-                    self._persist_dm_call_notice(
-                        str(caller.get("id")),
-                        str(target_user_id),
-                        caller.get("username"),
-                    )
-                except Exception as e:
-                    logger.error(f"dm call chat notice failed: {e}")
-        else:
-            emit(
-                "call_failed", {
-                    "message": "Пользователь не в сети или не найден"})
+        caller = self.broker.resolve_recipient(request.sid)
+        incoming_payload = {"caller_socket_id": request.sid}
+        if caller:
+            incoming_payload["caller_user_id"] = caller.get("id")
+            incoming_payload["caller_username"] = caller.get("username")
+            if caller.get("avatar_url"):
+                incoming_payload["caller_avatar_url"] = caller.get(
+                    "avatar_url")
+        if offer_sdp:
+            incoming_payload["offer"] = offer_sdp
+        # Always emit incoming_call to the user's room (all their sockets)
+        emit("incoming_call", incoming_payload, room=target_user_id)
+        logger.info(
+            f"Звонок от {request.sid} к пользователю {target_user_id}")
+        if caller and caller.get("id"):
+            try:
+                self._persist_dm_call_notice(
+                    str(caller.get("id")),
+                    str(target_user_id),
+                    caller.get("username"),
+                )
+            except Exception as e:
+                logger.error(f"dm call chat notice failed: {e}")
 
     def on_e2e_key_exchange(self, payload):
         target_user_id = payload.get("target_user_id")
@@ -482,23 +476,30 @@ class SignalingService:
                 "from_user_id": sender_id,
                 "public_key": public_key,
                 "key_id": key_id,
+                "type": payload.get("type"),
             },
             room=target_user_id,
         )
 
     def on_call_answer(self, payload):
-        caller_socket_id = payload.get("caller_socket_id")
+        caller_socket_id = payload.get("caller_socket_id") or payload.get("target_socket_id")
+        answer = payload.get("answer")
         if not caller_socket_id:
             return
-        if self.broker.resolve_recipient(caller_socket_id):
-            logger.info(f"Звонок принят: {request.sid} -> {caller_socket_id}")
+        logger.info(f"Звонок принят: {request.sid} -> {caller_socket_id}")
+        # Forward the WebRTC answer SDP to the caller
+        if answer:
             emit(
-                "call_accepted",
-                {"responder_socket_id": request.sid},
+                "call_answer",
+                {"socket_id": request.sid, "answer": answer},
                 room=caller_socket_id,
             )
-        else:
-            emit("error", {"message": "Звонящий отключился"})
+        # Also emit call_accepted for backwards compatibility
+        emit(
+            "call_accepted",
+            {"responder_socket_id": request.sid},
+            room=caller_socket_id,
+        )
 
     def on_call_group(self, payload):
         group_id = payload.get("group_id")
@@ -814,66 +815,62 @@ class SignalingService:
         caller_socket_id = payload.get("caller_socket_id")
         if not caller_socket_id:
             return
-        if self.broker.resolve_recipient(caller_socket_id):
-            logger.info(
-                f"Звонок отклонен: {request.sid} -> {caller_socket_id}")
-            emit(
-                "call_rejected",
-                {"responder_socket_id": request.sid, "reason": "busy"},
-                room=caller_socket_id,
-            )
+        logger.info(
+            f"Звонок отклонен: {request.sid} -> {caller_socket_id}")
+        emit(
+            "call_rejected",
+            {"responder_socket_id": request.sid, "reason": "busy"},
+            room=caller_socket_id,
+        )
 
     def on_call_end(self, payload):
         target_socket_id = payload.get("target_socket_id")
         if not target_socket_id:
             return
-        if self.broker.resolve_recipient(target_socket_id):
-            logger.info(
-                f"Завершение звонка: {request.sid} -> {target_socket_id}")
-            emit("call_ended", {
-                 "sender_socket_id": request.sid}, room=target_socket_id)
+        logger.info(
+            f"Завершение звонка: {request.sid} -> {target_socket_id}")
+        emit("call_ended", {
+             "sender_socket_id": request.sid}, room=target_socket_id)
 
     def on_offer(self, payload):
         target_sid = payload.get("target_socket_id")
         offer_sdp = payload.get("offer")
         if not target_sid or not offer_sdp:
             return
-        if self.broker.resolve_recipient(target_sid):
-            logger.info(f"Пересылка OFFER: {request.sid} -> {target_sid}")
-            emit(
-                "offer",
-                {"offer": offer_sdp, "sender_socket_id": request.sid},
-                room=target_sid,
-            )
-        else:
-            emit("error", {"message": "Пользователь не найден или оффлайн"})
+        logger.info(f"Пересылка OFFER: {request.sid} -> {target_sid}")
+        emit(
+            "offer",
+            {"offer": offer_sdp, "sender_socket_id": request.sid},
+            room=target_sid,
+        )
 
     def on_answer(self, payload):
         target_sid = payload.get("target_socket_id")
         answer_sdp = payload.get("answer")
         if not target_sid or not answer_sdp:
             return
-        if self.broker.resolve_recipient(target_sid):
-            logger.info(f"Пересылка ANSWER: {request.sid} -> {target_sid}")
-            emit(
-                "answer",
-                {"answer": answer_sdp, "sender_socket_id": request.sid},
-                room=target_sid,
-            )
-        else:
-            emit("error", {"message": "Пользователь не найден или оффлайн"})
+        logger.info(f"Пересылка ANSWER: {request.sid} -> {target_sid}")
+        emit(
+            "answer",
+            {"answer": answer_sdp, "sender_socket_id": request.sid},
+            room=target_sid,
+        )
 
     def on_ice(self, payload):
         target_sid = payload.get("target_socket_id")
+        target_user_id = payload.get("target_user_id")
         candidate_data = payload.get("candidate")
-        if not target_sid or not candidate_data:
+        if not candidate_data:
             return
-        if self.broker.resolve_recipient(target_sid):
-            emit(
-                "ice_candidate",
-                {"candidate": candidate_data, "sender_socket_id": request.sid},
-                room=target_sid,
-            )
+        if not target_sid and target_user_id:
+            target_sid = self.broker.get_user_socket(target_user_id)
+        if not target_sid:
+            return
+        emit(
+            "ice_candidate",
+            {"candidate": candidate_data, "sender_socket_id": request.sid},
+            room=target_sid,
+        )
 
     def on_send_message(self, payload):
         target_user_id = payload.get("target_user_id")

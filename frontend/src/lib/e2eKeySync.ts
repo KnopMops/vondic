@@ -26,10 +26,47 @@ async function generateMasterKey(): Promise<CryptoKey> {
   )
 }
 
+async function deriveMasterKeyFromToken(accessToken: string): Promise<CryptoKey> {
+  const encoder = new TextEncoder()
+  const bytes = encoder.encode(`vondic-e2e-backup:${accessToken}`)
+  const hash = await crypto.subtle.digest('SHA-256', bytes)
+  return crypto.subtle.importKey(
+    'raw',
+    hash,
+    { name: 'AES-GCM', length: 256 },
+    true,
+    ['encrypt', 'decrypt']
+  )
+}
+
+async function deriveMasterKeyFromUserId(userId: string): Promise<CryptoKey> {
+  const encoder = new TextEncoder()
+  const bytes = encoder.encode(`vondic-e2e-backup-user:${userId}`)
+  const hash = await crypto.subtle.digest('SHA-256', bytes)
+  return crypto.subtle.importKey(
+    'raw',
+    hash,
+    { name: 'AES-GCM', length: 256 },
+    true,
+    ['encrypt', 'decrypt']
+  )
+}
+
 /**
  * Get or create the master key for encrypting E2E key backups.
  */
-export async function getMasterKey(): Promise<CryptoKey> {
+export async function getMasterKey(accessToken?: string, userId?: string): Promise<CryptoKey> {
+  // Preferred: deterministic key from userId for multi-device restores.
+  // All devices of the same user can derive the same key.
+  if (userId) {
+    return deriveMasterKeyFromUserId(userId)
+  }
+
+  // Fallback: deterministic key from accessToken (legacy single-device restores).
+  if (accessToken) {
+    return deriveMasterKeyFromToken(accessToken)
+  }
+
   const stored = localStorage.getItem(E2E_MASTER_KEY_STORAGE_KEY)
   
   if (stored) {
@@ -56,9 +93,11 @@ export async function getMasterKey(): Promise<CryptoKey> {
  */
 export async function encryptKeyForBackup(
   keyId: string,
-  keyData: Uint8Array
+  keyData: Uint8Array,
+  accessToken?: string,
+  userId?: string
 ): Promise<string> {
-  const masterKey = await getMasterKey()
+  const masterKey = await getMasterKey(accessToken, userId)
   
   // Create payload: keyId length (2 bytes) + keyId + keyData
   const encoder = new TextEncoder()
@@ -95,22 +134,49 @@ export async function encryptKeyForBackup(
  * Decrypt E2E key data from backup.
  */
 export async function decryptKeyFromBackup(
-  encryptedData: string
+  encryptedData: string,
+  accessToken?: string,
+  userId?: string
 ): Promise<{ keyId: string; keyData: Uint8Array } | null> {
   try {
-    const masterKey = await getMasterKey()
     const data = Uint8Array.from(atob(encryptedData), c => c.charCodeAt(0))
     
     if (data.length < 12) return null // Need at least IV
     
     const iv = data.slice(0, 12)
     const ciphertext = data.slice(12)
-    
-    const decrypted = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv },
-      masterKey,
-      ciphertext
-    )
+
+    // Try userId-derived key first (multi-device across sessions).
+    // Fallback to token-derived key, then legacy local master key.
+    let decrypted: ArrayBuffer | null = null
+    if (userId) {
+      try {
+        const masterKey = await getMasterKey(undefined, userId)
+        decrypted = await crypto.subtle.decrypt(
+          { name: 'AES-GCM', iv },
+          masterKey,
+          ciphertext
+        )
+      } catch {}
+    }
+    if (!decrypted && accessToken) {
+      try {
+        const masterKey = await getMasterKey(accessToken)
+        decrypted = await crypto.subtle.decrypt(
+          { name: 'AES-GCM', iv },
+          masterKey,
+          ciphertext
+        )
+      } catch {}
+    }
+    if (!decrypted) {
+      const legacyKey = await getMasterKey()
+      decrypted = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv },
+        legacyKey,
+        ciphertext
+      )
+    }
     
     const decryptedBytes = new Uint8Array(decrypted)
     const view = new DataView(decryptedBytes.buffer)
@@ -136,10 +202,11 @@ export async function backupKeyToServer(
   keyId: string,
   keyData: Uint8Array,
   deviceId?: string,
-  deviceName?: string
+  deviceName?: string,
+  userId?: string
 ): Promise<boolean> {
   try {
-    const encryptedKeyData = await encryptKeyForBackup(keyId, keyData)
+    const encryptedKeyData = await encryptKeyForBackup(keyId, keyData, accessToken, userId)
     
     const response = await fetch('/api/v1/e2e-keys/backup', {
       method: 'POST',
@@ -175,7 +242,8 @@ export async function backupKeyToServer(
  */
 export async function restoreKeyFromServer(
   accessToken: string,
-  keyId: string
+  keyId: string,
+  userId?: string
 ): Promise<Uint8Array | null> {
   try {
     const response = await fetch('/api/v1/e2e-keys/restore', {
@@ -205,7 +273,7 @@ export async function restoreKeyFromServer(
       return null
     }
     
-    const decrypted = await decryptKeyFromBackup(data.encrypted_key_data)
+    const decrypted = await decryptKeyFromBackup(data.encrypted_key_data, accessToken, userId)
     
     if (!decrypted || decrypted.keyId !== keyId) {
       console.error('[E2E Key Sync] Decrypted key ID mismatch')
@@ -236,7 +304,7 @@ export async function syncKeysToServer(
     for (const keyId of keyIds) {
       const keyData = keysMap.get(keyId)
       if (keyData) {
-        const encryptedKeyData = await encryptKeyForBackup(keyId, keyData)
+        const encryptedKeyData = await encryptKeyForBackup(keyId, keyData, accessToken)
         keys.push({
           key_id: keyId,
           encrypted_key_data: encryptedKeyData
@@ -281,7 +349,8 @@ export async function syncKeysToServer(
  * Restore all available E2E keys from the server.
  */
 export async function restoreAllKeysFromServer(
-  accessToken: string
+  accessToken: string,
+  userId?: string
 ): Promise<Map<string, Uint8Array>> {
   const restoredKeys = new Map<string, Uint8Array>()
   
@@ -332,7 +401,7 @@ export async function restoreAllKeysFromServer(
     
     // Decrypt all keys
     for (const keyItem of restoreData.keys) {
-      const decrypted = await decryptKeyFromBackup(keyItem.encrypted_key_data)
+      const decrypted = await decryptKeyFromBackup(keyItem.encrypted_key_data, accessToken, userId)
       
       if (decrypted && decrypted.keyId === keyItem.key_id) {
         restoredKeys.set(decrypted.keyId, decrypted.keyData)

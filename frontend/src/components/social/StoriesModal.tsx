@@ -65,9 +65,11 @@ export default function StoriesModal({
 	const [isSendingReply, setIsSendingReply] = useState(false)
 	const [zoom, setZoom] = useState(1)
 	const [pan, setPan] = useState({ x: 0, y: 0 })
+	const [showReactions, setShowReactions] = useState(false)
 	const panRef = useRef({ x: 0, y: 0, startX: 0, startY: 0, dragging: false })
 	const videoRef = useRef<HTMLVideoElement | null>(null)
 	const pausedRef = useRef(false)
+	const reactionsRef = useRef<HTMLDivElement | null>(null)
 
 	useEffect(() => {
 		setMounted(true)
@@ -125,6 +127,7 @@ export default function StoriesModal({
 		if (!isOpen) return
 		setZoom(1)
 		setPan({ x: 0, y: 0 })
+		setShowReactions(false)
 		panRef.current = { x: 0, y: 0, startX: 0, startY: 0, dragging: false }
 	}, [index, isOpen])
 
@@ -137,6 +140,21 @@ export default function StoriesModal({
 	useEffect(() => {
 		pausedRef.current = isPaused
 	}, [isPaused])
+
+	useEffect(() => {
+		const handleClickOutside = (event: MouseEvent) => {
+			if (
+				reactionsRef.current &&
+				!reactionsRef.current.contains(event.target as Node)
+			) {
+				setShowReactions(false)
+			}
+		}
+		if (showReactions) {
+			document.addEventListener('mousedown', handleClickOutside)
+		}
+		return () => document.removeEventListener('mousedown', handleClickOutside)
+	}, [showReactions])
 
 	useEffect(() => {
 		if (!isOpen || !current) return
@@ -482,51 +500,82 @@ export default function StoriesModal({
 								</div>
 							)}
 
-							<div className='flex flex-wrap items-center justify-between gap-3'>
-								<div className='flex flex-wrap gap-2'>
-									{REACTIONS.map(emoji => (
-										<button
-											key={emoji}
-											onClick={() => handleReact(emoji)}
-											className={`rounded-full px-2.5 py-1.5 text-lg transition-colors ${
-												userReaction === emoji
-													? 'bg-indigo-500/40 text-white'
-													: 'bg-black/40 text-gray-100 hover:bg-black/60'
-											}`}
-										>
-											<AppleEmoji emoji={emoji} size={22} />
-										</button>
-									))}
+							<div className='flex items-center gap-3 relative'>
+								<div ref={reactionsRef} className='relative'>
+									<button
+										onClick={() => {
+											setShowReactions(prev => {
+												const next = !prev
+												setIsPaused(next)
+												return next
+											})
+										}}
+										className={`rounded-full px-4 py-2 text-lg transition-transform hover:scale-110 ${
+											userReaction
+												? 'bg-indigo-500/40 text-white ring-2 ring-indigo-400/60'
+												: 'bg-black/40 text-gray-100 hover:bg-black/60'
+										}`}
+									>
+										<AppleEmoji emoji={userReaction || '👍'} size={26} />
+									</button>
+									<AnimatePresence>
+										{showReactions && (
+											<motion.div
+												initial={{ opacity: 0, y: 10, scale: 0.9 }}
+												animate={{ opacity: 1, y: 0, scale: 1 }}
+												exit={{ opacity: 0, y: 10, scale: 0.9 }}
+												transition={{ duration: 0.2 }}
+												className='absolute bottom-full left-0 mb-2 rounded-2xl bg-black/80 backdrop-blur-xl border border-white/10 p-3 shadow-2xl z-50'
+											>
+												<div className='grid grid-cols-7 gap-2'>
+													{REACTIONS.map(emoji => (
+														<button
+															key={emoji}
+															onClick={() => {
+																handleReact(emoji)
+																setShowReactions(false)
+																setIsPaused(false)
+															}}
+															className={`rounded-full p-2 text-lg transition-transform hover:scale-125 ${
+																userReaction === emoji
+																	? 'bg-indigo-500/40 text-white ring-2 ring-indigo-400/60'
+																	: 'bg-white/5 text-gray-100 hover:bg-white/15'
+															}`}
+														>
+															<AppleEmoji emoji={emoji} size={24} />
+														</button>
+													))}
+												</div>
+											</motion.div>
+										)}
+									</AnimatePresence>
 								</div>
 								{storyItems.length > 1 && (
-									<div className='text-xs text-gray-200'>
+									<div className='text-xs text-gray-200 shrink-0'>
 										{index + 1} / {storyItems.length}
 									</div>
 								)}
-
+							</div>
 							{!isOwner && (
-								<div className='absolute bottom-3 left-3 right-3'>
-									<div className='flex items-center gap-2 rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 px-3 py-2'>
-										<input
-											value={replyText}
-											onChange={e => setReplyText(e.target.value)}
-											onFocus={() => setIsPaused(true)}
-											onBlur={() => setIsPaused(false)}
-											placeholder='Ответить в сообщения...'
-											className='flex-1 bg-transparent outline-none text-sm text-white placeholder:text-gray-300'
-										/>
-										<button
-											type='button'
-											disabled={!replyText.trim() || isSendingReply}
-											onClick={handleSendReply}
-											className='px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold'
-										>
-											Отправить
-										</button>
-									</div>
+								<div className='flex items-center gap-2 rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 px-3 py-2'>
+									<input
+										value={replyText}
+										onChange={e => setReplyText(e.target.value)}
+										onFocus={() => setIsPaused(true)}
+										onBlur={() => setIsPaused(false)}
+										placeholder='Ответить в сообщения...'
+										className='flex-1 bg-transparent outline-none text-sm text-white placeholder:text-gray-300'
+									/>
+									<button
+										type='button'
+										disabled={!replyText.trim() || isSendingReply}
+										onClick={handleSendReply}
+										className='px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold'
+									>
+										Отправить
+									</button>
 								</div>
 							)}
-							</div>
 						</div>
 					</div>
 				</motion.div>

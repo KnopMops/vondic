@@ -199,6 +199,36 @@ def register():
     )
 
 
+@rate_limit("auth-forgot-password", limit=5, window_seconds=60)
+@auth_bp.route("/forgot-password", methods=["POST"])
+def forgot_password():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Нет данных"}), 400
+    email = (data.get("email") or "").strip()
+    if not email:
+        return jsonify({"error": "Укажите email"}), 400
+    success, message = AuthService.request_password_reset(email)
+    if not success:
+        return jsonify({"error": message}), 400
+    return jsonify({"message": message}), 200
+
+
+@auth_bp.route("/reset-password", methods=["POST"])
+def reset_password_route():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Нет данных"}), 400
+    token = data.get("token")
+    new_password = data.get("new_password") or data.get("password")
+    if not token or not new_password:
+        return jsonify({"error": "Токен и новый пароль обязательны"}), 400
+    success, message = AuthService.reset_password(token, new_password)
+    if not success:
+        return jsonify({"error": message}), 400
+    return jsonify({"message": message}), 200
+
+
 @auth_bp.route("/verify-email/<token>", methods=["GET"])
 def verify_email(token):
     success, message = AuthService.verify_email(token)
@@ -225,14 +255,18 @@ def login():
 
         if not data:
             return (jsonify({"error": "No data provided"}), 400)
-        captcha_token = (
-            data.get("smart_captcha_token")
-            or data.get("captcha_token")
-            or data.get("smart-token")
+        is_2fa_step = bool(
+            data.get("email_code") or data.get("totp_code")
         )
-        captcha_ok, captcha_error = _verify_smart_captcha(captcha_token)
-        if not captcha_ok:
-            return jsonify({"error": captcha_error}), 400
+        if not is_2fa_step:
+            captcha_token = (
+                data.get("smart_captcha_token")
+                or data.get("captcha_token")
+                or data.get("smart-token")
+            )
+            captcha_ok, captcha_error = _verify_smart_captcha(captcha_token)
+            if not captcha_ok:
+                return jsonify({"error": captcha_error}), 400
 
         email = data.get("email")
         password = data.get("password")
@@ -246,19 +280,31 @@ def login():
 
     result, error = AuthService.login_user(data)
     if error:
-        if error == "TwoFactorEmailRequired":
-            try:
-                email = (data or {}).get("email")
-                user = UserService.get_user_by_email(email) if email else None
-                if user:
-                    AuthService.send_2fa_email_code(user)
-            except Exception:
-                pass
+        if error in (
+            "TwoFactorEmailRequired",
+            "TwoFactorTotpRequired",
+            "TwoFactorTotpNotConfigured",
+        ):
+            email = (data or {}).get("email")
+            user = UserService.get_user_by_email(email) if email else None
+            method = "email"
+            if user:
+                method = (user.two_factor_method or "email").strip().lower()
+                if error == "TwoFactorEmailRequired" and method == "email":
+                    try:
+                        AuthService.send_2fa_email_code(user, for_login=True)
+                    except Exception:
+                        pass
+            if error == "TwoFactorTotpNotConfigured":
+                return jsonify(
+                    {
+                        "error": "Секретный ключ не настроен. Сгенерируйте его в настройках.",
+                        "two_factor_required": True,
+                        "method": "totp",
+                    }
+                ), 400
             return jsonify(
-                {"two_factor_required": True, "method": "email"}), 401
-        if error == "TwoFactorTotpRequired":
-            return jsonify(
-                {"two_factor_required": True, "method": "totp"}), 401
+                {"two_factor_required": True, "method": method}), 401
         status_code = (
             401
             if error
@@ -438,7 +484,10 @@ def setup_2fa(current_user):
     data = request.get_json() or {}
     method = data.get("method")
     enable = bool(data.get("enable", True))
-    user, error = AuthService.setup_2fa(current_user, method, enable)
+    regenerate_secret = bool(data.get("regenerate_secret", False))
+    user, error = AuthService.setup_2fa(
+        current_user, method, enable, regenerate_secret=regenerate_secret
+    )
     if error:
         return jsonify({"error": error}), 400
     return jsonify({"user": user_schema.dump(user)}), 200

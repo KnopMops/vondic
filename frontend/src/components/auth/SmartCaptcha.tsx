@@ -1,7 +1,6 @@
 'use client'
 
-import Script from 'next/script'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 
 type Props = {
 	onTokenChange: (token: string) => void
@@ -9,47 +8,117 @@ type Props = {
 
 declare global {
 	interface Window {
-		[key: string]: any
+		smartCaptcha?: {
+			render: (
+				container: HTMLElement,
+				options: {
+					sitekey: string
+					hl?: string
+					callback?: (token: string) => void
+					'expired-callback'?: () => void
+				},
+			) => string
+			destroy?: (widgetId: string) => void
+		}
 	}
 }
 
 export default function SmartCaptcha({ onTokenChange }: Props) {
 	const siteKey = process.env.NEXT_PUBLIC_YANDEX_SMARTCAPTCHA_SITE_KEY || ''
-	const callbackName = useMemo(
-		() => `onSmartCaptchaSuccess_${Math.random().toString(36).slice(2, 10)}`,
-		[],
-	)
-	const expiredName = useMemo(
-		() => `onSmartCaptchaExpired_${Math.random().toString(36).slice(2, 10)}`,
-		[],
-	)
+	const containerRef = useRef<HTMLDivElement>(null)
+	const widgetIdRef = useRef<string | null>(null)
+	const [scriptLoaded, setScriptLoaded] = useState(false)
+	const instanceId = useId().replace(/:/g, '')
+
+	// Load script dynamically
+	useEffect(() => {
+		if (!siteKey) return
+		if (typeof window === 'undefined') return
+
+		if (window.smartCaptcha) {
+			setScriptLoaded(true)
+			return
+		}
+
+		const existing = document.querySelector('script[data-smartcaptcha]') as HTMLScriptElement | null
+		if (existing) {
+			const onLoad = () => setScriptLoaded(true)
+			if (window.smartCaptcha) {
+				onLoad()
+			} else {
+				existing.addEventListener('load', onLoad)
+				return () => existing.removeEventListener('load', onLoad)
+			}
+			return
+		}
+
+		const script = document.createElement('script')
+		script.src = 'https://smartcaptcha.yandexcloud.net/captcha.js'
+		script.async = true
+		script.defer = true
+		script.dataset.smartcaptcha = '1'
+		script.onload = () => setScriptLoaded(true)
+		script.onerror = () => console.error('SmartCaptcha script failed to load')
+		document.body.appendChild(script)
+	}, [siteKey])
 
 	useEffect(() => {
-		window[callbackName] = (token: string) => onTokenChange(token || '')
-		window[expiredName] = () => onTokenChange('')
-		return () => {
-			try {
-				delete window[callbackName]
-				delete window[expiredName]
-			} catch {}
-		}
-	}, [callbackName, expiredName, onTokenChange])
+		if (!siteKey || !scriptLoaded || !containerRef.current) return
 
-	if (!siteKey) return null
+		const container = containerRef.current
+		container.innerHTML = ''
+
+		const renderWidget = () => {
+			if (!window.smartCaptcha?.render || !containerRef.current) return
+			if (widgetIdRef.current) {
+				try {
+					window.smartCaptcha.destroy?.(widgetIdRef.current)
+				} catch {}
+				widgetIdRef.current = null
+			}
+			widgetIdRef.current = window.smartCaptcha.render(containerRef.current, {
+				sitekey: siteKey,
+				hl: 'ru',
+				callback: (token: string) => onTokenChange(token || ''),
+				'expired-callback': () => onTokenChange(''),
+			})
+		}
+
+		if (window.smartCaptcha?.render) {
+			renderWidget()
+		} else {
+			const interval = window.setInterval(() => {
+				if (window.smartCaptcha?.render) {
+					window.clearInterval(interval)
+					renderWidget()
+				}
+			}, 50)
+			return () => window.clearInterval(interval)
+		}
+
+		return () => {
+			if (widgetIdRef.current && window.smartCaptcha?.destroy) {
+				try {
+					window.smartCaptcha.destroy(widgetIdRef.current)
+				} catch {}
+				widgetIdRef.current = null
+			}
+			onTokenChange('')
+		}
+	}, [siteKey, scriptLoaded, onTokenChange, instanceId])
+
+	if (!siteKey) {
+		return (
+			<div className='rounded-xl border border-yellow-500/40 bg-yellow-500/10 p-3 text-xs text-yellow-200'>
+				Капча не настроена. Добавьте NEXT_PUBLIC_YANDEX_SMARTCAPTCHA_SITE_KEY в
+				переменные окружения и перезапустите приложение.
+			</div>
+		)
+	}
 
 	return (
 		<div className='rounded-xl border border-white/10 bg-white/5 p-3'>
-			<Script
-				src='https://smartcaptcha.yandexcloud.net/captcha.js'
-				strategy='afterInteractive'
-			/>
-			<div
-				className='smart-captcha'
-				data-sitekey={siteKey}
-				data-hl='ru'
-				data-callback={callbackName}
-				data-expired-callback={expiredName}
-			/>
+			<div ref={containerRef} id={`smart-captcha-${instanceId}`} />
 		</div>
 	)
 }

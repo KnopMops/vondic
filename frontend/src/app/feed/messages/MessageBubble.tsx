@@ -28,6 +28,8 @@ interface Message {
 	reply_to?: string
 	attachments?: Attachment[]
 	is_deleted?: boolean
+	sender_username?: string
+	sender_avatar?: string | null
 	forwarded_from?: {
 		sender_id: string
 		sender_name: string
@@ -224,13 +226,13 @@ const MessageBubble = memo(
 					isMenuOpen || isReactionsOpen ? 'relative z-40' : ''
 				}`}
 			>
-				{!msg.isOwn && sender && (
+				{!msg.isOwn && (msg.group_id || msg.channel_id) && (
 					<div className='flex items-end mr-2'>
 						<img
-							src={getAvatarUrl(sender.avatar_url)}
-							alt={sender.username}
+							src={getAvatarUrl(sender?.avatar_url || msg.sender_avatar)}
+							alt={sender?.username || msg.sender_username || 'User'}
 							className='w-8 h-8 rounded-full bg-gray-800 object-cover'
-							title={sender.username}
+							title={sender?.username || msg.sender_username || 'User'}
 						/>
 					</div>
 				)}
@@ -661,9 +663,9 @@ const MessageBubble = memo(
 								: 'justify-start text-gray-400'
 						}`}
 					>
-						{!msg.isOwn && sender && (
+						{!msg.isOwn && (msg.group_id || msg.channel_id) && (
 							<span className='font-bold text-gray-300 mr-2'>
-								{sender.username}
+								{sender?.username || msg.sender_username || 'User'}
 							</span>
 						)}
 						{formatMskTime((msg as any).timestamp || (msg as any).created_at || '')}

@@ -362,13 +362,14 @@ def create_app():
             return jsonify({"error": "Нет данных"}), 400
 
         group_id = data.get("group_id")
+        channel_id = data.get("channel_id")
         target_id = data.get("target_id")
         payload = data.get("payload")
 
         logger.info(
-            f"broadcast_message: target_id={target_id}, group_id={group_id}, payload_keys={
-                list(
-                    payload.keys()) if payload else 'None'}")
+            f"broadcast_message: target_id={target_id}, group_id={group_id}, "
+            f"channel_id={channel_id}, payload_keys={
+                list(payload.keys()) if payload else 'None'}")
 
         if not payload:
             logger.error("broadcast_message: Отсутствует payload")
@@ -386,6 +387,16 @@ def create_app():
                 else:
                     logger.warning(
                         f"broadcast_message: Сокет не найден для участника {pid}")
+        elif channel_id:
+            participants = user_repo.get_channel_participants(channel_id)
+            if not participants:
+                owner_id = user_repo.get_channel_owner(channel_id)
+                if owner_id:
+                    participants = [owner_id]
+            for pid in participants:
+                pid_socket = broker.get_user_socket(pid)
+                if pid_socket:
+                    socketio.emit("receive_message", payload, room=pid_socket)
         elif target_id:
             target_socket = broker.get_user_socket(target_id)
             if target_socket:
@@ -397,9 +408,9 @@ def create_app():
                     f"broadcast_message: Сокет не найден для {target_id}")
         else:
             logger.error(
-                "broadcast_message: Отсутствует group_id или target_id")
+                "broadcast_message: Отсутствует group_id, channel_id или target_id")
             return jsonify(
-                {"error": "Отсутствует group_id или target_id"}), 400
+                {"error": "Отсутствует group_id, channel_id или target_id"}), 400
 
         return jsonify({"status": "success"}), 200
 

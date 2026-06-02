@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import TEXT, TIMESTAMP
+from sqlalchemy import TEXT, TIMESTAMP, CheckConstraint
 
 from app.core.extensions import db
 
@@ -20,13 +20,19 @@ class Channel(db.Model):
     id = db.Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
     name = db.Column(TEXT, nullable=False)
     description = db.Column(TEXT, nullable=True)
+    avatar_url = db.Column(TEXT, nullable=True)
     invite_code = db.Column(
         TEXT, unique=True, default=lambda: str(uuid.uuid4())[:8])
     owner_id = db.Column(TEXT, db.ForeignKey("users.id"), nullable=False)
+    type = db.Column(TEXT, nullable=False, default="text")
 
     created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
     updated_at = db.Column(
         TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        CheckConstraint("type IN ('text','broadcast')", name="ck_channel_type"),
+    )
 
     owner = db.relationship("User", foreign_keys=[
                             owner_id], backref="owned_channels")
@@ -50,8 +56,10 @@ class Channel(db.Model):
             "id": self.id,
             "name": self.name,
             "description": self.description,
+            "avatar_url": self.avatar_url,
             "invite_code": self.invite_code,
             "owner_id": self.owner_id,
+            "type": self.type,
             "community_id": self.community_channel.community_id if self.community_channel else None,
             "participants_count": len(
                 self.participants),

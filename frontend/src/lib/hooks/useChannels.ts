@@ -142,6 +142,45 @@ export const useChannels = () => {
 		[token],
 	)
 
+	const searchChannels = useCallback(
+		async (query: string) => {
+			if (!token) return []
+			try {
+				const res = await fetch('/api/v1/channels/search', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ query, access_token: token }),
+				})
+				if (!res.ok) throw new Error('Failed to search channels')
+				const data = await res.json()
+				return data.channels || []
+			} catch (err: any) {
+				console.error(err)
+				return []
+			}
+		},
+		[token],
+	)
+
+	const updateChannel = useCallback(
+		async (id: string, data: { name?: string; description?: string; avatar_url?: string }) => {
+			if (!token) throw new Error('Unauthorized')
+			const res = await fetch(`/api/v1/channels/${id}`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ ...data, access_token: token }),
+			})
+			if (!res.ok) {
+				const err = await res.json().catch(() => ({}))
+				throw new Error(err.error || 'Failed to update channel')
+			}
+			const updated = await res.json()
+			setChannels(prev => prev.map(ch => (ch.id === id ? updated : ch)))
+			return updated
+		},
+		[token],
+	)
+
 	return {
 		channels,
 		isLoading,
@@ -150,5 +189,7 @@ export const useChannels = () => {
 		createChannel,
 		joinChannel,
 		getChannelInfo,
+		searchChannels,
+		updateChannel,
 	}
 }

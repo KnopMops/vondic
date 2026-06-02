@@ -68,15 +68,19 @@ def participants(current_user, group_id):
 
     data = request.get_json() or {}
     target_user_id = data.get("user_id")
+    target_username = data.get("username")
 
-    if not target_user_id:
-        return jsonify({"error": "user_id is required"}), 400
+    if not target_user_id and not target_username:
+        return jsonify({"error": "user_id or username is required"}), 400
 
     group, error = GroupService.add_participant(
-        group_id, target_user_id, current_user.id
+        group_id,
+        target_user_id=target_user_id,
+        requester_id=current_user.id,
+        target_username=target_username,
     )
     if error:
-        status_code = 403 if "Only owner" in error else 400
+        status_code = 403 if "Only participants" in error else 400
         return jsonify({"error": error}), status_code
 
     return jsonify(group_schema.dump(group)), 200
@@ -193,3 +197,51 @@ def delete_group_history(current_user):
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
+
+
+@groups_bp.route("/<group_id>", methods=["PUT"])
+@token_required
+def update_group(current_user, group_id):
+    group = GroupService.get_group_by_id(group_id)
+    if not group:
+        return jsonify({"error": "Group not found"}), 404
+    if not GroupService.is_owner(group_id, current_user.id):
+        return jsonify({"error": "Only owner can update group"}), 403
+
+    data = request.get_json() or {}
+    group, error = GroupService.update_group(group_id, data)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify(group_schema.dump(group)), 200
+
+
+@groups_bp.route("/leave", methods=["POST"])
+@token_required
+def leave_group(current_user):
+    data = request.get_json() or {}
+    group_id = data.get("group_id")
+    if not group_id:
+        return jsonify({"error": "group_id is required"}), 400
+
+    group = GroupService.get_group_by_id(group_id)
+    if not group:
+        return jsonify({"error": "Group not found"}), 404
+    if current_user not in group.participants:
+        return jsonify({"error": "You are not a participant"}), 403
+
+    group, error = GroupService.leave_group(group_id, current_user.id)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({"success": True}), 200
+
+
+@groups_bp.route("/search", methods=["POST"])
+@token_required
+def search_groups(current_user):
+    data = request.get_json() or {}
+    query = data.get("query", "").strip().lower()
+    if not query:
+        return jsonify({"groups": []}), 200
+
+    results = GroupService.search_groups(query, current_user.id)
+    return jsonify({"groups": groups_schema.dump(results)}), 200

@@ -8,7 +8,7 @@ import {
 	getDeviceInfo,
 } from '@/lib/e2eKeySync'
 
-const hasCryptoSubtle =
+const hasCryptoSubtle = () =>
 	typeof crypto !== 'undefined' && typeof crypto.subtle !== 'undefined'
 const HISTORY_PAGE_SIZE = 30
 
@@ -359,7 +359,11 @@ export const useChat = (
 	groupId?: string | undefined,
 ) => {
 	const { user } = useAppSelector(state => state.auth)
-	const accessToken = user?.access_token
+	const accessToken =
+		user?.access_token ||
+		(typeof window !== 'undefined'
+			? localStorage.getItem('access_token') || undefined
+			: undefined)
 	const [messages, setMessages] = useState<Message[]>([])
 	const [deletingMessageIds, setDeletingMessageIds] = useState<Set<string>>(
 		new Set(),
@@ -413,7 +417,7 @@ export const useChat = (
 		// 3) Try to restore from server backup
 		if (accessToken && e2eKeyId) {
 			console.log('[E2E] No local key found, trying to restore from server:', e2eKeyId)
-			const restoredKey = await restoreKeyFromServer(accessToken, e2eKeyId)
+			const restoredKey = await restoreKeyFromServer(accessToken, e2eKeyId, currentUserId)
 			if (restoredKey) {
 				console.log('[E2E] Successfully restored key from server:', e2eKeyId)
 				e2eKeysRef.current.set(e2eKeyId, restoredKey)
@@ -435,7 +439,8 @@ export const useChat = (
 				keyId,
 				keyBytes,
 				deviceId,
-				deviceName
+				deviceName,
+				currentUserId
 			)
 			if (success) {
 				console.log('[E2E] Key backed up to server:', keyId)
@@ -463,7 +468,7 @@ export const useChat = (
 			})
 			return
 		}
-		if (!hasCryptoSubtle) {
+		if (!hasCryptoSubtle()) {
 			console.log('[E2E] ensureKeyExchange skipping - no crypto.subtle')
 			return
 		}
@@ -493,6 +498,41 @@ export const useChat = (
 		})
 	}, [socket, targetUserId, currentUserId, e2eKeyId, loadStoredKey])
 
+	const resolveMessageKeyCandidates = useCallback(
+		(msg: any): string[] => {
+			const candidates = new Set<string>()
+			if (e2eKeyId) candidates.add(e2eKeyId)
+
+			const senderId = msg?.sender_id ? String(msg.sender_id) : null
+			const targetId = msg?.target_id
+				? String(msg.target_id)
+				: msg?.target_user_id
+					? String(msg.target_user_id)
+					: null
+			const localCurrentId = currentUserId ? String(currentUserId) : null
+			const localTargetId = targetUserId ? String(targetUserId) : null
+
+			if (senderId && targetId) {
+				candidates.add([senderId, targetId].sort().join(':'))
+				candidates.add(`${senderId}:${targetId}`)
+				candidates.add(`${targetId}:${senderId}`)
+			}
+			if (senderId && localCurrentId) {
+				candidates.add([senderId, localCurrentId].sort().join(':'))
+				candidates.add(`${senderId}:${localCurrentId}`)
+				candidates.add(`${localCurrentId}:${senderId}`)
+			}
+			if (localCurrentId && localTargetId) {
+				candidates.add([localCurrentId, localTargetId].sort().join(':'))
+				candidates.add(`${localCurrentId}:${localTargetId}`)
+				candidates.add(`${localTargetId}:${localCurrentId}`)
+			}
+
+			return Array.from(candidates)
+		},
+		[e2eKeyId, currentUserId, targetUserId],
+	)
+
 	const decryptMessage = useCallback(
 		(msg: any) => {
 			const next = { ...msg }
@@ -503,41 +543,20 @@ export const useChat = (
 				typeof next.content === 'string' &&
 				next.content.startsWith('e2e:')
 			) {
-				// Get current e2eKeyId from ref or state
-				const currentE2eKeyId =
-					e2eKeyId ||
-					(targetUserId && currentUserId
-						? [currentUserId, targetUserId].sort().join(':')
-						: null)
-
-				if (currentE2eKeyId) {
-					const key = e2eKeysRef.current.get(currentE2eKeyId)
-					if (key) {
-						const decrypted = mtDecrypt(next.content, key)
-						if (decrypted !== null) {
-							next.content = decrypted
-						} else {
-							// If decryption fails, strip e2e: prefix and show base64-decoded
-							try {
-								next.content = decodeURIComponent(
-									escape(atob(next.content.slice(4))),
-								)
-							} catch {
-								next.content = next.content.slice(4)
-							}
-						}
-					} else {
-						// No key yet - keep encrypted, will decrypt later
+				const candidates = resolveMessageKeyCandidates(next)
+				let decryptedContent = false
+				for (const candidateKeyId of candidates) {
+					const key = e2eKeysRef.current.get(candidateKeyId)
+					if (!key) continue
+					const decrypted = mtDecrypt(next.content, key)
+					if (decrypted !== null) {
+						next.content = decrypted
+						decryptedContent = true
+						break
 					}
-				} else {
-					// No e2eKeyId - strip prefix as fallback
-					try {
-						next.content = decodeURIComponent(
-							escape(atob(next.content.slice(4))),
-						)
-					} catch {
-						next.content = next.content.slice(4)
-					}
+				}
+				if (!decryptedContent) {
+					// Keep encrypted - will decrypt later when key arrives
 				}
 			}
 
@@ -546,35 +565,29 @@ export const useChat = (
 				typeof next.attachments === 'string' &&
 				next.attachments.startsWith('e2e:')
 			) {
-				const currentE2eKeyId =
-					e2eKeyId ||
-					(targetUserId && currentUserId
-						? [currentUserId, targetUserId].sort().join(':')
-						: null)
-				if (currentE2eKeyId) {
-					const key = e2eKeysRef.current.get(currentE2eKeyId)
-					if (key) {
-						const decrypted = mtDecrypt(next.attachments, key)
-						if (decrypted !== null) {
-							try {
-								next.attachments = JSON.parse(decrypted)
-							} catch {
-								next.attachments = undefined
-							}
-						} else {
-							next.attachments = undefined
-						}
-					} else {
-						next.attachments = undefined
+				const candidates = resolveMessageKeyCandidates(next)
+				let decryptedAttachments = false
+				for (const candidateKeyId of candidates) {
+					const key = e2eKeysRef.current.get(candidateKeyId)
+					if (!key) continue
+					const decrypted = mtDecrypt(next.attachments, key)
+					if (decrypted === null) continue
+					try {
+						next.attachments = JSON.parse(decrypted)
+						decryptedAttachments = true
+						break
+					} catch {
+						continue
 					}
-				} else {
+				}
+				if (!decryptedAttachments) {
 					next.attachments = undefined
 				}
 			}
 
 			return next
 		},
-		[e2eKeyId, targetUserId, currentUserId],
+		[resolveMessageKeyCandidates],
 	)
 
 	useEffect(() => {
@@ -587,7 +600,7 @@ export const useChat = (
 			})
 			return
 		}
-		if (!hasCryptoSubtle) {
+		if (!hasCryptoSubtle()) {
 			console.log('[E2E] Skipping - insecure context (no crypto.subtle)')
 			return
 		}

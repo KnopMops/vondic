@@ -43,6 +43,7 @@ def _tag_for_rule(rule: str) -> str:
         "gifts": "Gifts",
         "communities": "Communities",
         "dm": "Direct Messages",
+        "chat": "Chat Embed API",
         "storis": "Stories",
         "support": "Support",
         "health": "Health",
@@ -179,6 +180,7 @@ def create_app(config_class=Config):
     from app.api.public.v1.account import public_account_bp
     from app.api.public.v1.bots import public_bots_bp
     from app.api.public.v1.comments import public_comments_bp
+    from app.api.public.v1.chat import public_chat_bp
     from app.api.public.v1.messages import public_messages_bp
     from app.api.public.v1.posts import public_posts_bp
     from app.api.public.v1.users import public_users_bp
@@ -209,6 +211,7 @@ def create_app(config_class=Config):
     app.register_blueprint(public_account_bp)
     app.register_blueprint(public_bots_bp)
     app.register_blueprint(public_comments_bp)
+    app.register_blueprint(public_chat_bp)
     app.register_blueprint(public_messages_bp)
     app.register_blueprint(public_posts_bp)
     app.register_blueprint(public_users_bp)

@@ -1,7 +1,7 @@
 import { getAccessToken, getRefreshToken } from '@/lib/auth.utils'
 import { NextRequest, NextResponse } from 'next/server'
 
-const PUBLIC_ROUTES = ['/login', '/register', '/verify']
+const PUBLIC_ROUTES = ['/login', '/register', '/verify', '/forgot-password', '/reset-password']
 const ROOT_ROUTE = '/'
 const FEED_ROUTE = '/feed'
 
@@ -35,7 +35,7 @@ export default async function middleware(req: NextRequest) {
 		return NextResponse.redirect(url)
 	}
 
-	if (isPublicRoute && pathname !== '/verify') {
+	if (isPublicRoute && pathname !== '/verify' && pathname !== '/login') {
 		const url = req.nextUrl.clone()
 		url.pathname = FEED_ROUTE
 		return NextResponse.redirect(url)
