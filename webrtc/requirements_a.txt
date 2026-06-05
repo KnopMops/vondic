@@ -1,4 +1,4 @@
-aiogram
+ай aiogram
 bcrypt
 python-dotenv
 flask

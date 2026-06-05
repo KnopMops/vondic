@@ -204,21 +204,42 @@ def send_bot_message(bot_id):
         chat_id = data.get("chat_id")
         text = data.get("text")
         reply_markup = data.get("reply_markup")
+        game = data.get("game")
         if not chat_id:
             logger.info("bot_send_missing_chat_id bot_id=%s", bot_id)
             return jsonify({"error": "chat_id is required"}), 400
-        if not text:
+        if not text and not game:
             logger.info("bot_send_missing_text bot_id=%s", bot_id)
-            return jsonify({"error": "text is required"}), 400
+            return jsonify({"error": "text or game is required"}), 400
+        if game:
+            from app.services.bot_game_service import BotGameService
+
+            game_id = game.get("id") or game.get("game_id")
+            row = (
+                BotGameService.get_game(bot_id, str(game_id))
+                if game_id
+                else None
+            )
+            if not row or not row.is_published or row.scan_status != "approved":
+                return jsonify({"error": "Игра недоступна"}), 400
+            game = {
+                "id": row.id,
+                "title": row.title,
+                "embed_url": f"/api/v1/bots/{bot_id}/games/{row.id}/embed",
+                "download_url": f"/api/v1/bots/{bot_id}/games/{row.id}/download",
+            }
         with OUTBOX_LOCK:
             OUTBOX_COUNTERS[bot_id] += 1
             message_id = OUTBOX_COUNTERS[bot_id]
             message_data = {
                 "message_id": str(message_id),
                 "chat_id": str(chat_id),
-                "text": text,
+                "text": text or (game.get("title") if game else ""),
                 "date": int(time.time()),
             }
+            if game:
+                message_data["game"] = game
+                message_data["type"] = "game"
             if reply_markup:
                 message_data["reply_markup"] = reply_markup
             OUTBOX_QUEUES[bot_id].append(message_data)
@@ -257,26 +278,33 @@ def handle_bot_callback(bot_id):
             from app.api.public.v1.bots import OUTBOX_LOCK, OUTBOX_QUEUES, OUTBOX_COUNTERS, QUEUE_LOCK, UPDATE_QUEUES, UPDATE_COUNTERS
             import time
 
-            with OUTBOX_LOCK:
-                OUTBOX_COUNTERS[bot_id] += 1
-                callback_message_id = OUTBOX_COUNTERS[bot_id]
+            ui_only = (
+                str(callback_data).startswith("ui:")
+                or str(callback_data).startswith("games:")
+                or str(callback_data).startswith("game:")
+            )
 
-                response_text = f"Вы нажали: {callback_data}"
-                if callback_data == "register":
-                    response_text = "✅ Переход к регистрации..."
-                elif callback_data == "restore":
-                    response_text = "🔄 Восстановление ключа..."
-                elif callback_data == "buy_premium_tg":
-                    response_text = "💎 Оформление Premium..."
-                elif callback_data == "buy_coins":
-                    response_text = "💰 Покупка монет..."
+            if not ui_only:
+                with OUTBOX_LOCK:
+                    OUTBOX_COUNTERS[bot_id] += 1
+                    callback_message_id = OUTBOX_COUNTERS[bot_id]
 
-                OUTBOX_QUEUES[bot_id].append({
-                    "message_id": str(callback_message_id),
-                    "chat_id": str(chat_id),
-                    "text": response_text,
-                    "date": int(time.time()),
-                })
+                    response_text = f"Вы нажали: {callback_data}"
+                    if callback_data == "register":
+                        response_text = "✅ Переход к регистрации..."
+                    elif callback_data == "restore":
+                        response_text = "🔄 Восстановление ключа..."
+                    elif callback_data == "buy_premium_tg":
+                        response_text = "💎 Оформление Premium..."
+                    elif callback_data == "buy_coins":
+                        response_text = "💰 Покупка монет..."
+
+                    OUTBOX_QUEUES[bot_id].append({
+                        "message_id": str(callback_message_id),
+                        "chat_id": str(chat_id),
+                        "text": response_text,
+                        "date": int(time.time()),
+                    })
 
             with QUEUE_LOCK:
                 UPDATE_COUNTERS[bot_id] += 1
@@ -332,4 +360,35 @@ def answer_callback_query(bot_id):
             "bot_answer_callback_error bot_id=%s error=%s",
             bot_id,
             e)
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@public_bots_bp.route("/<bot_id>/games", methods=["GET"])
+def list_bot_games_public(bot_id):
+    """Список опубликованных игр бота (Bot token)."""
+    try:
+        _, error_response = _verify_bot_token(bot_id)
+        if error_response:
+            return error_response
+        from app.services.bot_game_service import BotGameService
+
+        query = request.args.get("q") or request.args.get("query")
+        games = BotGameService.list_games(
+            bot_id, query=query, published_only=True
+        )
+        return jsonify(
+            {
+                "games": [
+                    {
+                        "id": g.id,
+                        "title": g.title,
+                        "description": g.description,
+                    }
+                    for g in games
+                ],
+                "bot_id": bot_id,
+            }
+        ), 200
+    except Exception as e:
+        logger.exception("bot_list_games_error bot_id=%s error=%s", bot_id, e)
         return jsonify({"error": "Internal server error"}), 500

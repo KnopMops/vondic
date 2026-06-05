@@ -1,5 +1,6 @@
 'use client'
 
+import PremiumModal from '@/components/premium/PremiumModal'
 import { useAuth } from '@/lib/AuthContext'
 import { useNotificationStore } from '@/lib/stores/notificationStore'
 import { User } from '@/lib/types'
@@ -15,6 +16,7 @@ export default function RightPanel() {
 	const items = notifications.slice(0, 3)
 	const [friends, setFriends] = useState<User[]>([])
 	const [isLoading, setIsLoading] = useState(false)
+	const [premiumOpen, setPremiumOpen] = useState(false)
 
 	useEffect(() => {
 		const fetchFriends = async () => {
@@ -66,7 +68,7 @@ export default function RightPanel() {
 									<div className='text-sm font-medium text-white truncate'>
 										{friend.username}
 									</div>
-									{friend.privacy_settings?.show_email !== false && (
+									{friend.privacy_settings?.show_email === true && friend.email && (
 										<div className='text-xs text-gray-500 truncate'>
 											{friend.email}
 										</div>
@@ -111,13 +113,18 @@ export default function RightPanel() {
 							стикерам.
 						</p>
 
-						<button className='w-full py-3 px-4 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 hover:border-white/20 text-white text-sm font-semibold transition-all duration-300 flex items-center justify-center gap-2 group/btn'>
+						<button
+							type='button'
+							onClick={() => setPremiumOpen(true)}
+							className='w-full py-3 px-4 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 hover:border-white/20 text-white text-sm font-semibold transition-all duration-300 flex items-center justify-center gap-2 group/btn'
+						>
 							<Sparkles className='w-4 h-4 text-yellow-400 group-hover/btn:rotate-12 transition-transform' />
 							Подробнее
 						</button>
 					</div>
 				</motion.div>
 			)}
+			<PremiumModal isOpen={premiumOpen} onClose={() => setPremiumOpen(false)} />
 		</aside>
 	)
 }

@@ -1,4 +1,11 @@
-from botiksdk.bot import Bot, InlineKeyboardBuilder, InlineKeyboardButton
+from botiksdk.bot import (
+    Bot,
+    InlineKeyboardBuilder,
+    InlineKeyboardButton,
+    play_games_button,
+    upload_game_button,
+    game_play_button,
+)
 from botiksdk.bot_types import Chat, CallbackQuery, Message, Update, User
 from botiksdk.client import PublicAPIClient
 from botiksdk.dispatcher import Dispatcher, FSMContext
@@ -23,5 +30,8 @@ __all__ = [
     "CallbackQuery",
     "InlineKeyboardBuilder",
     "InlineKeyboardButton",
+    "play_games_button",
+    "upload_game_button",
+    "game_play_button",
     "FSMContext",
 ]

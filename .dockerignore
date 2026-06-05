@@ -1,0 +1,7 @@
+.venv/
+mobile/
+desktop/
+
+# Почта: данные и DKIM-ключи (права 600/711 ломают docker build context)
+mail/data/
+mail/config/opendkim/

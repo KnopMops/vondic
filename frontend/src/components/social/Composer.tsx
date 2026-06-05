@@ -1,8 +1,9 @@
 'use client'
 
 import { useAppSelector } from '@/lib/hooks'
+import { useFileDrop } from '@/lib/hooks/useFileDrop'
 import { Attachment } from '@/lib/types'
-import { useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 
 type Props = {
 	onCreate: (text: string, attachments?: Attachment[], isBlog?: boolean) => void
@@ -113,13 +114,34 @@ export default function Composer({ onCreate, mode = 'feed' }: Props) {
 		e.target.value = ''
 	}
 
+	const addFiles = useCallback((list: File[]) => {
+		if (list.length === 0) return
+		setFiles(prev => [...prev, ...list])
+	}, [])
+
+	const { dragOver, dropHandlers } = useFileDrop(addFiles)
+
 	const removeFile = (index: number) => {
 		setFiles(prev => prev.filter((_, i) => i !== index))
 		setText('')
 	}
 
 	return (
-		<div className='rounded-xl bg-gray-900/40 backdrop-blur-md border border-gray-800/50 p-4 shadow-sm'>
+		<div
+			className={`relative rounded-xl bg-gray-900/40 backdrop-blur-md border p-4 shadow-sm transition-all ${
+				dragOver
+					? 'border-indigo-500/60 ring-2 ring-indigo-500/30 bg-indigo-950/30'
+					: 'border-gray-800/50'
+			}`}
+			{...dropHandlers}
+		>
+			{dragOver && (
+				<div className='pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-indigo-500/10 backdrop-blur-[1px]'>
+					<p className='text-sm font-medium text-indigo-300'>
+						Отпустите файлы для прикрепления
+					</p>
+				</div>
+			)}
 			<input
 				ref={fileInputRef}
 				type='file'

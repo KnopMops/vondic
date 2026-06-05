@@ -4,9 +4,9 @@ import Sidebar from '@/components/social/Sidebar'
 import { useAuth } from '@/lib/AuthContext'
 import { fetchUser } from '@/lib/features/authSlice'
 import { useAppDispatch } from '@/lib/hooks'
-import { FiCheckCircle as CheckCircle } from 'react-icons/fi'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import { FiCheckCircle as CheckCircle } from 'react-icons/fi'
 
 export default function ShopSuccessPage() {
 	const { user } = useAuth()

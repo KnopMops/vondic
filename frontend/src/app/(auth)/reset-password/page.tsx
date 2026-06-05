@@ -1,6 +1,7 @@
 'use client'
 
 import BrandLogo from '@/components/social/BrandLogo'
+import PasswordInput from '@/components/ui/PasswordInput'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
@@ -106,14 +107,14 @@ export default function ResetPasswordPage() {
 								Новый пароль
 							</label>
 							<div className='relative'>
-								<KeyRound className='absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500' />
-								<input
+								<KeyRound className='absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 z-10 pointer-events-none' />
+								<PasswordInput
 									id='password'
 									name='password'
-									type='password'
 									autoComplete='new-password'
 									required
-									className='block w-full rounded-xl border border-white/10 bg-white/5 py-3 pl-10 pr-4 text-white placeholder:text-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none'
+									wrapperClassName='w-full'
+									className='block w-full rounded-xl border border-white/10 bg-white/5 py-3 pl-10 pr-11 text-white placeholder:text-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none'
 									placeholder='Новый пароль'
 									value={password}
 									onChange={e => setPassword(e.target.value)}
@@ -124,12 +125,12 @@ export default function ResetPasswordPage() {
 							<label htmlFor='confirm-password' className='sr-only'>
 								Подтвердите пароль
 							</label>
-							<input
+							<PasswordInput
 								id='confirm-password'
 								name='confirm-password'
-								type='password'
 								autoComplete='new-password'
 								required
+								wrapperClassName='w-full'
 								className='block w-full rounded-xl border border-white/10 bg-white/5 py-3 px-4 text-white placeholder:text-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none'
 								placeholder='Подтвердите пароль'
 								value={confirmPassword}

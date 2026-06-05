@@ -38,6 +38,8 @@ type Props = {
 	isBlog?: boolean
 	onDelete?: (id: string | number, reason?: string) => void
 	onUpdate?: (id: string | number, newText?: string, isBlog?: boolean) => void
+	/** Владелец сообщества может удалять чужие записи на стене */
+	canModerate?: boolean
 }
 
 export default function Post({
@@ -58,6 +60,7 @@ export default function Post({
 	isBlog = false,
 	onDelete,
 	onUpdate,
+	canModerate = false,
 }: Props) {
 	const [isMenuOpen, setIsMenuOpen] = useState(false)
 	const [isEditing, setIsEditing] = useState(false)
@@ -123,8 +126,8 @@ export default function Post({
 
 	const isOwner = String(currentUserId) === String(author_id)
 	const isAdmin = userRole === 'Admin'
-	const canDelete = isOwner || isAdmin
-	const canEdit = isOwner
+	const canDelete = Boolean(onDelete) && (isOwner || isAdmin || canModerate)
+	const canEdit = isOwner && Boolean(onUpdate)
 	const isBlogPost = !!isBlog
 
 	const handleUpdate = () => {
@@ -135,7 +138,6 @@ export default function Post({
 	}
 
 	const handleLike = async () => {
-		if (isBlogPost) return
 		if (isLiking) return
 		setIsLiking(true)
 
@@ -167,7 +169,14 @@ export default function Post({
 	}
 
 	const handleDeleteClick = () => {
-		if (isOwner) {
+		if (isOwner || canModerate) {
+			if (
+				!isOwner &&
+				canModerate &&
+				!window.confirm('Удалить эту запись со стены сообщества?')
+			) {
+				return
+			}
 			if (onDelete) onDelete(id)
 			setIsMenuOpen(false)
 		} else if (isAdmin) {
@@ -186,7 +195,6 @@ export default function Post({
 
 	const handleSubmitComment = async (e: React.FormEvent) => {
 		e.preventDefault()
-		if (isBlogPost) return
 		if (!newComment.trim() || !user) return
 
 		createComment(
@@ -577,29 +585,25 @@ export default function Post({
 					)}
 
 					<div className='mt-4 flex items-center gap-6'>
-						{!isBlogPost && (
-							<>
-								<button
-									onClick={handleLike}
-									disabled={isLiking}
-									className={`flex items-center gap-2 transition-all ${isLiked ? 'text-red-500 scale-105' : 'text-gray-500 hover:text-red-400 hover:scale-105'} ${isLiking ? 'opacity-50 cursor-not-allowed' : ''}`}
-								>
-									<Heart className='h-5 w-5' fill={isLiked ? 'currentColor' : 'none'} />
-									<span className='text-sm font-medium'>{likeCount}</span>
-								</button>
-								<button
-									onClick={() => setShowComments(!showComments)}
-									className='flex items-center gap-2 text-gray-500 transition-all hover:text-indigo-400 hover:scale-105'
-								>
-									<MessageCircle className='h-5 w-5' />
-									<span className='text-sm font-medium'>{commentCount}</span>
-								</button>
-							</>
-						)}
+						<button
+							onClick={handleLike}
+							disabled={isLiking}
+							className={`flex items-center gap-2 transition-all ${isLiked ? 'text-red-500 scale-105' : 'text-gray-500 hover:text-red-400 hover:scale-105'} ${isLiking ? 'opacity-50 cursor-not-allowed' : ''}`}
+						>
+							<Heart className='h-5 w-5' fill={isLiked ? 'currentColor' : 'none'} />
+							<span className='text-sm font-medium'>{likeCount}</span>
+						</button>
+						<button
+							onClick={() => setShowComments(!showComments)}
+							className='flex items-center gap-2 text-gray-500 transition-all hover:text-indigo-400 hover:scale-105'
+						>
+							<MessageCircle className='h-5 w-5' />
+							<span className='text-sm font-medium'>{commentCount}</span>
+						</button>
 						{isBlogPost && (
 							<div className='flex items-center gap-2 text-amber-400 text-xs'>
 								<StickyNote className='h-4 w-4' />
-								<span>Только пересылка</span>
+								<span>Блог</span>
 							</div>
 						)}
 						<button
@@ -611,7 +615,7 @@ export default function Post({
 						</button>
 					</div>
 
-					{showComments && !isBlogPost && (
+					{showComments && (
 						<div className='mt-4 pt-4 border-t border-gray-800/50'>
 							<div className='space-y-4 max-h-96 overflow-y-auto'>
 								{commentsLoading ? (

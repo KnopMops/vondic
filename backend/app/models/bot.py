@@ -16,6 +16,7 @@ class Bot(db.Model):
     is_active = db.Column(INTEGER, default=1)
     is_verified = db.Column(INTEGER, default=0)
     bot_token_hash = db.Column(TEXT, default=None)
+    owner_id = db.Column(TEXT, default=None, index=True)
     created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
     updated_at = db.Column(
         TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)

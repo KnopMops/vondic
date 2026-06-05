@@ -1,0 +1,48 @@
+{
+	"name": "vondic-desktop",
+	"version": "1.0.1",
+	"description": "Vondic Desktop Client",
+	"main": "electron/main.js",
+	"scripts": {
+		"start": "electron .",
+		"bundle": "bun build ./electron/main.js --outfile=dist/main.js --target=node --format=cjs --external electron && bun build ./electron/updater.js --outfile=dist/updater.js --target=node --format=cjs --external electron && bun build ./electron/preload.js --outfile=dist/preload.js --target=node --format=cjs --external electron",
+		"dist": "bun run bundle && electron-builder"
+	},
+	"keywords": [
+		"vondic",
+		"chat",
+		"desktop"
+	],
+	"author": "",
+	"license": "MIT",
+	"devDependencies": {
+		"electron": "^28.0.0",
+		"electron-builder": "^24.0.0"
+	},
+	"dependencies": {
+		"dotenv": "^16.3.1",
+		"node-fetch": "^2.7.0"
+	},
+	"build": {
+		"appId": "com.vondic.desktop",
+		"productName": "Vondic",
+		"directories": {
+			"output": "dist"
+		},
+		"extraResources": [
+			{
+				"from": ".env.desktop",
+				"to": ".env.desktop"
+			}
+		],
+		"files": [
+			"**/*",
+			"!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
+			"!**/node_modules/*/{test,__tests__,spec,__specs__,docs,.docusaurus}",
+			"!**/node_modules/.cache",
+			"!.env",
+			"!.env.desktop",
+			"!.env.desktop.example"
+		]
+	}
+}

@@ -22,7 +22,7 @@ def mtproto_decrypt(ciphertext: str | None) -> str | None:
     if not ciphertext:
         return None
     if not isinstance(ciphertext, str) or not ciphertext.startswith("mt:"):
-        return ciphertext  # не зашифровано — вернуть как есть
+        return ciphertext
 
     try:
         b64 = ciphertext[3:]
@@ -35,7 +35,7 @@ def mtproto_decrypt(ciphertext: str | None) -> str | None:
         prev_p = iv2
         out = bytearray()
         for i in range(0, len(raw), 16):
-            c_block = raw[i : i + 16]
+            c_block = raw[i: i + 16]
             xored = bytes(a ^ b for a, b in zip(c_block, prev_p))
             dec = decryptor.update(xored)
             p_block = bytes(a ^ b for a, b in zip(dec, prev_c))
@@ -45,7 +45,7 @@ def mtproto_decrypt(ciphertext: str | None) -> str | None:
         if len(out) < 4:
             return None
         msg_len = int.from_bytes(out[:4], "big")
-        body = out[4 : 4 + msg_len]
+        body = out[4: 4 + msg_len]
         return body.decode("utf-8")
     except Exception:
         return ciphertext

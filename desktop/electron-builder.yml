@@ -1,0 +1,19 @@
+appId: com.vondic.desktop
+productName: Vondic Messenger
+directories:
+  output: dist_electron
+files:
+  - electron/**/*
+  - public/**/*
+  - '!**/.env.desktop'
+  - '!**/.env.desktop.example'
+  - '!**/docs/**'
+  - '!**/src/**'
+  - '!**/*.md'
+linux:
+  target: AppImage
+  category: Network
+win:
+  target: nsis
+mac:
+  target: dmg

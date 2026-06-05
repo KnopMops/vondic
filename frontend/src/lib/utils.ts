@@ -1,4 +1,3 @@
-
 import { getBackendUrl } from './url-fallback'
 
 export const formatBytes = (bytes: number, decimals = 2) => {
@@ -16,7 +15,8 @@ export const formatBytes = (bytes: number, decimals = 2) => {
 export const getAttachmentUrl = (url: string | undefined | null) => {
 	if (!url) return ''
 	if (url.startsWith('http')) return url
-	return `${getBackendUrl()}${url.startsWith('/') ? '' : '/'}${url}`
+	// Same-origin paths (/uploads, /static) — nginx on vondic.ru отдаёт с backend/static-nginx
+	return url.startsWith('/') ? url : `/${url}`
 }
 
 export const getAvatarUrl = (url: string | undefined | null) => {

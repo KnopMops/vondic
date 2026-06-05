@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/AuthContext'
 import { useAppSelector } from '@/lib/hooks'
 import { useSocket } from '@/lib/SocketContext'
 import { User } from '@/lib/types'
+import { userShowsEmail } from '@/lib/userPrivacy'
 import { getAttachmentUrl, getAvatarUrl, formatMskDateTime } from '@/lib/utils'
 import {
 	getSavedAccounts,
@@ -161,9 +162,11 @@ export default function Header({ email, onLogout }: Props) {
 																		</span>
 																	)}
 																</div>
-																<div className='text-xs text-gray-500'>
-																	{u.email}
-																</div>
+																{userShowsEmail(u, user?.id) && u.email && (
+																	<div className='text-xs text-gray-500'>
+																		{u.email}
+																	</div>
+																)}
 															</div>
 														</Link>
 													))

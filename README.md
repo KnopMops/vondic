@@ -119,8 +119,8 @@ python main.py
 
 ## 📚 Документация и ссылки
 
-- **Botik SDK**: `https://vondic.knopusmedia.ru/api-docs`
-- **OAuth заметки**: `https://vondic.knopusmedia.ru/api-docs`
+- **Botik SDK**: `https://vondic.ru/api-docs`
+- **OAuth заметки**: `https://vondic.ru/api-docs`
 - **README по модулям**:
   - `frontend/README.md`
   - `backend/README.md`

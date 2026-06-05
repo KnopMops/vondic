@@ -8,7 +8,19 @@ import requests
 
 from dotenv import load_dotenv
 
-from botiksdk import Bot, CallbackQuery, Command, Dispatcher, FSMContext, InlineKeyboardBuilder, InlineKeyboardButton, Message
+from botiksdk import (
+    Bot,
+    CallbackQuery,
+    Command,
+    Dispatcher,
+    FSMContext,
+    InlineKeyboardBuilder,
+    InlineKeyboardButton,
+    Message,
+    game_play_button,
+    play_games_button,
+    upload_game_button,
+)
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -22,7 +34,7 @@ BOT_ID = os.getenv("BOT_ID", "9b0325e4-13fc-4659-8b86-88b90a4bfdb5")
 BOT_TOKEN = os.getenv(
     "BOT_TOKEN",
     "DbTXn0tna4VkF2XtiCI_bXa7TehYqxDIPfHKsjbfGKg")
-BACKEND_URL = os.getenv("BACKEND_URL", "https://api.vondic.knopusmedia.ru")
+BACKEND_URL = os.getenv("BACKEND_URL", "https://api.vondic.ru")
 
 dp = Dispatcher()
 bcrypter = BCrypter()
@@ -79,6 +91,7 @@ async def send_text(
 @dp.message(Command("start"))
 async def cmd_start(message: Message, bot: Bot, state: FSMContext):
     builder = InlineKeyboardBuilder()
+    builder.row(play_games_button(), upload_game_button())
     builder.row(
         InlineKeyboardButton(
             text="💰 Пополнить баланс (скоро)",
@@ -88,8 +101,9 @@ async def cmd_start(message: Message, bot: Bot, state: FSMContext):
         bot,
         str(message.chat.id),
         "👋 Добро пожаловать в Vondic Bot!\n\n"
-        "Покупка Premium — в веб-магазине Vondic за коины.\n"
-        "Здесь пока только заглушка пополнения баланса.",
+        "🎮 Игры: HTML/CSS/JS в ZIP — загрузите через «Загрузить игру», "
+        "играйте через «Играть» в чате с ботом.\n"
+        "Покупка Premium — в веб-магазине Vondic за коины.",
         reply_markup=builder.as_markup(),
     )
 
@@ -494,6 +508,51 @@ async def buy_premium(callback: CallbackQuery, bot: Bot, state: FSMContext):
         await send_text(bot, str(callback.message.chat.id), "❌ Произошла ошибка.")
 
     await safe_answer_callback_query(bot, callback.id)
+
+
+@dp.callback_query(lambda c: c.data == "games:list")
+async def games_list(callback: CallbackQuery, bot: Bot, state: FSMContext):
+    chat_id = str(callback.message.chat.id)
+    try:
+        data = await bot.list_games()
+        games = data.get("games") if isinstance(data, dict) else []
+        if not games:
+            await send_text(
+                bot,
+                chat_id,
+                "🎮 Пока нет игр. Владелец бота может загрузить ZIP через «Загрузить игру».",
+            )
+            await safe_answer_callback_query(bot, callback.id)
+            return
+        builder = InlineKeyboardBuilder()
+        for g in games[:12]:
+            gid = g.get("id")
+            title = g.get("title") or "Игра"
+            if gid:
+                builder.row(game_play_button(str(gid), str(title)))
+        builder.row(play_games_button("🔄 Обновить список"))
+        await send_text(
+            bot,
+            chat_id,
+            "🎮 Выберите игру:",
+            reply_markup=builder.as_markup(),
+        )
+    except Exception as e:
+        logger.error("games_list error: %s", e)
+        await send_text(bot, chat_id, "❌ Не удалось загрузить список игр.")
+    await safe_answer_callback_query(bot, callback.id)
+
+
+@dp.callback_query(lambda c: c.data and c.data.startswith("game:play:"))
+async def game_play(callback: CallbackQuery, bot: Bot, state: FSMContext):
+    chat_id = str(callback.message.chat.id)
+    game_id = callback.data.split(":", 2)[-1]
+    try:
+        await bot.send_game(chat_id, game_id, text="🎮 Запуск игры…")
+    except Exception as e:
+        logger.error("game_play error: %s", e)
+        await send_text(bot, chat_id, "❌ Игра недоступна.")
+    await safe_answer_callback_query(bot, callback.id, text="Игра открыта в чате")
 
 
 async def main():

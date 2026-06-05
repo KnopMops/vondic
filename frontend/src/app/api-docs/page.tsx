@@ -14,6 +14,7 @@ const ApiDocumentationPage = () => {
 		{ id: 'users', label: 'Пользователи' },
 		{ id: 'posts', label: 'Посты' },
 		{ id: 'messages', label: 'Сообщения' },
+		{ id: 'mail', label: 'Почта' },
 		{ id: 'comments', label: 'Комментарии' },
 		{ id: 'oauth2', label: 'OAuth 2.0' },
 		{ id: 'botiksdk', label: 'BotikSDK' },
@@ -39,7 +40,7 @@ const ApiDocumentationPage = () => {
 							<div className='bg-indigo-500/10 border-l-4 border-indigo-500 p-4 mb-4 backdrop-blur-sm border border-white/10 rounded-lg'>
 								<p className='font-semibold text-white'>Базовый URL:</p>
 								<code className='bg-gray-800/50 px-2 py-1 rounded text-indigo-300 border border-white/10'>
-									https://api.vondic.knopusmedia.ru
+									https://api.vondic.ru
 								</code>
 							</div>
 							<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
@@ -55,6 +56,19 @@ const ApiDocumentationPage = () => {
 									<h3 className='font-bold mb-2 text-white'>Версионирование</h3>
 									<p className='text-gray-300'>
 										Текущая версия: v1 (изменения будут обратно совместимыми)
+									</p>
+								</div>
+								<div className='border rounded-lg p-4 backdrop-blur-sm border-white/10 bg-white/5'>
+									<h3 className='font-bold mb-2 text-white'>Почта @vondic.ru</h3>
+									<p className='text-gray-300'>
+										Mail API для ящика и отправки — см. вкладку{' '}
+										<button
+											type='button'
+											onClick={() => setActiveTab('mail')}
+											className='text-indigo-400 hover:underline'
+										>
+											Почта
+										</button>
 									</p>
 								</div>
 							</div>
@@ -94,10 +108,11 @@ const ApiDocumentationPage = () => {
 									Использование вашего API ключа
 								</h3>
 								<p className='mb-2 text-gray-300'>
-									Включайте ваш API ключ в заголовок Authorization:
+									Передавайте API-ключ в заголовке{' '}
+									<code className='text-indigo-300'>X-API-Key</code>:
 								</p>
 								<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
-									{`Authorization: Bearer YOUR_API_KEY`}
+									{`X-API-Key: YOUR_API_KEY`}
 								</pre>
 							</div>
 
@@ -107,8 +122,8 @@ const ApiDocumentationPage = () => {
 								</h3>
 								<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
 									{`curl -X GET \\
-  "https://api.vondic.knopusmedia.ru/api/public/v1/users/me" \\
-  -H "Authorization: Bearer YOUR_API_KEY" \\
+  "https://api.vondic.ru/api/public/v1/users/me" \\
+  -H "X-API-Key: YOUR_API_KEY" \\
   -H "Content-Type: application/json"`}
 								</pre>
 							</div>
@@ -946,9 +961,9 @@ const ApiDocumentationPage = () => {
 									Базовые URL
 								</h3>
 								<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
-									{`Authorize: https://vondic.knopusmedia.ru/oauth/authorize
-Token:     https://vondic.knopusmedia.ru/oauth/token
-Userinfo:  https://vondic.knopusmedia.ru/oauth/userinfo`}
+									{`Authorize: https://vondic.ru/oauth/authorize
+Token:     https://vondic.ru/oauth/token
+Userinfo:  https://vondic.ru/oauth/userinfo`}
 								</pre>
 								<p className='mt-2 text-sm text-gray-400'>
 									Настройка OAuth-приложений выполняется в
@@ -982,7 +997,7 @@ Userinfo:  https://vondic.knopusmedia.ru/oauth/userinfo`}
 									Шаг 2: обмен code на access_token
 								</h3>
 								<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
-									{`curl -X POST https://vondic.knopusmedia.ru/oauth/token \\
+									{`curl -X POST https://vondic.ru/oauth/token \\
   -H "Content-Type: application/x-www-form-urlencoded" \\
   -d "grant_type=authorization_code" \\
   -d "code=AUTH_CODE" \\
@@ -996,7 +1011,7 @@ Userinfo:  https://vondic.knopusmedia.ru/oauth/userinfo`}
 									Шаг 3: userinfo
 								</h3>
 								<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
-									{`curl https://vondic.knopusmedia.ru/oauth/userinfo \\
+									{`curl https://vondic.ru/oauth/userinfo \\
   -H "Authorization: Bearer ACCESS_TOKEN"`}
 								</pre>
 							</div>
@@ -1005,7 +1020,7 @@ Userinfo:  https://vondic.knopusmedia.ru/oauth/userinfo`}
 									Refresh token
 								</h3>
 								<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
-									{`curl -X POST https://vondic.knopusmedia.ru/oauth/token \\
+									{`curl -X POST https://vondic.ru/oauth/token \\
   -H "Content-Type: application/x-www-form-urlencoded" \\
   -d "grant_type=refresh_token" \\
   -d "refresh_token=OLD_ACCESS_TOKEN" \\
@@ -1027,7 +1042,7 @@ Userinfo:  https://vondic.knopusmedia.ru/oauth/userinfo`}
     response_type: "code",
     state,
   });
-  res.redirect("https://vondic.knopusmedia.ru/oauth/authorize?" + qs);
+  res.redirect("https://vondic.ru/oauth/authorize?" + qs);
 });
 
 app.get("/oauth/callback", async (req, res) => {
@@ -1056,7 +1071,7 @@ sessionStorage.setItem("vondic_oauth_state", state);
 
 const redirectUri = "https://app.example.com/oauth/callback";
 const authUrl =
-  "https://vondic.knopusmedia.ru/oauth/authorize?" +
+  "https://vondic.ru/oauth/authorize?" +
   new URLSearchParams({
     client_id: process.env.NEXT_PUBLIC_VONDIC_CLIENT_ID!,
     redirect_uri: redirectUri,
@@ -1220,7 +1235,7 @@ from botiksdk import (
 )
 
 dp = Dispatcher()
-bot = Bot(token="your-bot-token", base_url="https://vondic.knopusmedia.ru")
+bot = Bot(token="your-bot-token", base_url="https://vondic.ru")
 
 @dp.message(Command("start"))
 async def cmd_start(message, bot, state):
@@ -1346,7 +1361,7 @@ async def login_password(message, bot, state):
 from botiksdk.client import PublicAPIClient
 
 # 1) exchange authorization code -> access_token
-token_resp = requests.post("https://vondic.knopusmedia.ru/oauth/token", data={
+token_resp = requests.post("https://vondic.ru/oauth/token", data={
     "grant_type": "authorization_code",
     "code": "AUTH_CODE",
     "redirect_uri": "https://app.example.com/callback",
@@ -1356,7 +1371,7 @@ token_resp = requests.post("https://vondic.knopusmedia.ru/oauth/token", data={
 access_token = token_resp.json()["access_token"]
 
 # 2) get api key by oauth token
-client = PublicAPIClient(base_url="https://vondic.knopusmedia.ru")
+client = PublicAPIClient(base_url="https://vondic.ru")
 api_key = client.get_api_key(access_token=access_token)["api_key"]
 
 # 3) list bots / generate bot token
@@ -1385,7 +1400,7 @@ print("bots:", bots)`}
 from botiksdk import Bot, Dispatcher, Command
 
 dp = Dispatcher()
-bot = Bot(token="YOUR_BOT_TOKEN", base_url="https://vondic.knopusmedia.ru")
+bot = Bot(token="YOUR_BOT_TOKEN", base_url="https://vondic.ru")
 
 @dp.message(Command("start"))
 async def start_command(message, bot, state):
@@ -1470,7 +1485,7 @@ async def menu(message, bot, state):
         InlineKeyboardButton(text="FAQ", callback_data="faq"),
         InlineKeyboardButton(text="Support", callback_data="support"),
     )
-    kb.add(InlineKeyboardButton(text="Сайт", url="https://vondic.knopusmedia.ru"))
+    kb.add(InlineKeyboardButton(text="Сайт", url="https://vondic.ru"))
     await bot.send_message(str(message.chat.id), "Выберите:", reply_markup=kb.as_markup())
 
 @dp.callback_query(lambda c: c.data in ["faq", "support"])
@@ -1515,7 +1530,7 @@ async def reg_password(message, bot, state):
 from botiksdk.client import PublicAPIClient
 
 # 1. exchange authorization code to access_token
-token_resp = requests.post("https://vondic.knopusmedia.ru/oauth/token", data={
+token_resp = requests.post("https://vondic.ru/oauth/token", data={
     "grant_type": "authorization_code",
     "code": "AUTH_CODE",
     "redirect_uri": "https://app.example.com/callback",
@@ -1525,7 +1540,7 @@ token_resp = requests.post("https://vondic.knopusmedia.ru/oauth/token", data={
 access_token = token_resp.json()["access_token"]
 
 # 2. get api key by oauth token
-client = PublicAPIClient(base_url="https://vondic.knopusmedia.ru")
+client = PublicAPIClient(base_url="https://vondic.ru")
 api_key = client.get_api_key(access_token=access_token)["api_key"]
 
 # 3. list bots / generate bot token
@@ -1535,6 +1550,186 @@ print("bots:", bots)`}
 							</div>
 								</>
 							)}
+						</section>
+					</div>
+				)
+
+			case 'mail':
+				return (
+					<div className='space-y-6'>
+						<section>
+							<h2 className='text-2xl font-bold mb-4 text-white'>
+								Mail API (@vondic.ru)
+							</h2>
+							<p className='mb-4 text-gray-300'>
+								Публичный API для ящика{' '}
+								<code className='text-indigo-300'>@vondic.ru</code>, привязанного
+								к аккаунту. Базовый путь:{' '}
+								<code className='text-indigo-300'>/api/public/v1/mail</code>
+							</p>
+							<div className='bg-indigo-500/10 border-l-4 border-indigo-500 p-4 mb-6 rounded-lg border border-white/10'>
+								<p className='text-sm text-gray-300'>
+									<strong className='text-white'>Аутентификация:</strong>{' '}
+									заголовок{' '}
+									<code className='text-indigo-300'>X-API-Key: YOUR_KEY</code>.
+									Включите режим разработчика, создайте ключ в настройках и
+									включите права в{' '}
+									<strong className='text-white'>Настройки → Почта</strong>.
+								</p>
+							</div>
+
+							<div className='mb-6'>
+								<h3 className='text-xl font-semibold mb-2 text-white'>
+									Права API-ключа
+								</h3>
+								<ul className='list-disc pl-5 space-y-1 text-gray-300 text-sm'>
+									<li>
+										<code className='text-indigo-300'>send</code> — отправка
+										писем
+									</li>
+									<li>
+										<code className='text-indigo-300'>read</code> — список и
+										чтение писем
+									</li>
+									<li>
+										<code className='text-indigo-300'>delete</code> — перенос в
+										корзину
+									</li>
+								</ul>
+							</div>
+
+							<div className='mb-6'>
+								<h3 className='text-xl font-semibold mb-2 text-white'>
+									Текущие права и ящик
+								</h3>
+								<div className='bg-gray-800/30 p-4 rounded-lg border border-white/10'>
+									<div className='flex items-center mb-2'>
+										<span className='bg-green-500/20 text-green-400 px-2 py-1 rounded mr-2 border border-green-500/30'>
+											GET
+										</span>
+										<code className='text-gray-300'>/mail/permissions</code>
+									</div>
+									<p className='text-gray-300 text-sm mb-2'>
+										Возвращает{' '}
+										<code className='text-indigo-300'>permissions</code> и{' '}
+										<code className='text-indigo-300'>mailbox</code> (адрес
+										ящика).
+									</p>
+								</div>
+							</div>
+
+							<div className='mb-6'>
+								<h3 className='text-xl font-semibold mb-2 text-white'>
+									Отправить письмо
+								</h3>
+								<div className='bg-gray-800/30 p-4 rounded-lg border border-white/10'>
+									<div className='flex items-center mb-2'>
+										<span className='bg-blue-500/20 text-blue-400 px-2 py-1 rounded mr-2 border border-blue-500/30'>
+											POST
+										</span>
+										<code className='text-gray-300'>/mail/send</code>
+									</div>
+									<p className='text-gray-300 text-sm mb-2'>
+										Требуется право <code className='text-indigo-300'>send</code>
+										. Тело JSON:
+									</p>
+									<pre className='bg-gray-900/50 p-3 rounded text-xs text-gray-200 overflow-x-auto border border-white/10'>
+										{`{
+  "to": "user@example.com",
+  "subject": "Тема",
+  "body_text": "Текст (plain)",
+  "body_html": "<p>HTML (опционально)</p>",
+  "cc": "copy@example.com"
+}`}
+									</pre>
+									<pre className='mt-3 bg-gray-900/50 p-3 rounded text-xs text-gray-200 overflow-x-auto border border-white/10'>
+										{`curl -X POST "https://api.vondic.ru/api/public/v1/mail/send" \\
+  -H "X-API-Key: YOUR_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"to":"user@example.com","subject":"Hi","body_text":"Hello"}'`}
+									</pre>
+								</div>
+							</div>
+
+							<div className='mb-6'>
+								<h3 className='text-xl font-semibold mb-2 text-white'>
+									Список писем
+								</h3>
+								<div className='bg-gray-800/30 p-4 rounded-lg border border-white/10'>
+									<div className='flex items-center mb-2'>
+										<span className='bg-green-500/20 text-green-400 px-2 py-1 rounded mr-2 border border-green-500/30'>
+											GET
+										</span>
+										<code className='text-gray-300'>/mail/messages</code>
+									</div>
+									<p className='text-gray-300 text-sm'>
+										Право <code className='text-indigo-300'>read</code>. Query:{' '}
+										<code className='text-indigo-300'>folder</code> (по умолчанию
+										INBOX), <code className='text-indigo-300'>limit</code>,{' '}
+										<code className='text-indigo-300'>offset</code>. Папки: INBOX,
+										Sent, Trash, Drafts, Junk.
+									</p>
+								</div>
+							</div>
+
+							<div className='mb-6'>
+								<h3 className='text-xl font-semibold mb-2 text-white'>
+									Прочитать письмо
+								</h3>
+								<div className='bg-gray-800/30 p-4 rounded-lg border border-white/10'>
+									<div className='flex items-center mb-2'>
+										<span className='bg-green-500/20 text-green-400 px-2 py-1 rounded mr-2 border border-green-500/30'>
+											GET
+										</span>
+										<code className='text-gray-300'>
+											/mail/messages/{'{uid}'}
+										</code>
+									</div>
+									<p className='text-gray-300 text-sm'>
+										Право <code className='text-indigo-300'>read</code>. Query:{' '}
+										<code className='text-indigo-300'>folder</code>. Ответ:{' '}
+										<code className='text-indigo-300'>body_text</code>,{' '}
+										<code className='text-indigo-300'>body_html</code>, тема,
+										отправитель, флаг <code className='text-indigo-300'>seen</code>
+										.
+									</p>
+								</div>
+							</div>
+
+							<div className='mb-6'>
+								<h3 className='text-xl font-semibold mb-2 text-white'>
+									В корзину
+								</h3>
+								<div className='bg-gray-800/30 p-4 rounded-lg border border-white/10'>
+									<div className='flex items-center mb-2'>
+										<span className='bg-blue-500/20 text-blue-400 px-2 py-1 rounded mr-2 border border-blue-500/30'>
+											POST
+										</span>
+										<code className='text-gray-300'>
+											/mail/messages/{'{uid}'}/trash
+										</code>
+									</div>
+									<p className='text-gray-300 text-sm'>
+										Право <code className='text-indigo-300'>delete</code>. Query
+										или body: <code className='text-indigo-300'>folder</code>.
+									</p>
+								</div>
+							</div>
+
+							<div>
+								<h3 className='text-xl font-semibold mb-2 text-white'>
+									Веб-интерфейс (cookie)
+								</h3>
+								<p className='text-gray-300 text-sm'>
+									Для браузера:{' '}
+									<code className='text-indigo-300'>/api/v1/mail/*</code> с сессией
+									(ящик, папки, отправка, корзина, настройка прав{' '}
+									<code className='text-indigo-300'>
+										PUT /api/v1/mail/api-permissions
+									</code>
+									).
+								</p>
+							</div>
 						</section>
 					</div>
 				)

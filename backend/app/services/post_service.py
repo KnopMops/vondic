@@ -3,10 +3,14 @@ import os
 from datetime import datetime
 
 from app.core.extensions import db
+from app.db_utils import db_commit
+from app.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.models.like import Like
 from app.models.post import Post
+from app.models.social_community import SocialCommunity
 from app.models.subscription import Subscription
 from app.models.user import User
+from app.services.social_community_service import SocialCommunityService
 from flask import current_app
 
 
@@ -38,12 +42,20 @@ class PostService:
             per_page=5,
             user_id=None,
             is_blog: bool | None = False,
-            filter_mode: str | None = None):
+            filter_mode: str | None = None,
+            social_community_id: str | None = None):
         query = Post.query.join(User, Post.posted_by == User.id).filter(
             Post.deleted.is_(False),
             User.is_blocked == 0,
             Post.is_blog.is_(True) if is_blog else Post.is_blog.is_(False),
         )
+
+        if social_community_id:
+            query = query.filter(
+                Post.social_community_id == social_community_id
+            )
+        else:
+            query = query.filter(Post.social_community_id.is_(None))
 
         if filter_mode == "subscriptions" and user_id:
             subscriptions = Subscription.query.filter_by(
@@ -53,7 +65,6 @@ class PostService:
             if target_ids:
                 query = query.filter(User.id.in_(target_ids))
             else:
-
                 return Post.query.filter(Post.id.is_(None)).paginate(
                     page=page, per_page=per_page, error_out=False
                 )
@@ -94,28 +105,35 @@ class PostService:
 
     @staticmethod
     def create_post(data, user_id, is_blog: bool = False):
+        social_community_id = data.get("social_community_id")
+        if social_community_id:
+            community = SocialCommunity.query.get(social_community_id)
+            user = User.query.get(user_id)
+            if not community or not SocialCommunityService.user_is_member(
+                community, user
+            ):
+                raise ForbiddenError("Нет доступа к сообществу")
+            is_blog = False
+
         new_post = Post(
             content=PostService._sanitize_text(data.get("content")),
             attachments=data.get("attachments"),
             posted_by=user_id,
+            social_community_id=social_community_id,
             is_blog=is_blog,
         )
-        try:
-            db.session.add(new_post)
-            db.session.commit()
-            return new_post
-        except Exception:
-            db.session.rollback()
-            return None
+        db.session.add(new_post)
+        db_commit()
+        return new_post
 
     @staticmethod
     def update_post(post_id, data, user_id, is_admin=False):
         post = Post.query.filter_by(id=post_id, deleted=False).first()
         if not post:
-            return None, "Пост не найден"
+            raise NotFoundError("Пост не найден")
 
         if post.posted_by != user_id and not is_admin:
-            return None, "Неавторизовано"
+            raise ForbiddenError("Неавторизовано")
 
         if "content" in data:
             post.content = PostService._sanitize_text(data["content"])
@@ -123,74 +141,63 @@ class PostService:
             post.attachments = data["attachments"]
         if "is_blog" in data:
             if not is_admin:
-                return None, "Неавторизовано"
+                raise ForbiddenError("Неавторизовано")
             post.is_blog = bool(data["is_blog"])
 
-        try:
-            db.session.commit()
-            return post, None
-        except Exception as e:
-            db.session.rollback()
-            return None, str(e)
+        db_commit()
+        return post
 
     @staticmethod
     def like_post(post_id, user_id):
         post = Post.query.filter_by(id=post_id, deleted=False).first()
         if not post:
-            return None, "Пост не найден"
-        if post.is_blog:
-            return None, "Блог-пост только для чтения"
+            raise NotFoundError("Пост не найден")
 
         existing_like = Like.query.filter_by(
             user_id=user_id, post_id=post_id).first()
         if existing_like:
-            return None, "Уже лайкнуто"
+            raise ConflictError("Уже лайкнуто")
 
         new_like = Like(user_id=user_id, post_id=post_id)
         if post.likes is None:
             post.likes = 0
         post.likes += 1
 
-        try:
-            db.session.add(new_like)
-            db.session.commit()
-            return post, None
-        except Exception as e:
-            db.session.rollback()
-            return None, str(e)
+        db.session.add(new_like)
+        db_commit()
+        return post
 
     @staticmethod
     def unlike_post(post_id, user_id):
         post = Post.query.filter_by(id=post_id, deleted=False).first()
         if not post:
-            return None, "Пост не найден"
-        if post.is_blog:
-            return None, "Блог-пост только для чтения"
+            raise NotFoundError("Пост не найден")
 
         existing_like = Like.query.filter_by(
             user_id=user_id, post_id=post_id).first()
         if not existing_like:
-            return None, "Не лайкнуто"
+            raise ConflictError("Не лайкнуто")
 
         if post.likes and post.likes > 0:
             post.likes -= 1
 
-        try:
-            db.session.delete(existing_like)
-            db.session.commit()
-            return post, None
-        except Exception as e:
-            db.session.rollback()
-            return None, str(e)
+        db.session.delete(existing_like)
+        db_commit()
+        return post
 
     @staticmethod
     def delete_post_by_user(post_id, user_id):
         post = Post.query.filter_by(id=post_id, deleted=False).first()
         if not post:
-            return None, "Пост не найден"
+            raise NotFoundError("Пост не найден")
 
         if post.posted_by != user_id:
-            return None, "Неавторизовано"
+            if post.social_community_id:
+                community = SocialCommunity.query.get(post.social_community_id)
+                if not community or str(community.owner_id) != str(user_id):
+                    raise ForbiddenError("Неавторизовано")
+            else:
+                raise ForbiddenError("Неавторизовано")
 
         freed_bytes = 0
         attachments = post.attachments or []
@@ -204,11 +211,11 @@ class PostService:
                     if os.path.exists(abs_path):
                         try:
                             os.remove(abs_path)
-                        except Exception:
+                        except OSError:
                             pass
                 if size > 0:
                     freed_bytes += size
-            except Exception:
+            except (TypeError, ValueError, AttributeError):
                 continue
 
         user = User.query.get(post.posted_by)
@@ -216,25 +223,21 @@ class PostService:
             try:
                 user.disk_usage = max(
                     0, int(user.disk_usage or 0) - freed_bytes)
-            except Exception:
+            except (TypeError, ValueError):
                 pass
 
         post.deleted = True
         post.deleted_at = datetime.utcnow()
         post.deleted_by = user_id
 
-        try:
-            db.session.commit()
-            return post, None
-        except Exception as e:
-            db.session.rollback()
-            return None, str(e)
+        db_commit()
+        return post
 
     @staticmethod
     def delete_post_by_admin(post_id, admin_id, reason=None):
         post = Post.query.filter_by(id=post_id, deleted=False).first()
         if not post:
-            return None, "Пост не найден"
+            raise NotFoundError("Пост не найден")
 
         freed_bytes = 0
         attachments = post.attachments or []
@@ -248,11 +251,11 @@ class PostService:
                     if os.path.exists(abs_path):
                         try:
                             os.remove(abs_path)
-                        except Exception:
+                        except OSError:
                             pass
                 if size > 0:
                     freed_bytes += size
-            except Exception:
+            except (TypeError, ValueError, AttributeError):
                 continue
 
         user = User.query.get(post.posted_by)
@@ -260,7 +263,7 @@ class PostService:
             try:
                 user.disk_usage = max(
                     0, int(user.disk_usage or 0) - freed_bytes)
-            except Exception:
+            except (TypeError, ValueError):
                 pass
 
         post.deleted = True
@@ -268,9 +271,5 @@ class PostService:
         post.deleted_by = admin_id
         post.reason_for_deletion = reason
 
-        try:
-            db.session.commit()
-            return post, None
-        except Exception as e:
-            db.session.rollback()
-            return None, str(e)
+        db_commit()
+        return post

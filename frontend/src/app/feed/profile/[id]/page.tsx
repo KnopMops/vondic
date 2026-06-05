@@ -1,5 +1,6 @@
 'use client'
 
+import AppLoader from '@/components/ui/AppLoader'
 import Header from '@/components/social/Header'
 import Sidebar from '@/components/social/Sidebar'
 import UserProfile from '@/components/social/UserProfile'
@@ -45,11 +46,7 @@ export default function ProfileIdPage() {
 	}, [id, currentUser, isAuthLoading])
 
 	if (isLoading || isAuthLoading) {
-		return (
-			<div className='flex min-h-screen items-center justify-center bg-black'>
-				<div className='h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent'></div>
-			</div>
-		)
+		return <AppLoader fullScreen size='lg' />
 	}
 
 	if (error || !profileUser) {

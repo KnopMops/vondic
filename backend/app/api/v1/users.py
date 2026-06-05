@@ -10,10 +10,35 @@ from flask import Blueprint, jsonify, request
 users_bp = Blueprint("users", __name__, url_prefix="/api/v1/users")
 
 
+def _viewer_id_from_request() -> str | None:
+    from app.services.auth_service import AuthService
+
+    data = request.get_json(silent=True) or {}
+    token = data.get("access_token")
+    if not token:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header.split(" ", 1)[1].strip()
+    if not token:
+        token = request.args.get("access_token")
+    if not token:
+        token = request.cookies.get("access_token")
+    if not token:
+        return None
+    user, error = AuthService.get_user_by_token(token)
+    if error or not user:
+        return None
+    return str(user.id)
+
+
 @users_bp.route("/", methods=["GET"])
-def get_users():
+@token_required
+def get_users(current_user):
     users = UserService.get_all_users()
-    return (jsonify(users_schema.dump(users)), 200)
+    return (
+        jsonify([u.to_dict(viewer_id=current_user.id) for u in users]),
+        200,
+    )
 
 
 @users_bp.route("/get", methods=["POST"])
@@ -26,16 +51,18 @@ def get_user_detail():
 
     user = UserService.get_user_by_id(user_id)
     if not user:
-        return jsonify({"error": "Пользователь не найден"}), 404
-    return jsonify(user_schema.dump(user)), 200
+        return jsonify({"code": "USER_NOT_FOUND"}), 404
+    viewer_id = _viewer_id_from_request()
+    return jsonify(user.to_dict(viewer_id=viewer_id)), 200
 
 
 @users_bp.route("/by-email/<email>", methods=["GET"])
 def get_user_by_email(email):
     user = UserService.get_user_by_email(email)
     if not user:
-        return jsonify({"error": "Пользователь не найден"}), 404
-    return jsonify(user_schema.dump(user)), 200
+        return jsonify({"code": "USER_NOT_FOUND"}), 404
+    viewer_id = _viewer_id_from_request()
+    return jsonify(user.to_dict(viewer_id=viewer_id)), 200
 
 
 @users_bp.route("/search", methods=["POST"])
@@ -48,7 +75,12 @@ def search_users(current_user):
         return jsonify({"error": "Требуется query"}), 400
 
     users = UserService.search_users(query)
-    return jsonify(users_schema.dump(users)), 200
+    return (
+        jsonify(
+            [u.to_dict(viewer_id=current_user.id) for u in users]
+        ),
+        200,
+    )
 
 
 @users_bp.route("/internal/process_message", methods=["POST"])
@@ -163,7 +195,8 @@ def block_user_by_user(current_user):
     blocked_id = data.get("user_id")
     if not blocked_id:
         return jsonify({"error": "Требуется user_id"}), 400
-    result, error = UserService.block_user_by_user(str(current_user.id), str(blocked_id))
+    result, error = UserService.block_user_by_user(
+        str(current_user.id), str(blocked_id))
     if error:
         return jsonify({"error": error}), 400
     return jsonify({"message": "Пользователь заблокирован"}), 200
@@ -176,7 +209,8 @@ def unblock_user_by_user(current_user):
     blocked_id = data.get("user_id")
     if not blocked_id:
         return jsonify({"error": "Требуется user_id"}), 400
-    result, error = UserService.unblock_user_by_user(str(current_user.id), str(blocked_id))
+    result, error = UserService.unblock_user_by_user(
+        str(current_user.id), str(blocked_id))
     if error:
         return jsonify({"error": error}), 400
     return jsonify({"message": "Пользователь разблокирован"}), 200
@@ -316,6 +350,57 @@ def gift_premium_coins(current_user):
         return jsonify({"error": str(e)}), 500
 
 
+@users_bp.route("/gift-coins", methods=["POST"])
+@token_required
+def gift_coins(current_user):
+    """Подарить Вондик Coins другому пользователю."""
+    data = request.get_json() or {}
+    target_user_id = data.get("target_user_id")
+    try:
+        amount = int(data.get("amount") or 0)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Неверное количество коинов"}), 400
+    if not target_user_id:
+        return jsonify({"error": "Требуется target_user_id"}), 400
+    if str(target_user_id) == str(current_user.id):
+        return jsonify({"error": "Нельзя подарить коины самому себе"}), 400
+    if amount < 1:
+        return jsonify({"error": "Минимум 1 коин"}), 400
+    if amount > 10000:
+        return jsonify({"error": "Максимум 10000 коинов за раз"}), 400
+    if (current_user.balance or 0) < amount:
+        return jsonify({"error": "Недостаточно коинов"}), 400
+    recipient = User.query.get(target_user_id)
+    if not recipient:
+        return jsonify({"error": "Получатель не найден"}), 404
+    try:
+        current_user.balance = (current_user.balance or 0) - amount
+        recipient.balance = (recipient.balance or 0) + amount
+        db.session.commit()
+        try:
+            from app.api.v1.support import notify_user
+
+            notify_user(
+                str(recipient.id),
+                f"Вам подарили {amount} Вондик Coins от @{current_user.username}.",
+                title="Подарок — коины",
+                notification_type="system",
+                send_email_copy=False,
+            )
+        except Exception:
+            pass
+        return jsonify(
+            {
+                "success": True,
+                "balance": current_user.balance,
+                "recipient_balance": recipient.balance,
+            }
+        ), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
 @users_bp.route("/purchase-gift", methods=["POST"])
 @token_required
 def purchase_gift(current_user):
@@ -341,7 +426,7 @@ def purchase_gift(current_user):
         price = GIFT_PRICING.get(gift_id)
     if price is None:
         return jsonify({"error": "Неизвестный подарок"}), 400
-    # Limit to 1 per user
+
     existing_gifts = list(current_user.gifts or [])
     already_owned = any(g.get("gift_id") == gift_id for g in existing_gifts)
     if already_owned:

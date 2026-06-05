@@ -138,7 +138,9 @@ export default function PostDetailsModal(props: Props) {
 									)}
 									<div>
 										<div className='font-bold text-white hover:underline'>
-											{post.author_name || 'Unknown User'}
+											{post.author_name ||
+												post.author?.username ||
+												'Unknown User'}
 											{post.author_premium && (
 												<span className='ml-1 text-amber-400'>★</span>
 											)}

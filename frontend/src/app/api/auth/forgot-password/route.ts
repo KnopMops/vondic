@@ -4,6 +4,9 @@ import { NextRequest, NextResponse } from 'next/server'
 export async function POST(request: NextRequest) {
 	try {
 		const body = await request.json()
+		if (body?.email && typeof body.email === 'string') {
+			body.email = body.email.trim().toLowerCase()
+		}
 		const backendUrl = getBackendUrl()
 		const res = await fetch(`${backendUrl}/api/v1/auth/forgot-password`, {
 			method: 'POST',

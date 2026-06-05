@@ -45,8 +45,18 @@ class ChannelService:
             return None, f"Unexpected error: {str(e)}"
 
     @staticmethod
+    def resolve_channel(code_or_id):
+        if not code_or_id:
+            return None
+        key = str(code_or_id).strip()
+        channel = Channel.query.filter_by(invite_code=key).first()
+        if not channel:
+            channel = Channel.query.get(key)
+        return channel
+
+    @staticmethod
     def join_channel(invite_code, user_id):
-        channel = Channel.query.filter_by(invite_code=invite_code).first()
+        channel = ChannelService.resolve_channel(invite_code)
         if not channel:
             return None, "Invalid invite code"
 
@@ -55,7 +65,7 @@ class ChannelService:
             return None, "User not found"
 
         if user in channel.participants:
-            return None, "Already a participant"
+            return channel, None
 
         try:
             channel.participants.append(user)
@@ -126,8 +136,10 @@ class ChannelService:
         user = User.query.get(user_id)
         if not user:
             return []
-        # Search by name or description, return channels user is NOT in
+
         results = Channel.query.filter(
-            (Channel.name.ilike(f"%{query}%")) | (Channel.description.ilike(f"%{query}%"))
-        ).all()
+            (Channel.name.ilike(
+                f"%{query}%")) | (
+                Channel.description.ilike(
+                    f"%{query}%"))).all()
         return [ch for ch in results if user not in ch.participants]

@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAccessToken } from '@/lib/auth.utils'
 import { getBackendUrl } from '@/lib/server-urls'
 
-async function proxyE2EKeys(request: NextRequest, path: string[], method: 'GET' | 'POST') {
+async function proxyE2EKeys(
+	request: NextRequest,
+	path: string[],
+	method: 'GET' | 'POST' | 'PUT',
+) {
   try {
     const backendUrl = getBackendUrl()
     const targetPath = path.join('/')
@@ -24,14 +28,14 @@ async function proxyE2EKeys(request: NextRequest, path: string[], method: 'GET' 
     if (token) {
       headers.Authorization = `Bearer ${token}`
     }
-    if (method === 'POST') {
+    if (method === 'POST' || method === 'PUT') {
       headers['Content-Type'] = 'application/json'
     }
 
     const response = await fetch(targetUrl.toString(), {
       method,
       headers,
-      body: method === 'POST' ? await request.text() : undefined,
+      body: method === 'GET' ? undefined : await request.text(),
     })
 
     const text = await response.text()
@@ -67,4 +71,12 @@ export async function POST(
 ) {
   const { path } = await params
   return proxyE2EKeys(request, path || [], 'POST')
+}
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> }
+) {
+  const { path } = await params
+  return proxyE2EKeys(request, path || [], 'PUT')
 }

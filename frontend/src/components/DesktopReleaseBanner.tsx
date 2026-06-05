@@ -4,30 +4,44 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { FiDownload as Download, FiMonitor as Monitor, FiX as X } from 'react-icons/fi'
-
-const BANNER_STORAGE_KEY = 'vondic-banner-desktop-v1.0.0-dismissed'
-const DESKTOP_VERSION = 'v1.0.1'
+import { fetchAppDownloads } from '@/lib/appDownloads'
 
 export default function DesktopReleaseBanner() {
 	const pathname = usePathname()
 	const [visible, setVisible] = useState(false)
+	const [version, setVersion] = useState('')
 
 	useEffect(() => {
 		if (pathname?.startsWith('/download/desktop')) return
 
-		try {
-			if (localStorage.getItem(BANNER_STORAGE_KEY) === '1') return
-		} catch {
-			// private mode / blocked storage
-		}
+		let cancelled = false
+		;(async () => {
+			const settings = await fetchAppDownloads()
+			const v = settings.desktop.version || ''
+			if (cancelled) return
+			setVersion(v)
+			const storageKey = `vondic-banner-desktop-${v}-dismissed`
+			try {
+				if (localStorage.getItem(storageKey) === '1') return
+			} catch {
+				// private mode / blocked storage
+			}
+			if (!settings.desktop.windows_available) return
+			setVisible(true)
+		})()
 
-		setVisible(true)
+		return () => {
+			cancelled = true
+		}
 	}, [pathname])
 
 	const dismiss = () => {
 		setVisible(false)
 		try {
-			localStorage.setItem(BANNER_STORAGE_KEY, '1')
+			localStorage.setItem(
+				`vondic-banner-desktop-${version}-dismissed`,
+				'1',
+			)
 		} catch {
 			// ignore
 		}
@@ -53,7 +67,7 @@ export default function DesktopReleaseBanner() {
 						</span>
 						<span className='hidden sm:inline'> — </span>
 						<span className='block sm:inline text-indigo-100/90'>
-							доступна для Windows ({DESKTOP_VERSION})
+							доступна для Windows{version ? ` (${version})` : ''}
 						</span>
 					</p>
 

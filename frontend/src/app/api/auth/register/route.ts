@@ -1,10 +1,16 @@
-import { NextRequest, NextResponse } from "next/server";
 import { setTokens } from "@/lib/auth.utils";
 import { getBackendUrl } from "@/lib/server-urls";
+import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    if (body?.email && typeof body.email === "string") {
+      body.email = body.email.trim().toLowerCase();
+    }
+    if (body?.username && typeof body.username === "string") {
+      body.username = body.username.trim();
+    }
     const backendUrl = getBackendUrl();
     const userAgent = req.headers.get("user-agent") || "";
     const forwardedFor = req.headers.get("x-forwarded-for") || "";

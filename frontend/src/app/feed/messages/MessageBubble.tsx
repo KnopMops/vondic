@@ -5,7 +5,14 @@ import PostDetailsModal from '@/components/social/PostDetailsModal'
 import VideoPlayer from '@/components/social/VideoPlayer'
 import { AppleEmoji } from '@/components/ui/AppleEmoji'
 import { Attachment, User } from '@/lib/types'
+import { MessageGroupPosition } from '@/lib/chatMessageLayout'
+import {
+	inviteEntityLabel,
+	parseInviteLink,
+} from '@/lib/inviteLinks'
+import { renderRichFormattedContent } from '@/lib/messageRichText'
 import { formatMskTime, getAttachmentUrl, getAvatarUrl } from '@/lib/utils'
+import { motion } from 'framer-motion'
 import { memo, useEffect, useRef, useState } from 'react'
 import {
 	LuCheck as Check,
@@ -44,8 +51,42 @@ interface Message {
 	}
 }
 
+const getBubbleRadius = (
+	isOwn: boolean,
+	position: MessageGroupPosition = 'single',
+) => {
+	if (isOwn) {
+		switch (position) {
+			case 'first':
+				return 'rounded-[17px] rounded-br-[5px]'
+			case 'middle':
+				return 'rounded-[17px] rounded-tr-[5px] rounded-br-[5px]'
+			case 'last':
+				return 'rounded-[17px] rounded-tr-[5px] rounded-br-[3px]'
+			default:
+				return 'rounded-[17px] rounded-br-[3px]'
+		}
+	}
+	switch (position) {
+		case 'first':
+			return 'rounded-[17px] rounded-bl-[5px]'
+		case 'middle':
+			return 'rounded-[17px] rounded-tl-[5px] rounded-bl-[5px]'
+		case 'last':
+			return 'rounded-[17px] rounded-tl-[5px] rounded-bl-[3px]'
+		default:
+			return 'rounded-[17px] rounded-bl-[3px]'
+	}
+}
+
+const getClusterMargin = (position: MessageGroupPosition) => {
+	if (position === 'first' || position === 'middle') return 'mb-1.5'
+	return 'mb-4'
+}
+
 interface MessageBubbleProps {
 	msg: Message
+	groupPosition?: MessageGroupPosition
 	theme?: {
 		ownMessageBg: string
 	}
@@ -66,6 +107,7 @@ interface MessageBubbleProps {
 	currentUserId?: string
 	botAccessToken?: string
 	onBotOutboxItems?: (botId: string, items: any[]) => void
+	onBotModal?: (botId: string, modal: string) => void
 }
 
 const REACTIONS = ['❤️', '🔥', '😂', '👍', '😮', '😢']
@@ -73,6 +115,7 @@ const REACTIONS = ['❤️', '🔥', '😂', '👍', '😮', '😢']
 const MessageBubble = memo(
 	({
 		msg,
+		groupPosition = 'single',
 		theme,
 		sender,
 		isPinned,
@@ -91,6 +134,7 @@ const MessageBubble = memo(
 		currentUserId,
 		botAccessToken,
 		onBotOutboxItems,
+		onBotModal,
 	}: MessageBubbleProps) => {
 		const [isDetailsOpen, setIsDetailsOpen] = useState(false)
 		const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -146,104 +190,132 @@ const MessageBubble = memo(
 			return null
 		}
 
+		const getInvitePayload = (content: string) => {
+			try {
+				if (
+					!content ||
+					typeof content !== 'string' ||
+					!content.trim().startsWith('{')
+				)
+					return null
+				const data = JSON.parse(content)
+				if (
+					data &&
+					data.type === 'invite' &&
+					typeof data.link === 'string' &&
+					typeof data.title === 'string'
+				) {
+					return data as {
+						type: 'invite'
+						entity?: 'group' | 'channel' | 'community' | 'server'
+						title: string
+						link: string
+						from_name?: string
+					}
+				}
+			} catch {
+				return null
+			}
+			return null
+		}
+
 		const sharedPost = msg.is_deleted ? null : getSharedPost(msg.content)
 		const stickerPayload = msg.is_deleted ? null : getStickerPayload(msg.content)
+		const invitePayload = msg.is_deleted ? null : getInvitePayload(msg.content)
+		const inviteInMessage =
+			msg.is_deleted || invitePayload
+				? null
+				: (() => {
+						const trimmed = msg.content.trim()
+						if (!trimmed) return null
+						const lines = trimmed.split('\n')
+						const lastLine = lines[lines.length - 1]?.trim()
+						if (!lastLine) return null
+						const parsed = parseInviteLink(lastLine)
+						if (!parsed) return null
+						const intro =
+							lines.length > 1
+								? lines
+										.slice(0, -1)
+										.join('\n')
+										.trim()
+								: undefined
+						return { intro, invite: parsed }
+					})()
 		const displayContent = msg.is_deleted ? 'Сообщение удалено' : msg.content
 		const reactionEntries = reactions ? Object.entries(reactions) : []
 		const attachments = Array.isArray(msg.attachments) ? msg.attachments : []
+		const isGroupChat = !!(msg.group_id || msg.channel_id)
+		const showAvatar =
+			!msg.isOwn &&
+			isGroupChat &&
+			(groupPosition === 'single' || groupPosition === 'last')
+		const showSenderName =
+			!msg.isOwn &&
+			isGroupChat &&
+			(groupPosition === 'single' || groupPosition === 'first')
+		const bubbleRadius = getBubbleRadius(msg.isOwn, groupPosition)
+		const clusterMargin = getClusterMargin(groupPosition)
 
-		const renderInline = (text: string, keyPrefix: string) => {
-			const parts = text.split('`')
-			return parts.map((part, index) =>
-				index % 2 === 1 ? (
-					<code
-						key={`${keyPrefix}-code-${index}`}
-						className='rounded bg-black/30 px-1 text-[0.9em] font-mono text-emerald-200'
-					>
-						{part}
-					</code>
-				) : (
-					<span key={`${keyPrefix}-text-${index}`}>{part}</span>
-				),
-			)
-		}
-
-		const renderTextBlock = (text: string, keyPrefix: string) => {
-			const lines = text.split('\n')
-			return (
-				<div key={keyPrefix} className='break-words leading-relaxed'>
-					{lines.map((line, index) => (
-						<span key={`${keyPrefix}-line-${index}`}>
-							{renderInline(line, `${keyPrefix}-inline-${index}`)}
-							{index < lines.length - 1 ? <br /> : null}
-						</span>
-					))}
+		const renderInviteCard = (
+			title: string,
+			link: string,
+			entity?: string,
+		) => (
+			<div className='rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-4'>
+				<div className='text-xs uppercase tracking-wider text-emerald-200/80'>
+					Приглашение
 				</div>
-			)
-		}
+				<div className='mt-1 text-sm font-semibold text-white break-words'>
+					{title}
+				</div>
+				{entity ? (
+					<div className='mt-1 text-xs text-emerald-100/70'>{entity}</div>
+				) : null}
+				<div className='mt-3 flex items-center gap-2'>
+					<a
+						href={link}
+						className='flex-1 rounded-lg bg-emerald-500/80 hover:bg-emerald-500 px-3 py-2 text-center text-sm font-semibold text-white transition-colors'
+					>
+						Вступить
+					</a>
+				</div>
+			</div>
+		)
 
-		const renderFormattedContent = (content: string) => {
-			const blocks = content.split('```')
-			return blocks.map((block, index) => {
-				if (index % 2 === 1) {
-					const firstNewline = block.indexOf('\n')
-					const firstLine =
-						firstNewline === -1
-							? block.trim()
-							: block.slice(0, firstNewline).trim()
-					const hasLang =
-						firstLine.length > 0 &&
-						!firstLine.includes(' ') &&
-						firstNewline !== -1
-					const language = hasLang ? firstLine : ''
-					const code = hasLang ? block.slice(firstNewline + 1) : block
-					const codeText = code.replace(/\n$/, '')
-					return (
-						<div
-							key={`code-${index}`}
-							className='my-2 overflow-hidden rounded-lg border border-white/10 bg-black/30'
-						>
-							{language ? (
-								<div className='border-b border-white/10 bg-black/40 px-3 py-1 text-[10px] uppercase tracking-wider text-gray-400'>
-									{language}
-								</div>
-							) : null}
-							<pre className='overflow-x-auto p-3 text-xs md:text-sm'>
-								<code className='font-mono text-emerald-200'>{codeText}</code>
-							</pre>
-						</div>
-					)
-				}
-				return block.trim() ? renderTextBlock(block, `text-${index}`) : null
-			})
-		}
+		const renderFormattedContent = (content: string) =>
+			renderRichFormattedContent(content, msg.isOwn)
+
+		const ownBubbleClass = theme?.ownMessageBg || 'chat-bubble-own'
 
 		return (
-			<div
-				className={`flex w-full mb-2 transition-all duration-300 ease-out animate-in fade-in slide-in-from-bottom-2 ${
-					msg.isOwn ? 'justify-end' : 'justify-start'
+			<motion.div
+				initial={{ opacity: 0, y: 5 }}
+				animate={{ opacity: 1, y: 0 }}
+				transition={{ duration: 0.18, ease: 'easeOut' }}
+				className={`flex w-full ${clusterMargin} ${
+					msg.isOwn ? 'justify-end pl-6 md:pl-10' : 'justify-start pr-6 md:pr-10'
 				} ${isDeleting ? 'message-deleting' : ''} ${
 					isMenuOpen || isReactionsOpen ? 'relative z-40' : ''
 				}`}
 			>
-				{!msg.isOwn && (msg.group_id || msg.channel_id) && (
-					<div className='flex items-end mr-2'>
-						<img
-							src={getAvatarUrl(sender?.avatar_url || msg.sender_avatar)}
-							alt={sender?.username || msg.sender_username || 'User'}
-							className='w-8 h-8 rounded-full bg-gray-800 object-cover'
-							title={sender?.username || msg.sender_username || 'User'}
-						/>
+				{!msg.isOwn && isGroupChat && (
+					<div className='flex items-end mr-2.5 w-10 shrink-0'>
+						{showAvatar ? (
+							<img
+								src={getAvatarUrl(sender?.avatar_url || msg.sender_avatar)}
+								alt={sender?.username || msg.sender_username || 'User'}
+								className='w-10 h-10 rounded-full bg-black/30 object-cover ring-1 ring-white/10'
+								title={sender?.username || msg.sender_username || 'User'}
+							/>
+						) : (
+							<div className='w-10' aria-hidden />
+						)}
 					</div>
 				)}
 				<div
-					className={`relative max-w-[75%] px-5 py-3 shadow-md text-sm md:text-base transition-colors duration-500 ${
-						msg.isOwn
-							? `${
-									theme?.ownMessageBg ||
-									'bg-gradient-to-br from-blue-600 to-blue-700'
-								} text-white rounded-2xl rounded-tr-sm`
-							: 'bg-gray-800 border border-gray-700 text-gray-100 rounded-2xl rounded-tl-sm'
+					className={`relative max-w-[min(72%,480px)] px-4 py-2.5 text-[15px] leading-relaxed transition-colors duration-300 ${bubbleRadius} ${
+						msg.isOwn ? ownBubbleClass : 'chat-bubble-other'
 					} ${
 						isSelectionMode && msg.isOwn
 							? isSelected
@@ -381,19 +453,27 @@ const MessageBubble = memo(
 							</div>
 						)}
 					</div>
+					{showSenderName && (
+						<div className='text-[13px] font-semibold text-indigo-400/90 mb-1 px-0.5'>
+							{sender?.username || msg.sender_username || 'User'}
+						</div>
+					)}
 					{replyPreview && (
-						<div className='mb-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-gray-200'>
-							<div className='font-semibold text-gray-300'>
+						<div className='mb-2 rounded-xl border-l-2 border-indigo-500/35 bg-black/20 px-3 py-2 text-xs text-gray-300'>
+							<div className='font-semibold text-indigo-400/90'>
 								{replyPreview.sender}
 							</div>
-							<div className='truncate text-gray-400'>{replyPreview.text}</div>
+							<div className='truncate text-gray-500'>{replyPreview.text}</div>
 						</div>
 					)}
 					{msg.forwarded_from && (
-						<div className='mb-2 flex items-center gap-2 rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-xs'>
-							<Repeat2 className='w-3.5 h-3.5 text-blue-400 flex-shrink-0' />
-							<span className='text-blue-300 truncate'>
-								Переслано от <span className='font-semibold text-white'>{msg.forwarded_from.sender_name}</span>
+						<div className='mb-2 flex items-center gap-2 rounded-xl border border-indigo-500/20 bg-indigo-500/10 px-3 py-2 text-xs'>
+							<Repeat2 className='w-3.5 h-3.5 text-indigo-400 flex-shrink-0' />
+							<span className='text-indigo-300/90 truncate'>
+								Переслано от{' '}
+								<span className='font-semibold text-gray-200'>
+									{msg.forwarded_from.sender_name}
+								</span>
 							</span>
 						</div>
 					)}
@@ -442,6 +522,34 @@ const MessageBubble = memo(
 								src={getAttachmentUrl(attachments[0]?.url || msg.content)}
 								className='w-full h-8'
 							/>
+						</div>
+					) : invitePayload ? (
+						renderInviteCard(
+							invitePayload.title,
+							invitePayload.link,
+							invitePayload.entity === 'group'
+								? 'Группа'
+								: invitePayload.entity === 'channel'
+									? 'Канал'
+									: invitePayload.entity === 'community' ||
+										  invitePayload.entity === 'server'
+										? 'Сервер'
+										: undefined,
+						)
+					) : inviteInMessage ? (
+						<div className='space-y-2'>
+							{inviteInMessage.intro ? (
+								<div className='relative min-w-[52px] pr-14 pb-0.5'>
+									<div className='space-y-1.5'>
+										{renderFormattedContent(inviteInMessage.intro)}
+									</div>
+								</div>
+							) : null}
+							{renderInviteCard(
+								`Присоединиться: ${inviteEntityLabel(inviteInMessage.invite.entity)}`,
+								inviteInMessage.invite.path,
+								inviteEntityLabel(inviteInMessage.invite.entity),
+							)}
 						</div>
 					) : stickerPayload ? (
 						<img
@@ -494,8 +602,32 @@ const MessageBubble = memo(
 							)}
 						</>
 					) : (
-						<div className='space-y-2'>
-							{renderFormattedContent(displayContent)}
+						<div className='relative min-w-[52px] pr-14 pb-0.5'>
+							<div className='space-y-1.5'>
+								{renderFormattedContent(displayContent)}
+							</div>
+							<span
+								className={`absolute bottom-0.5 right-0 text-[11px] leading-none tabular-nums select-none ${
+									msg.isOwn
+										? 'text-[color:var(--app-fg)]/55'
+										: 'text-[color:var(--app-muted)]'
+								}`}
+							>
+								{formatMskTime(
+									(msg as Message & { created_at?: string }).timestamp ||
+										(msg as Message & { created_at?: string }).created_at ||
+										'',
+								)}
+								{msg.isOwn && (
+									<span className='inline-flex align-middle ml-1'>
+										{msg.is_read ? (
+											<CheckCheck className='h-3.5 w-3.5 text-indigo-300/80' />
+										) : (
+											<Check className='h-3.5 w-3.5 text-[color:var(--app-fg)]/45' />
+										)}
+									</span>
+								)}
+							</span>
 						</div>
 					)}
 					{attachments.length > 0 && (
@@ -557,8 +689,34 @@ const MessageBubble = memo(
 							})}
 						</div>
 					)}
-					
-					
+
+					{msg.game?.embed_url && (
+						<div className='mt-2 w-full max-w-md rounded-xl overflow-hidden border border-white/10 bg-black/40'>
+							{msg.game.title && (
+								<p className='px-3 py-2 text-sm font-medium text-white border-b border-white/10'>
+									{msg.game.title}
+								</p>
+							)}
+							<iframe
+								title={msg.game.title || 'Игра'}
+								src={msg.game.embed_url}
+								className='w-full min-h-[380px] border-0 bg-black'
+								sandbox='allow-scripts allow-same-origin allow-pointer-lock'
+								allow='fullscreen'
+							/>
+							{msg.game.download_url && (
+								<div className='px-3 py-2 border-t border-white/10'>
+									<a
+										href={msg.game.download_url}
+										className='text-xs text-indigo-300 hover:text-indigo-200'
+									>
+										Скачать игру (ZIP)
+									</a>
+								</div>
+							)}
+						</div>
+					)}
+
 					{Array.isArray(msg.reply_markup?.inline_keyboard) && (
 						<div className='mt-3 flex flex-col gap-2'>
 							{msg.reply_markup.inline_keyboard.map((row, rowIndex) => (
@@ -569,6 +727,21 @@ const MessageBubble = memo(
 											onClick={async (e) => {
 												e.preventDefault()
 												e.stopPropagation()
+												const modalId =
+													typeof btn.modal === 'string'
+														? btn.modal
+														: typeof btn.callback_data === 'string' &&
+															  btn.callback_data.startsWith('ui:')
+															? btn.callback_data.slice(3)
+															: null
+												if (modalId) {
+													onBotModal?.(msg.sender_id, modalId)
+													return
+												}
+												if (btn.url) {
+													window.open(btn.url, '_blank')
+													return
+												}
 												console.log('[Button] Clicked:', btn.callback_data, btn.text)
 												if (btn.callback_data) {
 													// Send callback to backend via frontend proxy
@@ -623,9 +796,6 @@ const MessageBubble = memo(
 														console.error('[Button] Error:', e)
 													}
 												}
-												if (btn.url) {
-													window.open(btn.url, '_blank')
-												}
 											}}
 											className='w-full bg-blue-600/80 hover:bg-blue-500 text-white font-medium py-2.5 px-4 rounded-lg transition-colors text-sm cursor-pointer'
 											type='button'
@@ -656,31 +826,36 @@ const MessageBubble = memo(
 							))}
 						</div>
 					)}
-					<div
-						className={`text-[10px] mt-1 flex items-center gap-1 ${
-							msg.isOwn
-								? 'justify-end text-blue-200/80'
-								: 'justify-start text-gray-400'
-						}`}
-					>
-						{!msg.isOwn && (msg.group_id || msg.channel_id) && (
-							<span className='font-bold text-gray-300 mr-2'>
-								{sender?.username || msg.sender_username || 'User'}
-							</span>
-						)}
-						{formatMskTime((msg as any).timestamp || (msg as any).created_at || '')}
-						{msg.isOwn && (
-							<div className='flex items-center'>
-								{msg.is_read ? (
-									<CheckCheck className='h-3.5 w-3.5 text-blue-400' />
-								) : (
-									<Check className='h-3.5 w-3.5 text-white/70' />
-								)}
-							</div>
-						)}
-					</div>
+					{(msg.type === 'voice' ||
+						stickerPayload ||
+						sharedPost ||
+						attachments.length > 0 ||
+						isEditing) && (
+						<div
+							className={`text-[11px] mt-2 flex items-center gap-1 justify-end ${
+								msg.isOwn
+									? 'text-[color:var(--app-fg)]/55'
+									: 'text-[color:var(--app-muted)]'
+							}`}
+						>
+							{formatMskTime(
+								(msg as Message & { created_at?: string }).timestamp ||
+									(msg as Message & { created_at?: string }).created_at ||
+									'',
+							)}
+							{msg.isOwn && (
+								<span className='inline-flex'>
+									{msg.is_read ? (
+										<CheckCheck className='h-3.5 w-3.5 text-indigo-300/80' />
+									) : (
+										<Check className='h-3.5 w-3.5 text-[color:var(--app-fg)]/45' />
+									)}
+								</span>
+							)}
+						</div>
+					)}
 				</div>
-			</div>
+			</motion.div>
 		)
 	},
 )

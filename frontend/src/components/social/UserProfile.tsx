@@ -106,7 +106,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 	const [giftSenders, setGiftSenders] = useState<Record<string, any>>({})
 	const [giftCatalogMap, setGiftCatalogMap] = useState<Record<string, any>>({})
 	const backendUrl =
-		process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+		''
 	const STATIC_GIFT_IMAGES: Record<string, string> = {
 		newyear_fireworks: '/static/gifts/firework.png',
 		valentine_heart: '/static/gifts/bouquet.png',
@@ -211,7 +211,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 		setGiftPremiumError(null)
 		try {
 			const backendUrl =
-				process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+				''
 			const meRes = await fetch('/api/auth/me', { method: 'GET' })
 			if (!meRes.ok) throw new Error('Требуется авторизация')
 			const meData = await meRes.json()
@@ -249,7 +249,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 		setGiftError(null)
 		try {
 			const backendUrl =
-				process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+				''
 			const meRes = await fetch('/api/auth/me', { method: 'GET' })
 			if (!meRes.ok) {
 				throw new Error('Требуется авторизация')
@@ -347,7 +347,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 	useEffect(() => {
 		if (!user) return
 		const next = {
-			show_email: user.privacy_settings?.show_email !== false,
+			show_email: user.privacy_settings?.show_email === true,
 			show_online_status: user.privacy_settings?.show_online_status !== false,
 			show_last_seen: user.privacy_settings?.show_last_seen !== false,
 			allow_friend_requests: user.privacy_settings?.allow_friend_requests !== false,
@@ -1196,7 +1196,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 								)}
 							</h1>
 							{(isMe && privacySettings.show_email) ||
-							(!isMe && user.privacy_settings?.show_email !== false) ? (
+							(!isMe && user.privacy_settings?.show_email === true && user.email) ? (
 								<p className='text-sm text-gray-400'>{user.email}</p>
 							) : null}
 							<p
@@ -2509,9 +2509,10 @@ export default function UserProfile({ user, currentUser }: Props) {
 											<p className='font-medium text-white'>
 												{friend.username}
 											</p>
-											{friend.privacy_settings?.show_email !== false && (
-												<p className='text-xs text-gray-400'>{friend.email}</p>
-											)}
+											{friend.privacy_settings?.show_email === true &&
+												friend.email && (
+													<p className='text-xs text-gray-400'>{friend.email}</p>
+												)}
 										</div>
 									</Link>
 								))

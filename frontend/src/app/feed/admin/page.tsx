@@ -4,11 +4,15 @@ import Header from '@/components/social/Header'
 import PostDetailsModal from '@/components/social/PostDetailsModal'
 import Sidebar from '@/components/social/Sidebar'
 import { useAuth } from '@/lib/AuthContext'
+import {
+	DEFAULT_APP_DOWNLOADS,
+	type AppDownloadsSettings,
+} from '@/lib/appDownloads'
 import { getAttachmentUrl } from '@/lib/utils'
+import { useRouter } from 'next/navigation'
+import { useEffect, useRef, useState } from 'react'
 import { FiPaperclip as Paperclip } from 'react-icons/fi'
 import { LuLoader as Loader2 } from 'react-icons/lu'
-import { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 
 type Escalation = {
 	id: number
@@ -32,27 +36,12 @@ type PostReport = {
 	removal_time_left?: number | null
 }
 
-type UserReport = {
-	id: number
-	reporter_id?: string
-	reporter_login?: string
-	target_user_id: string
-	target_user_login?: string | null
-	description: string
-	attachments?: string[]
-	created_at: any
-	status?: string
-	verdict_at?: number | null
-}
-
 export default function AdminSupportPage() {
 	const { user, logout } = useAuth()
 	const router = useRouter()
 	const [items, setItems] = useState<Escalation[]>([])
 	const [postReports, setPostReports] = useState<PostReport[]>([])
 	const [postReportsLoading, setPostReportsLoading] = useState(false)
-	const [userReports, setUserReports] = useState<UserReport[]>([])
-	const [userReportsLoading, setUserReportsLoading] = useState(false)
 	const [postDetailsOpen, setPostDetailsOpen] = useState(false)
 	const [postDetailsId, setPostDetailsId] = useState<string | null>(null)
 	const [violationOpen, setViolationOpen] = useState(false)
@@ -93,6 +82,12 @@ export default function AdminSupportPage() {
 	const [giftUploading, setGiftUploading] = useState(false)
 	const giftFileInputRef = useRef<HTMLInputElement | null>(null)
 	const [nowTs, setNowTs] = useState(() => Date.now())
+	const [downloadSettings, setDownloadSettings] =
+		useState<AppDownloadsSettings>(DEFAULT_APP_DOWNLOADS)
+	const [downloadsLoading, setDownloadsLoading] = useState(false)
+	const [downloadsSaving, setDownloadsSaving] = useState(false)
+	const [downloadsError, setDownloadsError] = useState<string | null>(null)
+	const [downloadsSaved, setDownloadsSaved] = useState(false)
 
 	useEffect(() => {
 		const t = setInterval(() => setNowTs(Date.now()), 1000)
@@ -165,107 +160,6 @@ export default function AdminSupportPage() {
 		})
 	}
 
-	const formatReportDate = (value: any) => {
-		if (!value) return null
-		// Backend may return unix seconds, unix ms, or ISO string
-		const dt =
-			typeof value === 'number'
-				? new Date(value > 1e12 ? value : value * 1000)
-				: new Date(String(value))
-		if (Number.isNaN(dt.getTime())) return null
-		return dt.toLocaleString()
-	}
-
-	const getExt = (urlOrName: string) => {
-		const clean = (urlOrName || '').split('?')[0].split('#')[0]
-		const last = clean.split('/').pop() || clean
-		const ext = last.includes('.') ? last.split('.').pop() || '' : ''
-		return ext.toLowerCase()
-	}
-
-	const isImage = (x: string) =>
-		['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(getExt(x))
-	const isVideo = (x: string) => ['mp4', 'mov', 'webm', 'mkv', 'avi'].includes(getExt(x))
-	const isAudio = (x: string) =>
-		['mp3', 'wav', 'ogg', 'flac', 'm4a', 'webm'].includes(getExt(x))
-
-	const renderAttachmentsPreview = (attachments?: string[]) => {
-		if (!attachments || attachments.length === 0) return null
-		return (
-			<div className='space-y-2'>
-				<div className='text-xs text-gray-400'>Вложения:</div>
-				<div className='grid grid-cols-1 sm:grid-cols-2 gap-2'>
-					{attachments.map(a => {
-						const src = getAttachmentUrl(a)
-						return (
-							<div
-								key={a}
-								className='rounded-lg border border-white/10 bg-black/20 p-2'
-							>
-								{isImage(a) ? (
-									<img
-										src={src}
-										alt='attachment'
-										className='h-40 w-full rounded-md object-cover cursor-pointer'
-										onClick={() => window.open(src, '_blank', 'noopener,noreferrer')}
-									/>
-								) : isVideo(a) ? (
-									<video
-										controls
-										preload='metadata'
-										src={src}
-										className='h-40 w-full rounded-md object-cover'
-									/>
-								) : isAudio(a) ? (
-									<audio controls preload='none' src={src} className='w-full' />
-								) : (
-									<a
-										href={src}
-										target='_blank'
-										rel='noreferrer'
-										className='block text-xs text-indigo-300 hover:text-indigo-200 break-all'
-									>
-										{a}
-									</a>
-								)}
-							</div>
-						)
-					})}
-				</div>
-			</div>
-		)
-	}
-
-	const submitUserReportAction = async (
-		reportId: number,
-		action: 'no_violation' | 'close',
-	) => {
-		try {
-			const res = await fetch('/api/support/admin/user-reports/action', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ report_id: reportId, action }),
-			})
-			const text = await res.text()
-			let data: any = {}
-			try {
-				data = JSON.parse(text)
-			} catch {}
-			if (!res.ok || !data?.ok) {
-				throw new Error(data?.error || text || 'Ошибка выполнения действия')
-			}
-			if (data?.removed) {
-				setUserReports(prev => prev.filter(r => r.id !== reportId))
-			} else if (data?.status) {
-				setUserReports(prev =>
-					prev.map(r => (r.id === reportId ? { ...r, status: data.status } : r)),
-				)
-			}
-		} catch (e: any) {
-			alert(e?.message || 'Ошибка выполнения действия')
-		}
-	}
-
 	const formatTimeLeft = (deadline?: number | null) => {
 		if (!deadline) return null
 		const diff = Math.max(0, deadline * 1000 - nowTs)
@@ -317,28 +211,6 @@ export default function AdminSupportPage() {
 			console.error('Admin post reports load error', e)
 		} finally {
 			setPostReportsLoading(false)
-		}
-	}
-
-	const loadUserReports = async () => {
-		setUserReportsLoading(true)
-		try {
-			const res = await fetch('/api/support/admin/user-reports')
-			const text = await res.text()
-			let data: any = {}
-			try {
-				data = JSON.parse(text)
-			} catch {
-				console.error('Invalid JSON from backend /user-reports:', text)
-				return
-			}
-			if (data?.ok && Array.isArray(data.reports)) {
-				setUserReports(data.reports)
-			}
-		} catch (e) {
-			console.error('Admin user reports load error', e)
-		} finally {
-			setUserReportsLoading(false)
 		}
 	}
 
@@ -483,6 +355,82 @@ export default function AdminSupportPage() {
 				)
 			}
 		} catch (e) {}
+	}
+
+	const loadAppDownloads = async () => {
+		setDownloadsLoading(true)
+		setDownloadsError(null)
+		try {
+			const token = await ensureToken()
+			const res = await fetch('/api/v1/app-downloads/admin', {
+				method: 'GET',
+				headers: { Authorization: `Bearer ${token}` },
+				credentials: 'include',
+			})
+			const text = await res.text()
+			let data: any = {}
+			try {
+				data = JSON.parse(text)
+			} catch {}
+			if (!res.ok || !data?.downloads) {
+				throw new Error(data?.error || text || 'Не удалось загрузить настройки')
+			}
+			setDownloadSettings({
+				desktop: {
+					...DEFAULT_APP_DOWNLOADS.desktop,
+					...data.downloads.desktop,
+				},
+				mobile: {
+					...DEFAULT_APP_DOWNLOADS.mobile,
+					...data.downloads.mobile,
+				},
+			})
+		} catch (e: any) {
+			setDownloadsError(e.message || 'Не удалось загрузить загрузки')
+		} finally {
+			setDownloadsLoading(false)
+		}
+	}
+
+	const saveAppDownloads = async () => {
+		setDownloadsSaving(true)
+		setDownloadsError(null)
+		setDownloadsSaved(false)
+		try {
+			const token = await ensureToken()
+			const res = await fetch('/api/v1/app-downloads/admin', {
+				method: 'PUT',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`,
+				},
+				credentials: 'include',
+				body: JSON.stringify({ downloads: downloadSettings }),
+			})
+			const text = await res.text()
+			let data: any = {}
+			try {
+				data = JSON.parse(text)
+			} catch {}
+			if (!res.ok || !data?.downloads) {
+				throw new Error(data?.error || text || 'Не удалось сохранить')
+			}
+			setDownloadSettings({
+				desktop: {
+					...DEFAULT_APP_DOWNLOADS.desktop,
+					...data.downloads.desktop,
+				},
+				mobile: {
+					...DEFAULT_APP_DOWNLOADS.mobile,
+					...data.downloads.mobile,
+				},
+			})
+			setDownloadsSaved(true)
+		} catch (e: any) {
+			setDownloadsError(e.message || 'Не удалось сохранить загрузки')
+		} finally {
+			setDownloadsSaving(false)
+		}
 	}
 
 	const loadGifts = async () => {
@@ -850,12 +798,12 @@ export default function AdminSupportPage() {
 		if (!roleAllowed) return
 		loadEscalations()
 		loadPostReports()
-		loadUserReports()
 	}, [roleAllowed])
 
 	useEffect(() => {
 		if (user?.role === 'Admin') {
 			loadGifts()
+			loadAppDownloads()
 		}
 	}, [user?.role])
 
@@ -962,9 +910,11 @@ export default function AdminSupportPage() {
 															<div className='font-semibold text-white'>
 																Жалоба #{r.id}
 															</div>
-															{formatReportDate(r.created_at) && (
+															{r.created_at && (
 																<div className='text-xs text-gray-500'>
-																	{formatReportDate(r.created_at)}
+																	{new Date(
+																		r.created_at * 1000,
+																	).toLocaleString()}
 																</div>
 															)}
 														</div>
@@ -993,7 +943,26 @@ export default function AdminSupportPage() {
 														<div className='text-gray-200 whitespace-pre-wrap'>
 															{r.description}
 														</div>
-														{renderAttachmentsPreview(r.attachments)}
+														{r.attachments && r.attachments.length > 0 && (
+															<div className='space-y-1'>
+																<div className='text-xs text-gray-400'>
+																	Вложения:
+																</div>
+																<div className='space-y-1'>
+																	{r.attachments.map(a => (
+																		<a
+																			key={a}
+																			href={getAttachmentUrl(a)}
+																			target='_blank'
+																			rel='noreferrer'
+																			className='block text-xs text-indigo-300 hover:text-indigo-200 truncate'
+																		>
+																			{a}
+																		</a>
+																	))}
+																</div>
+															</div>
+														)}
 														<div className='flex flex-wrap gap-2 pt-2'>
 															<button
 																onClick={() =>
@@ -1057,82 +1026,316 @@ export default function AdminSupportPage() {
 										)}
 									</div>
 
-									<div className='rounded-xl border border-gray-800 bg-gray-950 p-4'>
-										<div className='flex items-center justify-between mb-3'>
-											<div className='text-sm font-semibold text-white'>
-												Жалобы на пользователей
+									{user?.role === 'Admin' && (
+										<div className='rounded-xl border border-gray-800 bg-gray-950 p-4'>
+											<div className='flex items-center justify-between mb-2'>
+												<div className='text-sm font-semibold text-white'>
+													Загрузки приложений
+												</div>
+												<div className='text-xs text-gray-400'>
+													Версии и ссылки на /download/*
+												</div>
 											</div>
-											<div className='text-xs text-gray-400'>
-												Поступившие обращения на аккаунты
-											</div>
-										</div>
-										{userReportsLoading ? (
-											<div className='text-xs text-gray-500'>
-												Загрузка жалоб...
-											</div>
-										) : userReports.length === 0 ? (
-											<div className='text-sm text-gray-400'>Нет жалоб</div>
-										) : (
-											<div className='space-y-3'>
-												{userReports.map(r => (
-													<div
-														key={r.id}
-														className='rounded-lg border border-gray-800 bg-gray-900/60 p-4 text-sm text-gray-200 space-y-2'
-													>
-														<div className='flex items-center justify-between'>
-															<div className='font-semibold text-white'>
-																Жалоба #{r.id}
-															</div>
-															{formatReportDate(r.created_at) && (
-																<div className='text-xs text-gray-500'>
-																	{formatReportDate(r.created_at)}
-																</div>
-															)}
+											{downloadsError && (
+												<div className='mb-3 rounded-md border border-red-500 bg-red-50 px-3 py-2 text-xs text-red-700'>
+													{downloadsError}
+												</div>
+											)}
+											{downloadsSaved && (
+												<div className='mb-3 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200'>
+													Сохранено
+												</div>
+											)}
+											{downloadsLoading ? (
+												<div className='text-xs text-gray-500'>
+													Загрузка настроек...
+												</div>
+											) : (
+												<div className='space-y-4'>
+													<div>
+														<div className='text-xs font-semibold uppercase tracking-wide text-indigo-300 mb-2'>
+															Desktop
 														</div>
-														<div className='text-gray-400'>
-															Цель: {r.target_user_login || r.target_user_id}
+														<div className='grid grid-cols-1 gap-2 md:grid-cols-2'>
+															<label className='block text-xs text-gray-400'>
+																Версия
+																<input
+																	value={downloadSettings.desktop.version}
+																	onChange={e =>
+																		setDownloadSettings(s => ({
+																			...s,
+																			desktop: {
+																				...s.desktop,
+																				version: e.target.value,
+																			},
+																		}))
+																	}
+																	className='mt-1 w-full rounded-md border border-gray-700 bg-gray-900 px-2 py-1.5 text-sm text-gray-100'
+																/>
+															</label>
+															<label className='block text-xs text-gray-400'>
+																GitHub release URL
+																<input
+																	value={
+																		downloadSettings.desktop
+																			.github_release_url
+																	}
+																	onChange={e =>
+																		setDownloadSettings(s => ({
+																			...s,
+																			desktop: {
+																				...s.desktop,
+																				github_release_url:
+																					e.target.value,
+																			},
+																		}))
+																	}
+																	className='mt-1 w-full rounded-md border border-gray-700 bg-gray-900 px-2 py-1.5 text-sm text-gray-100'
+																/>
+															</label>
+															<label className='block text-xs text-gray-400 md:col-span-2'>
+																Windows URL
+																<input
+																	value={
+																		downloadSettings.desktop
+																			.windows_download_url
+																	}
+																	onChange={e =>
+																		setDownloadSettings(s => ({
+																			...s,
+																			desktop: {
+																				...s.desktop,
+																				windows_download_url:
+																					e.target.value,
+																			},
+																		}))
+																	}
+																	className='mt-1 w-full rounded-md border border-gray-700 bg-gray-900 px-2 py-1.5 text-sm text-gray-100'
+																/>
+															</label>
+															<label className='block text-xs text-gray-400 md:col-span-2'>
+																macOS URL
+																<input
+																	value={
+																		downloadSettings.desktop
+																			.macos_download_url
+																	}
+																	onChange={e =>
+																		setDownloadSettings(s => ({
+																			...s,
+																			desktop: {
+																				...s.desktop,
+																				macos_download_url:
+																					e.target.value,
+																			},
+																		}))
+																	}
+																	className='mt-1 w-full rounded-md border border-gray-700 bg-gray-900 px-2 py-1.5 text-sm text-gray-100'
+																/>
+															</label>
+															<label className='block text-xs text-gray-400 md:col-span-2'>
+																Linux URL
+																<input
+																	value={
+																		downloadSettings.desktop
+																			.linux_download_url
+																	}
+																	onChange={e =>
+																		setDownloadSettings(s => ({
+																			...s,
+																			desktop: {
+																				...s.desktop,
+																				linux_download_url:
+																					e.target.value,
+																			},
+																		}))
+																	}
+																	className='mt-1 w-full rounded-md border border-gray-700 bg-gray-900 px-2 py-1.5 text-sm text-gray-100'
+																/>
+															</label>
 														</div>
-														{r.reporter_login && (
-															<div className='text-gray-400'>
-																Отправил: {r.reporter_login}
-															</div>
-														)}
-														{r.status && (
-															<div className='text-xs text-gray-500'>
-																Статус: {r.status}
-															</div>
-														)}
-														<div className='text-gray-200 whitespace-pre-wrap'>
-															{r.description}
-														</div>
-														{renderAttachmentsPreview(r.attachments)}
-														<div className='flex flex-wrap gap-2 pt-2'>
-															<a
-																href={`/feed/profile/${r.target_user_id}`}
-																className='rounded-md border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs font-medium text-gray-200 hover:bg-gray-800'
-															>
-																Перейти на страницу
-															</a>
-															<button
-																onClick={() =>
-																	submitUserReportAction(r.id, 'no_violation')
-																}
-																className='rounded-md border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs font-medium text-gray-200 hover:bg-gray-800'
-															>
-																Нарушение не найдено
-															</button>
-															<button
-																onClick={() => submitUserReportAction(r.id, 'close')}
-																className='rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-200 hover:bg-emerald-500/20'
-															>
-																Закрыть
-															</button>
+														<div className='mt-2 flex flex-wrap gap-4 text-xs text-gray-300'>
+															<label className='inline-flex items-center gap-2'>
+																<input
+																	type='checkbox'
+																	checked={
+																		downloadSettings.desktop
+																			.windows_available
+																	}
+																	onChange={e =>
+																		setDownloadSettings(s => ({
+																			...s,
+																			desktop: {
+																				...s.desktop,
+																				windows_available:
+																					e.target.checked,
+																			},
+																		}))
+																	}
+																/>
+																Windows доступен
+															</label>
+															<label className='inline-flex items-center gap-2'>
+																<input
+																	type='checkbox'
+																	checked={
+																		downloadSettings.desktop
+																			.macos_available
+																	}
+																	onChange={e =>
+																		setDownloadSettings(s => ({
+																			...s,
+																			desktop: {
+																				...s.desktop,
+																				macos_available:
+																					e.target.checked,
+																			},
+																		}))
+																	}
+																/>
+																macOS доступен
+															</label>
+															<label className='inline-flex items-center gap-2'>
+																<input
+																	type='checkbox'
+																	checked={
+																		downloadSettings.desktop
+																			.linux_available
+																	}
+																	onChange={e =>
+																		setDownloadSettings(s => ({
+																			...s,
+																			desktop: {
+																				...s.desktop,
+																				linux_available:
+																					e.target.checked,
+																			},
+																		}))
+																	}
+																/>
+																Linux доступен
+															</label>
 														</div>
 													</div>
-												))}
-											</div>
-										)}
-									</div>
+													<div className='border-t border-white/10 pt-3'>
+														<div className='text-xs font-semibold uppercase tracking-wide text-emerald-300 mb-2'>
+															Mobile
+														</div>
+														<div className='grid grid-cols-1 gap-2 md:grid-cols-2'>
+															<label className='block text-xs text-gray-400'>
+																Версия
+																<input
+																	value={downloadSettings.mobile.version}
+																	onChange={e =>
+																		setDownloadSettings(s => ({
+																			...s,
+																			mobile: {
+																				...s.mobile,
+																				version: e.target.value,
+																			},
+																		}))
+																	}
+																	className='mt-1 w-full rounded-md border border-gray-700 bg-gray-900 px-2 py-1.5 text-sm text-gray-100'
+																/>
+															</label>
+															<label className='block text-xs text-gray-400 md:col-span-2'>
+																Android URL
+																<input
+																	value={
+																		downloadSettings.mobile
+																			.android_download_url
+																	}
+																	onChange={e =>
+																		setDownloadSettings(s => ({
+																			...s,
+																			mobile: {
+																				...s.mobile,
+																				android_download_url:
+																					e.target.value,
+																			},
+																		}))
+																	}
+																	className='mt-1 w-full rounded-md border border-gray-700 bg-gray-900 px-2 py-1.5 text-sm text-gray-100'
+																/>
+															</label>
+															<label className='block text-xs text-gray-400 md:col-span-2'>
+																iOS URL
+																<input
+																	value={
+																		downloadSettings.mobile.ios_download_url
+																	}
+																	onChange={e =>
+																		setDownloadSettings(s => ({
+																			...s,
+																			mobile: {
+																				...s.mobile,
+																				ios_download_url:
+																					e.target.value,
+																			},
+																		}))
+																	}
+																	className='mt-1 w-full rounded-md border border-gray-700 bg-gray-900 px-2 py-1.5 text-sm text-gray-100'
+																/>
+															</label>
+														</div>
+														<div className='mt-2 flex flex-wrap gap-4 text-xs text-gray-300'>
+															<label className='inline-flex items-center gap-2'>
+																<input
+																	type='checkbox'
+																	checked={
+																		downloadSettings.mobile
+																			.android_available
+																	}
+																	onChange={e =>
+																		setDownloadSettings(s => ({
+																			...s,
+																			mobile: {
+																				...s.mobile,
+																				android_available:
+																					e.target.checked,
+																			},
+																		}))
+																	}
+																/>
+																Android доступен
+															</label>
+															<label className='inline-flex items-center gap-2'>
+																<input
+																	type='checkbox'
+																	checked={
+																		downloadSettings.mobile.ios_available
+																	}
+																	onChange={e =>
+																		setDownloadSettings(s => ({
+																			...s,
+																			mobile: {
+																				...s.mobile,
+																				ios_available:
+																					e.target.checked,
+																			},
+																		}))
+																	}
+																/>
+																iOS доступен
+															</label>
+														</div>
+													</div>
+													<div className='flex justify-end'>
+														<button
+															type='button'
+															onClick={saveAppDownloads}
+															disabled={downloadsSaving}
+															className='rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-60'
+														>
+															{downloadsSaving
+																? 'Сохранение...'
+																: 'Сохранить загрузки'}
+														</button>
+													</div>
+												</div>
+											)}
+										</div>
+									)}
 
 									{user?.role === 'Admin' && (
 										<div className='rounded-xl border border-gray-800 bg-gray-950 p-4'>

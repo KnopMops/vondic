@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Вондик — Вход</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #000;
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+    .bg-glow {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(120px);
+      pointer-events: none;
+    }
+    .bg-glow-1 {
+      top: -20%; left: -10%;
+      width: 50%; height: 50%;
+      background: rgba(79, 70, 229, 0.15);
+    }
+    .bg-glow-2 {
+      top: 40%; right: -10%;
+      width: 40%; height: 60%;
+      background: rgba(147, 51, 234, 0.15);
+    }
+    .bg-glow-3 {
+      bottom: 10%; left: 20%;
+      width: 30%; height: 30%;
+      background: rgba(16, 185, 129, 0.08);
+    }
+    .card {
+      width: 100%;
+      max-width: 420px;
+      padding: 32px;
+      border-radius: 24px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(20px);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+      text-align: center;
+      position: relative;
+      z-index: 1;
+      animation: fadeInUp 0.8s ease-out;
+    }
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .logo {
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, #4f46e5, #9333ea);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+      font-size: 28px;
+      font-weight: 700;
+      box-shadow: 0 10px 25px rgba(79, 70, 229, 0.3);
+    }
+    h1 {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    p {
+      color: #9ca3af;
+      font-size: 14px;
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+    .btn {
+      width: 100%;
+      padding: 14px 24px;
+      border-radius: 9999px;
+      border: none;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #4f46e5, #9333ea);
+      color: #fff;
+    }
+    .btn-primary:hover {
+      transform: scale(1.02);
+      box-shadow: 0 10px 25px rgba(79, 70, 229, 0.35);
+    }
+    .btn-primary:active {
+      transform: scale(0.98);
+    }
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error {
+      color: #f87171;
+      font-size: 13px;
+      margin-top: 12px;
+    }
+    .footer {
+      margin-top: 20px;
+      font-size: 11px;
+      color: #6b7280;
+      line-height: 1.5;
+    }
+    .footer a {
+      color: #818cf8;
+      text-decoration: none;
+    }
+    .footer a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-glow bg-glow-1"></div>
+  <div class="bg-glow bg-glow-2"></div>
+  <div class="bg-glow bg-glow-3"></div>
+
+  <div class="card">
+    <div class="logo">V</div>
+    <h1>Вондик</h1>
+    <p>Войдите в свой аккаунт через Vondic OAuth.<br>Вы сможете авторизовать любой аккаунт.</p>
+
+    <button id="loginBtn" class="btn btn-primary" type="button">
+      Войти через Вондик
+    </button>
+    <div id="error" class="error" style="display:none"></div>
+
+    <div class="footer">
+      Входя, вы соглашаетесь с
+      <a href="#" id="privacyLink">политикой конфиденциальности</a>
+      и
+      <a href="#" id="consentLink">согласием на обработку данных</a>.
+    </div>
+  </div>
+
+  <script>
+    const backendUrl = 'https://vondic.knopusmedia.ru';
+    document.getElementById('privacyLink').href = backendUrl + '/static/docs/privacy_policy.rtf';
+    document.getElementById('consentLink').href = backendUrl + '/static/docs/consent_to_processing_personal_data.rtf';
+
+    const btn = document.getElementById('loginBtn');
+    const errorEl = document.getElementById('error');
+
+    btn.addEventListener('click', async () => {
+      if (!window.electronAPI || !window.electronAPI.startVondicAuth) {
+        errorEl.textContent = 'Ошибка: Electron API недоступен';
+        errorEl.style.display = 'block';
+        return;
+      }
+      btn.disabled = true;
+      btn.innerHTML = '<div class="spinner"></div> Открытие окна...';
+      errorEl.style.display = 'none';
+
+      try {
+        const result = await window.electronAPI.startVondicAuth();
+        if (!result || !result.success) {
+          throw new Error((result && result.error) || 'Вход не выполнен');
+        }
+        // Main process сам перекинет на /feed/messages после установки cookies
+      } catch (err) {
+        btn.disabled = false;
+        btn.innerHTML = 'Войти через Вондик';
+        errorEl.textContent = err.message || 'Ошибка входа';
+        errorEl.style.display = 'block';
+      }
+    });
+  </script>
+</body>
+</html>

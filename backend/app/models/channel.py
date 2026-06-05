@@ -31,7 +31,9 @@ class Channel(db.Model):
         TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     __table_args__ = (
-        CheckConstraint("type IN ('text','broadcast')", name="ck_channel_type"),
+        CheckConstraint(
+            "type IN ('text','broadcast')",
+            name="ck_channel_type"),
     )
 
     owner = db.relationship("User", foreign_keys=[

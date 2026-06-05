@@ -69,9 +69,14 @@ class AuthService:
         password = data.get("password")
         if not email or not username or (not password):
             return (None, "Missing required fields")
-        if User.query.filter_by(email=email).first():
+        from app.utils.email_utils import email_exists
+
+        if email_exists(email):
             return (None, "Email already registered")
-        if User.query.filter_by(username=username).first():
+        uname = (username or "").strip()
+        if User.query.filter(
+            db.func.lower(User.username) == uname.lower()
+        ).first():
             return (None, "Username already taken")
         try:
             new_user = User(email=email, username=username, is_verified=0)
@@ -124,13 +129,16 @@ class AuthService:
             legacy = User.query.filter_by(access_token=token).first()
             if legacy:
                 try:
-                    legacy.access_token = AuthService._hash_token(token)
+                    legacy.access_token = generate_password_hash(token)
+                    legacy.access_token_lookup = (
+                        token.split(".", 1)[0] if "." in token else None
+                    )
                     db.session.commit()
                 except Exception:
                     db.session.rollback()
                 user = legacy
         if not user:
-            # Try OAuth access token
+
             from app.api.oauth import OAuthAccessToken
             oauth_token = OAuthAccessToken.query.filter_by(token=token).first()
             if oauth_token and not oauth_token.is_expired():
@@ -241,7 +249,11 @@ class AuthService:
             return None, f"Failed to get user info: {str(e)}"
 
         yandex_id = user_info.get("id")
-        email = user_info.get("default_email") or f"{yandex_id}@yandex.oauth"
+        from app.utils.email_utils import find_user_by_email, normalize_email
+
+        email = normalize_email(
+            user_info.get("default_email") or f"{yandex_id}@yandex.oauth"
+        )
         username = user_info.get("login") or f"yandex_{yandex_id}"
         avatar_id = user_info.get("default_avatar_id")
         avatar_url = (
@@ -250,9 +262,11 @@ class AuthService:
             else None
         )
 
-        user = User.query.filter_by(email=email).first()
+        user = find_user_by_email(email)
         if not user:
-            if User.query.filter_by(username=username).first():
+            if User.query.filter(
+                db.func.lower(User.username) == username.lower()
+            ).first():
                 username = f"{username}_{secrets.token_hex(4)}"
 
             user = User(email=email, username=username, is_verified=1)
@@ -298,7 +312,9 @@ class AuthService:
         email = EmailService.confirm_token(token)
         if not email:
             return (False, "Invalid or expired token")
-        user = User.query.filter_by(email=email).first()
+        from app.utils.email_utils import find_user_by_email
+
+        user = find_user_by_email(email)
         if not user:
             return (False, "User not found")
         if user.is_verified:
@@ -313,7 +329,9 @@ class AuthService:
 
     @staticmethod
     def request_password_reset(email):
-        user = User.query.filter_by(email=email).first()
+        from app.utils.email_utils import find_user_by_email, normalize_email
+
+        user = find_user_by_email(normalize_email(email))
         if not user:
             return (False, "User not found")
         raw_token = EmailService.generate_password_reset_token(email)
@@ -333,7 +351,9 @@ class AuthService:
         email = EmailService.confirm_password_reset_token(token)
         if not email:
             return (False, "Invalid or expired token")
-        user = User.query.filter_by(email=email).first()
+        from app.utils.email_utils import find_user_by_email
+
+        user = find_user_by_email(email)
         if not user:
             return (False, "User not found")
         token_hash = AuthService._hash_token(token)
@@ -441,11 +461,13 @@ class AuthService:
 
     @staticmethod
     def login_user(data):
-        email = data.get("email")
+        from app.utils.email_utils import find_user_by_email, normalize_email
+
+        email = normalize_email(data.get("email"))
         password = data.get("password")
         if not email or not password:
             return (None, "Missing email or password")
-        user = User.query.filter_by(email=email).first()
+        user = find_user_by_email(email)
         if not user or not user.check_password(password):
             return (None, "Invalid email or password")
         if user.is_blocked:

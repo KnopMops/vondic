@@ -1,7 +1,8 @@
 'use client'
 
 import { useAuth } from '@/lib/AuthContext'
-import { formatBytes } from '@/lib/utils'
+import { useSocialCommunities } from '@/lib/hooks/useSocialCommunities'
+import { formatBytes, getAvatarUrl } from '@/lib/utils'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
@@ -16,6 +17,7 @@ import {
 export default function Sidebar() {
 	const [isExpanded, setIsExpanded] = useState(false)
 	const { user } = useAuth()
+	const { communities } = useSocialCommunities()
 	const pathname = usePathname()
 	const [isMemoryModalOpen, setIsMemoryModalOpen] = useState(false)
 
@@ -90,6 +92,7 @@ export default function Sidebar() {
 											i.href === '/feed/admin' ||
 											i.href === '/feed/support' ||
 											i.href === '/feed/friends' ||
+											i.href === '/feed/communities' ||
 											i.href === '/feed/settings')))
 							const activeClass = isActive ? 'bg-white/15 text-white' : ''
 							const content = (
@@ -133,6 +136,46 @@ export default function Sidebar() {
 							)
 						})}
 					</nav>
+
+					{isExpanded && communities.length > 0 && (
+						<div className='mt-2 w-full border-t border-white/10 pt-3'>
+							<p className='mb-2 px-2 text-[10px] font-semibold uppercase tracking-wide text-gray-500'>
+								Мои сообщества
+							</p>
+							<div className='flex max-h-40 flex-col gap-1 overflow-y-auto'>
+								{communities.slice(0, 8).map(c => {
+									const href = `/feed/communities/${c.id}`
+									const active =
+										pathname === href || pathname?.startsWith(`${href}/`)
+									return (
+										<Link
+											key={c.id}
+											href={href}
+											className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-gray-300 hover:bg-white/10 hover:text-white ${
+												active ? 'bg-white/15 text-white' : ''
+											}`}
+											title={c.name}
+										>
+											{c.avatar_url ? (
+												<img
+													src={getAvatarUrl(c.avatar_url)}
+													alt=''
+													className='h-7 w-7 shrink-0 rounded-full object-cover'
+												/>
+											) : (
+												<div className='flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-900/60 text-xs font-bold text-indigo-200'>
+													{c.name.charAt(0).toUpperCase()}
+												</div>
+											)}
+											<span className='truncate text-xs font-medium'>
+												{c.name}
+											</span>
+										</Link>
+									)
+								})}
+							</div>
+						</div>
+					)}
 
 					{isExpanded && user && (
 						<div className='mt-auto w-full'>

@@ -105,7 +105,8 @@ def leave_community(current_user):
     if current_user not in community.members:
         return jsonify({"error": "You are not a member"}), 403
 
-    community, err = CommunityService.leave_community(community_id, current_user.id)
+    community, err = CommunityService.leave_community(
+        community_id, current_user.id)
     if err:
         return jsonify({"error": err}), 400
     return jsonify({"success": True}), 200

@@ -17,6 +17,44 @@ from flask import Blueprint, jsonify, request
 posts_bp = Blueprint("posts", __name__, url_prefix="/api/v1/posts")
 
 
+def _attach_author_to_post(post: dict) -> None:
+    posted_by = post.get("posted_by")
+    if not posted_by:
+        return
+    author = User.query.get(posted_by)
+    if not author:
+        return
+    post["author_name"] = author.username
+    post["author_avatar"] = author.avatar_url
+    post["author_premium"] = bool(author.premium)
+    post["author"] = {
+        "id": author.id,
+        "username": author.username,
+        "avatar_url": author.avatar_url,
+        "premium": bool(author.premium),
+    }
+
+
+def _attach_authors_to_posts(items: list) -> None:
+    author_ids = {p.get("posted_by") for p in items if p.get("posted_by")}
+    if not author_ids:
+        return
+    authors = {u.id: u for u in User.query.filter(User.id.in_(author_ids)).all()}
+    for post in items:
+        author = authors.get(post.get("posted_by"))
+        if not author:
+            continue
+        post["author_name"] = author.username
+        post["author_avatar"] = author.avatar_url
+        post["author_premium"] = bool(author.premium)
+        post["author"] = {
+            "id": author.id,
+            "username": author.username,
+            "avatar_url": author.avatar_url,
+            "premium": bool(author.premium),
+        }
+
+
 def notify_all_users(
         title: str,
         message: str,
@@ -62,6 +100,7 @@ def get_posts():
             pass
     per_page = request.args.get("per_page", 5, type=int)
     user_id = request.args.get("user_id", type=str)
+    social_community_id = request.args.get("social_community_id", type=str)
     kind = (request.args.get("kind") or "").strip().lower()
     filter_mode = (request.args.get("filter") or "").strip().lower()
     is_blog = kind == "blog"
@@ -78,10 +117,14 @@ def get_posts():
         per_page=per_page,
         user_id=user_id,
         is_blog=is_blog,
-        filter_mode=filter_mode)
+        filter_mode=filter_mode,
+        social_community_id=social_community_id or None,
+    )
+    items = posts_schema.dump(pagination.items)
+    _attach_authors_to_posts(items)
     return jsonify(
         {
-            "items": posts_schema.dump(pagination.items),
+            "items": items,
             "total": pagination.total,
             "pages": pagination.pages,
             "page": pagination.page,
@@ -95,7 +138,9 @@ def get_post(post_id):
     post = PostService.get_post_by_id(post_id)
     if not post:
         return jsonify({"error": "Пост не найден"}), 404
-    return jsonify(post_schema.dump(post)), 200
+    data = post_schema.dump(post)
+    _attach_author_to_post(data)
+    return jsonify(data), 200
 
 
 @posts_bp.route("/detail", methods=["POST"])
@@ -109,7 +154,9 @@ def get_post_detail():
     post = PostService.get_post_by_id(post_id)
     if not post:
         return jsonify({"error": "Пост не найден"}), 404
-    return jsonify(post_schema.dump(post)), 200
+    data = post_schema.dump(post)
+    _attach_author_to_post(data)
+    return jsonify(data), 200
 
 
 @posts_bp.route("/", methods=["POST"])

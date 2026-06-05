@@ -113,28 +113,19 @@ def _store_login_session(
         ip = _get_client_ip()
         user_agent_str = request.headers.get("user-agent") or ""
         device, platform, browser = _parse_user_agent(user_agent_str)
-        session_id = str(uuid.uuid4())
-        payload = {
-            "session_id": session_id,
-            "user_id": str(user.id),
-            "created_at": now,
-            "last_seen": now,
-            "ip": ip,
-            "user_agent": user_agent_str,
-            "device": device,
-            "platform": platform,
-            "browser": browser,
-            "access_token_hash": hashlib.sha256(
-                (access_token or "").encode("utf-8")
-            ).hexdigest()
+        device_key = f"{device}|{platform}|{browser}"
+
+        access_hash = (
+            hashlib.sha256((access_token or "").encode("utf-8")).hexdigest()
             if access_token
-            else None,
-            "refresh_token_hash": hashlib.sha256(
-                (refresh_token or "").encode("utf-8")
-            ).hexdigest()
+            else None
+        )
+        refresh_hash = (
+            hashlib.sha256((refresh_token or "").encode("utf-8")).hexdigest()
             if refresh_token
-            else None,
-        }
+            else None
+        )
+
         key = f"sessions:{user.id}"
         existing = cache.get(key) or []
         if isinstance(existing, dict):
@@ -142,7 +133,67 @@ def _store_login_session(
         if not isinstance(existing, list):
             existing = []
 
-        existing.insert(0, payload)
+        session_id = None
+        match_index = None
+        for idx, item in enumerate(existing):
+            if not isinstance(item, dict):
+                continue
+            if item.get("device_key") != device_key:
+                continue
+            old_id = item.get("session_id")
+            if old_id and cache.get(f"session:{old_id}"):
+                match_index = idx
+                session_id = old_id
+                break
+
+        if session_id and match_index is not None:
+            created_at = existing[match_index].get("created_at") or now
+            payload = {
+                **existing[match_index],
+                "session_id": session_id,
+                "user_id": str(user.id),
+                "created_at": created_at,
+                "last_seen": now,
+                "ip": ip,
+                "user_agent": user_agent_str,
+                "device": device,
+                "platform": platform,
+                "browser": browser,
+                "device_key": device_key,
+                "access_token_hash": access_hash,
+                "refresh_token_hash": refresh_hash,
+            }
+            existing[match_index] = payload
+            current_app.logger.info(
+                "Reused session %s for user %s (%s)",
+                session_id,
+                user.id,
+                device_key,
+            )
+        else:
+            session_id = str(uuid.uuid4())
+            payload = {
+                "session_id": session_id,
+                "user_id": str(user.id),
+                "created_at": now,
+                "last_seen": now,
+                "ip": ip,
+                "user_agent": user_agent_str,
+                "device": device,
+                "platform": platform,
+                "browser": browser,
+                "device_key": device_key,
+                "access_token_hash": access_hash,
+                "refresh_token_hash": refresh_hash,
+            }
+            existing.insert(0, payload)
+            current_app.logger.info(
+                "Stored new session %s for user %s (%s)",
+                session_id,
+                user.id,
+                device_key,
+            )
+
         existing = existing[:50]
 
         cache.set(key, existing, timeout=ttl)
@@ -158,9 +209,6 @@ def _store_login_session(
             json.dumps(payload, ensure_ascii=False),
             timeout=ttl,
         )
-        current_app.logger.info(
-            f"Stored session {session_id} for user {user.id} in Redis"
-        )
     except Exception as e:
         current_app.logger.error(
             f"Failed to store login session in Redis: {e}")
@@ -169,9 +217,15 @@ def _store_login_session(
 @rate_limit("auth-register", limit=5, window_seconds=60)
 @auth_bp.route("/register", methods=["POST"])
 def register():
-    data = request.get_json()
+    data = request.get_json(silent=True)
     if not data:
-        return (jsonify({"error": "Нет данных"}), 400)
+        return jsonify({"error": "Нет данных"}), 400
+    from app.utils.email_utils import normalize_email
+
+    if data.get("email"):
+        data = {**data, "email": normalize_email(data.get("email"))}
+    if data.get("username"):
+        data = {**data, "username": (data.get("username") or "").strip()}
     captcha_token = (
         data.get("smart_captcha_token")
         or data.get("captcha_token")
@@ -199,13 +253,34 @@ def register():
     )
 
 
+@auth_bp.route("/check-email", methods=["POST"])
+def check_email():
+    """Проверка формата и занятости email при регистрации."""
+    data = request.get_json(silent=True) or {}
+    from app.utils.email_utils import email_exists, normalize_email
+
+    raw = data.get("email") or ""
+    email, err = AuthService._validate_registration_email(raw)
+    if err:
+        return jsonify({"valid": False, "available": False, "error": err}), 200
+    return jsonify(
+        {
+            "valid": True,
+            "available": not email_exists(email),
+            "email": normalize_email(email or raw),
+        }
+    ), 200
+
+
 @rate_limit("auth-forgot-password", limit=5, window_seconds=60)
 @auth_bp.route("/forgot-password", methods=["POST"])
 def forgot_password():
-    data = request.get_json()
+    data = request.get_json(silent=True)
     if not data:
         return jsonify({"error": "Нет данных"}), 400
-    email = (data.get("email") or "").strip()
+    from app.utils.email_utils import normalize_email
+
+    email = normalize_email(data.get("email"))
     if not email:
         return jsonify({"error": "Укажите email"}), 400
     success, message = AuthService.request_password_reset(email)
@@ -240,43 +315,31 @@ def verify_email(token):
 @rate_limit("auth-login", limit=10, window_seconds=60)
 @auth_bp.route("/login", methods=["POST"])
 def login():
-    try:
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Неверный формат JSON"}), 400
 
-        raw_data = request.get_data(as_text=True)
-        current_app.logger.info(f"Raw login data: {raw_data}")
+    from app.utils.email_utils import normalize_email
 
-        if raw_data and '\\"' in raw_data:
+    if data.get("email"):
+        data = {**data, "email": normalize_email(data.get("email"))}
 
-            raw_data = raw_data.replace('\\"', '"')
-            current_app.logger.info(f"Fixed raw data: {raw_data}")
+    current_app.logger.info(
+        f"Login attempt for email: {data.get('email', 'unknown')}"
+    )
 
-        data = request.get_json()
-        current_app.logger.info(f"Parsed login data: {data}")
-
-        if not data:
-            return (jsonify({"error": "No data provided"}), 400)
-        is_2fa_step = bool(
-            data.get("email_code") or data.get("totp_code")
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+    is_2fa_step = bool(data.get("email_code") or data.get("totp_code"))
+    if not is_2fa_step:
+        captcha_token = (
+            data.get("smart_captcha_token")
+            or data.get("captcha_token")
+            or data.get("smart-token")
         )
-        if not is_2fa_step:
-            captcha_token = (
-                data.get("smart_captcha_token")
-                or data.get("captcha_token")
-                or data.get("smart-token")
-            )
-            captcha_ok, captcha_error = _verify_smart_captcha(captcha_token)
-            if not captcha_ok:
-                return jsonify({"error": captcha_error}), 400
-
-        email = data.get("email")
-        password = data.get("password")
-        current_app.logger.info(
-            f"Email: {email}, Password length: {
-                len(password) if password else 0}")
-
-    except Exception as e:
-        current_app.logger.error(f"JSON parsing error: {e}")
-        return (jsonify({"error": "Неверный формат JSON"}), 400)
+        captcha_ok, captcha_error = _verify_smart_captcha(captcha_token)
+        if not captcha_ok:
+            return jsonify({"error": captcha_error}), 400
 
     result, error = AuthService.login_user(data)
     if error:

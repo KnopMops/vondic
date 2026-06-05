@@ -1,23 +1,68 @@
 'use client'
 
-import { useAuth } from '@/lib/AuthContext'
 import SmartCaptcha from '@/components/auth/SmartCaptcha'
+import EmailInput from '@/components/ui/EmailInput'
+import PasswordInput from '@/components/ui/PasswordInput'
+import { useAuth } from '@/lib/AuthContext'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 export default function RegisterPage() {
 	const [email, setEmail] = useState('')
 	const [username, setUsername] = useState('')
 	const [password, setPassword] = useState('')
 	const [captchaToken, setCaptchaToken] = useState('')
+	const [emailHint, setEmailHint] = useState<string | null>(null)
+	const [emailOk, setEmailOk] = useState<boolean | null>(null)
 	const captchaSiteKey =
 		process.env.NEXT_PUBLIC_YANDEX_SMARTCAPTCHA_SITE_KEY || ''
 	const { register, isLoading } = useAuth()
 
+	useEffect(() => {
+		const norm = email.trim().toLowerCase()
+		if (!norm || !norm.includes('@')) {
+			setEmailHint(null)
+			setEmailOk(null)
+			return
+		}
+		const t = setTimeout(async () => {
+			try {
+				const res = await fetch('/api/auth/check-email', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ email: norm }),
+				})
+				const data = await res.json()
+				if (!data.valid) {
+					setEmailOk(false)
+					setEmailHint(data.error || 'Некорректный email')
+					return
+				}
+				if (!data.available) {
+					setEmailOk(false)
+					setEmailHint('Этот email уже зарегистрирован')
+					return
+				}
+				setEmailOk(true)
+				setEmailHint('Email свободен')
+			} catch {
+				setEmailOk(null)
+				setEmailHint(null)
+			}
+		}, 500)
+		return () => clearTimeout(t)
+	}, [email])
+
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault()
-		await register(email, username, password, captchaToken)
+		if (emailOk === false) return
+		await register(
+			email.trim().toLowerCase(),
+			username.trim(),
+			password,
+			captchaToken,
+		)
 	}
 
 	return (
@@ -47,17 +92,23 @@ export default function RegisterPage() {
 							<label htmlFor='email-address' className='sr-only'>
 								Email address
 							</label>
-							<input
+							<EmailInput
 								id='email-address'
-								name='email'
-								type='email'
-								autoComplete='email'
-								required
-								className='relative block w-full rounded-xl border border-white/10 bg-white/5 py-3 px-4 text-white placeholder:text-gray-500 focus:z-10 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none'
-								placeholder='Электронная почта'
 								value={email}
-								onChange={e => setEmail(e.target.value)}
+								onChange={setEmail}
+								required
+								listId='register-email-suggestions'
+								className='relative block w-full rounded-xl border border-white/10 bg-white/5 py-3 px-4 text-white placeholder:text-gray-500 focus:z-10 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none'
 							/>
+							{emailHint ? (
+								<p
+									className={`mt-1 text-xs ${
+										emailOk ? 'text-emerald-400' : 'text-red-400'
+									}`}
+								>
+									{emailHint}
+								</p>
+							) : null}
 						</div>
 						<div>
 							<label htmlFor='username' className='sr-only'>
@@ -79,12 +130,12 @@ export default function RegisterPage() {
 							<label htmlFor='password' className='sr-only'>
 								Password
 							</label>
-							<input
+							<PasswordInput
 								id='password'
 								name='password'
-								type='password'
 								autoComplete='new-password'
 								required
+								wrapperClassName='w-full'
 								className='relative block w-full rounded-xl border border-white/10 bg-white/5 py-3 px-4 text-white placeholder:text-gray-500 focus:z-10 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none'
 								placeholder='Пароль'
 								value={password}
@@ -99,6 +150,7 @@ export default function RegisterPage() {
 							type='submit'
 							disabled={
 								isLoading ||
+								emailOk === false ||
 								(!!captchaSiteKey && !captchaToken.trim())
 							}
 							className='group relative flex w-full justify-center rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-3 text-sm font-semibold text-white hover:shadow-lg hover:shadow-indigo-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed'

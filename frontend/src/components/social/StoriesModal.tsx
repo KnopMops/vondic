@@ -1,11 +1,11 @@
 "'use client'"
 
+import { AppleEmoji } from '@/components/ui/AppleEmoji'
 import { useAppSelector } from '@/lib/hooks'
 import { getAttachmentUrl } from '@/lib/utils'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { AppleEmoji } from '@/components/ui/AppleEmoji'
 
 type Reaction = { user_id: string; emoji: string; created_at?: string }
 type Item = {

@@ -48,6 +48,10 @@ class User(db.Model):
     is_developer = db.Column(INTEGER, default=0)
     api_key_hash = db.Column(TEXT, default=None)
     api_key = db.Column(TEXT, default=None)
+    mail_api_permissions = db.Column(
+        JSON,
+        default=lambda: {"send": False, "read": False, "delete": False},
+    )
     privacy_settings = db.Column(JSON, default=lambda: {"show_email": False})
     moderation_warnings = db.Column(JSON, default=list)
     cloud_password_hash = db.Column(TEXT, default=None)
@@ -55,6 +59,8 @@ class User(db.Model):
     cloud_password_reset_count = db.Column(INTEGER, default=0)
     reset_password_token = db.Column(TEXT, default=None)
     reset_password_expires = db.Column(TIMESTAMP, default=None)
+    e2e_backup_salt = db.Column(TEXT, default=None)
+    e2e_wrapped_device_secret = db.Column(TEXT, default=None)
     video_likes = db.Column(TEXT, default=None)
     video_watch_later = db.Column(TEXT, default=None)
     video_history = db.Column(TEXT, default=None)
@@ -76,8 +82,10 @@ class User(db.Model):
     def __repr__(self):
         return f"<User {self.username}>"
 
-    def to_dict(self):
-        return {
+    def to_dict(self, viewer_id: str | None = None):
+        from app.utils.user_privacy import redact_user_dict
+
+        data = {
             "id": self.id,
             "username": self.username,
             "email": self.email,
@@ -111,3 +119,4 @@ class User(db.Model):
             "privacy_settings": self.privacy_settings or {"show_email": False},
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
+        return redact_user_dict(data, viewer_id)

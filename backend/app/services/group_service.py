@@ -81,7 +81,8 @@ class GroupService:
         if target_user_id:
             user_to_add = User.query.get(target_user_id)
         if not user_to_add and target_username:
-            user_to_add = User.query.filter_by(username=target_username).first()
+            user_to_add = User.query.filter_by(
+                username=target_username).first()
 
         if not user_to_add:
             return None, "User not found"
@@ -146,6 +147,8 @@ class GroupService:
         if not user:
             return []
         results = Group.query.filter(
-            (Group.name.ilike(f"%{query}%")) | (Group.description.ilike(f"%{query}%"))
-        ).all()
+            (Group.name.ilike(
+                f"%{query}%")) | (
+                Group.description.ilike(
+                    f"%{query}%"))).all()
         return [g for g in results if user not in g.participants]

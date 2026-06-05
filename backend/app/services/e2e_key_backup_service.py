@@ -15,6 +15,20 @@ class E2EKeyBackupService:
     """Service for managing encrypted E2E key backups."""
 
     @staticmethod
+    def key_id_variants(key_id: str) -> List[str]:
+        """All legacy + sorted DM key id forms."""
+        if not key_id or ':' not in key_id:
+            return [key_id] if key_id else []
+        parts = key_id.split(':', 1)
+        if len(parts) != 2:
+            return [key_id]
+        a, b = parts[0].strip(), parts[1].strip()
+        if not a or not b:
+            return [key_id]
+        sorted_id = ':'.join(sorted([a, b]))
+        return list(dict.fromkeys([key_id, sorted_id, f'{a}:{b}', f'{b}:{a}']))
+
+    @staticmethod
     def backup_key(
         user_id: str,
         key_id: str,
@@ -76,9 +90,13 @@ class E2EKeyBackupService:
         Returns:
             E2EKeyBackup instance or None
         """
-        return E2EKeyBackup.query.filter_by(
-            user_id=user_id, key_id=key_id
-        ).first()
+        for variant in E2EKeyBackupService.key_id_variants(key_id):
+            row = E2EKeyBackup.query.filter_by(
+                user_id=user_id, key_id=variant
+            ).first()
+            if row:
+                return row
+        return None
 
     @staticmethod
     def get_all_keys(user_id: str) -> List[E2EKeyBackup]:
@@ -105,9 +123,13 @@ class E2EKeyBackupService:
         """
         if not key_ids:
             return []
+        expanded: List[str] = []
+        for kid in key_ids:
+            expanded.extend(E2EKeyBackupService.key_id_variants(kid))
+        unique_ids = list(dict.fromkeys(expanded))
         return E2EKeyBackup.query.filter(
             E2EKeyBackup.user_id == user_id,
-            E2EKeyBackup.key_id.in_(key_ids)
+            E2EKeyBackup.key_id.in_(unique_ids)
         ).all()
 
     @staticmethod

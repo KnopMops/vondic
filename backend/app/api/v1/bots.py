@@ -42,6 +42,7 @@ def create_bot(current_user):
     data = request.get_json() or {}
     for key in ("id", "created_at", "updated_at"):
         data.pop(key, None)
+    data["owner_id"] = str(current_user.id)
     bot, error = BotService.create_bot(data)
     if error:
         return jsonify({"error": error}), 400

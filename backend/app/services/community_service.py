@@ -35,9 +35,18 @@ class CommunityService:
         return Community.query.get(community_id)
 
     @staticmethod
-    def join_community(invite_code, user_id):
+    def resolve_community(code_or_id):
+        if not code_or_id:
+            return None
+        key = str(code_or_id).strip()
+        community = Community.query.filter_by(invite_code=key).first()
+        if not community:
+            community = Community.query.get(key)
+        return community
 
-        community = Community.query.filter_by(invite_code=invite_code).first()
+    @staticmethod
+    def join_community(invite_code, user_id):
+        community = CommunityService.resolve_community(invite_code)
         if not community:
             return None, "Invalid invite code"
 
@@ -46,10 +55,9 @@ class CommunityService:
             return None, "User not found"
 
         if user in community.members:
-            return None, "User already a member"
+            return community, None
 
         try:
-
             community.members.append(user)
             db.session.commit()
             return community, None
@@ -99,6 +107,8 @@ class CommunityService:
         if not user:
             return []
         results = Community.query.filter(
-            (Community.name.ilike(f"%{query}%")) | (Community.description.ilike(f"%{query}%"))
-        ).all()
+            (Community.name.ilike(
+                f"%{query}%")) | (
+                Community.description.ilike(
+                    f"%{query}%"))).all()
         return [c for c in results if user not in c.members]

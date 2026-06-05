@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
 import { setTokens } from '@/lib/auth.utils'
 import { getBackendUrl } from '@/lib/server-urls'
+import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(req: NextRequest) {
 	try {

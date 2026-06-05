@@ -301,7 +301,8 @@ def chat_send(current_user):
             return jsonify(
                 {"ok": False, "error": "Достигнут лимит чатов (5)"}), 400
         esc_id = save_escalation(str(current_user.id), question)
-        notify_admin(str(current_user.id), f"Новая заявка #{esc_id}: {question}")
+        notify_admin(str(current_user.id),
+                     f"Новая заявка #{esc_id}: {question}")
         db.session.add(
             SupportChatMessage(
                 escalation_id=esc_id,
@@ -374,7 +375,8 @@ def chat_send(current_user):
             return jsonify(
                 {"ok": False, "error": "Достигнут лимит чатов (5)"}), 400
         esc_id = save_escalation(str(current_user.id), question)
-        notify_admin(str(current_user.id), f"Новая заявка #{esc_id}: {question}")
+        notify_admin(str(current_user.id),
+                     f"Новая заявка #{esc_id}: {question}")
         db.session.add(
             SupportChatMessage(
                 escalation_id=esc_id,

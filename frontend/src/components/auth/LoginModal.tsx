@@ -1,14 +1,15 @@
 'use client'
 
-import BrandLogo from '@/components/social/BrandLogo'
 import SmartCaptcha from '@/components/auth/SmartCaptcha'
+import BrandLogo from '@/components/social/BrandLogo'
+import PasswordInput from '@/components/ui/PasswordInput'
 import { useAuth } from '@/lib/AuthContext'
 import { setUser } from '@/lib/features/authSlice'
 import { useAppDispatch } from '@/lib/hooks'
 import Link from 'next/link'
 import { useState } from 'react'
-import { SiYandexcloud as Yandex } from 'react-icons/si'
 import { LuX as X } from 'react-icons/lu'
+import { SiYandexcloud as Yandex } from 'react-icons/si'
 
 interface LoginModalProps {
 	isOpen: boolean
@@ -169,12 +170,12 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 								<label htmlFor='password' className='sr-only'>
 									Password
 								</label>
-								<input
+								<PasswordInput
 									id='password'
 									name='password'
-									type='password'
 									autoComplete='current-password'
 									required
+									wrapperClassName='w-full'
 									className='relative block w-full rounded-xl border-0 bg-gray-800/50 py-3.5 px-4 text-white ring-1 ring-inset ring-gray-700/50 placeholder:text-gray-500 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-indigo-500/50 transition-all hover:bg-gray-800'
 									placeholder='Пароль'
 									value={password}

@@ -38,7 +38,9 @@ class UserService:
 
     @staticmethod
     def get_user_by_email(email):
-        return User.query.filter_by(email=email).first()
+        from app.utils.email_utils import find_user_by_email
+
+        return find_user_by_email(email)
 
     @staticmethod
     def search_users(query_str):
@@ -256,13 +258,15 @@ class UserService:
             return None, "Пользователь уже заблокирован"
         block = Block(blocker_id=blocker_id, blocked_id=blocked_id)
         db.session.add(block)
-        # Remove from friends both ways
+
         Friendship.query.filter(
             or_(
-                (Friendship.requester_id == blocker_id) & (Friendship.addressee_id == blocked_id),
-                (Friendship.requester_id == blocked_id) & (Friendship.addressee_id == blocker_id),
-            )
-        ).delete(synchronize_session=False)
+                (Friendship.requester_id == blocker_id) & (
+                    Friendship.addressee_id == blocked_id),
+                (Friendship.requester_id == blocked_id) & (
+                    Friendship.addressee_id == blocker_id),
+            )).delete(
+            synchronize_session=False)
         try:
             db.session.commit()
             return block, None
@@ -290,9 +294,9 @@ class UserService:
         if not blocker_id or not blocked_id:
             return False
         return (
-            Block.query.filter_by(blocker_id=blocker_id, blocked_id=blocked_id).first()
-            is not None
-        )
+            Block.query.filter_by(
+                blocker_id=blocker_id,
+                blocked_id=blocked_id).first() is not None)
 
     @staticmethod
     def get_block_status(viewer_id: str, target_id: str):

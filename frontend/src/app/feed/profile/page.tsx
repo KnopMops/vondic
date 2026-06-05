@@ -1,5 +1,6 @@
 'use client'
 
+import AppLoader from '@/components/ui/AppLoader'
 import { useAuth } from '@/lib/AuthContext'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
@@ -18,9 +19,5 @@ export default function ProfilePage() {
 		}
 	}, [user, isLoading, router])
 
-	return (
-		<div className='flex min-h-screen items-center justify-center bg-gray-900'>
-			<div className='h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent'></div>
-		</div>
-	)
+	return <AppLoader fullScreen size='lg' />
 }

@@ -117,7 +117,11 @@ export default function SocialFeed({ email, onLogout, mode = 'feed' }: Props) {
 							<Post
 								key={p.id}
 								id={p.id}
-								author={p.author_name || 'Unknown User'}
+								author={
+									p.author_name ||
+									p.author?.username ||
+									'Unknown User'
+								}
 								author_id={p.posted_by}
 								author_avatar={p.author_avatar}
 								author_premium={p.author_premium}

@@ -1,5 +1,4 @@
 from app.schemas.post_schema import posts_schema
-from app.schemas.user_schema import users_schema
 from app.services.post_service import PostService
 from app.services.user_service import UserService
 from app.utils.decorators import token_required
@@ -28,7 +27,13 @@ def global_search(current_user):
 
         users = UserService.search_users(search_term)
         return jsonify(
-            {"type": "users", "results": users_schema.dump(users)}), 200
+            {
+                "type": "users",
+                "results": [
+                    u.to_dict(viewer_id=current_user.id) for u in users
+                ],
+            }
+        ), 200
 
     elif query.startswith("#"):
         search_term = query[1:]

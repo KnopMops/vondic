@@ -445,7 +445,7 @@ class SignalingService:
                     "avatar_url")
         if offer_sdp:
             incoming_payload["offer"] = offer_sdp
-        # Always emit incoming_call to the user's room (all their sockets)
+
         emit("incoming_call", incoming_payload, room=target_user_id)
         logger.info(
             f"Звонок от {request.sid} к пользователю {target_user_id}")
@@ -482,19 +482,20 @@ class SignalingService:
         )
 
     def on_call_answer(self, payload):
-        caller_socket_id = payload.get("caller_socket_id") or payload.get("target_socket_id")
+        caller_socket_id = payload.get(
+            "caller_socket_id") or payload.get("target_socket_id")
         answer = payload.get("answer")
         if not caller_socket_id:
             return
         logger.info(f"Звонок принят: {request.sid} -> {caller_socket_id}")
-        # Forward the WebRTC answer SDP to the caller
+
         if answer:
             emit(
                 "call_answer",
                 {"socket_id": request.sid, "answer": answer},
                 room=caller_socket_id,
             )
-        # Also emit call_accepted for backwards compatibility
+
         emit(
             "call_accepted",
             {"responder_socket_id": request.sid},
@@ -772,7 +773,9 @@ class SignalingService:
             emit("error", {"message": "Доступ запрещён"})
             return
 
-        messages = self.broker.repo.get_group_history(group_id, limit, offset)
+        messages = self.broker.repo.get_group_history(
+            group_id, limit, offset, viewer_id=sender_id
+        )
 
         for msg in messages:
             for key, value in msg.items():

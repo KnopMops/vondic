@@ -80,6 +80,35 @@ class Config:
     MAIL_USERNAME = os.environ.get("MAIL_USERNAME")
     MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD")
     MAIL_DEFAULT_SENDER = os.environ.get("MAIL_DEFAULT_SENDER")
+    MAIL_DOMAIN = os.environ.get("MAIL_DOMAIN") or "vondic.ru"
+    MAIL_TLS_SERVER_NAME = os.environ.get(
+        "MAIL_TLS_SERVER_NAME") or "mail.vondic.ru"
+    MAIL_IMAP_HOST = os.environ.get("MAIL_IMAP_HOST") or "mail.vondic.ru"
+    MAIL_IMAP_PORT = int(os.environ.get("MAIL_IMAP_PORT") or 993)
+    MAIL_IMAP_USE_SSL = os.environ.get(
+        "MAIL_IMAP_USE_SSL", "True"
+    ).lower() in ("true", "1", "t")
+    MAIL_IMAP_TLS_INSECURE = os.environ.get(
+        "MAIL_IMAP_TLS_INSECURE", "False"
+    ).lower() in ("true", "1", "t")
+    MAIL_SMTP_INTERNAL_HOST = os.environ.get("MAIL_SMTP_INTERNAL_HOST")
+    MAIL_SMTP_INTERNAL_PORT = os.environ.get("MAIL_SMTP_INTERNAL_PORT")
+    MAIL_CREDENTIALS_KEY = os.environ.get("MAIL_CREDENTIALS_KEY")
+    MAIL_PROVISION_ENABLED = os.environ.get(
+        "MAIL_PROVISION_ENABLED", "0"
+    ).lower() in ("true", "1", "t")
+    MAIL_DOCKER_CONTAINER = os.environ.get(
+        "MAIL_DOCKER_CONTAINER") or "mailserver"
+    MAIL_DOCKER_BIN = os.environ.get("MAIL_DOCKER_BIN") or "/usr/bin/docker"
+    MAIL_DOCKER_SOCKET = os.environ.get(
+        "MAIL_DOCKER_SOCKET") or "/var/run/docker.sock"
+    MAIL_NOREPLY_ADDRESS = os.environ.get(
+        "MAIL_NOREPLY_ADDRESS") or "noreply@vondic.ru"
+    MAIL_NOREPLY_SMTP_PASSWORD = os.environ.get("MAIL_NOREPLY_SMTP_PASSWORD")
+    MAIL_NOREPLY_API_PASSWORD = os.environ.get("MAIL_NOREPLY_API_PASSWORD")
+    MAIL_NOREPLY_API_PASSWORD_HASH = os.environ.get(
+        "MAIL_NOREPLY_API_PASSWORD_HASH"
+    )
     YANDEX_CLIENT_ID = os.environ.get("YANDEX_CLIENT_ID")
     YANDEX_CLIENT_SECRET = os.environ.get("YANDEX_CLIENT_SECRET")
     YANDEX_REDIRECT_URI = os.environ.get("YANDEX_REDIRECT_URI")

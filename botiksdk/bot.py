@@ -41,18 +41,38 @@ class InlineKeyboardButton:
         text: str,
         callback_data: Optional[str] = None,
         url: Optional[str] = None,
+        modal: Optional[str] = None,
     ):
         self.text = text
         self.callback_data = callback_data
         self.url = url
+        self.modal = modal
 
     def to_dict(self) -> Dict[str, Any]:
         result = {"text": self.text}
+        if self.modal:
+            result["modal"] = self.modal
+            if not self.callback_data:
+                result["callback_data"] = f"ui:{self.modal}"
         if self.callback_data:
             result["callback_data"] = self.callback_data
         if self.url:
             result["url"] = self.url
         return result
+
+
+def play_games_button(text: str = "Играть") -> InlineKeyboardButton:
+    """Открывает список игр в чате с ботом (callback games:list)."""
+    return InlineKeyboardButton(text, callback_data="games:list")
+
+
+def game_play_button(game_id: str, title: str) -> InlineKeyboardButton:
+    label = title if len(title) <= 28 else f"{title[:25]}…"
+    return InlineKeyboardButton(label, callback_data=f"game:play:{game_id}")
+
+
+def upload_game_button(text: str = "Загрузить игру") -> InlineKeyboardButton:
+    return InlineKeyboardButton(text, modal="upload_game")
 
 
 class Bot:
@@ -121,15 +141,17 @@ class Bot:
         text: str,
         parse_mode: Optional[str] = None,
         reply_markup: Optional[Dict[str, Any]] = None,
+        game: Optional[Dict[str, Any]] = None,
     ):
         self._ensure_ready()
         logger = logging.getLogger(__name__)
         logger.info(
-            "botiksdk_send_message bot_id=%s chat_id=%s text=%s reply_markup=%s",
+            "botiksdk_send_message bot_id=%s chat_id=%s text=%s reply_markup=%s game=%s",
             self.bot_id,
             chat_id,
             text,
             reply_markup is not None,
+            game is not None,
         )
         result = self.public.send_message(
             self.bot_id,
@@ -138,6 +160,7 @@ class Bot:
             text,
             parse_mode=parse_mode,
             reply_markup=reply_markup,
+            game=game,
         )
         logger.info("botiksdk_send_message_result bot_id=%s result=%s", self.bot_id, result)
         return result
@@ -148,12 +171,54 @@ class Bot:
         text: str,
         parse_mode: Optional[str] = None,
         reply_markup: Optional[Dict[str, Any]] = None,
+        game: Optional[Dict[str, Any]] = None,
     ):
         return await asyncio.to_thread(
             self.send_message_sync,
             chat_id,
             text,
             parse_mode=parse_mode,
+            reply_markup=reply_markup,
+            game=game,
+        )
+
+    def list_games_sync(self, query: Optional[str] = None):
+        self._ensure_ready()
+        return self.public.list_bot_games(
+            self.bot_id, self.token, query=query
+        )
+
+    async def list_games(self, query: Optional[str] = None):
+        return await asyncio.to_thread(self.list_games_sync, query)
+
+    def send_game_sync(
+        self,
+        chat_id: str,
+        game_id: str,
+        *,
+        text: Optional[str] = None,
+        reply_markup: Optional[Dict[str, Any]] = None,
+    ):
+        return self.send_message_sync(
+            chat_id,
+            text or "🎮",
+            game={"id": game_id},
+            reply_markup=reply_markup,
+        )
+
+    async def send_game(
+        self,
+        chat_id: str,
+        game_id: str,
+        *,
+        text: Optional[str] = None,
+        reply_markup: Optional[Dict[str, Any]] = None,
+    ):
+        return await asyncio.to_thread(
+            self.send_game_sync,
+            chat_id,
+            game_id,
+            text=text,
             reply_markup=reply_markup,
         )
 

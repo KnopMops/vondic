@@ -1,4 +1,5 @@
 import { getAccessToken } from '@/lib/auth.utils'
+import { withVondicProxyHeaders } from '@/lib/proxy-headers'
 import { NextRequest, NextResponse } from 'next/server'
 import { getBackendUrl } from '@/lib/server-urls'
 
@@ -11,6 +12,8 @@ export async function GET(req: NextRequest) {
 		const perPage = searchParams.get('per_page')
 		const userId = searchParams.get('user_id')
 		const kind = searchParams.get('kind')
+		const socialCommunityId = searchParams.get('social_community_id')
+		const filterMode = searchParams.get('filter')
 
 		const accessToken = await getAccessToken(req)
 		const headers: HeadersInit = {
@@ -26,10 +29,14 @@ export async function GET(req: NextRequest) {
 		if (perPage) backendUrl.searchParams.set('per_page', perPage)
 		if (userId) backendUrl.searchParams.set('user_id', userId)
 		if (kind) backendUrl.searchParams.set('kind', kind)
+		if (socialCommunityId) {
+			backendUrl.searchParams.set('social_community_id', socialCommunityId)
+		}
+		if (filterMode) backendUrl.searchParams.set('filter', filterMode)
 
 		const postsResponse = await fetch(backendUrl.toString(), {
 			method: 'GET',
-			headers,
+			headers: withVondicProxyHeaders(headers),
 			cache: 'no-store',
 		})
 
@@ -46,35 +53,52 @@ export async function GET(req: NextRequest) {
 			? postsPayload
 			: postsPayload.items || postsPayload.posts || []
 
-		// 2. Fetch users (to map authors)
-		// We try to fetch all users to map names/avatars.
-		// In a real production app, this should be paginated or optimized (e.g. fetch by IDs).
-		const usersResponse = await fetch(`${BACKEND_URL}/api/v1/users/`, {
-			method: 'GET',
-			headers: {
-				'Content-Type': 'application/json',
-			},
-		})
-
 		let usersMap: Record<string, any> = {}
-		if (usersResponse.ok) {
-			const users = await usersResponse.json()
-			if (Array.isArray(users)) {
-				users.forEach((u: any) => {
-					usersMap[u.id] = u
-				})
+		const needsAuthors = items.some(
+			(p: { author_name?: string; posted_by?: string }) =>
+				p.posted_by && !p.author_name,
+		)
+		if (needsAuthors && accessToken) {
+			const usersResponse = await fetch(`${BACKEND_URL}/api/v1/users/`, {
+				method: 'GET',
+				headers: withVondicProxyHeaders({
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${accessToken}`,
+				}),
+			})
+			if (usersResponse.ok) {
+				const users = await usersResponse.json()
+				if (Array.isArray(users)) {
+					users.forEach((u: { id: string }) => {
+						usersMap[u.id] = u
+					})
+				}
 			}
 		}
 
-		// 3. Merge data
 		const enrichedPosts = Array.isArray(items)
 			? items.map((post: any) => {
 					const author = usersMap[post.posted_by]
 					return {
 						...post,
-						author_name: author?.username || 'Unknown User',
-						author_avatar: author?.avatar_url || null,
-						author_premium: !!author?.premium,
+						author_name:
+							post.author_name ||
+							post.author?.username ||
+							author?.username ||
+							'Unknown User',
+						author_avatar:
+							post.author_avatar ?? author?.avatar_url ?? null,
+						author_premium:
+							post.author_premium ?? !!author?.premium,
+						author: post.author ||
+							(author
+								? {
+										id: author.id,
+										username: author.username,
+										avatar_url: author.avatar_url,
+										premium: author.premium,
+									}
+								: undefined),
 						is_liked: post.is_liked || post.liked || post.has_liked || false,
 						likes: post.likes || post.like_count || 0,
 					}

@@ -3,6 +3,7 @@ import NotificationBell from '@/components/notifications/NotificationBell'
 import GlobalPlayer from '@/components/music/GlobalPlayer'
 import { UrlFallbackProvider } from '@/components/UrlFallbackProvider'
 import { AuthProvider } from '@/lib/AuthContext'
+import { SocialCommunitiesProvider } from '@/lib/SocialCommunitiesContext'
 import ReactQueryProvider from '@/lib/ReactQueryProvider'
 import { SocketProvider } from '@/lib/SocketContext'
 import { ToastProvider } from '@/lib/ToastContext'
@@ -54,16 +55,18 @@ export default function RootLayout({
 					<StoreProvider>
 						<ReactQueryProvider>
 							<AuthProvider>
-								<SocketProvider>
-									<ToastProvider>
-										<WebRTCProvider>
-											{children}
-											<GlobalCallUI />
-											<GlobalPlayer />
-											<NotificationBell />
-										</WebRTCProvider>
-									</ToastProvider>
-								</SocketProvider>
+								<SocialCommunitiesProvider>
+									<SocketProvider>
+										<ToastProvider>
+											<WebRTCProvider>
+												{children}
+												<GlobalCallUI />
+												<GlobalPlayer />
+												<NotificationBell />
+											</WebRTCProvider>
+										</ToastProvider>
+									</SocketProvider>
+								</SocialCommunitiesProvider>
 							</AuthProvider>
 						</ReactQueryProvider>
 					</StoreProvider>

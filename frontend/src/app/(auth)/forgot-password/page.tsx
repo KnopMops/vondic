@@ -1,6 +1,7 @@
 'use client'
 
 import BrandLogo from '@/components/social/BrandLogo'
+import EmailInput from '@/components/ui/EmailInput'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { useState } from 'react'
@@ -19,7 +20,7 @@ export default function ForgotPasswordPage() {
 			const res = await fetch('/api/auth/forgot-password', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ email }),
+				body: JSON.stringify({ email: email.trim().toLowerCase() }),
 			})
 			const data = await res.json()
 			if (res.ok) {
@@ -87,17 +88,14 @@ export default function ForgotPasswordPage() {
 								Электронная почта
 							</label>
 							<div className='relative'>
-								<Mail className='absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500' />
-								<input
+								<Mail className='absolute left-3 top-1/2 z-10 -translate-y-1/2 w-5 h-5 text-gray-500 pointer-events-none' />
+								<EmailInput
 									id='email'
-									name='email'
-									type='email'
-									autoComplete='email'
-									required
-									className='block w-full rounded-xl border border-white/10 bg-white/5 py-3 pl-10 pr-4 text-white placeholder:text-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none'
-									placeholder='Электронная почта'
 									value={email}
-									onChange={e => setEmail(e.target.value)}
+									onChange={setEmail}
+									required
+									listId='forgot-email-suggestions'
+									className='block w-full rounded-xl border border-white/10 bg-white/5 py-3 pl-10 pr-4 text-white placeholder:text-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none'
 								/>
 							</div>
 						</div>

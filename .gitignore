@@ -59,6 +59,17 @@ run.py
 *.crt
 *.key
 
+mail/.env
+mail/data/
+mail/config/ssl/cert.pem
+mail/config/ssl/key.pem
+!mail/data/.gitkeep
+!mail/config/
+!mail/config/ssl/
+!mail/config/ssl/.gitkeep
+
+mail/
+
 Dockerfile*
 nginx/
 *.yaml
@@ -78,3 +89,6 @@ nginx-static/
 qwen_free_cli/
 
 docker-compose.yml
+
+mail_listener.py
+

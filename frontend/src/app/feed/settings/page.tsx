@@ -2,6 +2,8 @@
 
 import Header from '@/components/social/Header'
 import DeveloperSettings from '@/components/settings/DeveloperSettings'
+import MailApiSettings from '@/components/settings/MailApiSettings'
+import PasswordInput from '@/components/ui/PasswordInput'
 import Sidebar from '@/components/social/Sidebar'
 import { useAuth } from '@/lib/AuthContext'
 import { setUser } from '@/lib/features/authSlice'
@@ -132,9 +134,9 @@ export default function SettingsPage() {
 	const [newPassword, setNewPassword] = useState('')
 	const [confirmPassword, setConfirmPassword] = useState('')
 	const [changePasswordLoading, setChangePasswordLoading] = useState(false)
-	const [activeTab, setActiveTab] = useState<'system' | 'interface' | 'sounds'>(
-		'system',
-	)
+	const [activeTab, setActiveTab] = useState<
+		'system' | 'mail' | 'interface' | 'sounds'
+	>('system')
 	const [ringtoneVolume, setRingtoneVolume] = useState<number>(70)
 	const [messageVolume, setMessageVolume] = useState<number>(50)
 	const [isOauthModalOpen, setIsOauthModalOpen] = useState(false)
@@ -712,6 +714,17 @@ export default function SettingsPage() {
 									Системные
 								</button>
 								<button
+									onClick={() => setActiveTab('mail')}
+									className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+										activeTab === 'mail'
+											? 'bg-indigo-500/20 text-white'
+											: 'text-gray-400 hover:text-white hover:bg-white/5'
+									}`}
+								>
+									<FiMail className='w-4 h-4' />
+									Почта
+								</button>
+								<button
 									onClick={() => setActiveTab('interface')}
 									className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
 										activeTab === 'interface'
@@ -1057,25 +1070,25 @@ export default function SettingsPage() {
 											</button>
 										) : (
 											<div className='space-y-3'>
-												<input
-													type='password'
+												<PasswordInput
 													placeholder='Текущий пароль'
 													value={currentPassword}
 													onChange={e => setCurrentPassword(e.target.value)}
+													wrapperClassName='w-full'
 													className='w-full rounded-lg border border-white/10 bg-black/30 p-3 text-sm text-white placeholder:text-gray-500 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition'
 												/>
-												<input
-													type='password'
+												<PasswordInput
 													placeholder='Новый пароль'
 													value={newPassword}
 													onChange={e => setNewPassword(e.target.value)}
+													wrapperClassName='w-full'
 													className='w-full rounded-lg border border-white/10 bg-black/30 p-3 text-sm text-white placeholder:text-gray-500 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition'
 												/>
-												<input
-													type='password'
+												<PasswordInput
 													placeholder='Подтвердите новый пароль'
 													value={confirmPassword}
 													onChange={e => setConfirmPassword(e.target.value)}
+													wrapperClassName='w-full'
 													className='w-full rounded-lg border border-white/10 bg-black/30 p-3 text-sm text-white placeholder:text-gray-500 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition'
 												/>
 												<div className='flex gap-3'>
@@ -1103,6 +1116,27 @@ export default function SettingsPage() {
 									</div>
 								</motion.div>
 							</>
+						)}
+
+						{activeTab === 'mail' && (
+							<motion.div
+								initial={{ opacity: 0, y: 20 }}
+								animate={{ opacity: 1, y: 0 }}
+								transition={{ duration: 0.4 }}
+								className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
+							>
+								<motion.div
+									initial={{ opacity: 0 }}
+									animate={{ opacity: 1 }}
+									transition={{ duration: 0.8 }}
+									className='absolute -top-20 -right-16 w-52 h-52 bg-gradient-to-br from-indigo-500/10 to-blue-500/10 rounded-full blur-3xl'
+								/>
+								<div className='flex items-center gap-3 mb-4'>
+									<FiMail className='w-5 h-5 text-indigo-400' />
+									<h2 className='text-xl font-semibold'>Mail API</h2>
+								</div>
+								<MailApiSettings />
+							</motion.div>
 						)}
 
 						{activeTab === 'interface' && (

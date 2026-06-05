@@ -2,23 +2,22 @@
 
 import { getAttachmentUrl } from '@/lib/utils'
 import { AnimatePresence, motion } from 'framer-motion'
-import {
-	LuArchive as Archive,
-	LuArrowDownAZ as ArrowDownAZ,
-	LuArrowDownZA as ArrowDownZA,
-	LuCheck as Check,
-	LuClipboard as Clipboard,
-	LuFileText as FileText,
-	LuFolder as Folder,
-	LuImage as Image,
-	LuMic as Mic,
-	LuMusic as Music,
-	LuUpload as Upload,
-	LuTrash2 as Trash2,
-	LuVideo as Video,
-	LuX as X,
-} from 'react-icons/lu'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+    LuArchive as Archive,
+    LuArrowDownAZ as ArrowDownAZ,
+    LuArrowDownZA as ArrowDownZA,
+    LuCheck as Check,
+    LuClipboard as Clipboard,
+    LuFileText as FileText,
+    LuFolder as Folder,
+    LuImage as Image,
+    LuMic as Mic,
+    LuTrash2 as Trash2,
+    LuUpload as Upload,
+    LuVideo as Video,
+    LuX as X
+} from 'react-icons/lu'
 
 type FileItem = {
 	id: string

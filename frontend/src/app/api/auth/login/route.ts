@@ -1,10 +1,14 @@
-import { NextRequest, NextResponse } from "next/server";
 import { setTokens } from "@/lib/auth.utils";
+import { withVondicProxyHeaders } from "@/lib/proxy-headers";
 import { getBackendUrl } from "@/lib/server-urls";
+import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    if (body?.email && typeof body.email === "string") {
+      body.email = body.email.trim().toLowerCase();
+    }
     const backendUrl = getBackendUrl();
     const userAgent = req.headers.get("user-agent") || "";
     const forwardedFor = req.headers.get("x-forwarded-for") || "";
@@ -12,12 +16,12 @@ export async function POST(req: NextRequest) {
 
     const response = await fetch(`${backendUrl}/api/v1/auth/login`, {
       method: "POST",
-      headers: {
+      headers: withVondicProxyHeaders({
         "Content-Type": "application/json",
         "User-Agent": userAgent,
         "X-Forwarded-For": forwardedFor,
         "X-Real-IP": realIp,
-      },
+      }),
       body: JSON.stringify(body),
     });
 

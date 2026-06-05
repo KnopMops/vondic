@@ -5,13 +5,70 @@ Endpoints for backing up and restoring E2E encryption keys across devices.
 All key data is encrypted client-side - the server only stores encrypted blobs.
 """
 
+import base64
+import secrets
+
 from flask import Blueprint, request, jsonify
 from typing import List, Dict, Any
 
+from ...core.extensions import db
+from ...models.user import User
 from ...services.e2e_key_backup_service import E2EKeyBackupService
 from ...utils.decorators import token_required
 
 e2e_keys_bp = Blueprint('e2e_keys', __name__, url_prefix='/api/v1/e2e-keys')
+
+
+def _ensure_e2e_backup_salt(user: User) -> str:
+    if user.e2e_backup_salt:
+        return user.e2e_backup_salt
+    user.e2e_backup_salt = base64.b64encode(secrets.token_bytes(32)).decode(
+        'ascii'
+    )
+    db.session.commit()
+    return user.e2e_backup_salt
+
+
+@e2e_keys_bp.route('/backup-material', methods=['GET'])
+@token_required
+def get_backup_material(current_user):
+    """Salt + wrapped device secret for E2E backup (requires auth)."""
+    try:
+        user = User.query.get(current_user.id)
+        if not user:
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        salt = _ensure_e2e_backup_salt(user)
+        return jsonify({
+            'success': True,
+            'salt': salt,
+            'wrapped_device_secret': user.e2e_wrapped_device_secret,
+        }), 200
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@e2e_keys_bp.route('/backup-material', methods=['PUT'])
+@token_required
+def put_backup_material(current_user):
+    """Store wrapped device secret (encrypted client-side with session key)."""
+    data = request.get_json() or {}
+    wrapped = data.get('wrapped_device_secret')
+    if not wrapped or not isinstance(wrapped, str):
+        return jsonify({
+            'success': False,
+            'error': 'wrapped_device_secret is required',
+        }), 400
+    try:
+        user = User.query.get(current_user.id)
+        if not user:
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        _ensure_e2e_backup_salt(user)
+        user.e2e_wrapped_device_secret = wrapped
+        db.session.commit()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @e2e_keys_bp.route('/backup', methods=['POST'])
@@ -107,8 +164,8 @@ def restore_key(current_user):
         if not backup:
             return jsonify({
                 'success': False,
-                'error': 'Key not found'
-            }), 404
+                'error': 'Key not found',
+            }), 200
 
         return jsonify({
             'success': True,

@@ -31,7 +31,7 @@ export default async function middleware(req: NextRequest) {
 
 		const url = req.nextUrl.clone()
 		url.pathname = '/login'
-		url.searchParams.set('from', pathname)
+		url.searchParams.set('returnTo', pathname + req.nextUrl.search)
 		return NextResponse.redirect(url)
 	}
 

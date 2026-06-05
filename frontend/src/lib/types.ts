@@ -116,7 +116,13 @@ export interface Message {
 	channel_id?: string
 	group_id?: string
 	reply_to?: string
-	type?: 'text' | 'voice' | 'image' | 'file'
+	type?: 'text' | 'voice' | 'image' | 'file' | 'game'
+	game?: {
+		id: string
+		title?: string
+		embed_url: string
+		download_url?: string
+	}
 	attachments?: Attachment[] | string
 	is_deleted?: boolean
 	sender_username?: string
@@ -131,6 +137,7 @@ export interface Message {
 			text: string
 			callback_data?: string
 			url?: string
+			modal?: string
 		}>>
 	}
 }

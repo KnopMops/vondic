@@ -150,16 +150,36 @@ class PublicAPIClient:
             text: str,
             parse_mode: Optional[str] = None,
             reply_markup: Optional[Dict[str, Any]] = None,
+            game: Optional[Dict[str, Any]] = None,
     ):
-        body = {"chat_id": chat_id, "text": text}
+        body: Dict[str, Any] = {"chat_id": chat_id, "text": text or ""}
         if parse_mode:
             body["parse_mode"] = parse_mode
         if reply_markup:
             body["reply_markup"] = reply_markup
+        if game:
+            body["game"] = game
         return self._request(
             "POST",
             f"/api/public/v1/bots/{bot_id}/send",
             json_body=body,
+            bot_token=bot_token,
+        )
+
+    def list_bot_games(
+        self,
+        bot_id: str,
+        bot_token: str,
+        *,
+        query: Optional[str] = None,
+    ):
+        params = {}
+        if query:
+            params["q"] = query
+        return self._request(
+            "GET",
+            f"/api/public/v1/bots/{bot_id}/games",
+            params=params or None,
             bot_token=bot_token,
         )
 

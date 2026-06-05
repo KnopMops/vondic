@@ -49,6 +49,7 @@ dependencies = [
     "nuitka>=4.0.1",
     "pyinstaller>=6.19.0",
     "prometheus-client>=0.25.0",
+    "imap-tools>=1.13.0",
 ]
 
 [tool.ruff]

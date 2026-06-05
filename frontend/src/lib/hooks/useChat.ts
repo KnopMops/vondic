@@ -5,7 +5,15 @@ import { Socket } from 'socket.io-client'
 import {
 	backupKeyToServer,
 	restoreKeyFromServer,
+	beginServerKeysRestore,
+	ensureBackupMaterial,
 	getDeviceInfo,
+	getE2eKeyIdVariants,
+	lookupCachedServerKey,
+	persistKeyLocally,
+	resetE2eRestoreCache,
+	resetServerKeyRestoreResults,
+	serverHasKeyBackup,
 } from '@/lib/e2eKeySync'
 
 const hasCryptoSubtle = () =>
@@ -319,6 +327,31 @@ const mtDecrypt = (ciphertext: string, key: Uint8Array) => {
 	return decoder.decode(body)
 }
 
+/** Превью E2E в списке чатов (несколько вариантов key_id). */
+export function tryDecryptE2EPreviewWithKeyIds(
+	ciphertext: string,
+	keyIds: string[],
+): string | null {
+	if (!ciphertext || typeof ciphertext !== 'string') return null
+	if (!ciphertext.startsWith('e2e:')) return ciphertext
+	for (const keyId of keyIds) {
+		const normalized = String(keyId || '').trim()
+		if (!normalized) continue
+		const stored =
+			localStorage.getItem(`e2e_key_${normalized}`) ||
+			sessionStorage.getItem(`e2e_key_${normalized}`)
+		if (!stored) continue
+		try {
+			const key = bytesFromBase64(stored)
+			const decrypted = mtDecrypt(ciphertext, key)
+			if (decrypted !== null && decrypted.trim() !== '') return decrypted
+		} catch {
+			continue
+		}
+	}
+	return null
+}
+
 /** Превью E2E в списке чатов без открытия переписки (ключ из localStorage). */
 export function decryptDmPreviewText(
 	selfId: string,
@@ -327,28 +360,13 @@ export function decryptDmPreviewText(
 ): string {
 	if (!text || !text.startsWith('e2e:')) return text
 	if (!selfId || !peerId) return '🔒 Зашифрованное сообщение'
-	const keyId = [selfId, peerId].sort().join(':')
-	let stored =
-		localStorage.getItem(`e2e_key_${keyId}`) ||
-		sessionStorage.getItem(`e2e_key_${keyId}`)
-	if (!stored) {
-		const legacyA = `e2e_key_${selfId}:${peerId}`
-		const legacyB = `e2e_key_${peerId}:${selfId}`
-		stored =
-			localStorage.getItem(legacyA) ||
-			localStorage.getItem(legacyB) ||
-			sessionStorage.getItem(legacyA) ||
-			sessionStorage.getItem(legacyB) ||
-			null
-	}
-	if (!stored) return '🔒 Зашифрованное сообщение'
-	try {
-		const key = bytesFromBase64(stored)
-		const dec = mtDecrypt(text, key)
-		return dec && dec.trim() !== '' ? dec : '🔒 Зашифрованное сообщение'
-	} catch {
-		return '🔒 Зашифрованное сообщение'
-	}
+	const keyIds = [
+		[selfId, peerId].sort().join(':'),
+		`${selfId}:${peerId}`,
+		`${peerId}:${selfId}`,
+	]
+	const decrypted = tryDecryptE2EPreviewWithKeyIds(text, keyIds)
+	return decrypted || '🔒 Зашифрованное сообщение'
 }
 
 export const useChat = (
@@ -375,6 +393,8 @@ export const useChat = (
 	const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 	const e2eKeysRef = useRef<Map<string, Uint8Array>>(new Map())
 	const e2ePairsRef = useRef<Map<string, CryptoKeyPair>>(new Map())
+	const loadStoredKeyAttemptedRef = useRef<Set<string>>(new Set())
+	const keyExchangeStartedRef = useRef<Set<string>>(new Set())
 	const e2ePendingRef = useRef<
 		Map<
 			string,
@@ -391,62 +411,123 @@ export const useChat = (
 			? [currentUserId, targetUserId].sort().join(':')
 			: null
 
+	const hydrateKeysFromLocalStorage = useCallback(() => {
+		if (typeof window === 'undefined') return
+		for (let i = 0; i < localStorage.length; i++) {
+			const storageKey = localStorage.key(i)
+			if (!storageKey?.startsWith('e2e_key_')) continue
+			const keyId = storageKey.slice('e2e_key_'.length)
+			try {
+				const stored = localStorage.getItem(storageKey)
+				if (stored) {
+					e2eKeysRef.current.set(keyId, bytesFromBase64(stored))
+				}
+			} catch {
+				// ignore corrupt entries
+			}
+		}
+	}, [])
+
+	const aliasKeyToChat = useCallback(
+		(keyBytes: Uint8Array) => {
+			if (!e2eKeyId || !currentUserId || !targetUserId) return
+			for (const variant of getE2eKeyIdVariants(
+				currentUserId,
+				targetUserId,
+			)) {
+				e2eKeysRef.current.set(variant, keyBytes)
+			}
+		},
+		[e2eKeyId, currentUserId, targetUserId],
+	)
+
 	const loadStoredKey = useCallback(async () => {
 		if (!e2eKeyId) return
 		if (e2eKeysRef.current.has(e2eKeyId)) return
-		// 1) Текущий формат (отсортированная пара)
-		let stored =
-			localStorage.getItem(`e2e_key_${e2eKeyId}`) ||
-			sessionStorage.getItem(`e2e_key_${e2eKeyId}`)
-		// 2) Легаси-форматы (без сортировки)
-		if (!stored && currentUserId && targetUserId) {
-			const legacyA = `e2e_key_${currentUserId}:${targetUserId}`
-			const legacyB = `e2e_key_${targetUserId}:${currentUserId}`
-			stored =
-				localStorage.getItem(legacyA) ||
-				localStorage.getItem(legacyB) ||
-				sessionStorage.getItem(legacyA) ||
-				sessionStorage.getItem(legacyB) ||
-				null
+
+		hydrateKeysFromLocalStorage()
+
+		if (currentUserId && targetUserId) {
+			for (const variant of getE2eKeyIdVariants(
+				currentUserId,
+				targetUserId,
+			)) {
+				const fromRef = e2eKeysRef.current.get(variant)
+				if (fromRef) {
+					aliasKeyToChat(fromRef)
+					return
+				}
+				const stored =
+					localStorage.getItem(`e2e_key_${variant}`) ||
+					sessionStorage.getItem(`e2e_key_${variant}`)
+				if (stored) {
+					const bytes = bytesFromBase64(stored)
+					aliasKeyToChat(bytes)
+					return
+				}
+			}
 		}
-		if (stored) {
-			e2eKeysRef.current.set(e2eKeyId, bytesFromBase64(stored))
+
+		const cached = lookupCachedServerKey(e2eKeyId)
+		if (cached) {
+			aliasKeyToChat(cached)
+			persistKeyLocally(e2eKeyId, cached)
 			return
 		}
-		
-		// 3) Try to restore from server backup
-		if (accessToken && e2eKeyId) {
-			console.log('[E2E] No local key found, trying to restore from server:', e2eKeyId)
-			const restoredKey = await restoreKeyFromServer(accessToken, e2eKeyId, currentUserId)
-			if (restoredKey) {
-				console.log('[E2E] Successfully restored key from server:', e2eKeyId)
-				e2eKeysRef.current.set(e2eKeyId, restoredKey)
-				// Store locally for future use
-				localStorage.setItem(`e2e_key_${e2eKeyId}`, base64FromBytes(restoredKey))
-			}
-		}
-	}, [e2eKeyId, currentUserId, targetUserId, accessToken])
 
-	const storeKey = useCallback(async (keyId: string, keyBytes: Uint8Array) => {
-		e2eKeysRef.current.set(keyId, keyBytes)
-		localStorage.setItem(`e2e_key_${keyId}`, base64FromBytes(keyBytes))
-		
-		// Backup to server for multi-device sync
-		if (accessToken) {
-			const { deviceId, deviceName } = getDeviceInfo()
-			const success = await backupKeyToServer(
-				accessToken,
-				keyId,
-				keyBytes,
-				deviceId,
-				deviceName,
-				currentUserId
-			)
-			if (success) {
-				console.log('[E2E] Key backed up to server:', keyId)
-			}
+		if (!accessToken || loadStoredKeyAttemptedRef.current.has(e2eKeyId)) {
+			return
 		}
-	}, [accessToken])
+		loadStoredKeyAttemptedRef.current.add(e2eKeyId)
+
+		const restoredKey = await restoreKeyFromServer(
+			accessToken,
+			e2eKeyId,
+			currentUserId,
+		)
+		if (restoredKey) {
+			aliasKeyToChat(restoredKey)
+			persistKeyLocally(e2eKeyId, restoredKey)
+		}
+	}, [
+		e2eKeyId,
+		currentUserId,
+		targetUserId,
+		accessToken,
+		aliasKeyToChat,
+		hydrateKeysFromLocalStorage,
+	])
+
+	const storeKey = useCallback(
+		async (keyId: string, keyBytes: Uint8Array) => {
+			if (currentUserId && targetUserId) {
+				for (const variant of getE2eKeyIdVariants(
+					currentUserId,
+					targetUserId,
+				)) {
+					e2eKeysRef.current.set(variant, keyBytes)
+				}
+				persistKeyLocally(keyId, keyBytes)
+			} else {
+				e2eKeysRef.current.set(keyId, keyBytes)
+				persistKeyLocally(keyId, keyBytes)
+			}
+
+			if (accessToken && currentUserId) {
+				await ensureBackupMaterial(accessToken, currentUserId)
+				const { deviceId, deviceName } = getDeviceInfo()
+				await backupKeyToServer(
+					accessToken,
+					keyId,
+					keyBytes,
+					deviceId,
+					deviceName,
+					currentUserId,
+				)
+			}
+		},
+		[accessToken, currentUserId, targetUserId],
+	)
 
 	const deriveKey = useCallback(async (shared: ArrayBuffer, keyId: string) => {
 		const encoder = new TextEncoder()
@@ -460,27 +541,40 @@ export const useChat = (
 
 	const ensureKeyExchange = useCallback(async () => {
 		if (!socket || !targetUserId || !currentUserId || !e2eKeyId) {
-			console.log('[E2E] ensureKeyExchange skipping - missing params:', {
-				hasSocket: !!socket,
-				hasTargetUserId: !!targetUserId,
-				hasCurrentUserId: !!currentUserId,
-				hasE2eKeyId: !!e2eKeyId,
-			})
 			return
 		}
 		if (!hasCryptoSubtle()) {
-			console.log('[E2E] ensureKeyExchange skipping - no crypto.subtle')
 			return
 		}
-		console.log('[E2E] ensureKeyExchange called for:', e2eKeyId)
+		hydrateKeysFromLocalStorage()
+		if (accessToken) {
+			await beginServerKeysRestore(accessToken, currentUserId)
+		}
 		await loadStoredKey()
 		if (e2eKeysRef.current.has(e2eKeyId)) {
-			console.log('[E2E] Key already loaded for:', e2eKeyId)
 			return
 		}
+		if (accessToken && (await serverHasKeyBackup(accessToken, e2eKeyId))) {
+			loadStoredKeyAttemptedRef.current.delete(e2eKeyId)
+			await ensureBackupMaterial(accessToken, currentUserId)
+			resetServerKeyRestoreResults()
+			await beginServerKeysRestore(accessToken, currentUserId)
+			await loadStoredKey()
+			if (e2eKeysRef.current.has(e2eKeyId)) {
+				return
+			}
+			console.warn(
+				'[E2E] Server backup exists but key could not be restored — not rotating',
+			)
+			return
+		}
+		if (keyExchangeStartedRef.current.has(e2eKeyId)) {
+			return
+		}
+		keyExchangeStartedRef.current.add(e2eKeyId)
+
 		let pair = e2ePairsRef.current.get(e2eKeyId)
 		if (!pair) {
-			console.log('[E2E] Generating key pair for:', e2eKeyId)
 			pair = await crypto.subtle.generateKey(
 				{ name: 'ECDH', namedCurve: 'P-256' },
 				true,
@@ -489,14 +583,21 @@ export const useChat = (
 			e2ePairsRef.current.set(e2eKeyId, pair)
 		}
 		const publicKeyRaw = await crypto.subtle.exportKey('raw', pair.publicKey)
-		console.log('[E2E] Sending key exchange offer to:', targetUserId)
 		socket.emit('e2e_key_exchange', {
 			target_user_id: targetUserId,
 			public_key: base64FromBytes(new Uint8Array(publicKeyRaw)),
 			key_id: e2eKeyId,
 			type: 'offer',
 		})
-	}, [socket, targetUserId, currentUserId, e2eKeyId, loadStoredKey])
+	}, [
+		socket,
+		targetUserId,
+		currentUserId,
+		e2eKeyId,
+		accessToken,
+		loadStoredKey,
+		hydrateKeysFromLocalStorage,
+	])
 
 	const resolveMessageKeyCandidates = useCallback(
 		(msg: any): string[] => {
@@ -591,6 +692,56 @@ export const useChat = (
 	)
 
 	useEffect(() => {
+		if (!accessToken || !currentUserId) return
+		let cancelled = false
+		resetE2eRestoreCache()
+		loadStoredKeyAttemptedRef.current.clear()
+		keyExchangeStartedRef.current.clear()
+		hydrateKeysFromLocalStorage()
+		;(async () => {
+			try {
+				await ensureBackupMaterial(accessToken, currentUserId)
+				const keys = await beginServerKeysRestore(
+					accessToken,
+					currentUserId,
+				)
+				if (cancelled) return
+				for (const [keyId, keyBytes] of keys.entries()) {
+					e2eKeysRef.current.set(keyId, keyBytes)
+					try {
+						localStorage.setItem(
+							`e2e_key_${keyId}`,
+							base64FromBytes(keyBytes),
+						)
+					} catch {
+						// ignore quota errors
+					}
+				}
+				setMessages(prev => prev.map(m => decryptMessage(m)))
+			} catch {
+				// ignore restore errors
+			}
+		})()
+		return () => {
+			cancelled = true
+		}
+	}, [
+		accessToken,
+		currentUserId,
+		hydrateKeysFromLocalStorage,
+		decryptMessage,
+	])
+
+	useEffect(() => {
+		if (typeof window === 'undefined') return
+		const onKeysUpdated = () => {
+			setMessages(prev => prev.map(m => decryptMessage(m)))
+		}
+		window.addEventListener('e2e-keys-updated', onKeysUpdated)
+		return () => window.removeEventListener('e2e-keys-updated', onKeysUpdated)
+	}, [decryptMessage])
+
+	useEffect(() => {
 		if (!socket || !e2eKeyId || !currentUserId || !targetUserId) {
 			console.log('[E2E] Skipping key exchange - missing params:', {
 				hasSocket: !!socket,
@@ -605,11 +756,40 @@ export const useChat = (
 			return
 		}
 		console.log('[E2E] Starting key exchange for:', e2eKeyId)
-		;(async () => { await loadStoredKey() })()
+		;(async () => {
+			hydrateKeysFromLocalStorage()
+			await loadStoredKey()
+		})()
 		const handleKeyExchange = async (data: any) => {
 			console.log('[E2E] Received key exchange:', data)
 			if (!data || data.key_id !== e2eKeyId) return
 			if (data.from_user_id !== targetUserId) return
+
+			if (e2eKeysRef.current.has(e2eKeyId)) {
+				setMessages(prev => prev.map(m => decryptMessage(m)))
+				return
+			}
+			await loadStoredKey()
+			if (e2eKeysRef.current.has(e2eKeyId)) {
+				setMessages(prev => prev.map(m => decryptMessage(m)))
+				return
+			}
+			if (accessToken && (await serverHasKeyBackup(accessToken, e2eKeyId))) {
+				loadStoredKeyAttemptedRef.current.delete(e2eKeyId)
+				await ensureBackupMaterial(accessToken, currentUserId)
+				resetServerKeyRestoreResults()
+				await beginServerKeysRestore(accessToken, currentUserId)
+				await loadStoredKey()
+				if (e2eKeysRef.current.has(e2eKeyId)) {
+					setMessages(prev => prev.map(m => decryptMessage(m)))
+					return
+				}
+				console.warn(
+					'[E2E] Ignoring key exchange — existing server backup could not be restored',
+				)
+				return
+			}
+
 			let pair = e2ePairsRef.current.get(e2eKeyId)
 			if (!pair) {
 				console.log('[E2E] Generating new key pair')
@@ -697,7 +877,9 @@ export const useChat = (
 		e2eKeyId,
 		currentUserId,
 		targetUserId,
+		accessToken,
 		loadStoredKey,
+		hydrateKeysFromLocalStorage,
 		deriveKey,
 		storeKey,
 		ensureKeyExchange,
@@ -707,12 +889,13 @@ export const useChat = (
 	useEffect(() => {
 		if (!e2eKeyId) return
 		;(async () => {
+			hydrateKeysFromLocalStorage()
 			await loadStoredKey()
 			if (e2eKeysRef.current.has(e2eKeyId)) {
 				setMessages(prev => prev.map(m => decryptMessage(m)))
 			}
 		})()
-	}, [e2eKeyId, loadStoredKey, decryptMessage])
+	}, [e2eKeyId, loadStoredKey, hydrateKeysFromLocalStorage, decryptMessage])
 
 	// 1. Load history when chat opens
 	useEffect(() => {
@@ -812,6 +995,10 @@ export const useChat = (
 								attachments: msg.is_deleted ? undefined : msg.attachments,
 							}))
 						: []
+					if (accessToken && currentUserId) {
+						await beginServerKeysRestore(accessToken, currentUserId)
+					}
+					hydrateKeysFromLocalStorage()
 					await loadStoredKey()
 					const decryptedHistory = history.map(msg => decryptMessage(msg))
 
@@ -839,7 +1026,17 @@ export const useChat = (
 			setMessages([])
 			setOffset(0)
 		}
-	}, [targetUserId, currentUserId, channelId, groupId, socket])
+	}, [
+		targetUserId,
+		currentUserId,
+		channelId,
+		groupId,
+		socket,
+		accessToken,
+		loadStoredKey,
+		decryptMessage,
+		hydrateKeysFromLocalStorage,
+	])
 
 	const loadMoreMessages = useCallback(async () => {
 		if (
@@ -949,6 +1146,8 @@ export const useChat = (
 									: undefined,
 						}))
 					: []
+				hydrateKeysFromLocalStorage()
+				await loadStoredKey()
 				const decryptedHistory = newOldMessages.map(msg => decryptMessage(msg))
 
 				if (decryptedHistory.length < HISTORY_PAGE_SIZE) {

@@ -1,6 +1,5 @@
-import { getAccessToken } from '@/lib/auth.utils'
+import { fetchBackend, getAccessToken } from '@/lib/auth.utils'
 import { NextRequest, NextResponse } from 'next/server'
-import { getBackendUrl } from '@/lib/server-urls'
 
 export async function POST(req: NextRequest) {
 	try {
@@ -8,8 +7,6 @@ export async function POST(req: NextRequest) {
 		if (!token) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 		}
-
-		const backendUrl = getBackendUrl()
 
 		let body: any = {}
 		try {
@@ -20,7 +17,7 @@ export async function POST(req: NextRequest) {
 
 		const payload = { ...body, access_token: token }
 
-		const response = await fetch(`${backendUrl}/api/v1/friends/list`, {
+		const response = await fetchBackend('/api/v1/friends/list', {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
@@ -44,42 +41,15 @@ export async function POST(req: NextRequest) {
 		const friendsData = await response.json()
 		const friends = Array.isArray(friendsData) ? friendsData : []
 
-		// Fetch all users to enrich data just in case friends list is also missing details
-		// We reuse the token for this request as well
-		const usersResponse = await fetch(`${backendUrl}/api/v1/users/`, {
-			method: 'GET',
-			headers: {
-				'Content-Type': 'application/json',
-			},
+		const sanitized = friends.map((friend: any) => {
+			if (friend.privacy_settings?.show_email === true) {
+				return friend
+			}
+			const { email: _e, ...rest } = friend
+			return rest
 		})
 
-		let usersMap: Record<string, any> = {}
-		if (usersResponse.ok) {
-			const users = await usersResponse.json()
-			if (Array.isArray(users)) {
-				users.forEach((u: any) => {
-					usersMap[u.id] = u
-				})
-			}
-		}
-
-		const enrichedFriends = friends.map((friend: any) => {
-			const userId = friend.id || friend.friend_id
-			const userDetails = usersMap[userId]
-
-			if (userDetails) {
-				return {
-					...friend,
-					...userDetails,
-					avatar_url: userDetails.avatar_url || friend.avatar_url,
-					username: userDetails.username || friend.username,
-					email: userDetails.email || friend.email,
-				}
-			}
-			return friend
-		})
-
-		return NextResponse.json(enrichedFriends)
+		return NextResponse.json(sanitized)
 	} catch (error) {
 		console.error('Friends list proxy error:', error)
 		return NextResponse.json(

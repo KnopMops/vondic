@@ -1,5 +1,6 @@
 'use client'
 
+import AppLoader from '@/components/ui/AppLoader'
 import Header from '@/components/social/Header'
 import Sidebar from '@/components/social/Sidebar'
 import RightPanel from '@/components/social/RightPanel'
@@ -25,11 +26,7 @@ export default function SupportPage() {
 	const [isUploading, setIsUploading] = useState(false)
 
 	if (!isInitialized || isAuthLoading || !user) {
-		return (
-			<div className='flex min-h-screen items-center justify-center bg-black'>
-				<div className='h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent'></div>
-			</div>
-		)
+		return <AppLoader fullScreen size='lg' />
 	}
 
 	const renderInline = (text: string, keyPrefix: string) => {
@@ -99,7 +96,7 @@ export default function SupportPage() {
 	const ragPollRef = useRef<number | null>(null)
 	const chatBoxRef = useRef<HTMLDivElement | null>(null)
 	const BACKEND_URL =
-		process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:5050'
+		''
 
 	const [chats, setChats] = useState<
 		{ id: number; question: string; status: string; created_at: number }[]

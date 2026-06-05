@@ -190,8 +190,8 @@ class MessageService:
         if not user or user not in channel.participants:
             return None, "User is not a participant of this channel"
 
-        # Broadcast channels: only owner can post text; participants can send voice only
-        if channel.type == "broadcast" and str(channel.owner_id) != str(user_id):
+        if channel.type == "broadcast" and str(
+                channel.owner_id) != str(user_id):
             if msg_type != "voice":
                 return None, "Only owner can post text in this channel. Voice messages allowed."
 
@@ -320,20 +320,28 @@ class MessageService:
                     continue
                 if other_id in last_meta:
                     continue
-                content = MessageService._decrypt_content(msg.content) or ""
-                content = content.strip()
+                raw_content = (msg.content or "").strip()
                 if msg.type == "voice":
                     preview = "🎤 Голосовое сообщение"
                 elif msg.type == "image":
                     preview = "🖼️ Фото"
                 elif msg.type == "file":
                     preview = "📎 Файл"
+                elif raw_content.startswith("e2e:"):
+                    preview = "🔐 Зашифрованное сообщение"
                 else:
-                    preview = content
+                    decrypted = MessageService._decrypt_content(
+                        raw_content) or ""
+                    preview = (decrypted or raw_content).strip()
                 last_meta[other_id] = {
                     "last_message_at": last_at.isoformat() if last_at else None,
                     "last_message_text": preview,
                     "last_message_type": msg.type or "text",
+                    "last_message_raw": raw_content,
+                    "last_message_sender_id": str(
+                        msg.sender_id) if msg.sender_id else None,
+                    "last_message_target_id": str(
+                        msg.target_id) if msg.target_id else None,
                 }
                 ordered_ids.append(other_id)
 

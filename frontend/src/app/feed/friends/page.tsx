@@ -4,6 +4,7 @@ import Header from '@/components/social/Header'
 import Sidebar from '@/components/social/Sidebar'
 import { useAuth } from '@/lib/AuthContext'
 import { User } from '@/lib/types'
+import { userShowsEmail } from '@/lib/userPrivacy'
 import { getAttachmentUrl, getAvatarUrl } from '@/lib/utils'
 import { motion } from 'framer-motion'
 import {
@@ -219,7 +220,9 @@ export default function FriendsPage() {
 									{u.username}
 									{u.premium && <span className='ml-1 text-amber-400'>★</span>}
 								</div>
-								<div className='text-xs text-gray-400'>{u.email}</div>
+								{userShowsEmail(u, user?.id) && u.email && (
+									<div className='text-xs text-gray-400'>{u.email}</div>
+								)}
 							</div>
 						</Link>
 						{isRequest ? (

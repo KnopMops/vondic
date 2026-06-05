@@ -4,6 +4,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getBackendUrl } from './url-fallback'
 
 const ACCESS_TOKEN_KEY = 'access_token'
+
+export async function fetchBackend(path: string, init?: RequestInit): Promise<Response> {
+	const base = getBackendUrl().replace(/\/$/, '')
+	return fetch(`${base}${path}`, init)
+}
 const REFRESH_TOKEN_KEY = 'refresh_token'
 /** 3 дня — после этого нужен повторный вход */
 const SESSION_MAX_AGE_SECONDS = 3 * 24 * 60 * 60

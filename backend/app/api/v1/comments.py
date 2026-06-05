@@ -1,3 +1,4 @@
+from app.exceptions import ForbiddenError, ValidationError
 from app.schemas.comment_schema import comment_schema
 from app.services.comment_service import CommentService
 from app.utils.decorators import token_required
@@ -13,15 +14,12 @@ def update_comment(current_user):
     comment_id = data.get("comment_id")
 
     if not comment_id:
-        return jsonify({"error": "Требуется comment_id"}), 400
+        raise ValidationError("Требуется comment_id")
 
     is_admin = current_user.role == "Admin"
-    comment, error = CommentService.update_comment(
+    comment = CommentService.update_comment(
         comment_id, data, current_user.id, is_admin
     )
-    if error:
-        status_code = 404 if error == "Комментарий не найден" else 403
-        return jsonify({"error": error}), status_code
     return jsonify(comment_schema.dump(comment)), 200
 
 
@@ -33,15 +31,12 @@ def delete_comment(current_user):
     user_id = data.get("user_id")
 
     if not comment_id or not user_id:
-        return jsonify({"error": "Требуется comment_id и user_id"}), 400
+        raise ValidationError("Требуется comment_id и user_id")
 
     if str(user_id) != str(current_user.id):
-        return jsonify({"error": "Несоответствие ID пользователя"}), 403
+        raise ForbiddenError("Несоответствие ID пользователя")
 
-    comment, error = CommentService.delete_comment_by_user(comment_id, user_id)
-    if error:
-        status_code = 404 if error == "Комментарий не найден" else 403
-        return jsonify({"error": error}), status_code
+    CommentService.delete_comment_by_user(comment_id, user_id)
     return jsonify({"message": "Комментарий успешно удалён"}), 200
 
 
@@ -49,7 +44,7 @@ def delete_comment(current_user):
 @token_required
 def delete_comment_admin(current_user):
     if current_user.role != "Admin":
-        return jsonify({"error": "Неавторизовано"}), 403
+        raise ForbiddenError("Неавторизовано")
 
     data = request.get_json() or {}
     comment_id = data.get("comment_id")
@@ -57,18 +52,12 @@ def delete_comment_admin(current_user):
     reason = data.get("reason")
 
     if not comment_id or not user_id or not reason:
-        return jsonify(
-            {"error": "Требуется comment_id, user_id и reason"}), 400
+        raise ValidationError("Требуется comment_id, user_id и reason")
 
     if str(user_id) != str(current_user.id):
-        return jsonify({"error": "Несоответствие ID пользователя"}), 403
+        raise ForbiddenError("Несоответствие ID пользователя")
 
-    comment, error = CommentService.delete_comment_by_admin(
-        comment_id, current_user.id, reason
-    )
-    if error:
-        status_code = 404 if error == "Комментарий не найден" else 403
-        return jsonify({"error": error}), status_code
+    CommentService.delete_comment_by_admin(comment_id, current_user.id, reason)
     return jsonify({"message": "Комментарий удалён администратором"}), 200
 
 
@@ -78,12 +67,9 @@ def like_comment(current_user):
     data = request.get_json() or {}
     comment_id = data.get("comment_id")
     if not comment_id:
-        return jsonify({"error": "Требуется comment_id"}), 400
+        raise ValidationError("Требуется comment_id")
 
-    comment, error = CommentService.like_comment(comment_id, current_user.id)
-    if error:
-        status_code = 404 if error == "Комментарий не найден" else 400
-        return jsonify({"error": error}), status_code
+    comment = CommentService.like_comment(comment_id, current_user.id)
     return jsonify(comment_schema.dump(comment)), 200
 
 
@@ -93,10 +79,7 @@ def unlike_comment(current_user):
     data = request.get_json() or {}
     comment_id = data.get("comment_id")
     if not comment_id:
-        return jsonify({"error": "Требуется comment_id"}), 400
+        raise ValidationError("Требуется comment_id")
 
-    comment, error = CommentService.unlike_comment(comment_id, current_user.id)
-    if error:
-        status_code = 404 if error == "Комментарий не найден" else 400
-        return jsonify({"error": error}), status_code
+    comment = CommentService.unlike_comment(comment_id, current_user.id)
     return jsonify(comment_schema.dump(comment)), 200

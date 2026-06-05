@@ -2,12 +2,14 @@
 
 import { useRouter } from 'next/navigation'
 import React, { createContext, useContext, useEffect } from 'react'
+import { consumePostLoginRedirect } from './authRedirect'
 import {
-	fetchUser,
-	logout as logoutAction,
-	setUser,
+    fetchUser,
+    logout as logoutAction,
+    setUser,
 } from './features/authSlice'
 import { useAppDispatch, useAppSelector } from './hooks'
+import { getSavedAccounts, saveAccount } from './savedAccounts'
 import { User } from './types'
 import { getSavedAccounts, saveAccount } from './savedAccounts'
 
@@ -28,6 +30,8 @@ interface AuthContextType {
 	logout: (redirectUrl?: string) => void
 	isLoading: boolean
 	isInitialized: boolean
+	/** true пока идёт первичная проверка cookies / fetchUser */
+	authReady: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -37,8 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 	const { user, isLoading, isInitialized } = useAppSelector(state => state.auth)
 	const router = useRouter()
 
-	const backendUrl =
-		process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+	const backendUrl = ''
 
 	useEffect(() => {
 		const initAuth = async () => {
@@ -107,7 +110,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		opts?: { smartCaptchaToken?: string },
 	) => {
 		try {
-			const body: Record<string, string> = { email, password }
+			const body: Record<string, string> = {
+				email: email.trim().toLowerCase(),
+				password,
+			}
 			const cap = opts?.smartCaptchaToken
 			if (cap) body.smart_captcha_token = cap
 			// Запрос к нашему API Proxy (который установит cookies)
@@ -120,7 +126,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			const data = await response.json()
 
 			if (!response.ok) {
-				throw new Error(data.error || 'Вход не выполнен')
+				throw new Error(
+					data.error || data.code || 'Вход не выполнен',
+				)
 			}
 
 			const userData = data.user
@@ -143,7 +151,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			// Токены теперь в httpOnly cookies, не сохраняем их в localStorage
 
 			if (typeof window !== 'undefined') {
-				window.location.assign('/feed')
+				window.location.assign(consumePostLoginRedirect())
 			} else {
 				router.push('/feed')
 			}
@@ -187,8 +195,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					email,
-					username,
+					email: email.trim().toLowerCase(),
+					username: username.trim(),
 					password,
 					smart_captcha_token: captchaToken,
 				}),
@@ -285,6 +293,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				logout,
 				isLoading,
 				isInitialized,
+				authReady: isInitialized && !isLoading,
 			}}
 		>
 			{children}

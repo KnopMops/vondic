@@ -1,3 +1,4 @@
+from .app_setting import AppSetting
 from .block import Block
 from .bot import Bot
 from .channel import Channel
@@ -10,12 +11,14 @@ from .friendship import Friendship
 from .gift_catalog import GiftCatalog
 from .group import Group
 from .like import Like
+from .mailbox import Mailbox, MailboxCredential
 from .message import Message
 from .notification import Notification
 from .post_report import PostReport
 from .post import Post
 from .playlist import Playlist
 from .playlist_borrow import PlaylistBorrow
+from .social_community import SocialCommunity
 from .subscription import Subscription
 from .support_chat_message import SupportChatMessage
 from .user import User
@@ -28,6 +31,7 @@ from .video_like import VideoLike
 from .video_view import VideoView
 
 __all__ = [
+    "AppSetting",
     "Block",
     "Bot",
     "Channel",
@@ -37,6 +41,8 @@ __all__ = [
     "Friendship",
     "Group",
     "Like",
+    "Mailbox",
+    "MailboxCredential",
     "Message",
     "Notification",
     "PostReport",
@@ -56,4 +62,5 @@ __all__ = [
     "GiftCatalog",
     "Community",
     "CommunityChannel",
+    "SocialCommunity",
 ]

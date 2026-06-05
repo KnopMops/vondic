@@ -157,7 +157,7 @@ class FriendshipService:
                 friend_id = f.addressee_id if f.requester_id == user_id else f.requester_id
                 friend = User.query.get(friend_id)
                 if friend:
-                    friends.append(friend.to_dict())
+                    friends.append(friend.to_dict(viewer_id=user_id))
             return friends
         except Exception as e:
             print(f"Error in get_friends: {e}")
@@ -177,7 +177,7 @@ class FriendshipService:
         for r in requests:
             requester = User.query.get(r.requester_id)
             if requester:
-                data = requester.to_dict()
+                data = requester.to_dict(viewer_id=user_id)
                 data["request_created_at"] = r.created_at.isoformat()
                 data["friendship_id"] = r.id
                 result.append(data)

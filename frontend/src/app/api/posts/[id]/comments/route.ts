@@ -1,6 +1,6 @@
 import { getAccessToken } from '@/lib/auth.utils'
-import { NextRequest, NextResponse } from 'next/server'
 import { getBackendUrl } from '@/lib/server-urls'
+import { NextRequest, NextResponse } from 'next/server'
 
 const BACKEND_URL = getBackendUrl()
 

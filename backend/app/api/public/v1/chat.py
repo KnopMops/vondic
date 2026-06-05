@@ -8,11 +8,18 @@ from app.api.public.auth_helpers import embed_auth_required, extract_api_key, re
 from app.core.extensions import db
 from app.models.message import Message
 from app.schemas.channel_schema import channel_schema, channels_schema
+from app.schemas.community_channel_schema import (
+    community_channel_schema,
+    community_channels_schema,
+)
+from app.schemas.community_schema import communities_schema, community_schema
 from app.schemas.group_schema import group_schema, groups_schema
 from app.schemas.message_schema import message_schema, messages_schema
 from app.schemas.user_schema import user_schema, users_schema
 from app.services.auth_service import AuthService
 from app.services.channel_service import ChannelService
+from app.services.community_channel_service import CommunityChannelService
+from app.services.community_service import CommunityService
 from app.services.e2e_key_backup_service import E2EKeyBackupService
 from app.services.friendship_service import FriendshipService
 from app.services.group_service import GroupService
@@ -31,6 +38,14 @@ def _webrtc_base_url() -> str:
         or os.getenv("WEBRTC_URL")
         or "http://webrtc:5000"
     ).rstrip("/")
+
+
+def _user_in_community(community, user) -> bool:
+    if not community:
+        return False
+    if str(community.owner_id) == str(user.id):
+        return True
+    return user in community.members
 
 
 def _paginated_messages_response(messages_pagination):
@@ -83,12 +98,13 @@ def chat_config():
             },
             "websocket_url": os.getenv(
                 "PUBLIC_WEBRTC_URL",
-                os.getenv("WEBRTC_URL", "https://webrtc.vondic.knopusmedia.ru"),
+                os.getenv("WEBRTC_URL", "https://webrtc.vondic.ru"),
             ),
             "features": {
                 "direct_messages": True,
                 "groups": True,
                 "channels": True,
+                "communities": True,
                 "reactions": True,
                 "replies": True,
                 "forwards": True,
@@ -121,7 +137,8 @@ def chat_me(current_user, access_token):
 @embed_auth_required
 def issue_access_token(current_user, access_token):
     if access_token:
-        return jsonify({"access_token": access_token, "auth_type": "bearer"}), 200
+        return jsonify({"access_token": access_token,
+                       "auth_type": "bearer"}), 200
     api_key = extract_api_key()
     if api_key:
         return jsonify(
@@ -149,7 +166,8 @@ def get_api_key(current_user, access_token):
     if error:
         return jsonify({"error": error}), 400
     if not token:
-        return jsonify({"error": "API key not set. Create one via POST /api-key"}), 404
+        return jsonify(
+            {"error": "API key not set. Create one via POST /api-key"}), 404
     return jsonify({"api_key": token}), 200
 
 
@@ -213,13 +231,10 @@ def send_dm_message(current_user, access_token, target_id):
 def delete_dm_message(current_user, access_token, target_id, message_id):
     message = Message.query.filter(
         Message.id == message_id,
-        (
-            ((Message.sender_id == current_user.id) & (Message.target_id == target_id))
-            | (
-                (Message.sender_id == target_id)
-                & (Message.target_id == current_user.id)
-            )
-        ),
+        (((Message.sender_id == current_user.id) & (
+            Message.target_id == target_id)) | (
+            (Message.sender_id == target_id) & (
+                Message.target_id == current_user.id))),
     ).first()
     if not message:
         return jsonify({"error": "Message not found"}), 404
@@ -234,9 +249,11 @@ def delete_dm_message(current_user, access_token, target_id, message_id):
 @embed_auth_required
 def delete_dm_history(current_user, access_token, target_id):
     deleted = Message.query.filter(
-        ((Message.sender_id == current_user.id) & (Message.target_id == target_id))
-        | ((Message.sender_id == target_id) & (Message.target_id == current_user.id))
-    ).delete(synchronize_session=False)
+        ((Message.sender_id == current_user.id) & (
+            Message.target_id == target_id)) | (
+            (Message.sender_id == target_id) & (
+                Message.target_id == current_user.id))).delete(
+                    synchronize_session=False)
     db.session.commit()
     return jsonify({"deleted": deleted}), 200
 
@@ -436,6 +453,130 @@ def get_channel_messages(current_user, access_token, channel_id):
     return jsonify(_paginated_messages_response(messages_pagination)), 200
 
 
+@public_chat_bp.route("/communities", methods=["POST"])
+@embed_auth_required
+def create_community(current_user, access_token):
+    data = request.get_json() or {}
+    community, error = CommunityService.create_community(data, current_user.id)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify(community_schema.dump(community)), 201
+
+
+@public_chat_bp.route("/communities/join", methods=["POST"])
+@embed_auth_required
+def join_community(current_user, access_token):
+    data = request.get_json() or {}
+    invite_code = data.get("invite_code")
+    if not invite_code:
+        return jsonify({"error": "invite_code is required"}), 400
+    community, error = CommunityService.join_community(
+        invite_code, current_user.id)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify(community_schema.dump(community)), 200
+
+
+@public_chat_bp.route("/communities", methods=["GET"])
+@embed_auth_required
+def list_communities(current_user, access_token):
+    communities = CommunityService.get_user_communities(current_user.id)
+    return jsonify(communities_schema.dump(communities)), 200
+
+
+@public_chat_bp.route("/communities/search", methods=["POST"])
+@embed_auth_required
+def search_communities(current_user, access_token):
+    data = request.get_json() or {}
+    query = (data.get("query") or "").strip()
+    if not query:
+        return jsonify({"items": []}), 200
+    results = CommunityService.search_communities(query, current_user.id)
+    return jsonify({"items": communities_schema.dump(results)}), 200
+
+
+@public_chat_bp.route("/communities/<community_id>", methods=["GET"])
+@embed_auth_required
+def get_community(current_user, access_token, community_id):
+    community = CommunityService.get_by_id(community_id)
+    if not community:
+        return jsonify({"error": "Community not found"}), 404
+    if not _user_in_community(community, current_user):
+        return jsonify({"error": "Access denied"}), 403
+    return jsonify(community_schema.dump(community)), 200
+
+
+@public_chat_bp.route("/communities/<community_id>", methods=["PUT"])
+@embed_auth_required
+def update_community(current_user, access_token, community_id):
+    community = CommunityService.get_by_id(community_id)
+    if not community:
+        return jsonify({"error": "Community not found"}), 404
+    if str(community.owner_id) != str(current_user.id):
+        return jsonify({"error": "Only owner can update community"}), 403
+    data = request.get_json() or {}
+    community, error = CommunityService.update_community(community_id, data)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify(community_schema.dump(community)), 200
+
+
+@public_chat_bp.route("/communities/leave", methods=["POST"])
+@embed_auth_required
+def leave_community(current_user, access_token):
+    data = request.get_json() or {}
+    community_id = data.get("community_id")
+    if not community_id:
+        return jsonify({"error": "community_id is required"}), 400
+    community = CommunityService.get_by_id(community_id)
+    if not community:
+        return jsonify({"error": "Community not found"}), 404
+    if not _user_in_community(community, current_user):
+        return jsonify({"error": "You are not a member"}), 403
+    _, error = CommunityService.leave_community(community_id, current_user.id)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({"success": True}), 200
+
+
+@public_chat_bp.route("/communities/<community_id>/invite", methods=["GET"])
+@embed_auth_required
+def get_community_invite(current_user, access_token, community_id):
+    community = CommunityService.get_by_id(community_id)
+    if not community:
+        return jsonify({"error": "Community not found"}), 404
+    if not _user_in_community(community, current_user):
+        return jsonify({"error": "Access denied"}), 403
+    return jsonify({"invite_code": community.invite_code}), 200
+
+
+@public_chat_bp.route("/communities/<community_id>/channels", methods=["GET"])
+@embed_auth_required
+def list_community_channels(current_user, access_token, community_id):
+    community = CommunityService.get_by_id(community_id)
+    if not community:
+        return jsonify({"error": "Community not found"}), 404
+    if not _user_in_community(community, current_user):
+        return jsonify({"error": "Access denied"}), 403
+    channels = CommunityChannelService.list_channels(community_id)
+    return jsonify(community_channels_schema.dump(channels)), 200
+
+
+@public_chat_bp.route("/communities/<community_id>/channels", methods=["POST"])
+@embed_auth_required
+def create_community_channel(current_user, access_token, community_id):
+    community = CommunityService.get_by_id(community_id)
+    if not community:
+        return jsonify({"error": "Community not found"}), 404
+    if not _user_in_community(community, current_user):
+        return jsonify({"error": "Access denied"}), 403
+    data = request.get_json() or {}
+    channel, error = CommunityChannelService.create_channel(community_id, data)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify(community_channel_schema.dump(channel)), 201
+
+
 @public_chat_bp.route("/channels/<channel_id>/messages", methods=["POST"])
 @embed_auth_required
 def send_channel_message(current_user, access_token, channel_id):
@@ -491,7 +632,8 @@ def add_reaction(current_user, access_token, message_id):
 
     message.reactions = reactions
     db.session.commit()
-    return jsonify({"success": True, "reactions": reactions, "action": action}), 200
+    return jsonify(
+        {"success": True, "reactions": reactions, "action": action}), 200
 
 
 @public_chat_bp.route("/messages/<message_id>/edit", methods=["PUT"])
@@ -511,9 +653,8 @@ def edit_message(current_user, access_token, message_id):
         return jsonify({"error": "Edit window expired (48h)"}), 400
 
     edit_history = message.edit_history or []
-    edit_history.append(
-        {"content": message.content, "edited_at": datetime.utcnow().isoformat()}
-    )
+    edit_history.append({"content": message.content,
+                         "edited_at": datetime.utcnow().isoformat()})
     message.content = new_content
     message.is_edited = True
     message.edit_history = edit_history
@@ -580,7 +721,8 @@ def forward_message(current_user, access_token, message_id):
     group_id = data.get("group_id")
     channel_id = data.get("channel_id")
     if not target_id and not group_id and not channel_id:
-        return jsonify({"error": "target_id, group_id or channel_id required"}), 400
+        return jsonify(
+            {"error": "target_id, group_id or channel_id required"}), 400
 
     original = Message.query.get(message_id)
     if not original:
@@ -611,7 +753,9 @@ def delete_for_everyone(current_user, access_token, message_id):
     message = Message.query.get(message_id)
     if not message:
         return jsonify({"error": "Message not found"}), 404
-    if str(message.sender_id) != str(current_user.id) and current_user.role != "Admin":
+    if str(
+            message.sender_id) != str(
+            current_user.id) and current_user.role != "Admin":
         return jsonify({"error": "Forbidden"}), 403
     if (datetime.utcnow() - message.created_at).total_seconds() > 604800:
         return jsonify({"error": "Delete window expired (7d)"}), 400
@@ -647,7 +791,8 @@ def send_friend_request(current_user, access_token):
         return jsonify({"error": "friend_id is required"}), 400
     from app.schemas.friendship_schema import friendship_schema
 
-    friendship, error = FriendshipService.send_request(current_user.id, friend_id)
+    friendship, error = FriendshipService.send_request(
+        current_user.id, friend_id)
     if error:
         return jsonify({"error": error}), 400
     return jsonify(friendship_schema.dump(friendship)), 201
@@ -702,7 +847,12 @@ def search_users(current_user, access_token):
     if not query:
         return jsonify({"items": []}), 200
     users = UserService.search_users(query)
-    return jsonify({"items": users_schema.dump(users)}), 200
+    return (
+        jsonify(
+            {"items": [u.to_dict(viewer_id=current_user.id) for u in users]}
+        ),
+        200,
+    )
 
 
 @public_chat_bp.route("/users/<user_id>", methods=["GET"])
@@ -711,8 +861,8 @@ def get_user(current_user, access_token, user_id):
     user = UserService.get_user_by_id(user_id)
     if not user:
         return jsonify({"error": "User not found"}), 404
-    data = user_schema.dump(user)
-    for field in ("email", "password_hash", "api_key", "refresh_token"):
+    data = user.to_dict(viewer_id=current_user.id)
+    for field in ("password_hash", "api_key", "refresh_token"):
         data.pop(field, None)
     return jsonify(data), 200
 
@@ -800,7 +950,8 @@ def online_count():
 def e2e_backup(current_user, access_token):
     data = request.get_json() or {}
     if not data.get("key_id") or not data.get("encrypted_key_data"):
-        return jsonify({"error": "key_id and encrypted_key_data required"}), 400
+        return jsonify(
+            {"error": "key_id and encrypted_key_data required"}), 400
     backup = E2EKeyBackupService.backup_key(
         user_id=str(current_user.id),
         key_id=data["key_id"],

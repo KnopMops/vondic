@@ -131,6 +131,17 @@ class GroupParticipant(Base):
     user_id: Mapped[str] = mapped_column(String, nullable=False)
 
 
+class ChatClear(Base):
+    """Per-user chat history clear (messages stay for others)."""
+
+    __tablename__ = "chat_clears"
+
+    user_id: Mapped[str] = mapped_column(String, primary_key=True)
+    peer_id: Mapped[str] = mapped_column(String, primary_key=True)
+    chat_type: Mapped[str] = mapped_column(String, primary_key=True)
+    cleared_at: Mapped[datetime] = mapped_column(nullable=False)
+
+
 class UserRepository:
     def __init__(self):
         try:
@@ -171,9 +182,70 @@ class UserRepository:
                     text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS pinned_by TEXT"))
                 conn.execute(
                     text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS reactions TEXT"))
+                conn.execute(
+                    text(
+                        """
+                        CREATE TABLE IF NOT EXISTS chat_clears (
+                            user_id TEXT NOT NULL,
+                            peer_id TEXT NOT NULL,
+                            chat_type TEXT NOT NULL,
+                            cleared_at TIMESTAMP NOT NULL,
+                            PRIMARY KEY (user_id, peer_id, chat_type)
+                        )
+                        """
+                    )
+                )
         except Exception as e:
 
             logger.warning(f"Schema ensure skipped/failed: {e}")
+
+    def _set_chat_cleared(self, user_id, peer_id, chat_type):
+        now = datetime.utcnow()
+        with self._session() as session:
+            row = (
+                session.query(ChatClear)
+                .filter(
+                    ChatClear.user_id == str(user_id),
+                    ChatClear.peer_id == str(peer_id),
+                    ChatClear.chat_type == str(chat_type),
+                )
+                .first()
+            )
+            if row:
+                row.cleared_at = now
+            else:
+                session.add(
+                    ChatClear(
+                        user_id=str(user_id),
+                        peer_id=str(peer_id),
+                        chat_type=str(chat_type),
+                        cleared_at=now,
+                    )
+                )
+
+    def _get_chat_cleared_at(self, user_id, peer_id, chat_type):
+        try:
+            with self._session() as session:
+                row = (
+                    session.query(ChatClear)
+                    .filter(
+                        ChatClear.user_id == str(user_id),
+                        ChatClear.peer_id == str(peer_id),
+                        ChatClear.chat_type == str(chat_type),
+                    )
+                    .first()
+                )
+                return row.cleared_at if row else None
+        except Exception as err:
+            logger.error(f"Ошибка БД (chat clear): {err}")
+            return None
+
+    def _clear_chat_clear_records(self, peer_id, chat_type):
+        with self._session() as session:
+            session.query(ChatClear).filter(
+                ChatClear.peer_id == str(peer_id),
+                ChatClear.chat_type == str(chat_type),
+            ).delete(synchronize_session=False)
 
     @contextmanager
     def _session(self):
@@ -336,7 +408,7 @@ class UserRepository:
                         except Exception:
                             pass
                         row = legacy
-                # Check OAuth access token (for mobile OAuth login)
+
                 if not row and token:
                     oauth_token = session.query(OAuthAccessToken).filter(
                         OAuthAccessToken.token == str(token)).first()
@@ -769,13 +841,26 @@ class UserRepository:
             logger.error(f"DB Error get_group_owner: {e}")
             return None
 
-    def get_channel_history(self, channel_id, limit=50, offset=0):
+    def get_channel_history(
+            self,
+            channel_id,
+            limit=50,
+            offset=0,
+            viewer_id=None):
         try:
+            cleared_at = None
+            if viewer_id:
+                cleared_at = self._get_chat_cleared_at(
+                    viewer_id, channel_id, "channel"
+                )
             with self._session() as session:
+                query = session.query(Message).filter(
+                    Message.channel_id == str(channel_id)
+                )
+                if cleared_at is not None:
+                    query = query.filter(Message.created_at > cleared_at)
                 rows = (
-                    session.query(Message)
-                    .filter(Message.channel_id == str(channel_id))
-                    .order_by(Message.created_at.desc())
+                    query.order_by(Message.created_at.desc())
                     .limit(limit)
                     .offset(offset)
                     .all()
@@ -823,54 +908,83 @@ class UserRepository:
             logger.error(f"Ошибка БД (история канала): {err}")
             return []
 
-    def delete_messages_history(self, user_id, target_id):
+    def delete_messages_history(self, user_id, target_id, scope="for_all"):
         try:
+            if scope == "for_me":
+                self._set_chat_cleared(user_id, target_id, "dm")
+                return 0
             with self._session() as session:
                 deleted = (
-                    session.query(Message) .filter(
+                    session.query(Message)
+                    .filter(
                         or_(
-                            (Message.sender_id == str(user_id)) & (
-                                Message.target_id == str(target_id)), (Message.sender_id == str(target_id)) & (
-                                Message.target_id == str(user_id)), )) .delete(
-                        synchronize_session=False))
-                return deleted or 0
+                            (Message.sender_id == str(user_id))
+                            & (Message.target_id == str(target_id)),
+                            (Message.sender_id == str(target_id))
+                            & (Message.target_id == str(user_id)),
+                        )
+                    )
+                    .delete(synchronize_session=False)
+                )
+            self._clear_chat_clear_records(target_id, "dm")
+            return deleted or 0
         except Exception as err:
             logger.error(f"Ошибка БД (удаление истории): {err}")
             return 0
 
-    def delete_channel_history(self, channel_id):
+    def delete_channel_history(
+            self,
+            channel_id,
+            user_id=None,
+            scope="for_all"):
         try:
+            if scope == "for_me" and user_id:
+                self._set_chat_cleared(user_id, channel_id, "channel")
+                return 0
             with self._session() as session:
                 deleted = (
                     session.query(Message)
                     .filter(Message.channel_id == str(channel_id))
                     .delete(synchronize_session=False)
                 )
-                return deleted or 0
+            self._clear_chat_clear_records(channel_id, "channel")
+            return deleted or 0
         except Exception as err:
             logger.error(f"Ошибка БД (удаление истории канала): {err}")
             return 0
 
-    def delete_group_history(self, group_id):
+    def delete_group_history(self, group_id, user_id=None, scope="for_all"):
         try:
+            if scope == "for_me" and user_id:
+                self._set_chat_cleared(user_id, group_id, "group")
+                return 0
             with self._session() as session:
                 deleted = (
                     session.query(Message)
                     .filter(Message.group_id == str(group_id))
                     .delete(synchronize_session=False)
                 )
-                return deleted or 0
+            self._clear_chat_clear_records(group_id, "group")
+            return deleted or 0
         except Exception as err:
             logger.error(f"Ошибка БД (удаление истории группы): {err}")
             return 0
 
-    def get_group_history(self, group_id, limit=50, offset=0):
+    def get_group_history(self, group_id, limit=50, offset=0, viewer_id=None):
         try:
+            cleared_at = None
+            if viewer_id:
+                cleared_at = self._get_chat_cleared_at(
+                    viewer_id, group_id, "group"
+                )
             with self._session() as session:
+                query = session.query(Message).filter(
+                    Message.group_id == str(group_id)
+                )
+                if cleared_at is not None:
+                    query = query.filter(Message.created_at > cleared_at)
                 rows = (
-                    session.query(Message)
-                    .filter(Message.group_id == str(group_id))
-                    .order_by(Message.created_at.desc())
+                    query.order_by(Message.created_at.desc())
                     .limit(limit)
                     .offset(offset)
                     .all()
@@ -965,14 +1079,24 @@ class UserRepository:
 
     def get_messages_history(self, user_id, target_id, limit=50, offset=0):
         try:
+            cleared_at = self._get_chat_cleared_at(user_id, target_id, "dm")
             with self._session() as session:
+                query = session.query(Message).filter(
+                    or_(
+                        (Message.sender_id == str(user_id))
+                        & (Message.target_id == str(target_id)),
+                        (Message.sender_id == str(target_id))
+                        & (Message.target_id == str(user_id)),
+                    )
+                )
+                if cleared_at is not None:
+                    query = query.filter(Message.created_at > cleared_at)
                 rows = (
-                    session.query(Message) .filter(
-                        or_(
-                            (Message.sender_id == str(user_id)) & (
-                                Message.target_id == str(target_id)), (Message.sender_id == str(target_id)) & (
-                                Message.target_id == str(user_id)), )) .order_by(
-                        Message.created_at.desc()) .limit(limit) .offset(offset) .all())
+                    query.order_by(Message.created_at.desc())
+                    .limit(limit)
+                    .offset(offset)
+                    .all()
+                )
 
             messages = []
             for row in rows:

@@ -41,7 +41,9 @@ def _tag_for_rule(rule: str) -> str:
         "upload": "Upload",
         "payments": "Payments",
         "gifts": "Gifts",
+        "app-downloads": "App Downloads",
         "communities": "Communities",
+        "social-communities": "Social Communities",
         "dm": "Direct Messages",
         "chat": "Chat Embed API",
         "storis": "Stories",
@@ -87,6 +89,7 @@ def _build_swagger_paths(app: Flask):
 
 def _build_allowed_origins() -> list[str]:
     defaults = [
+        "https://vondic.ru",
         "https://vondic.knopusmedia.ru",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
@@ -113,6 +116,11 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
     app.url_map.strict_slashes = False
+
+    from app.error_handlers import register_error_handlers
+
+    register_error_handlers(app)
+
     db.init_app(app)
     migrate.init_app(app, db)
     ma.init_app(app)
@@ -169,11 +177,23 @@ def create_app(config_class=Config):
                 print(f"Failed to ensure AI user: {e}")
 
         try:
-            from app.services.db_schema_bootstrap import ensure_users_extended_columns
+            from app.services.db_schema_bootstrap import (
+                ensure_bots_owner_id_column,
+                ensure_channels_type_column,
+                ensure_chat_entity_avatar_columns,
+                ensure_posts_social_community_column,
+                ensure_social_communities_cover_column,
+                ensure_users_extended_columns,
+            )
 
             ensure_users_extended_columns(db.engine)
+            ensure_posts_social_community_column(db.engine)
+            ensure_social_communities_cover_column(db.engine)
+            ensure_chat_entity_avatar_columns(db.engine)
+            ensure_channels_type_column(db.engine)
+            ensure_bots_owner_id_column(db.engine)
             print(
-                "[DB] Дополнительные колонки users проверены (lookup / moderation_warnings).")
+                "[DB] Дополнительные колонки users/posts/chat/bots проверены.")
         except Exception as e:
             print(f"[DB] ensure_users_extended_columns: {e}")
 
@@ -184,15 +204,19 @@ def create_app(config_class=Config):
     from app.api.public.v1.messages import public_messages_bp
     from app.api.public.v1.posts import public_posts_bp
     from app.api.public.v1.users import public_users_bp
+    from app.api.public.v1.mail import public_mail_bp
     from app.api.oauth import oauth_bp
     from app.api.v1.auth import auth_bp
     from app.api.v1.bots import bots_bp
+    from app.api.v1.bot_games import bot_games_bp
     from app.api.v1.channels import channels_bp
     from app.api.v1.comments import comments_bp
     from app.api.v1.communities import communities_bp
+    from app.api.v1.social_communities import social_communities_bp
     from app.api.v1.e2e_keys import e2e_keys_bp
     from app.api.v1.direct_messages import dm_bp
     from app.api.v1.friends import friends_bp
+    from app.api.v1.app_downloads import app_downloads_bp
     from app.api.v1.gifts import gifts_bp
     from app.api.v1.groups import groups_bp
     from app.api.v1.messages import messages_bp
@@ -207,6 +231,7 @@ def create_app(config_class=Config):
     from app.api.v1.videos import videos_bp
     from app.api.v1.upload import upload_bp
     from app.api.v1.files import files_bp
+    from app.api.v1.mail import mail_bp
 
     app.register_blueprint(public_account_bp)
     app.register_blueprint(public_bots_bp)
@@ -215,15 +240,19 @@ def create_app(config_class=Config):
     app.register_blueprint(public_messages_bp)
     app.register_blueprint(public_posts_bp)
     app.register_blueprint(public_users_bp)
+    app.register_blueprint(public_mail_bp)
     app.register_blueprint(oauth_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(bots_bp)
+    app.register_blueprint(bot_games_bp, url_prefix="/api/v1/bots")
     app.register_blueprint(channels_bp)
     app.register_blueprint(comments_bp)
     app.register_blueprint(communities_bp)
+    app.register_blueprint(social_communities_bp)
     app.register_blueprint(e2e_keys_bp)
     app.register_blueprint(dm_bp)
     app.register_blueprint(friends_bp)
+    app.register_blueprint(app_downloads_bp)
     app.register_blueprint(gifts_bp)
     app.register_blueprint(groups_bp)
     app.register_blueprint(messages_bp)
@@ -238,6 +267,7 @@ def create_app(config_class=Config):
     app.register_blueprint(videos_bp)
     app.register_blueprint(upload_bp)
     app.register_blueprint(files_bp)
+    app.register_blueprint(mail_bp)
 
     swagger_config = {
         "headers": [],
@@ -270,6 +300,20 @@ def create_app(config_class=Config):
         response.headers.add('Access-Control-Expose-Headers', 'X-Total-Count')
         return response
 
+    from app.utils.api_errors import api_error
+    from app.utils.network_access import should_allow_request
+    from app.utils.static_access import authorize_static_request
+
+    @app.before_request
+    def restrict_network_access():
+        path = request.path or ""
+        if path.startswith("/uploads/") or path.startswith("/static/"):
+            if not authorize_static_request():
+                return api_error("STATIC_ACCESS_DENIED", 401)
+            return None
+        if not should_allow_request(path):
+            return api_error("NETWORK_ACCESS_DENIED", 403)
+
     @app.before_request
     def before_request_metrics():
         endpoint = request.endpoint or "unknown"
@@ -301,68 +345,30 @@ def create_app(config_class=Config):
 
     STATIC_NGINX_URL = os.getenv('STATIC_NGINX_URL', 'http://static-nginx:80')
 
-    @app.route('/static/<path:filename>')
-    def serve_static(filename):
-        remote_addr = request.remote_addr or ""
-
-        is_internal = remote_addr.startswith('172.') or remote_addr.startswith(
-            '192.168.') or remote_addr.startswith('10.')
-
-        is_authorized = False
-
-        if is_internal:
-            is_authorized = True
-        else:
-            token = request.args.get("access_token") or request.headers.get(
-                "Authorization", "").replace("Bearer ", "")
-            if token:
-                try:
-                    from app.services.auth_service import AuthService
-                    user, error = AuthService.get_user_by_token(token)
-                    if user:
-                        is_authorized = True
-                except Exception:
-                    pass
-
-            api_key = request.args.get(
-                "api_key") or request.headers.get("X-API-Key")
-            if api_key:
-                try:
-                    from app.services.user_service import UserService
-                    user = UserService.get_user_by_api_key(api_key)
-                    if user:
-                        is_authorized = True
-                except Exception:
-                    pass
-
-            origin = request.headers.get("Origin", "")
-            allowed_origins = _build_allowed_origins()
-            if origin in allowed_origins:
-                is_authorized = True
-
-        if not is_authorized:
-            return jsonify(
-                {"error": "Unauthorized access to static resource"}), 401
-
+    def _proxy_upstream(
+        upstream_url: str,
+        *,
+        fallback_folder: str,
+        fallback_name: str,
+        as_attachment: bool = False,
+        download_name: str | None = None,
+    ):
         try:
-            if filename.startswith('uploads/'):
-                static_url = f"{STATIC_NGINX_URL}/{filename}"
-            else:
-                static_url = f"{STATIC_NGINX_URL}/static/{filename}"
-
             if request.query_string:
-                static_url += f"?{request.query_string.decode('utf-8')}"
+                qs = request.query_string.decode('utf-8')
+                sep = '&' if '?' in upstream_url else '?'
+                upstream_url = f"{upstream_url}{sep}{qs}"
 
             resp = http_requests.request(
                 method=request.method,
-                url=static_url,
+                url=upstream_url,
                 headers={
                     key: value for key,
                     value in request.headers if key.lower() != 'host'},
                 data=request.get_data(),
                 cookies=request.cookies,
                 allow_redirects=False,
-                timeout=10)
+                timeout=30)
 
             excluded_headers = {
                 'content-encoding',
@@ -374,59 +380,61 @@ def create_app(config_class=Config):
                 for name, value in resp.raw.headers.items()
                 if name.lower() not in excluded_headers
             ]
-
+            if as_attachment and download_name:
+                headers.append(
+                    (
+                        'Content-Disposition',
+                        f'attachment; filename="{download_name}"',
+                    )
+                )
             return Response(resp.content, resp.status_code, headers)
         except http_requests.exceptions.ConnectionError:
-            static_folder = os.path.join(os.path.dirname(__file__), 'static')
-            return send_from_directory(static_folder, filename)
+            return send_from_directory(
+                fallback_folder,
+                fallback_name,
+                as_attachment=as_attachment,
+                download_name=download_name,
+            )
         except http_requests.exceptions.Timeout:
-            return jsonify({"error": "Static service timeout"}), 504
+            return api_error("STATIC_TIMEOUT", 504)
         except Exception as e:
-            import traceback
             print(f"Error proxying to static nginx: {e}")
-            print(traceback.format_exc())
-            static_folder = os.path.join(os.path.dirname(__file__), 'static')
-            return send_from_directory(static_folder, filename)
+            return send_from_directory(
+                fallback_folder,
+                fallback_name,
+                as_attachment=as_attachment,
+                download_name=download_name,
+            )
+
+    @app.route('/static/<path:filename>')
+    def serve_static(filename):
+        if filename.startswith('uploads/'):
+            static_url = f"{STATIC_NGINX_URL}/{filename}"
+        else:
+            static_url = f"{STATIC_NGINX_URL}/static/{filename}"
+        static_folder = os.path.join(os.path.dirname(__file__), 'static')
+        return _proxy_upstream(
+            static_url,
+            fallback_folder=static_folder,
+            fallback_name=filename,
+        )
 
     @app.route('/uploads/<path:filename>')
     def serve_uploads(filename):
-        try:
-            uploads_url = f"{STATIC_NGINX_URL}/uploads/{filename}"
-            if request.query_string:
-                uploads_url += f"?{request.query_string.decode('utf-8')}"
-
-            resp = http_requests.request(
-                method=request.method,
-                url=uploads_url,
-                headers={
-                    key: value for key,
-                    value in request.headers if key.lower() != 'host'},
-                data=request.get_data(),
-                cookies=request.cookies,
-                allow_redirects=False,
-                timeout=10)
-
-            excluded_headers = {
-                'content-encoding',
-                'content-length',
-                'transfer-encoding',
-                'connection'}
-            headers = [
-                (name, value)
-                for name, value in resp.raw.headers.items()
-                if name.lower() not in excluded_headers
-            ]
-
-            return Response(resp.content, resp.status_code, headers)
-        except http_requests.exceptions.ConnectionError:
-            uploads_folder = os.getenv('UPLOADS_DIR', '/app/uploads')
-            return send_from_directory(uploads_folder, filename)
-        except http_requests.exceptions.Timeout:
-            return jsonify({"error": "Uploads service timeout"}), 504
-        except Exception as e:
-            print(f"Error proxying to static nginx for uploads: {e}")
-            uploads_folder = os.getenv('UPLOADS_DIR', '/app/uploads')
-            return send_from_directory(uploads_folder, filename)
+        as_attachment = (
+            request.args.get('download') in ('1', 'true', 'yes')
+            or request.headers.get('X-Download') == '1'
+        )
+        download_name = request.args.get('filename') or filename.rsplit('/', 1)[-1]
+        uploads_url = f"{STATIC_NGINX_URL}/uploads/{filename}"
+        uploads_folder = os.getenv('UPLOADS_DIR', '/app/uploads')
+        return _proxy_upstream(
+            uploads_url,
+            fallback_folder=uploads_folder,
+            fallback_name=filename,
+            as_attachment=as_attachment,
+            download_name=download_name if as_attachment else None,
+        )
 
     @app.route("/metrics")
     def metrics():

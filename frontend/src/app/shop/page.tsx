@@ -2,6 +2,7 @@
 import Header from '@/components/social/Header'
 import Sidebar from '@/components/social/Sidebar'
 import { useAuth } from '@/lib/AuthContext'
+import { getAttachmentUrl } from '@/lib/utils'
 import {
 	FiCoffee as Coffee,
 	FiHelpCircle as HelpCircle,
@@ -48,9 +49,15 @@ export default function ShopPage() {
 	const [premiumSearchLoading, setPremiumSearchLoading] = useState(false)
 	const [premiumGiftLoading, setPremiumGiftLoading] = useState(false)
 	const [premiumGiftError, setPremiumGiftError] = useState<string | null>(null)
+	const [coinRecipientId, setCoinRecipientId] = useState<string | null>(null)
+	const [coinSearch, setCoinSearch] = useState('')
+	const [coinHits, setCoinHits] = useState<any[]>([])
+	const [coinSearchLoading, setCoinSearchLoading] = useState(false)
+	const [coinAmount, setCoinAmount] = useState('10')
+	const [coinTransferLoading, setCoinTransferLoading] = useState(false)
+	const [coinTransferError, setCoinTransferError] = useState<string | null>(null)
+	const [coinTransferNote, setCoinTransferNote] = useState<string | null>(null)
 
-	const backendUrl =
-		process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
 	const staticGiftImages: Record<string, string> = {
 		newyear_fireworks: '/static/gifts/firework.png',
 		valentine_heart: '/static/gifts/bouquet.png',
@@ -79,7 +86,7 @@ export default function ShopPage() {
 	useEffect(() => {
 		const fetchGifts = async () => {
 			try {
-				const res = await fetch(`${backendUrl}/api/v1/gifts/`, {
+				const res = await fetch('/api/v1/gifts', {
 					method: 'GET',
 				})
 				if (!res.ok) {
@@ -93,7 +100,7 @@ export default function ShopPage() {
 			}
 		}
 		fetchGifts()
-	}, [backendUrl])
+	}, [])
 
 	useEffect(() => {
 		if (!giftMode || !recipientSearch.trim()) {
@@ -115,7 +122,7 @@ export default function ShopPage() {
 					setUserSearchHits([])
 					return
 				}
-				const res = await fetch(`${backendUrl}/api/v1/users/search`, {
+				const res = await fetch('/api/users/search', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({ access_token: token, query: q }),
@@ -133,7 +140,7 @@ export default function ShopPage() {
 			}
 		}, 400)
 		return () => clearTimeout(t)
-	}, [recipientSearch, giftMode, backendUrl])
+	}, [recipientSearch, giftMode])
 
 	useEffect(() => {
 		if (!premiumGiftOpen || !premiumSearch.trim()) {
@@ -155,7 +162,7 @@ export default function ShopPage() {
 					setPremiumHits([])
 					return
 				}
-				const res = await fetch(`${backendUrl}/api/v1/users/search`, {
+				const res = await fetch('/api/users/search', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({ access_token: token, query: q }),
@@ -173,7 +180,47 @@ export default function ShopPage() {
 			}
 		}, 400)
 		return () => clearTimeout(t)
-	}, [premiumSearch, premiumGiftOpen, backendUrl])
+	}, [premiumSearch, premiumGiftOpen])
+
+	useEffect(() => {
+		if (!coinSearch.trim()) {
+			setCoinHits([])
+			return
+		}
+		const q = coinSearch.trim()
+		const t = setTimeout(async () => {
+			setCoinSearchLoading(true)
+			try {
+				const meRes = await fetch('/api/auth/me', { method: 'GET' })
+				if (!meRes.ok) {
+					setCoinHits([])
+					return
+				}
+				const meData = await meRes.json()
+				const token = meData?.user?.access_token || meData?.access_token
+				if (!token) {
+					setCoinHits([])
+					return
+				}
+				const res = await fetch('/api/users/search', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ access_token: token, query: q }),
+				})
+				if (!res.ok) {
+					setCoinHits([])
+					return
+				}
+				const data = await res.json()
+				setCoinHits(Array.isArray(data) ? data : [])
+			} catch {
+				setCoinHits([])
+			} finally {
+				setCoinSearchLoading(false)
+			}
+		}, 400)
+		return () => clearTimeout(t)
+	}, [coinSearch])
 
 	const openGiftModal = (gift: any) => {
 		setSelectedGift(gift)
@@ -254,7 +301,7 @@ export default function ShopPage() {
 			const meData = await meRes.json()
 			const token = meData?.user?.access_token || meData?.access_token
 			if (!token) throw new Error('Требуется авторизация')
-			const res = await fetch(`${backendUrl}/api/v1/users/gift-premium-coins`, {
+			const res = await fetch(`/api/v1/users/gift-premium-coins`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -295,7 +342,7 @@ export default function ShopPage() {
 			const meData = await meRes.json()
 			const token = meData?.user?.access_token || meData?.access_token
 			if (!token) throw new Error('Требуется авторизация')
-			const res = await fetch(`${backendUrl}/api/v1/users/send-gift`, {
+			const res = await fetch(`/api/v1/users/send-gift`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
@@ -320,6 +367,54 @@ export default function ShopPage() {
 		}
 	}
 
+	const sendCoinTransfer = async () => {
+		if (!coinRecipientId) {
+			setCoinTransferError('Выберите получателя')
+			return
+		}
+		const amount = parseInt(coinAmount, 10)
+		if (!amount || amount < 1) {
+			setCoinTransferError('Укажите количество коинов')
+			return
+		}
+		setCoinTransferLoading(true)
+		setCoinTransferError(null)
+		setCoinTransferNote(null)
+		try {
+			const meRes = await fetch('/api/auth/me', { method: 'GET' })
+			if (!meRes.ok) throw new Error('Требуется авторизация')
+			const meData = await meRes.json()
+			const token = meData?.user?.access_token || meData?.access_token
+			if (!token) throw new Error('Требуется авторизация')
+			const res = await fetch(`/api/v1/users/gift-coins`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`,
+				},
+				body: JSON.stringify({
+					access_token: token,
+					target_user_id: coinRecipientId,
+					amount,
+				}),
+			})
+			const data = await res.json().catch(() => ({}))
+			if (!res.ok) {
+				throw new Error(data.error || data.message || 'Не удалось отправить коины')
+			}
+			setBalanceOverride(typeof data.balance === 'number' ? data.balance : null)
+			setCoinTransferNote(`Передано ${amount} коинов`)
+			setCoinRecipientId(null)
+			setCoinSearch('')
+			setCoinAmount('10')
+			router.refresh()
+		} catch (e: any) {
+			setCoinTransferError(e.message || 'Ошибка')
+		} finally {
+			setCoinTransferLoading(false)
+		}
+	}
+
 	const buyPremiumWithCoins = async () => {
 		setPremiumLoading(true)
 		setPremiumNote(null)
@@ -331,7 +426,7 @@ export default function ShopPage() {
 			const meData = await meRes.json()
 			const token = meData?.user?.access_token || meData?.access_token
 			if (!token) throw new Error('Требуется авторизация')
-			const res = await fetch(`${backendUrl}/api/v1/users/buy-premium-coins`, {
+			const res = await fetch(`/api/v1/users/buy-premium-coins`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -367,7 +462,7 @@ export default function ShopPage() {
 			const meData = await meRes.json()
 			const token = meData?.user?.access_token || meData?.access_token
 			if (!token) throw new Error('Требуется авторизация')
-			const res = await fetch(`${backendUrl}/api/v1/users/purchase-gift`, {
+			const res = await fetch(`/api/v1/users/purchase-gift`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
@@ -481,6 +576,82 @@ export default function ShopPage() {
 								</div>
 							</div>
 
+							<div className='rounded-2xl border border-indigo-400/30 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 p-6 shadow-sm'>
+								<div className='flex items-start gap-4'>
+									<div className='flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-500/20'>
+										<Coins className='h-6 w-6 text-indigo-300' />
+									</div>
+									<div className='flex-1'>
+										<div className='text-lg font-semibold text-white'>
+											Передать коины
+										</div>
+										<p className='mt-1 text-sm text-gray-400'>
+											Отправьте коины любому пользователю по нику
+										</p>
+										<div className='mt-4 space-y-3'>
+											<input
+												type='text'
+												value={coinSearch}
+												onChange={e => {
+													setCoinSearch(e.target.value)
+													setCoinRecipientId(null)
+												}}
+												placeholder='Поиск по username…'
+												className='w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-sm text-white placeholder:text-gray-500 focus:border-indigo-500 outline-none'
+											/>
+											{coinSearchLoading && (
+												<p className='text-xs text-gray-500'>Поиск…</p>
+											)}
+											{coinHits.length > 0 && (
+												<div className='max-h-36 overflow-y-auto rounded-xl border border-white/10 divide-y divide-white/5'>
+													{coinHits.map((u: any) => (
+														<button
+															key={u.id}
+															type='button'
+															onClick={() => {
+																setCoinRecipientId(String(u.id))
+																setCoinSearch(u.username)
+																setCoinHits([])
+															}}
+															className={`w-full text-left px-4 py-2.5 text-sm hover:bg-white/5 transition-colors ${
+																coinRecipientId === String(u.id)
+																	? 'bg-indigo-500/10 text-indigo-300'
+																	: 'text-gray-200'
+															}`}
+														>
+															{u.username}
+														</button>
+													))}
+												</div>
+											)}
+											<input
+												type='number'
+												min={1}
+												max={10000}
+												value={coinAmount}
+												onChange={e => setCoinAmount(e.target.value)}
+												placeholder='Количество коинов'
+												className='w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-sm text-white placeholder:text-gray-500 focus:border-indigo-500 outline-none'
+											/>
+											{coinTransferError && (
+												<p className='text-sm text-red-400'>{coinTransferError}</p>
+											)}
+											{coinTransferNote && (
+												<p className='text-sm text-emerald-400'>{coinTransferNote}</p>
+											)}
+											<button
+												type='button'
+												disabled={coinTransferLoading || !coinRecipientId}
+												onClick={sendCoinTransfer}
+												className='rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50 hover:from-indigo-500 hover:to-purple-500 transition-all'
+											>
+												{coinTransferLoading ? 'Отправка…' : 'Передать коины'}
+											</button>
+										</div>
+									</div>
+								</div>
+							</div>
+
 							<div className='rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800'>
 								<div className='text-lg font-semibold text-gray-900 dark:text-white'>
 									Подарки
@@ -493,9 +664,7 @@ export default function ShopPage() {
 										const Icon = iconMap[g.icon as string] || Gift
 										const backendImage =
 											typeof g.imageUrl === 'string' && g.imageUrl
-												? g.imageUrl.startsWith('http')
-													? g.imageUrl
-													: `${backendUrl}${g.imageUrl}`
+												? getAttachmentUrl(g.imageUrl)
 												: null
 										const staticImageUrl =
 											typeof g.id === 'string'
@@ -649,9 +818,7 @@ export default function ShopPage() {
 											const backendImage =
 												typeof selectedGift.imageUrl === 'string' &&
 												selectedGift.imageUrl
-													? selectedGift.imageUrl.startsWith('http')
-														? selectedGift.imageUrl
-														: `${backendUrl}${selectedGift.imageUrl}`
+													? getAttachmentUrl(selectedGift.imageUrl)
 													: null
 											const staticImageUrl =
 												typeof selectedGift.id === 'string'

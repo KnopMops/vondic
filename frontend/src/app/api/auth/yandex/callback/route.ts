@@ -1,3 +1,4 @@
+import { POST_LOGIN_REDIRECT_COOKIE } from '@/lib/authRedirect'
 import { setTokens } from '@/lib/auth.utils'
 import { setDesktopSession } from '@/lib/desktopSessions'
 import { NextRequest, NextResponse } from 'next/server'
@@ -58,8 +59,19 @@ export async function GET(req: NextRequest) {
 			}
 		}
 
-		// Если успех, устанавливаем токены и редиректим на /feed
-		const nextResponse = NextResponse.redirect(new URL('/feed', frontendUrl))
+		const rawRedirect = req.cookies.get(POST_LOGIN_REDIRECT_COOKIE)?.value
+		let dest = '/feed'
+		if (rawRedirect) {
+			try {
+				const decoded = decodeURIComponent(rawRedirect)
+				if (decoded.startsWith('/')) dest = decoded
+			} catch {
+				/* ignore */
+			}
+		}
+
+		const nextResponse = NextResponse.redirect(new URL(dest, frontendUrl))
+		nextResponse.cookies.delete(POST_LOGIN_REDIRECT_COOKIE)
 
 		// Устанавливаем токены
 		const responseWithTokens = setTokens(

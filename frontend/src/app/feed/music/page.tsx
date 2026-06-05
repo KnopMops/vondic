@@ -1,34 +1,35 @@
 'use client'
 
+import AppLoader from '@/components/ui/AppLoader'
 import Header from '@/components/social/Header'
 import { useAuth } from '@/lib/AuthContext'
 import { useToast } from '@/lib/ToastContext'
-import { useMusicPlayerStore } from '@/lib/stores/musicPlayerStore'
 import { audioManager } from '@/lib/services/musicPlayer'
+import { useMusicPlayerStore } from '@/lib/stores/musicPlayerStore'
 import { AnimatePresence, motion } from 'framer-motion'
-import {
-	FiDownload as Download,
-	FiLayout as Layout,
-	FiList as List,
-	FiMusic as Music,
-	FiPause as Pause,
-	FiPlay as Play,
-	FiPlus as Plus,
-	FiRepeat as Repeat,
-	FiShare2 as Share2,
-	FiShuffle as Shuffle,
-	FiSkipBack as SkipBack,
-	FiSkipForward as SkipForward,
-	FiTrash2 as Trash2,
-	FiUpload as Upload,
-	FiUser as User,
-	FiVolume2 as Volume2,
-	FiVolumeX as VolumeX,
-	FiX as X,
-} from 'react-icons/fi'
-import { LuPin as Pin, LuPinOff as PinOff } from 'react-icons/lu'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+    FiDownload as Download,
+    FiLayout as Layout,
+    FiList as List,
+    FiMusic as Music,
+    FiPause as Pause,
+    FiPlay as Play,
+    FiPlus as Plus,
+    FiRepeat as Repeat,
+    FiShare2 as Share2,
+    FiShuffle as Shuffle,
+    FiSkipBack as SkipBack,
+    FiSkipForward as SkipForward,
+    FiTrash2 as Trash2,
+    FiUpload as Upload,
+    FiUser as User,
+    FiVolume2 as Volume2,
+    FiVolumeX as VolumeX,
+    FiX as X,
+} from 'react-icons/fi'
+import { LuPin as Pin, LuPinOff as PinOff } from 'react-icons/lu'
 
 interface Track {
 	id: string
@@ -1172,11 +1173,7 @@ export default function MusicPage() {
 	)
 
 	if (!isInitialized || isAuthLoading || !user) {
-		return (
-			<div className='flex min-h-screen items-center justify-center bg-black'>
-				<div className='h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent'></div>
-			</div>
-		)
+		return <AppLoader fullScreen size='lg' />
 	}
 
 	return (

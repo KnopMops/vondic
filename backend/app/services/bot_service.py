@@ -46,6 +46,12 @@ class BotService:
         )
 
     @staticmethod
+    def get_bot_by_id(bot_id):
+        if not bot_id:
+            return None
+        return Bot.query.get(bot_id)
+
+    @staticmethod
     def get_active_bot_by_id(bot_id):
         if not bot_id:
             return None
@@ -75,11 +81,13 @@ class BotService:
                 is_active = int(is_active)
             except Exception:
                 is_active = None
+        owner_id = data.get("owner_id")
         bot = Bot(
             name=name,
             description=description,
             avatar_url=avatar_url,
             is_active=is_active if is_active is not None else 1,
+            owner_id=str(owner_id) if owner_id else None,
         )
         try:
             db.session.add(bot)
