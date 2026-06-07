@@ -4,6 +4,16 @@
   <p>Коммуникационная платформа: чаты, сообщества, голосовые каналы и WebRTC‑звонки.</p>
 </div>
 
+<a href="LICENSE">
+  <img src="https://img.shields.io/badge/License-CC%20BY--NC%20ND%204.0-lightgrey?style=for-the-badge&labelColor=red&color=darkred" alt="License: Non-Commercial Only">
+</a>
+<a href="LICENSE">
+  <img src="https://img.shields.io/badge/Commercial%20Use-Not%20Allowed-red?style=for-the-badge" alt="Commercial Use: Not Allowed">
+</a>
+<a href="LICENSE">
+  <img src="https://img.shields.io/badge/Open%20Source-Yes-brightgreen?style=for-the-badge" alt="Open Source: Yes">
+</a>
+
 ---
 
 ## 🎯 Что внутри
@@ -126,13 +136,3 @@ python main.py
   - `backend/README.md`
   - `webrtc/README.md`
   - `bot/README.md`
-
-<a href="LICENSE">
-  <img src="https://img.shields.io/badge/License-CC%20BY--NC%20ND%204.0-lightgrey?style=for-the-badge&labelColor=red&color=darkred" alt="License: Non-Commercial Only">
-</a>
-<a href="LICENSE">
-  <img src="https://img.shields.io/badge/Commercial%20Use-Not%20Allowed-red?style=for-the-badge" alt="Commercial Use: Not Allowed">
-</a>
-<a href="LICENSE">
-  <img src="https://img.shields.io/badge/Open%20Source-Yes-brightgreen?style=for-the-badge" alt="Open Source: Yes">
-</a>
