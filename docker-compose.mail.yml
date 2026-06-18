@@ -1,0 +1,79 @@
+# Почтовый сервер Vondic (docker-mailserver: Postfix + Dovecot + Rspamd)
+#
+# Запуск вместе с основным стеком:
+#   docker compose -f docker-compose.yml -f docker-compose.mail.yml up -d mailserver
+#
+# Порты слушают MAIL_BIND_IP хоста (например 192.168.120.248) — на него проброс с роутера.
+#
+# Документация DNS: docs/REG_RU_DNS_И_ПОЧТА.md
+
+services:
+  mailserver:
+    image: ghcr.io/docker-mailserver/docker-mailserver:latest
+    container_name: mailserver
+    hostname: mail.vondic.ru
+    env_file:
+      - ./mail/.env
+    # Проброс на LAN-IP хоста (роутер: WAN:25 → 192.168.120.248:25). MAIL_BIND_IP в mail/.env
+    ports:
+      - target: 25
+        published: ${MAIL_SMTP_PORT:-25}
+        host_ip: ${MAIL_BIND_IP:-192.168.120.248}
+        protocol: tcp
+      - target: 587
+        published: ${MAIL_SUBMISSION_PORT:-587}
+        host_ip: ${MAIL_BIND_IP:-192.168.120.248}
+        protocol: tcp
+      - target: 465
+        published: ${MAIL_SMTPS_PORT:-465}
+        host_ip: ${MAIL_BIND_IP:-192.168.120.248}
+        protocol: tcp
+      - target: 993
+        published: ${MAIL_IMAPS_PORT:-993}
+        host_ip: ${MAIL_BIND_IP:-192.168.120.248}
+        protocol: tcp
+    volumes:
+      - ./mail/data/mail-data:/var/mail
+      - ./mail/data/mail-state:/var/mail-state
+      - ./mail/data/mail-logs:/var/log/mail
+      - ./mail/config:/tmp/docker-mailserver
+      - ./nginx/ssl:/tmp/dms/nginx-ssl:ro
+    environment:
+      - TZ=${MAIL_TZ:-Europe/Moscow}
+      - OVERRIDE_HOSTNAME=${MAIL_HOSTNAME:-mail.vondic.ru}
+      - POSTMASTER_ADDRESS=${POSTMASTER_ADDRESS:-postmaster@vondic.ru}
+      - SSL_CERT_PATH=${MAIL_SSL_CERT_PATH:-/tmp/dms/nginx-ssl/vondic.ru.crt}
+      - SSL_KEY_PATH=${MAIL_SSL_KEY_PATH:-/tmp/dms/nginx-ssl/vondic.ru.key}
+      - ENABLE_RSPAMD=1
+      - ENABLE_OPENDKIM=1
+      - ENABLE_OPENDMARC=1
+      - ENABLE_POLICYD_SPF=0
+      - ENABLE_AMAVIS=0
+      - ENABLE_SPAMASSASSIN=0
+      - ENABLE_CLAMAV=0
+      - ENABLE_FAIL2BAN=1
+      - ENABLE_QUOTAS=1
+      - ONE_DIR=1
+      - SSL_TYPE=${MAIL_SSL_TYPE:-manual}
+      - PERMIT_DOCKER=none
+      - SPOOF_PROTECTION=1
+      - POSTFIX_INET_PROTOCOLS=ipv4
+    cap_add:
+      - NET_ADMIN
+    stop_grace_period: 1m
+    healthcheck:
+      test: ["CMD-SHELL", "ss -lntp | grep -E ':25|:993' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    networks:
+      app-network:
+        aliases:
+          - mail.vondic.ru
+    restart: unless-stopped
+
+# Та же bridge-сеть, что у backend/nginx (docker compose … -f docker-compose.mail.yml)
+networks:
+  app-network:
+    driver: bridge
