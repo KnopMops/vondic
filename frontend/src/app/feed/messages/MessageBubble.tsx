@@ -29,6 +29,7 @@ interface Message {
 	timestamp: string
 	isOwn: boolean
 	is_read?: boolean
+	is_edited?: boolean
 	type?: 'text' | 'voice' | 'video_note'
 	channel_id?: string
 	group_id?: string
@@ -224,6 +225,16 @@ const MessageBubble = memo(
 		const sharedPost = msg.is_deleted ? null : getSharedPost(msg.content)
 		const stickerPayload = msg.is_deleted ? null : getStickerPayload(msg.content)
 		const invitePayload = msg.is_deleted ? null : getInvitePayload(msg.content)
+
+		const storyReplyMatch = !msg.is_deleted && msg.content
+			? msg.content.match(/__STORY_REPLY__(\{.*?\})__/)
+			: null
+		const storyReplyData = storyReplyMatch
+			? JSON.parse(storyReplyMatch[1]) as { url: string; type: string; text: string }
+			: null
+		const userTextForStoryReply = storyReplyMatch
+			? msg.content.replace(storyReplyMatch[0], '').trim()
+			: null
 		const inviteInMessage =
 			msg.is_deleted || invitePayload
 				? null
@@ -248,7 +259,7 @@ const MessageBubble = memo(
 			? 'Сообщение удалено'
 			: typeof msg.content === 'string' && msg.content.startsWith('e2e:')
 				? '🔒 Зашифрованное сообщение'
-				: msg.content
+				: (msg.content || '').replace(/\n*\s*__STORY_REPLY__\{.*?\}__\s*/g, '').trim()
 		const reactionEntries = reactions ? Object.entries(reactions) : []
 		const attachments = Array.isArray(msg.attachments) ? msg.attachments : []
 		const isGroupChat = !!(msg.group_id || msg.channel_id)
@@ -647,11 +658,45 @@ const MessageBubble = memo(
 										(msg as Message & { created_at?: string }).created_at ||
 										'',
 								)}
+								{msg.is_edited && (
+									<span className='ml-1 text-[10px] opacity-60'>ред.</span>
+								)}
 								{msg.isOwn && (
 									<span className='inline-flex align-middle ml-1'>
 										{msg.is_read ? (
 											<CheckCheck className='h-3.5 w-3.5 text-indigo-300/80' />
-										) : (
+					) : storyReplyData ? (
+						<div className='space-y-2'>
+							<div className='relative w-[80px] h-[80px] rounded-xl overflow-hidden bg-black/30 border border-white/10'>
+								{storyReplyData.type === 'video' ? (
+									<video
+										src={getAttachmentUrl(storyReplyData.url)}
+										className='w-full h-full object-cover'
+										muted
+										preload='metadata'
+									/>
+								) : (
+									<img
+										src={getAttachmentUrl(storyReplyData.url)}
+										alt=''
+										className='w-full h-full object-cover'
+									/>
+								)}
+								{storyReplyData.type === 'video' && (
+									<div className='absolute inset-0 flex items-center justify-center bg-black/30'>
+										<span className='text-white text-lg'>▶</span>
+									</div>
+								)}
+							</div>
+							{userTextForStoryReply && (
+								<div className='relative min-w-[52px] pr-14 pb-0.5'>
+									<div className='space-y-1.5'>
+										{renderFormattedContent(userTextForStoryReply)}
+									</div>
+								</div>
+							)}
+						</div>
+					) : (
 											<Check className='h-3.5 w-3.5 text-[color:var(--app-fg)]/45' />
 										)}
 									</span>
@@ -877,6 +922,9 @@ const MessageBubble = memo(
 								(msg as Message & { created_at?: string }).timestamp ||
 									(msg as Message & { created_at?: string }).created_at ||
 									'',
+							)}
+							{msg.is_edited && (
+								<span className='ml-1 text-[10px] opacity-60'>ред.</span>
 							)}
 							{msg.isOwn && (
 								<span className='inline-flex'>

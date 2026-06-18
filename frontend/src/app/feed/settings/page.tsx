@@ -653,7 +653,7 @@ export default function SettingsPage() {
 				<Header email={user?.email} onLogout={logout} />
 			</div>
 
-			<div className='relative z-10 mx-auto flex max-w-7xl pt-6'>
+			<div className='relative z-10 mx-auto flex max-w-7xl pt-20'>
 				<Sidebar />
 				<main className='flex-1 px-4 sm:px-6 lg:px-8 pb-20'>
 					<div className='max-w-3xl mx-auto space-y-8'>

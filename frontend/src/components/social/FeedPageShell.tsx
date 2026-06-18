@@ -31,7 +31,7 @@ export default function FeedPageShell({
 			</div>
 
 			<div
-				className={`relative z-10 mx-auto flex max-w-7xl ${withTopPadding ? 'pt-6' : ''}`}
+				className={`relative z-10 mx-auto flex max-w-7xl ${withTopPadding ? 'pt-20' : ''}`}
 			>
 				<Sidebar />
 				{children}

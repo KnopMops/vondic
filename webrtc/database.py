@@ -71,6 +71,7 @@ class Message(Base):
     is_deleted: Mapped[int | None] = mapped_column(Integer, nullable=True)
     pinned_by: Mapped[str | None] = mapped_column(String, nullable=True)
     reactions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_edited: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class Video(Base):
@@ -184,6 +185,8 @@ class UserRepository:
                     text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS pinned_by TEXT"))
                 conn.execute(
                     text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS reactions TEXT"))
+                conn.execute(
+                    text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_edited INTEGER"))
                 conn.execute(
                     text(
                         """
@@ -1301,4 +1304,21 @@ class UserRepository:
                 return True
         except Exception as e:
             logger.error(f"DB Error update_message_pinned_by: {e}")
+            return False
+
+    def edit_message(self, message_id, sender_id, new_content):
+        try:
+            with self._session() as session:
+                row = session.query(Message).filter(
+                    Message.id == str(message_id),
+                    Message.sender_id == str(sender_id),
+                ).first()
+                if not row:
+                    return False
+                row.content = self._encrypt_payload(new_content)
+                row.is_edited = 1
+                row.updated_at = datetime.now()
+                return True
+        except Exception as e:
+            logger.error(f"DB Error edit_message: {e}")
             return False

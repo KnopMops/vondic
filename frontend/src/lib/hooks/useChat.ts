@@ -1432,12 +1432,24 @@ export const useChat = (
 			}, 400) // Match animation duration
 		}
 
+		const handleMessageEdited = (data: any) => {
+			if (!data?.id) return
+			setMessages(prev =>
+				prev.map(msg =>
+					msg.id === data.id
+						? { ...msg, content: data.content, is_edited: true }
+						: msg,
+				),
+			)
+		}
+
 		socket.on('receive_message', handleReceiveMessage)
 		socket.on('message_sent', handleSentMessage)
 		socket.on('typing', handleTyping)
 		socket.on('stop_typing', handleStopTyping)
 		socket.on('messages_read_update', handleMessagesReadUpdate)
 		socket.on('message_deleted', handleMessageDeleted)
+		socket.on('message_edited', handleMessageEdited)
 
 		const handleError = (err: any) => {
 			console.error('Socket error raw:', err)
@@ -1460,6 +1472,7 @@ export const useChat = (
 			socket.off('stop_typing', handleStopTyping)
 			socket.off('messages_read_update', handleMessagesReadUpdate)
 			socket.off('message_deleted', handleMessageDeleted)
+			socket.off('message_edited', handleMessageEdited)
 			socket.off('error', handleError)
 		}
 	}, [socket, targetUserId, channelId, groupId, currentUserId, decryptMessage])
@@ -1581,11 +1594,20 @@ export const useChat = (
 		[socket, targetUserId, channelId, groupId],
 	)
 
-	const updateMessage = useCallback((id: string, updater: Partial<Message>) => {
-		setMessages(prev =>
-			prev.map(msg => (msg.id === id ? { ...msg, ...updater } : msg)),
-		)
-	}, [])
+	const updateMessage = useCallback(
+		(id: string, updater: Partial<Message>) => {
+			setMessages(prev =>
+				prev.map(msg => (msg.id === id ? { ...msg, ...updater } : msg)),
+			)
+			if (updater.content && socket) {
+				socket.emit('edit_message', {
+					message_id: id,
+					content: updater.content,
+				})
+			}
+		},
+		[socket],
+	)
 
 	const markMessageDeleted = useCallback((id: string) => {
 		// Remove the message from the list entirely

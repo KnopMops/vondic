@@ -59,7 +59,7 @@ export default function ShopSuccessPage() {
 				<Header email={user?.email} onLogout={() => {}} />
 			</div>
 
-			<div className='relative z-10 mx-auto flex max-w-7xl pt-6'>
+			<div className='relative z-10 mx-auto flex max-w-7xl pt-20'>
 				<Sidebar />
 				<main className='flex-1 p-4 sm:p-6 lg:p-8'>
 					<div className='mx-auto max-w-3xl'>

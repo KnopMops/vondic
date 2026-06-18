@@ -101,6 +101,7 @@ class SignalingService:
         self.io.on_event("leave_voice_channel", self.on_leave_voice_channel)
         self.io.on_event("send_message", self.on_send_message)
         self.io.on_event("delete_message", self.on_delete_message)
+        self.io.on_event("edit_message", self.on_edit_message)
         self.io.on_event("react_message", self.on_react_message)
         self.io.on_event("pin_message", self.on_pin_message)
         self.io.on_event("post_create", self.on_post_create)
@@ -1226,6 +1227,55 @@ class SignalingService:
         emit("message_deleted", payload, room=sender_id)
         if target_user_id:
             emit("message_deleted", payload, room=target_user_id)
+
+    def on_edit_message(self, payload):
+        message_id = payload.get("message_id") if isinstance(
+            payload, dict) else None
+        new_content = payload.get("content") if isinstance(
+            payload, dict) else None
+        if not message_id or not new_content:
+            emit("error", {"message": "message_id and content are required"})
+            return
+
+        sender_id, _ = self._get_sender()
+        if not sender_id:
+            emit("error", {"message": "Unauthorized"})
+            return
+
+        ok = self.broker.repo.edit_message(message_id, sender_id, new_content)
+        if not ok:
+            emit("error", {"message": "Failed to edit message"})
+            return
+
+        meta = self.broker.repo.get_message_meta(message_id)
+        if not meta:
+            emit("error", {"message": "Message not found"})
+            return
+
+        edit_payload = {
+            "id": message_id,
+            "content": new_content,
+            "is_edited": True,
+        }
+
+        if meta.get("channel_id"):
+            participants = self.broker.repo.get_channel_participants(
+                meta["channel_id"])
+            for pid in participants:
+                emit("message_edited", edit_payload, room=pid)
+            return
+
+        if meta.get("group_id"):
+            participants = self.broker.repo.get_group_participants(
+                meta["group_id"])
+            for pid in participants:
+                emit("message_edited", edit_payload, room=pid)
+            return
+
+        target_user_id = meta.get("target_id")
+        emit("message_edited", edit_payload, room=sender_id)
+        if target_user_id:
+            emit("message_edited", edit_payload, room=target_user_id)
 
     def on_post_create(self, payload):
         if not isinstance(payload, dict):

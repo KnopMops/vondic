@@ -125,6 +125,7 @@ export interface Message {
 	}
 	attachments?: Attachment[] | string
 	is_deleted?: boolean
+	is_edited?: boolean
 	sender_username?: string
 	sender_avatar?: string | null
 	forwarded_from?: {

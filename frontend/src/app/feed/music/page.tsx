@@ -1188,7 +1188,7 @@ export default function MusicPage() {
 				<Header email={user.email} onLogout={() => router.push('/')} />
 			</div>
 
-			<div className='relative z-10 mx-auto flex max-w-[1600px] pt-4 px-4 gap-4 h-[calc(100vh-80px)]'>
+			<div className='relative z-10 mx-auto flex max-w-[1600px] pt-20 px-4 gap-4 h-[calc(100vh-80px)]'>
 				{/* Internal Music Sidebar */}
 				<aside className='hidden md:flex flex-col w-72 flex-shrink-0 bg-gray-900/40 backdrop-blur-md rounded-2xl border border-gray-800/50 overflow-hidden'>
 					<div className='p-4 space-y-4'>

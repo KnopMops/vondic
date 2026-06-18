@@ -1,22 +1,63 @@
 'use client'
 
+import BotGameUploadModal from '@/components/bots/BotGameUploadModal'
 import { ChatMenu } from '@/components/calls'
 import { ConnectingModal } from '@/components/calls/ConnectingModal'
 import { FloatingCallBar } from '@/components/calls/FloatingCallBar'
 import { IntegratedCallPanel } from '@/components/calls/IntegratedCallPanel'
 import { ScreenShareViewer } from '@/components/calls/ScreenShareViewer'
+import { AppleEmoji } from '@/components/ui/AppleEmoji'
 import { useAuth } from '@/lib/AuthContext'
+import {
+	assignChatToFolder,
+	chatInFolder,
+	createFolderId,
+	loadActiveFolderId,
+	loadChatFolders,
+	matchesActiveFolder,
+	saveActiveFolderId,
+	saveChatFolders,
+	type ChatFolder,
+	type ChatRef
+} from '@/lib/chatFolders'
+import { buildChatListItems } from '@/lib/chatMessageLayout'
 import {
 	canPinChats,
 	sortChatsWithPinned,
 	togglePinChat,
 } from '@/lib/chatUtils'
+import {
+	applyE2eKeyExchange,
+	requestE2eKeyExchange,
+} from '@/lib/e2eGlobalExchange'
+import {
+	beginServerKeysRestore,
+	ensureBackupMaterial,
+	normalizeE2eKeyId,
+	persistKeyLocally,
+	resetE2eRestoreCache,
+	restoreKeyFromServer,
+} from '@/lib/e2eKeySync'
 import { useChannels } from '@/lib/hooks/useChannels'
 import { decryptDmPreviewText, tryDecryptE2EPreviewWithKeyIds, useChat } from '@/lib/hooks/useChat'
 import { useCommunities } from '@/lib/hooks/useCommunities'
 import { useDebounce } from '@/lib/hooks/useDebounce'
 import { useFileDrop } from '@/lib/hooks/useFileDrop'
 import { useGroups } from '@/lib/hooks/useGroups'
+import {
+	channelJoinUrl,
+	groupJoinUrl,
+	parseInviteToken,
+	serverJoinUrl,
+} from '@/lib/inviteLinks'
+import {
+	createScheduledMessageId,
+	getDueScheduledMessages,
+	getPendingForTarget,
+	loadScheduledMessages,
+	saveScheduledMessages,
+	type ScheduledMessage,
+} from '@/lib/scheduledMessages'
 import { useSocket } from '@/lib/SocketContext'
 import {
 	clearCallState,
@@ -31,48 +72,8 @@ import {
 } from '@/lib/stores/callStore'
 import { useToast } from '@/lib/ToastContext'
 import { Channel, Group, Message, User } from '@/lib/types'
-import {
-	channelJoinUrl,
-	groupJoinUrl,
-	parseInviteToken,
-	serverJoinUrl,
-} from '@/lib/inviteLinks'
-import { apiUrl, webrtcUrl } from '@/lib/url-fallback'
-import { buildChatListItems } from '@/lib/chatMessageLayout'
 import { getAttachmentUrl, getAvatarUrl, parseAsUtc } from '@/lib/utils'
-import {
-	ensureBackupMaterial,
-	beginServerKeysRestore,
-	normalizeE2eKeyId,
-	persistKeyLocally,
-	resetE2eRestoreCache,
-	restoreKeyFromServer,
-} from '@/lib/e2eKeySync'
-import {
-	applyE2eKeyExchange,
-	requestE2eKeyExchange,
-} from '@/lib/e2eGlobalExchange'
-import {
-	assignChatToFolder,
-	chatInFolder,
-	chatRefKey,
-	matchesActiveFolder,
-	createFolderId,
-	loadActiveFolderId,
-	loadChatFolders,
-	saveActiveFolderId,
-	saveChatFolders,
-	type ChatFolder,
-	type ChatRef,
-} from '@/lib/chatFolders'
-import {
-	createScheduledMessageId,
-	getDueScheduledMessages,
-	getPendingForTarget,
-	loadScheduledMessages,
-	saveScheduledMessages,
-	type ScheduledMessage,
-} from '@/lib/scheduledMessages'
+import { AnimatePresence, motion } from 'framer-motion'
 import Link from 'next/link'
 import {
 	useCallback,
@@ -82,26 +83,14 @@ import {
 	useRef,
 	useState,
 } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
-import MessageBubble from './MessageBubble'
-import ChatDateSeparator from './ChatDateSeparator'
-import DeleteChatHistoryModal, {
-	type DeleteHistoryScope,
-} from './DeleteChatHistoryModal'
-import BotGameUploadModal from '@/components/bots/BotGameUploadModal'
-import DiscoveryModal from './DiscoveryModal'
-import ChannelSettingsModal from './ChannelSettingsModal'
-import CommunitySettingsModal from './CommunitySettingsModal'
-import ScheduleMessageModal from './ScheduleMessageModal'
-import SmartChatInput from './components/SmartChatInput'
-import { AppleEmoji } from '@/components/ui/AppleEmoji'
+import { FiMoreVertical as MoreVertical } from 'react-icons/fi'
 import {
 	LuArrowLeft as ArrowLeft,
 	LuCheck as Check,
 	LuClock as Clock,
 	LuCopy as Copy,
-	LuFolder as Folder,
 	LuFilter as Filter,
+	LuFolder as Folder,
 	LuHash as Hash,
 	LuInfo as Info,
 	LuLogIn as LogIn,
@@ -112,17 +101,26 @@ import {
 	LuPlus as Plus,
 	LuScreenShare as ScreenShare,
 	LuSearch as Search,
-	LuServer as Server,
 	LuSend as Send,
+	LuServer as Server,
 	LuSmile as Smile,
-	LuSquare as Stop,
 	LuSticker as Sticker,
+	LuSquare as Stop,
 	LuTrash2 as Trash2Icon,
 	LuUserPlus as UserPlus,
 	LuUsers as Users,
 	LuX as X,
 } from 'react-icons/lu'
-import { FiMoreVertical as MoreVertical } from 'react-icons/fi'
+import ChannelSettingsModal from './ChannelSettingsModal'
+import ChatDateSeparator from './ChatDateSeparator'
+import CommunitySettingsModal from './CommunitySettingsModal'
+import SmartChatInput from './components/SmartChatInput'
+import DeleteChatHistoryModal, {
+	type DeleteHistoryScope,
+} from './DeleteChatHistoryModal'
+import DiscoveryModal from './DiscoveryModal'
+import MessageBubble from './MessageBubble'
+import ScheduleMessageModal from './ScheduleMessageModal'
 
 const formatLastSeen = (
 	lastSeen?: string | Date,

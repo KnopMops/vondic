@@ -1,5 +1,6 @@
 'use client'
 
+import React, { useEffect, useRef, useState } from 'react'
 import {
 	FiHelpCircle as HelpCircle,
 	FiMic as Mic,
@@ -15,7 +16,6 @@ import {
 	LuScreenShare as ScreenShare,
 	LuSettings2 as Settings2,
 } from 'react-icons/lu'
-import React, { useEffect, useRef, useState } from 'react'
 import { useCallStore } from '../../lib/stores/callStore'
 
 interface CallPanelProps {

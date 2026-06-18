@@ -1,6 +1,7 @@
 'use client'
 
 import { getAttachmentUrl } from '@/lib/utils'
+import React, { useEffect, useRef, useState } from 'react'
 import {
 	FiChevronDown as ChevronDown,
 	FiChevronUp as ChevronUp,
@@ -13,14 +14,12 @@ import {
 	FiPhoneOff as PhoneOff,
 	FiVideo as Video,
 	FiVideoOff as VideoOff,
-	FiVolume2 as Volume2,
-	FiX as X,
+	FiX as X
 } from 'react-icons/fi'
 import {
 	LuMonitorOff as MonitorOff,
 	LuSettings2 as Settings2,
 } from 'react-icons/lu'
-import React, { useEffect, useRef, useState } from 'react'
 import { CallState } from '../../lib/services/WebRTCService'
 
 interface ActiveCallProps {

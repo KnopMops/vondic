@@ -1,6 +1,5 @@
 "'use client'"
 
-import { AppleEmoji } from '@/components/ui/AppleEmoji'
 import { useAppSelector } from '@/lib/hooks'
 import { getAttachmentUrl } from '@/lib/utils'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -34,15 +33,9 @@ const REACTIONS = [
 	'🔥',
 	'😍',
 	'😮',
-	'🤯',
-	'😢',
-	'😡',
 	'👍',
 	'👏',
-	'🙏',
 	'💯',
-	'🎉',
-	'🤔',
 ]
 
 export default function StoriesModal({
@@ -241,13 +234,21 @@ export default function StoriesModal({
 			if (!token) return
 			const backendUrl =
 				process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+
+			const storyRef = current
+				? `\n\n__STORY_REPLY__${JSON.stringify({ url: current.url, type: current.type || 'image', text: current.text || '' })}__`
+				: ''
+
 			const res = await fetch(`${backendUrl}/api/v1/dm/${ownerId}/messages`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
 					Authorization: `Bearer ${token}`,
 				},
-				body: JSON.stringify({ content: text }),
+				body: JSON.stringify({
+					content: text + storyRef,
+					story_reply_to: current?.id || null,
+				}),
 			})
 			if (res.ok) {
 				setReplyText('')
@@ -489,13 +490,13 @@ export default function StoriesModal({
 							{Object.keys(reactionCounts).length > 0 && (
 								<div className='flex flex-wrap gap-2'>
 									{Object.entries(reactionCounts).map(([emoji, count]) => (
-										<div
+										<span
 											key={emoji}
-											className='flex items-center gap-1 rounded-full bg-black/40 px-2 py-1 text-sm text-gray-100'
+											className='inline-flex items-center gap-1 rounded-full bg-black/40 px-2 py-0.5 text-sm'
 										>
-											<AppleEmoji emoji={emoji} size={18} />
-											<span className='text-xs text-gray-300'>{count}</span>
-										</div>
+											{emoji}
+											<span className='text-xs text-white/80'>{count}</span>
+										</span>
 									))}
 								</div>
 							)}
@@ -516,7 +517,7 @@ export default function StoriesModal({
 												: 'bg-black/40 text-gray-100 hover:bg-black/60'
 										}`}
 									>
-										<AppleEmoji emoji={userReaction || '👍'} size={26} />
+										<span className='text-2xl'>{userReaction || '👍'}</span>
 									</button>
 									<AnimatePresence>
 										{showReactions && (
@@ -527,7 +528,7 @@ export default function StoriesModal({
 												transition={{ duration: 0.2 }}
 												className='absolute bottom-full left-0 mb-2 rounded-2xl bg-black/80 backdrop-blur-xl border border-white/10 p-3 shadow-2xl z-50'
 											>
-												<div className='grid grid-cols-7 gap-2'>
+												<div className='grid grid-cols-4 gap-2'>
 													{REACTIONS.map(emoji => (
 														<button
 															key={emoji}
@@ -536,13 +537,13 @@ export default function StoriesModal({
 																setShowReactions(false)
 																setIsPaused(false)
 															}}
-															className={`rounded-full p-2 text-lg transition-transform hover:scale-125 ${
+															className={`rounded-full p-2 text-2xl transition-transform hover:scale-125 ${
 																userReaction === emoji
 																	? 'bg-indigo-500/40 text-white ring-2 ring-indigo-400/60'
 																	: 'bg-white/5 text-gray-100 hover:bg-white/15'
 															}`}
 														>
-															<AppleEmoji emoji={emoji} size={24} />
+															{emoji}
 														</button>
 													))}
 												</div>

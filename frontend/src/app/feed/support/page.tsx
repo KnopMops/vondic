@@ -332,7 +332,7 @@ export default function SupportPage() {
 				<Header email={user.email} onLogout={() => router.push('/')} />
 			</div>
 
-			<div className='relative z-10 mx-auto flex max-w-7xl pt-6'>
+			<div className='relative z-10 mx-auto flex max-w-7xl pt-20'>
 				<Sidebar />
 				<main className='flex-1 px-4 sm:px-6 lg:px-8'>
 					<div className='mx-auto max-w-2xl space-y-6'>
