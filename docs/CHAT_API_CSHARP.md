@@ -2,9 +2,9 @@
 
 Руководство по встраиванию мессенджера Vondic в игру на C# (Unity, Godot Mono или standalone-сервер).
 
-**Базовый URL REST:** `https://api.vondic.knopusmedia.ru/api/public/v1/chat`  
-**Базовый URL OAuth:** `https://vondic.knopusmedia.ru/oauth`  
-**WebSocket (realtime):** `https://webrtc.vondic.knopusmedia.ru` (Socket.IO)
+**Базовый URL REST:** `https://api.vondic.ru/api/public/v1/chat`  
+**Базовый URL OAuth:** `https://vondic.ru/oauth`  
+**WebSocket (realtime):** `https://webrtc.vondic.ru` (Socket.IO)
 
 ---
 
@@ -50,7 +50,7 @@
 Сформируй URL и открой его в браузере игрока (или внутриигровой WebView):
 
 ```
-https://vondic.knopusmedia.ru/oauth/authorize?
+https://vondic.ru/oauth/authorize?
   client_id={CLIENT_ID}&
   redirect_uri={REDIRECT_URI}&
   response_type=code&
@@ -90,7 +90,7 @@ async Task<string> ExchangeCodeAsync(string code, string state)
     };
 
     var resp = await _http.PostAsync(
-        "https://vondic.knopusmedia.ru/oauth/token",
+        "https://vondic.ru/oauth/token",
         new FormUrlEncodedContent(data));
 
     resp.EnsureSuccessStatusCode();
@@ -108,7 +108,7 @@ async Task<string> GetApiKeyAsync(string accessToken)
 {
     var request = new HttpRequestMessage(
         HttpMethod.Post,
-        "https://api.vondic.knopusmedia.ru/api/public/v1/chat/api-key");
+        "https://api.vondic.ru/api/public/v1/chat/api-key");
     request.Headers.Authorization =
         new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
 
@@ -129,12 +129,6 @@ async Task<string> GetApiKeyAsync(string accessToken)
 X-API-Key: {api_key}
 ```
 
-Или можно использовать Bearer:
-
-```
-Authorization: Bearer {access_token}
-```
-
 ---
 
 ## HTTP-клиент (REST)
@@ -148,7 +142,7 @@ public class VondicChatClient : IDisposable
     private readonly string _baseUrl;
     private readonly string _apiKey;
 
-    public VondicChatClient(string apiKey, string baseUrl = "https://api.vondic.knopusmedia.ru/api/public/v1/chat")
+    public VondicChatClient(string apiKey, string baseUrl = "https://api.vondic.ru/api/public/v1/chat")
     {
         _apiKey = apiKey;
         _baseUrl = baseUrl.TrimEnd('/');
@@ -368,7 +362,7 @@ var socket = new SocketIO(wsUrl, new SocketIOOptions
     Transport = TransportProtocol.WebSocket,
     ExtraHeaders = new Dictionary<string, string>
     {
-        ["Authorization"] = $"Bearer {_apiKey}" // или access_token
+        ["X-API-Key"] = _apiKey
     }
 });
 
@@ -431,7 +425,7 @@ class GameChatClient
     public GameChatClient(string apiKey)
     {
         _apiKey = apiKey;
-        _baseUrl = "https://api.vondic.knopusmedia.ru/api/public/v1/chat";
+        _baseUrl = "https://api.vondic.ru/api/public/v1/chat";
         _http.DefaultRequestHeaders.Add("X-API-Key", _apiKey);
     }
 

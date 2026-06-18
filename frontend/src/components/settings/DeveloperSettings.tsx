@@ -10,6 +10,7 @@ import {
   OAuthClient,
 } from '@/lib/api/oauth'
 import { useToast } from '@/lib/ToastContext'
+import { LuEye as EyeIcon, LuEyeOff as EyeOffIcon } from 'react-icons/lu'
 
 type Props = {
   enabled: boolean
@@ -42,10 +43,16 @@ export default function DeveloperSettings({ enabled }: Props) {
   const [editDefaultScopes, setEditDefaultScopes] = useState('basic_profile')
   const [editRedirectUris, setEditRedirectUris] = useState('')
   const [showSecretModal, setShowSecretModal] = useState(false)
+  const [showSecret, setShowSecret] = useState(false)
+  const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({})
   const [newClientCredentials, setNewClientCredentials] = useState<{
     client_id: string
     client_secret: string
   } | null>(null)
+
+  const toggleCardSecret = (clientId: string) => {
+    setShowSecrets(prev => ({ ...prev, [clientId]: !prev[clientId] }))
+  }
 
   useEffect(() => {
     if (enabled && user) {
@@ -375,6 +382,27 @@ export default function DeveloperSettings({ enabled }: Props) {
                     копировать
                   </button>
                 </p>
+                {client.client_secret && (
+                  <p className="flex items-center gap-1">
+                    <span className="font-mono">Client Secret:</span>
+                    <span className="font-mono text-white/60">
+                      {showSecrets[client.client_id] ? client.client_secret : '••••••••••••••••••••••••••'}
+                    </span>
+                    <button
+                      onClick={() => toggleCardSecret(client.client_id)}
+                      className="rounded p-0.5 text-white/40 hover:text-white hover:bg-white/10 transition-colors"
+                      title={showSecrets[client.client_id] ? 'Скрыть' : 'Показать'}
+                    >
+                      {showSecrets[client.client_id] ? <EyeOffIcon size={12} /> : <EyeIcon size={12} />}
+                    </button>
+                    <button
+                      onClick={() => copyText(client.client_secret!, 'Client Secret')}
+                      className="ml-1 text-emerald-300/70 hover:text-emerald-200"
+                    >
+                      копировать
+                    </button>
+                  </p>
+                )}
                 <p><span className="font-mono">Redirect URIs:</span> {client.redirect_uris.join(', ')}</p>
                 <p><span className="font-mono">Default scopes:</span> {(client.default_scopes || []).join(', ') || 'basic_profile'}</p>
                 <p><span className="font-mono">Created:</span> {new Date(client.created_at).toLocaleDateString()}</p>
@@ -490,7 +518,7 @@ Authorization: Bearer YOUR_ACCESS_TOKEN`}
                 </p>
               </div>
               <button
-                onClick={() => setShowSecretModal(false)}
+                onClick={() => { setShowSecretModal(false); setShowSecret(false) }}
                 className='rounded-lg border border-white/10 bg-white/5 px-3 py-1 text-sm text-gray-200 hover:bg-white/10'
               >
                 Закрыть
@@ -510,9 +538,18 @@ Authorization: Bearer YOUR_ACCESS_TOKEN`}
                 </button>
               </div>
               <div className='rounded-lg border border-white/10 bg-black/40 p-3'>
-                <div className='text-xs text-gray-400 mb-1'>Client Secret</div>
+                <div className='flex items-center justify-between mb-1'>
+                  <div className='text-xs text-gray-400'>Client Secret</div>
+                  <button
+                    onClick={() => setShowSecret(v => !v)}
+                    className='rounded-md p-1 text-gray-400 hover:text-white hover:bg-white/10 transition-colors'
+                    title={showSecret ? 'Скрыть' : 'Показать'}
+                  >
+                    {showSecret ? <EyeOffIcon size={14} /> : <EyeIcon size={14} />}
+                  </button>
+                </div>
                 <div className='break-all text-sm text-white font-mono'>
-                  {newClientCredentials.client_secret}
+                  {showSecret ? newClientCredentials.client_secret : '••••••••••••••••••••••••••'}
                 </div>
                 <button
                   onClick={() =>

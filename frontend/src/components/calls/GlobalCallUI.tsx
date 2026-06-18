@@ -6,6 +6,7 @@ import { useCallStore } from '../../lib/stores/callStore'
 import { useToast } from '../../lib/ToastContext'
 import ActiveCall from './ActiveCall'
 import ActiveGroupCall from './ActiveGroupCall'
+import ActiveVoiceChannel from './ActiveVoiceChannel'
 import { FloatingCallBar } from './FloatingCallBar'
 import IncomingCallModal from './IncomingCallModal'
 
@@ -17,6 +18,8 @@ export const GlobalCallUI: React.FC = () => {
 		incomingCall,
 		activeCalls,
 		activeGroupCallId,
+		activeVoiceChannelId,
+		voiceChannelParticipants,
 		localStream,
 		screenStream,
 		remoteStreams,
@@ -28,6 +31,7 @@ export const GlobalCallUI: React.FC = () => {
 		rejectCall,
 		endCall,
 		leaveGroupCall,
+		leaveVoiceChannel,
 		toggleMute,
 		toggleScreenShare,
 		toggleVideo,
@@ -64,6 +68,13 @@ export const GlobalCallUI: React.FC = () => {
 		showToast('Вы вышли из группового звонка', 'info')
 	}
 
+	const handleLeaveVoiceChannel = () => {
+		if (activeVoiceChannelId) {
+			leaveVoiceChannel(activeVoiceChannelId)
+			showToast('Вы отключились от голосового канала', 'info')
+		}
+	}
+
 	const handleMuteToggle = () => {
 		toggleMute()
 	}
@@ -74,7 +85,7 @@ export const GlobalCallUI: React.FC = () => {
 
 	const activeDirectCall = Array.from(activeCalls.values()).find(c => !c.isGroupCall)
 	const hasDirectCall = !!activeDirectCall
-	const isMessagesPage = pathname?.startsWith('/feed/messages')
+	const isMessagesPage = pathname ? (pathname.startsWith('/feed/messages') || pathname.startsWith('/messages')) : false
 
 	return (
 		<>
@@ -110,7 +121,17 @@ export const GlobalCallUI: React.FC = () => {
 				/>
 			)}
 
-			{activeDirectCall && !activeGroupCallId && !isMessagesPage && (
+			{activeVoiceChannelId && (
+				<ActiveVoiceChannel
+					channelId={activeVoiceChannelId}
+					participants={voiceChannelParticipants[activeVoiceChannelId] || []}
+					isMuted={isMuted}
+					onMuteToggle={handleMuteToggle}
+					onLeave={handleLeaveVoiceChannel}
+				/>
+			)}
+
+			{activeDirectCall && !activeGroupCallId && !activeVoiceChannelId && !isMessagesPage && (
 				<ActiveCall
 					callInfo={activeDirectCall}
 					localStream={localStream}
@@ -128,7 +149,7 @@ export const GlobalCallUI: React.FC = () => {
 				/>
 			)}
 
-			{hasDirectCall && !activeGroupCallId && !isMessagesPage && (
+			{hasDirectCall && !activeGroupCallId && !activeVoiceChannelId && !isMessagesPage && (
 				<FloatingCallBar
 					onReturnToCall={() => {
 						if (activeDirectCall?.userId) {

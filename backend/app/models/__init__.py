@@ -22,6 +22,7 @@ from .social_community import SocialCommunity
 from .subscription import Subscription
 from .support_chat_message import SupportChatMessage
 from .user import User
+from .user_conversation import UserConversation
 from .user_file import UserFile
 from .user_report import UserReport
 from .video import Video
@@ -52,6 +53,7 @@ __all__ = [
     "Subscription",
     "SupportChatMessage",
     "User",
+    "UserConversation",
     "UserFile",
     "UserReport",
     "Video",

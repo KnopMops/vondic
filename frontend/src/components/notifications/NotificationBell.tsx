@@ -32,9 +32,7 @@ export const NotificationBell: React.FC = () => {
 	}, [])
 
 	useEffect(() => {
-		const backendUrl =
-			process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
-		const audioUrl = `${backendUrl}/static/message.mp3`
+		const audioUrl = '/static/message.mp3'
 		audioRef.current = new Audio(audioUrl)
 		audioRef.current.preload = 'auto'
 		audioRef.current.load()

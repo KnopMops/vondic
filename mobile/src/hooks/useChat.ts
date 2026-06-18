@@ -1,20 +1,39 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {socketService} from '@/services/SocketService';
 import {Message} from '@/types';
-import {subtle, mtEncrypt, mtDecrypt, base64FromBytes, bytesFromBase64} from '@/utils/crypto';
+import {
+  subtle,
+  mtEncrypt,
+  mtDecrypt,
+  base64FromBytes,
+  bytesFromBase64,
+  type CryptoKey,
+  type CryptoKeyPair,
+} from '@/utils/crypto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   backupKeyToServer,
-  restoreAllKeysFromServer,
   restoreKeyFromServer,
+  restoreAllKeysFromServer,
+  beginServerKeysRestore,
+  ensureBackupMaterial,
   getDeviceInfo,
+  normalizeE2eKeyId,
+  getE2eKeyIdVariants,
+  expandKeyIdVariants,
+  lookupCachedServerKey,
+  persistKeyLocally,
+  resetE2eRestoreCache,
+  resetServerKeyRestoreResults,
 } from '@/utils/e2eKeySync';
 import {apiClient} from '@/api/client';
 import {useAppSelector} from '@/store/hooks';
+import {appLog} from '@/utils/appLogger';
 
 const hasCryptoSubtle = () => typeof subtle !== 'undefined' && subtle != null;
 const HISTORY_PAGE_SIZE = 30;
 
+/** Превью E2E в списке чатов (несколько вариантов key_id). */
 export const tryDecryptE2EPreviewWithKeyIds = async (
   ciphertext: string,
   keyIds: string[],
@@ -29,7 +48,7 @@ export const tryDecryptE2EPreviewWithKeyIds = async (
     try {
       const key = bytesFromBase64(stored);
       const decrypted = mtDecrypt(ciphertext, key);
-      if (decrypted !== null) return decrypted;
+      if (decrypted !== null && decrypted.trim() !== '') return decrypted;
     } catch {
       continue;
     }
@@ -41,26 +60,71 @@ export const useChat = (
   targetUserId: string | undefined,
   channelId?: string | undefined,
   groupId?: string | undefined,
+  initialSecretChatEnabled = false,
 ) => {
+  appLog('useChat', 'hook start', {targetUserId, channelId, groupId, initialSecretChatEnabled});
   const {user} = useAppSelector(state => state.auth);
   const currentUserId = user?.id;
-  const accessToken = user?.access_token;
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    AsyncStorage.getItem('access_token')
+      .then(token => {
+        if (!cancelled) setAccessToken(token);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const [secretChatEnabled, setSecretChatEnabled] = useState(initialSecretChatEnabled);
+
+  useEffect(() => {
+    setSecretChatEnabled(initialSecretChatEnabled);
+  }, [initialSecretChatEnabled]);
+
+  useEffect(() => {
+    if (!targetUserId || !accessToken) {
+      return;
+    }
+    let active = true;
+    apiClient
+      .get<{is_secret?: boolean}>(`/dm/${targetUserId}/settings`)
+      .then(res => {
+        if (active && res) {
+          setSecretChatEnabled(Boolean(res.is_secret));
+        }
+      })
+      .catch(err => {
+        console.warn('[useChat] Failed to fetch DM settings:', err);
+      });
+    return () => {
+      active = false;
+    };
+  }, [targetUserId, accessToken]);
 
   const [messages, setMessages] = useState<Message[]>([]);
-  const [deletingMessageIds, setDeletingMessageIds] = useState<Set<string>>(new Set());
+  const [deletingMessageIds, setDeletingMessageIds] = useState<Set<string>>(
+    new Set(),
+  );
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
+  const [keysVersion, setKeysVersion] = useState(0);
   const typingTimeoutRef = useRef<any>(null);
   const e2eKeysRef = useRef<Map<string, Uint8Array>>(new Map());
   const e2ePairsRef = useRef<Map<string, CryptoKeyPair>>(new Map());
+  const loadStoredKeyAttemptedRef = useRef<Set<string>>(new Set());
+  const keyExchangeStartedRef = useRef<Set<string>>(new Set());
   const e2ePendingRef = useRef<
     Map<
       string,
       Array<{
         content: string;
-        type: 'text' | 'voice';
+        type: 'text' | 'voice' | 'video_note';
         attachments?: any[];
         replyToId?: string;
       }>
@@ -68,7 +132,9 @@ export const useChat = (
   >(new Map());
 
   const e2eKeyId =
-    targetUserId && currentUserId ? [currentUserId, targetUserId].sort().join(':') : null;
+    targetUserId && currentUserId
+      ? [currentUserId, targetUserId].sort().join(':')
+      : null;
 
   useEffect(() => {
     setMessages([]);
@@ -77,51 +143,199 @@ export const useChat = (
     setIsLoading(false);
   }, [targetUserId, groupId, channelId]);
 
+  const hydrateKeysFromLocalStorage = useCallback(async () => {
+    const allKeys = await AsyncStorage.getAllKeys();
+    for (const storageKey of allKeys) {
+      if (!storageKey.startsWith('e2e_key_')) continue;
+      const keyId = storageKey.slice('e2e_key_'.length);
+      try {
+        const stored = await AsyncStorage.getItem(storageKey);
+        if (stored) {
+          e2eKeysRef.current.set(keyId, bytesFromBase64(stored));
+        }
+      } catch {
+        // ignore corrupt entries
+      }
+    }
+  }, []);
+
+  const aliasKeyToChat = useCallback(
+    (keyBytes: Uint8Array) => {
+      if (!e2eKeyId || !currentUserId || !targetUserId) return;
+      for (const variant of getE2eKeyIdVariants(currentUserId, targetUserId)) {
+        e2eKeysRef.current.set(variant, keyBytes);
+      }
+    },
+    [e2eKeyId, currentUserId, targetUserId],
+  );
+
   const loadStoredKey = useCallback(async () => {
     if (!e2eKeyId) return;
     if (e2eKeysRef.current.has(e2eKeyId)) return;
+    appLog('useChat', 'loadStoredKey start', {e2eKeyId, currentUserId, targetUserId});
 
-    let stored = await AsyncStorage.getItem(`e2e_key_${e2eKeyId}`);
-    if (!stored && currentUserId && targetUserId) {
-      const legacyA = `e2e_key_${currentUserId}:${targetUserId}`;
-      const legacyB = `e2e_key_${targetUserId}:${currentUserId}`;
-      stored =
-        (await AsyncStorage.getItem(legacyA)) ||
-        (await AsyncStorage.getItem(legacyB)) ||
-        null;
+    await hydrateKeysFromLocalStorage();
+
+    if (currentUserId && targetUserId) {
+      for (const variant of getE2eKeyIdVariants(currentUserId, targetUserId)) {
+        const fromRef = e2eKeysRef.current.get(variant);
+        if (fromRef) {
+          aliasKeyToChat(fromRef);
+          setKeysVersion(v => v + 1);
+          appLog('useChat', 'loadStoredKey found in ref', {variant});
+          return;
+        }
+        const stored = await AsyncStorage.getItem(`e2e_key_${variant}`);
+        if (stored) {
+          const bytes = bytesFromBase64(stored);
+          aliasKeyToChat(bytes);
+          setKeysVersion(v => v + 1);
+          appLog('useChat', 'loadStoredKey found in storage', {variant});
+          return;
+        }
+      }
     }
-    if (stored) {
-      e2eKeysRef.current.set(e2eKeyId, bytesFromBase64(stored));
+
+    const cached = lookupCachedServerKey(e2eKeyId);
+    if (cached) {
+      aliasKeyToChat(cached);
+      await persistKeyLocally(e2eKeyId, cached);
+      setKeysVersion(v => v + 1);
+      appLog('useChat', 'loadStoredKey found cached server key', {e2eKeyId});
       return;
     }
 
-    if (accessToken && e2eKeyId) {
-      const restoredKey = await restoreKeyFromServer(accessToken, e2eKeyId, currentUserId);
-      if (restoredKey) {
-        e2eKeysRef.current.set(e2eKeyId, restoredKey);
-        await AsyncStorage.setItem(`e2e_key_${e2eKeyId}`, base64FromBytes(restoredKey));
-      }
+    let token = accessToken;
+    if (!token) {
+      try {
+        token = await AsyncStorage.getItem('access_token');
+      } catch {}
     }
-  }, [e2eKeyId, currentUserId, targetUserId, accessToken]);
+    if (!token || loadStoredKeyAttemptedRef.current.has(e2eKeyId)) {
+      appLog('useChat', 'loadStoredKey skipping server restore', {hasToken: !!token, attempted: loadStoredKeyAttemptedRef.current.has(e2eKeyId)});
+      return;
+    }
+    loadStoredKeyAttemptedRef.current.add(e2eKeyId);
 
-  const hydrateKeysFromServer = useCallback(async () => {
-    if (!accessToken) return;
-    try {
-      const restored = await restoreAllKeysFromServer(accessToken, currentUserId);
-      if (!restored.size) return;
-      restored.forEach(async (keyData, keyId) => {
-        e2eKeysRef.current.set(keyId, keyData);
-        await AsyncStorage.setItem(`e2e_key_${keyId}`, base64FromBytes(keyData));
-      });
-    } catch (error) {
-      console.error('[E2E] Failed to hydrate keys from server:', error);
+    const restoredKey = await restoreKeyFromServer(
+      token,
+      e2eKeyId,
+      currentUserId,
+    );
+    if (restoredKey) {
+      aliasKeyToChat(restoredKey);
+      await persistKeyLocally(e2eKeyId, restoredKey);
+      setKeysVersion(v => v + 1);
+      appLog('useChat', 'loadStoredKey restored from server', {e2eKeyId});
+    } else {
+      appLog('useChat', 'loadStoredKey server restore returned null', {e2eKeyId});
     }
-  }, [accessToken, currentUserId]);
+  }, [
+    e2eKeyId,
+    currentUserId,
+    targetUserId,
+    accessToken,
+    aliasKeyToChat,
+    hydrateKeysFromLocalStorage,
+  ]);
+
+  const storeKey = useCallback(
+    async (keyId: string, keyBytes: Uint8Array) => {
+      appLog('useChat', 'storeKey', {keyId, keyLength: keyBytes.length, currentUserId, targetUserId});
+      if (currentUserId && targetUserId) {
+        for (const variant of getE2eKeyIdVariants(currentUserId, targetUserId)) {
+          e2eKeysRef.current.set(variant, keyBytes);
+        }
+        await persistKeyLocally(keyId, keyBytes);
+      } else {
+        e2eKeysRef.current.set(keyId, keyBytes);
+        await persistKeyLocally(keyId, keyBytes);
+      }
+      setKeysVersion(v => v + 1);
+
+      (async () => {
+        let token = accessToken;
+        if (!token) {
+          try {
+            token = await AsyncStorage.getItem('access_token');
+          } catch {}
+        }
+        if (token && currentUserId) {
+          await ensureBackupMaterial(token, currentUserId);
+          const {deviceId, deviceName} = await getDeviceInfo();
+          await backupKeyToServer(
+            token,
+            normalizeE2eKeyId(keyId),
+            keyBytes,
+            deviceId,
+            deviceName,
+            currentUserId,
+          );
+        }
+      })().catch(() => {});
+    },
+    [accessToken, currentUserId, targetUserId],
+  );
+
+  const deriveKey = useCallback(async (shared: ArrayBuffer, keyId: string) => {
+    const encoder = new TextEncoder();
+    const salt = encoder.encode(normalizeE2eKeyId(keyId));
+    const combined = new Uint8Array(shared.byteLength + salt.length);
+    combined.set(new Uint8Array(shared), 0);
+    combined.set(salt, shared.byteLength);
+    const hash = await subtle.digest('SHA-256', combined);
+    return new Uint8Array(hash);
+  }, []);
+
+  const ensureKeyExchange = useCallback(async () => {
+    if (!secretChatEnabled) return;
+    if (!targetUserId || !currentUserId || !e2eKeyId) return;
+    if (!hasCryptoSubtle()) return;
+    if (keyExchangeStartedRef.current.has(e2eKeyId)) return;
+    keyExchangeStartedRef.current.add(e2eKeyId);
+
+    appLog('useChat', 'ensureKeyExchange', {targetUserId, e2eKeyId});
+    try {
+      // Load keys in the background; emit the offer ASAP so the peer can answer.
+      hydrateKeysFromLocalStorage().catch(() => {});
+      loadStoredKey().catch(() => {});
+
+      let pair = e2ePairsRef.current.get(e2eKeyId);
+      if (!pair) {
+        pair = (await subtle.generateKey(
+          {name: 'ECDH', namedCurve: 'P-256'},
+          true,
+          ['deriveBits'],
+        )) as CryptoKeyPair;
+        e2ePairsRef.current.set(e2eKeyId, pair);
+      }
+      const publicKeyRaw = await subtle.exportKey('raw', pair.publicKey);
+      socketService.emit('e2e_key_exchange', {
+        target_user_id: targetUserId,
+        public_key: base64FromBytes(new Uint8Array(publicKeyRaw)),
+        key_id: e2eKeyId,
+        type: 'offer',
+      });
+      appLog('useChat', 'ensureKeyExchange offer emitted', {targetUserId, e2eKeyId});
+    } catch (err) {
+      appLog('useChat', 'ensureKeyExchange error', String(err));
+      console.error('[Chat] E2EE key exchange failed:', err);
+      keyExchangeStartedRef.current.delete(e2eKeyId);
+    }
+  }, [
+    targetUserId,
+    currentUserId,
+    e2eKeyId,
+    loadStoredKey,
+    hydrateKeysFromLocalStorage,
+    secretChatEnabled,
+  ]);
 
   const resolveMessageKeyCandidates = useCallback(
     (msg: any): string[] => {
       const candidates = new Set<string>();
       if (e2eKeyId) candidates.add(e2eKeyId);
+
       const senderId = msg?.sender_id ? String(msg.sender_id) : null;
       const targetId = msg?.target_id
         ? String(msg.target_id)
@@ -146,73 +360,68 @@ export const useChat = (
         candidates.add(`${localCurrentId}:${localTargetId}`);
         candidates.add(`${localTargetId}:${localCurrentId}`);
       }
+
       return Array.from(candidates);
     },
     [e2eKeyId, currentUserId, targetUserId],
   );
 
-  const storeKey = useCallback(
-    async (keyId: string, keyBytes: Uint8Array) => {
-      e2eKeysRef.current.set(keyId, keyBytes);
-      await AsyncStorage.setItem(`e2e_key_${keyId}`, base64FromBytes(keyBytes));
-      if (accessToken) {
-        const {deviceId, deviceName} = getDeviceInfo();
-        await backupKeyToServer(accessToken, keyId, keyBytes, deviceId, deviceName, currentUserId);
+  const resolveKeyBytes = useCallback(
+    async (candidateKeyId: string): Promise<Uint8Array | null> => {
+      const fromRef = e2eKeysRef.current.get(candidateKeyId);
+      if (fromRef?.length) return fromRef;
+      const stored = await AsyncStorage.getItem(`e2e_key_${candidateKeyId}`);
+      if (!stored) return null;
+      try {
+        const bytes = bytesFromBase64(stored);
+        e2eKeysRef.current.set(candidateKeyId, bytes);
+        return bytes;
+      } catch {
+        return null;
       }
     },
-    [accessToken, currentUserId],
+    [],
   );
-
-  const deriveKey = useCallback(async (shared: ArrayBuffer, keyId: string) => {
-    const encoder = new TextEncoder();
-    const salt = encoder.encode(keyId);
-    const combined = new Uint8Array(shared.byteLength + salt.length);
-    combined.set(new Uint8Array(shared), 0);
-    combined.set(salt, shared.byteLength);
-    const hash = await subtle.digest('SHA-256', combined);
-    return new Uint8Array(hash);
-  }, []);
-
-  const ensureKeyExchange = useCallback(async () => {
-    if (!targetUserId || !currentUserId || !e2eKeyId) return;
-    if (!hasCryptoSubtle()) return;
-    try {
-      await loadStoredKey();
-      if (e2eKeysRef.current.has(e2eKeyId)) return;
-
-      let pair = e2ePairsRef.current.get(e2eKeyId);
-      if (!pair) {
-        pair = await subtle.generateKey({name: 'ECDH', namedCurve: 'P-256'}, true, ['deriveBits']);
-        e2ePairsRef.current.set(e2eKeyId, pair);
-      }
-      const publicKeyRaw = await subtle.exportKey('raw', pair.publicKey);
-      socketService.emit('e2e_key_exchange', {
-        target_user_id: targetUserId,
-        public_key: base64FromBytes(new Uint8Array(publicKeyRaw)),
-        key_id: e2eKeyId,
-        type: 'offer',
-      });
-    } catch (err) {
-      console.error('[Chat] E2EE key exchange failed:', err);
-    }
-  }, [targetUserId, currentUserId, e2eKeyId, loadStoredKey]);
 
   const decryptMessage = useCallback(
     (msg: any) => {
       const next = {...msg};
-      if (next.content && typeof next.content === 'string' && next.content.startsWith('e2e:')) {
+      const needsDecrypt =
+        (next.content && typeof next.content === 'string' && next.content.startsWith('e2e:')) ||
+        (typeof next.attachments === 'string' && next.attachments.startsWith('e2e:'));
+
+      if (needsDecrypt) {
         const candidates = resolveMessageKeyCandidates(next);
+        appLog('useChat', 'decryptMessage attempt', {msgId: next.id, candidates, keysAvailable: candidates.filter(k => e2eKeysRef.current.has(k))});
+      }
+
+      if (
+        next.content &&
+        typeof next.content === 'string' &&
+        next.content.startsWith('e2e:')
+      ) {
+        const candidates = resolveMessageKeyCandidates(next);
+        let decryptedContent = false;
         for (const candidateKeyId of candidates) {
           const key = e2eKeysRef.current.get(candidateKeyId);
           if (!key) continue;
           const decrypted = mtDecrypt(next.content, key);
           if (decrypted !== null) {
             next.content = decrypted;
+            decryptedContent = true;
             break;
           }
         }
+        appLog('useChat', 'decryptMessage content result', {msgId: next.id, decryptedContent});
+        if (!decryptedContent) {
+          // Keep ciphertext — UI masks it until key arrives
+        }
       }
-      if (typeof next.attachments === 'string' && next.attachments.startsWith('e2e:')) {
+
+      if (
+        typeof next.attachments === 'string' &&
+        next.attachments.startsWith('e2e:')
+      ) {
         const candidates = resolveMessageKeyCandidates(next);
         let decryptedAttachments = false;
         for (const candidateKeyId of candidates) {
@@ -228,17 +437,145 @@ export const useChat = (
             continue;
           }
         }
-        if (!decryptedAttachments) next.attachments = undefined;
+        if (!decryptedAttachments) {
+          next.attachments = undefined;
+        }
       }
+
       return next;
     },
     [resolveMessageKeyCandidates],
   );
 
+  // Re-decrypt already-loaded messages whenever keys change.
   useEffect(() => {
-    if (!e2eKeyId || !currentUserId || !targetUserId) return;
+    if (keysVersion === 0) return;
+    setMessages(prev => prev.map(m => decryptMessage(m)));
+  }, [keysVersion, decryptMessage]);
+
+  // Reset caches and restore server keys on login/currentUser change.
+  useEffect(() => {
+    if (!currentUserId) return;
+    let cancelled = false;
+    resetE2eRestoreCache();
+    loadStoredKeyAttemptedRef.current.clear();
+    keyExchangeStartedRef.current.clear();
+    (async () => {
+      try {
+        let token = accessToken;
+        if (!token) {
+          token = await AsyncStorage.getItem('access_token');
+        }
+        if (!token) return;
+        await ensureBackupMaterial(token, currentUserId);
+        const keys = await beginServerKeysRestore(token, currentUserId);
+        if (cancelled) return;
+        for (const [keyId, keyBytes] of keys.entries()) {
+          const normalized = normalizeE2eKeyId(keyId);
+          const hasLocal = !!(await AsyncStorage.getItem(`e2e_key_${normalized}`));
+          if (!hasLocal) {
+            e2eKeysRef.current.set(normalized, keyBytes);
+            await persistKeyLocally(normalized, keyBytes);
+          }
+        }
+        setKeysVersion(v => v + 1);
+      } catch {
+        // ignore restore errors
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, currentUserId]);
+
+  // Trigger key exchange when E2EE chat is opened.
+  useEffect(() => {
+    if (!secretChatEnabled || !e2eKeyId || !currentUserId || !targetUserId) return;
     ensureKeyExchange().catch(() => {});
-  }, [e2eKeyId, currentUserId, targetUserId, ensureKeyExchange]);
+  }, [e2eKeyId, currentUserId, targetUserId, secretChatEnabled, ensureKeyExchange]);
+
+  const sendMessage = useCallback(
+    async (
+      content: string,
+      type: 'text' | 'voice' | 'video_note' = 'text',
+      attachments?: any[],
+      replyToId?: string,
+    ) => {
+      if (!currentUserId || (!targetUserId && !channelId && !groupId)) return;
+
+      const normalizedAttachments = Array.isArray(attachments) ? attachments : [];
+
+      if (!channelId && !groupId && targetUserId && e2eKeyId && secretChatEnabled) {
+        await loadStoredKey();
+        const key = e2eKeysRef.current.get(e2eKeyId);
+        if (!key) {
+          appLog('useChat', 'sendMessage no e2e key; queueing pending', {e2eKeyId});
+          const pending = e2ePendingRef.current.get(e2eKeyId) || [];
+          pending.push({
+            content,
+            type,
+            attachments: normalizedAttachments,
+            replyToId,
+          });
+          e2ePendingRef.current.set(e2eKeyId, pending);
+          ensureKeyExchange();
+          return;
+        }
+        appLog('useChat', 'sendMessage encrypting with e2e key', {e2eKeyId});
+        const encryptedContent = mtEncrypt(content, key);
+        const encryptedAttachments =
+          normalizedAttachments.length > 0
+            ? mtEncrypt(JSON.stringify(normalizedAttachments), key)
+            : undefined;
+        const messagePayload: any = {
+          content: encryptedContent,
+          type,
+          attachments: encryptedAttachments,
+          target_user_id: targetUserId,
+        };
+        if (replyToId) messagePayload.reply_to = replyToId;
+        socketService.emit('send_message', messagePayload);
+        return;
+      }
+
+      const messagePayload: any = {
+        content,
+        type,
+        sender_id: currentUserId,
+        reply_to: replyToId,
+        attachments: normalizedAttachments,
+      };
+      if (targetUserId) messagePayload.target_user_id = targetUserId;
+      if (groupId) messagePayload.group_id = groupId;
+      if (channelId) messagePayload.channel_id = channelId;
+
+      socketService.emit('send_message', messagePayload);
+    },
+    [
+      currentUserId,
+      targetUserId,
+      groupId,
+      channelId,
+      e2eKeyId,
+      loadStoredKey,
+      ensureKeyExchange,
+      secretChatEnabled,
+    ],
+  );
+
+  // Flush any messages that were queued while waiting for an E2EE key.
+  useEffect(() => {
+    if (!e2eKeyId) return;
+    const key = e2eKeysRef.current.get(e2eKeyId);
+    if (!key) return;
+    const pending = e2ePendingRef.current.get(e2eKeyId);
+    if (!pending || pending.length === 0) return;
+    e2ePendingRef.current.delete(e2eKeyId);
+    appLog('useChat', 'flushing pending E2EE messages', {e2eKeyId, count: pending.length});
+    for (const item of pending) {
+      sendMessage(item.content, item.type, item.attachments, item.replyToId);
+    }
+  }, [keysVersion, e2eKeyId, sendMessage]);
 
   // Socket listeners
   useEffect(() => {
@@ -254,32 +591,38 @@ export const useChat = (
     };
 
     const onReceiveMessage = (msg: any) => {
-      const decrypted = decryptMessage(normalizeMsg(msg));
+      const normalized = normalizeMsg(msg);
+      appLog('useChat', 'onReceiveMessage', {msgId: normalized.id, isE2e: normalized.content?.startsWith('e2e:')});
+      const decrypted = decryptMessage(normalized);
       setMessages(prev => {
         if (prev.find(m => m.id === decrypted.id)) return prev;
-        return [...prev, decrypted];
+        return [decrypted, ...prev];
       });
     };
 
     const onMessageSent = (data: any) => {
-      console.log('[Chat] message_sent raw:', JSON.stringify(data));
       const msg = data?.message || data;
-      const decrypted = decryptMessage(normalizeMsg(msg));
-      console.log('[Chat] message_sent parsed:', decrypted.id, decrypted.content?.slice(0, 20));
+      const normalized = normalizeMsg(msg);
+      appLog('useChat', 'onMessageSent', {msgId: normalized.id, isE2e: normalized.content?.startsWith('e2e:')});
+      const decrypted = decryptMessage(normalized);
       setMessages(prev => {
-        const idx = prev.findIndex(m => m.id === decrypted.id || (m as any)._pendingId === decrypted.id);
+        const idx = prev.findIndex(
+          m => m.id === decrypted.id || (m as any)._pendingId === decrypted.id,
+        );
         if (idx !== -1) {
           const next = [...prev];
           next[idx] = decrypted;
           return next;
         }
-        return [...prev, decrypted];
+        return [decrypted, ...prev];
       });
     };
 
     const onTyping = (data: any) => {
       if (
-        (targetUserId && data.target_user_id === currentUserId && data.sender_id === targetUserId) ||
+        (targetUserId &&
+          data.target_user_id === currentUserId &&
+          data.sender_id === targetUserId) ||
         (groupId && data.group_id === groupId) ||
         (channelId && data.channel_id === channelId)
       ) {
@@ -309,13 +652,19 @@ export const useChat = (
     };
 
     const onE2EKeyExchange = async (data: any) => {
+      if (!secretChatEnabled) return;
       if (!currentUserId || !targetUserId || !e2eKeyId) return;
-      const keyId = data.key_id;
-      if (!keyId) return;
+      if (!data?.key_id || normalizeE2eKeyId(data.key_id) !== normalizeE2eKeyId(e2eKeyId)) return;
+      if (String(data.from_user_id) !== String(targetUserId)) return;
+      const keyId = normalizeE2eKeyId(data.key_id);
       const otherPublicKeyB64 = data.public_key;
       if (!otherPublicKeyB64) return;
 
+      appLog('useChat', 'onE2EKeyExchange received', {keyId, type: data.type, from: data.from_user_id});
       try {
+        hydrateKeysFromLocalStorage().catch(() => {});
+        loadStoredKey().catch(() => {});
+
         const otherPublicKeyRaw = bytesFromBase64(otherPublicKeyB64);
         const otherPublicKey = await subtle.importKey(
           'raw',
@@ -327,7 +676,11 @@ export const useChat = (
 
         let pair = e2ePairsRef.current.get(keyId);
         if (!pair) {
-          pair = await subtle.generateKey({name: 'ECDH', namedCurve: 'P-256'}, true, ['deriveBits']);
+          pair = (await subtle.generateKey(
+            {name: 'ECDH', namedCurve: 'P-256'},
+            true,
+            ['deriveBits'],
+          )) as CryptoKeyPair;
           e2ePairsRef.current.set(keyId, pair);
         }
 
@@ -338,9 +691,9 @@ export const useChat = (
         );
         const derived = await deriveKey(shared, keyId);
         await storeKey(keyId, derived);
+        appLog('useChat', 'onE2EKeyExchange key stored', {keyId, keyLength: derived.length});
 
-        // Send answer if we received offer
-        if (data.type === 'offer' && data.sender_id === targetUserId) {
+        if (data.type !== 'answer' && String(data.from_user_id) === String(targetUserId)) {
           const publicKeyRaw = await subtle.exportKey('raw', pair.publicKey);
           socketService.emit('e2e_key_exchange', {
             target_user_id: targetUserId,
@@ -348,7 +701,10 @@ export const useChat = (
             key_id: keyId,
             type: 'answer',
           });
+          appLog('useChat', 'onE2EKeyExchange answer emitted', {keyId});
         }
+
+        setKeysVersion(v => v + 1);
 
         // Send pending messages
         const pending = e2ePendingRef.current.get(keyId);
@@ -359,6 +715,7 @@ export const useChat = (
           e2ePendingRef.current.delete(keyId);
         }
       } catch (error) {
+        appLog('useChat', 'onE2EKeyExchange error', String(error));
         console.error('[E2E] Key exchange failed:', error);
       }
     };
@@ -387,6 +744,10 @@ export const useChat = (
     decryptMessage,
     deriveKey,
     storeKey,
+    loadStoredKey,
+    hydrateKeysFromLocalStorage,
+    secretChatEnabled,
+    sendMessage,
   ]);
 
   const fetchHistory = useCallback(async () => {
@@ -404,18 +765,26 @@ export const useChat = (
       }
       if (!endpoint) return;
 
-      const data = await apiClient.get<{items?: any[]; messages?: any[]}>(endpoint);
+      const data = await apiClient.get<{items?: any[]; messages?: any[]}>(
+        endpoint,
+      );
       const items = data.items || data.messages || [];
       const normalizeMsg = (msg: any): any => ({
         ...msg,
         timestamp: msg.timestamp || msg.created_at || new Date().toISOString(),
         created_at: msg.created_at || msg.timestamp,
       });
+
+      await hydrateKeysFromLocalStorage();
+      await loadStoredKey();
       const decrypted = items.map((m: any) => decryptMessage(normalizeMsg(m)));
+
+
+
       setMessages(prev => {
         const existingIds = new Set(prev.map(p => p.id));
         const newMessages = decrypted.filter(m => !existingIds.has(m.id));
-        return [...newMessages, ...prev];
+        return [...prev, ...newMessages];
       });
       setOffset(prev => prev + decrypted.length);
       if (decrypted.length < HISTORY_PAGE_SIZE) setHasMore(false);
@@ -424,50 +793,25 @@ export const useChat = (
     } finally {
       setIsLoading(false);
     }
-  }, [targetUserId, groupId, channelId, offset, hasMore, isLoading, decryptMessage]);
-
-  const sendMessage = useCallback(
-    async (
-      content: string,
-      type: 'text' | 'voice' = 'text',
-      attachments?: any[],
-      replyToId?: string,
-    ) => {
-      if (!currentUserId) return;
-
-      // Encrypt for DM if key exists — otherwise send plaintext
-      let finalContent = content;
-      let finalAttachments: any = attachments;
-      if (targetUserId && e2eKeyId) {
-        const key = e2eKeysRef.current.get(e2eKeyId);
-        if (key) {
-          finalContent = mtEncrypt(content, key);
-          if (attachments && attachments.length > 0) {
-            finalAttachments = mtEncrypt(JSON.stringify(attachments), key);
-          }
-        }
-        // If no key, send plaintext (will be encrypted by server-side if needed)
-      }
-
-      const payload: any = {
-        content: finalContent,
-        type,
-        sender_id: currentUserId,
-        reply_to: replyToId,
-      };
-      if (targetUserId) payload.target_user_id = targetUserId;
-      if (groupId) payload.group_id = groupId;
-      if (channelId) payload.channel_id = channelId;
-      if (finalAttachments) payload.attachments = finalAttachments;
-
-      socketService.emit('send_message', payload);
-    },
-    [currentUserId, targetUserId, groupId, channelId, e2eKeyId, ensureKeyExchange],
-  );
+  }, [
+    targetUserId,
+    groupId,
+    channelId,
+    offset,
+    hasMore,
+    isLoading,
+    decryptMessage,
+    loadStoredKey,
+    hydrateKeysFromLocalStorage,
+    e2eKeyId,
+    currentUserId,
+    secretChatEnabled,
+    ensureKeyExchange,
+  ]);
 
   const deleteMessage = useCallback(
     async (messageId: string) => {
-      if (!currentUserId) return;
+      if (!currentUserId || !messageId) return;
       setDeletingMessageIds(prev => new Set(prev).add(messageId));
       try {
         socketService.emit('delete_message', {message_id: messageId});
@@ -513,7 +857,9 @@ export const useChat = (
   const forwardMessage = useCallback(
     async (messageId: string, targetId: string) => {
       try {
-        await apiClient.post(`/messages/${messageId}/forward`, {target_id: targetId});
+        await apiClient.post(`/messages/${messageId}/forward`, {
+          target_id: targetId,
+        });
       } catch (error) {
         console.error('[Chat] Failed to forward message:', error);
       }

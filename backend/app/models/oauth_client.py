@@ -15,6 +15,7 @@ class OAuthClient(db.Model):
     user_id = db.Column(TEXT, ForeignKey("users.id"), nullable=False)
     client_id = db.Column(TEXT, unique=True, nullable=False)
     client_secret_hash = db.Column(TEXT, nullable=False)
+    client_secret_plain = db.Column(TEXT, nullable=True)
     name = db.Column(TEXT, nullable=False)
     description = db.Column(TEXT, default=None)
     redirect_uris = db.Column(TEXT, nullable=False)
@@ -92,6 +93,7 @@ class OAuthClient(db.Model):
         return {
             "id": self.id,
             "client_id": self.client_id,
+            "client_secret": self.client_secret_plain,
             "name": self.name,
             "description": desc_text,
             "logo_url": logo_url,

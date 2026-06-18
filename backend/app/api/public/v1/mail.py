@@ -17,7 +17,8 @@ public_mail_bp = Blueprint(
 )
 
 
-def _send_payload(data: dict) -> tuple[list[str], str, str, str | None, list[str] | None]:
+def _send_payload(
+        data: dict) -> tuple[list[str], str, str, str | None, list[str] | None]:
     to_addrs = parse_recipients(data.get("to"))
     if not to_addrs:
         raise ValueError("Поле to обязательно")
@@ -28,7 +29,8 @@ def _send_payload(data: dict) -> tuple[list[str], str, str, str | None, list[str
         body_html = str(body_html).strip() or None
     cc = parse_recipients(data.get("cc")) or None
     if not body_text and not body_html:
-        raise ValueError("Текст письма обязателен (body/body_text или body_html)")
+        raise ValueError(
+            "Текст письма обязателен (body/body_text или body_html)")
     return to_addrs, subject, body_text or "(пусто)", body_html, cc
 
 

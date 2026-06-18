@@ -255,6 +255,7 @@ def delete_dm_history(current_user, access_token, target_id):
                 Message.target_id == current_user.id))).delete(
                     synchronize_session=False)
     db.session.commit()
+    MessageService.ensure_dm_conversation(current_user.id, target_id)
     return jsonify({"deleted": deleted}), 200
 
 

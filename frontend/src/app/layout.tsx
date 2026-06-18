@@ -1,17 +1,16 @@
 import { GlobalCallUI, WebRTCProvider } from '@/components/calls'
-import NotificationBell from '@/components/notifications/NotificationBell'
+import DesktopReleaseBanner from '@/components/DesktopReleaseBanner'
 import GlobalPlayer from '@/components/music/GlobalPlayer'
+import NotificationBell from '@/components/notifications/NotificationBell'
+import ThemeInit from '@/components/ThemeInit'
 import { UrlFallbackProvider } from '@/components/UrlFallbackProvider'
 import { AuthProvider } from '@/lib/AuthContext'
-import { SocialCommunitiesProvider } from '@/lib/SocialCommunitiesContext'
 import ReactQueryProvider from '@/lib/ReactQueryProvider'
+import { SocialCommunitiesProvider } from '@/lib/SocialCommunitiesContext'
 import { SocketProvider } from '@/lib/SocketContext'
 import { ToastProvider } from '@/lib/ToastContext'
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
-import DesktopReleaseBanner from '@/components/DesktopReleaseBanner'
-import ThemeInit from '@/components/ThemeInit'
-import BottomNav from '@/components/social/BottomNav'
 import '../styles/calls.css'
 import './globals.css'
 import StoreProvider from './StoreProvider'
@@ -29,6 +28,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
 	title: 'Вондик',
 	description: 'Универсальный коммуникационный хаб',
+	manifest: '/manifest.webmanifest',
 }
 
 export const viewport: Viewport = {

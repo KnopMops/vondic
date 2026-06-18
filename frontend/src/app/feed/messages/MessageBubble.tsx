@@ -29,7 +29,7 @@ interface Message {
 	timestamp: string
 	isOwn: boolean
 	is_read?: boolean
-	type?: 'text' | 'voice'
+	type?: 'text' | 'voice' | 'video_note'
 	channel_id?: string
 	group_id?: string
 	reply_to?: string
@@ -108,6 +108,7 @@ interface MessageBubbleProps {
 	botAccessToken?: string
 	onBotOutboxItems?: (botId: string, items: any[]) => void
 	onBotModal?: (botId: string, modal: string) => void
+	onBotGamePlay?: (game: { embed_url: string; title?: string; download_url?: string }) => void
 }
 
 const REACTIONS = ['❤️', '🔥', '😂', '👍', '😮', '😢']
@@ -135,6 +136,7 @@ const MessageBubble = memo(
 		botAccessToken,
 		onBotOutboxItems,
 		onBotModal,
+		onBotGamePlay,
 	}: MessageBubbleProps) => {
 		const [isDetailsOpen, setIsDetailsOpen] = useState(false)
 		const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -242,7 +244,11 @@ const MessageBubble = memo(
 								: undefined
 						return { intro, invite: parsed }
 					})()
-		const displayContent = msg.is_deleted ? 'Сообщение удалено' : msg.content
+		const displayContent = msg.is_deleted
+			? 'Сообщение удалено'
+			: typeof msg.content === 'string' && msg.content.startsWith('e2e:')
+				? '🔒 Зашифрованное сообщение'
+				: msg.content
 		const reactionEntries = reactions ? Object.entries(reactions) : []
 		const attachments = Array.isArray(msg.attachments) ? msg.attachments : []
 		const isGroupChat = !!(msg.group_id || msg.channel_id)
@@ -523,6 +529,29 @@ const MessageBubble = memo(
 								className='w-full h-8'
 							/>
 						</div>
+					) : msg.type === 'video_note' ? (
+						<div className='py-1'>
+							<div
+								style={{
+									width: 200,
+									height: 200,
+									borderRadius: '50%',
+									overflow: 'hidden',
+									position: 'relative',
+									border: '3px solid rgba(99,102,241,0.6)',
+									boxShadow: '0 0 0 1px rgba(99,102,241,0.25)',
+								}}
+							>
+								<video
+									src={getAttachmentUrl(msg.content)}
+									style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+									controls
+									preload='metadata'
+									playsInline
+									loop={false}
+								/>
+							</div>
+						</div>
 					) : invitePayload ? (
 						renderInviteCard(
 							invitePayload.title,
@@ -692,18 +721,23 @@ const MessageBubble = memo(
 
 					{msg.game?.embed_url && (
 						<div className='mt-2 w-full max-w-md rounded-xl overflow-hidden border border-white/10 bg-black/40'>
-							{msg.game.title && (
-								<p className='px-3 py-2 text-sm font-medium text-white border-b border-white/10'>
-									{msg.game.title}
-								</p>
-							)}
-							<iframe
-								title={msg.game.title || 'Игра'}
-								src={msg.game.embed_url}
-								className='w-full min-h-[380px] border-0 bg-black'
-								sandbox='allow-scripts allow-same-origin allow-pointer-lock'
-								allow='fullscreen'
-							/>
+							<div className='flex items-center gap-3 p-3'>
+								<div className='flex-1 min-w-0'>
+									{msg.game.title && (
+										<p className='text-sm font-medium text-white truncate'>
+											{msg.game.title}
+										</p>
+									)}
+									<p className='text-xs text-gray-400'>HTML5-игра</p>
+								</div>
+								<button
+									type='button'
+									onClick={() => onBotGamePlay?.(msg.game!)}
+									className='shrink-0 rounded-lg bg-indigo-600 hover:bg-indigo-500 px-4 py-2 text-xs font-medium text-white'
+								>
+									Играть
+								</button>
+							</div>
 							{msg.game.download_url && (
 								<div className='px-3 py-2 border-t border-white/10'>
 									<a
@@ -827,6 +861,7 @@ const MessageBubble = memo(
 						</div>
 					)}
 					{(msg.type === 'voice' ||
+						msg.type === 'video_note' ||
 						stickerPayload ||
 						sharedPost ||
 						attachments.length > 0 ||

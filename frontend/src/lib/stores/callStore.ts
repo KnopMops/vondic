@@ -13,6 +13,8 @@ interface CallStore {
 	remoteStreams: Map<string, MediaStream>
 	activeCalls: Map<string, CallState>
 	activeGroupCallId: string | null
+	activeVoiceChannelId: string | null
+	voiceChannelParticipants: Record<string, { userId: string; username: string; avatarUrl?: string; socketId: string }[]>
 	incomingCall: CallState | null
 	isMuted: boolean
 	isScreenSharing: boolean
@@ -51,7 +53,7 @@ interface CallStore {
 	isVideoEnabled: () => boolean
 
 	
-	initiateCall: (targetUserId: string, targetUserName: string) => Promise<void>
+	initiateCall: (targetUserId: string, targetUserName: string, targetAvatarUrl?: string) => Promise<void>
 	initiateGroupCall: (groupId: string) => Promise<void>
 	joinVoiceChannel: (channelId: string) => Promise<void>
 	leaveVoiceChannel: (channelId: string) => void
@@ -89,6 +91,8 @@ export const useCallStore = create<CallStore>((set, get) => ({
 	remoteStreams: new Map(),
 	activeCalls: new Map(),
 	activeGroupCallId: null,
+	activeVoiceChannelId: null,
+	voiceChannelParticipants: {},
 	incomingCall: null,
 	isMuted: false,
 	isScreenSharing: false,
@@ -295,6 +299,29 @@ export const useCallStore = create<CallStore>((set, get) => ({
 				set({ activeGroupCallId: groupId })
 			}
 
+			callManager.onVoiceChannelParticipantJoined = (channelId: string, participant: { userId: string; username: string; avatarUrl?: string; socketId: string }) => {
+				const { voiceChannelParticipants } = get()
+				const list = voiceChannelParticipants[channelId] || []
+				const filtered = list.filter(p => p.socketId !== participant.socketId)
+				set({
+					voiceChannelParticipants: {
+						...voiceChannelParticipants,
+						[channelId]: [...filtered, participant],
+					},
+				})
+			}
+
+			callManager.onVoiceChannelParticipantLeft = (channelId: string, socketId: string) => {
+				const { voiceChannelParticipants } = get()
+				const list = voiceChannelParticipants[channelId] || []
+				set({
+					voiceChannelParticipants: {
+						...voiceChannelParticipants,
+						[channelId]: list.filter(p => p.socketId !== socketId),
+					},
+				})
+			}
+
 			set({
 				isInitialized: true,
 				webRTCService,
@@ -351,6 +378,8 @@ export const useCallStore = create<CallStore>((set, get) => ({
 			remoteStreams: new Map(),
 			activeCalls: new Map(),
 			activeGroupCallId: null,
+			activeVoiceChannelId: null,
+			voiceChannelParticipants: {},
 			incomingCall: null,
 			isMuted: false,
 			isScreenSharing: false,
@@ -497,13 +526,13 @@ export const useCallStore = create<CallStore>((set, get) => ({
 	},
 
 	// Действия звонков
-	initiateCall: async (targetUserId: string, targetUserName: string) => {
+	initiateCall: async (targetUserId: string, targetUserName: string, targetAvatarUrl?: string) => {
 		const { callManager } = get()
 		if (!callManager) {
 			throw new Error('CallManager не инициализирован')
 		}
 
-		await callManager.initiateDirectCall(targetUserId, targetUserName)
+		await callManager.initiateDirectCall(targetUserId, targetUserName, targetAvatarUrl)
 	},
 
 	initiateGroupCall: async (groupId: string) => {
@@ -519,12 +548,16 @@ export const useCallStore = create<CallStore>((set, get) => ({
 		const { callManager } = get()
 		if (!callManager) throw new Error('CallManager not initialized')
 		await callManager.joinVoiceChannel(channelId)
+		set({ activeVoiceChannelId: channelId })
 	},
 
 	leaveVoiceChannel: (channelId: string) => {
-		const { callManager } = get()
+		const { callManager, voiceChannelParticipants } = get()
 		if (!callManager) return
 		callManager.leaveVoiceChannel(channelId)
+		const newParticipants = { ...voiceChannelParticipants }
+		delete newParticipants[channelId]
+		set({ activeVoiceChannelId: null, voiceChannelParticipants: newParticipants })
 	},
 
 	joinGroupCall: async (callId: string) => {
@@ -649,12 +682,12 @@ export const saveCallState = () => {
 	const state = useCallStore.getState()
 	try {
 		const data = {
-			activeCalls: Array.from(state.activeCalls.entries()).map(([key, value]) => ({
+			activeCalls: Array.from(state.activeCalls.entries()).map(([key, value]: [string, CallState]) => ({
 				key,
 				socketId: value.socketId,
 				userId: value.userId,
 				userName: value.userName,
-				userAvatar: value.userAvatar,
+				avatarUrl: value.avatarUrl,
 				status: value.status,
 				isGroupCall: value.isGroupCall,
 				callId: value.callId,

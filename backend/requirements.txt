@@ -25,9 +25,6 @@ pytz
 psycopg2-binary
 asyncpg
 user-agents
-openai-whisper
-safetext
-nudenetv2
 pika
 uvicorn
 prometheus-client

@@ -55,7 +55,7 @@ export default function SocialFeed({ email, onLogout, mode = 'feed' }: Props) {
 	}
 
 	return (
-		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white overflow-x-hidden relative pb-20 md:pb-0'>
+		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white relative pb-20 md:pb-0'>
 			<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
 				<div className='absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-indigo-900/20 blur-[120px]' />
 				<div className='absolute top-[40%] -right-[10%] w-[40%] h-[60%] rounded-full bg-purple-900/20 blur-[120px]' />
@@ -66,9 +66,9 @@ export default function SocialFeed({ email, onLogout, mode = 'feed' }: Props) {
 				<Header email={email} onLogout={onLogout} />
 			</div>
 
-			<div className='relative z-10 mx-auto flex max-w-7xl pt-6'>
+			<div className='relative z-10 mx-auto flex max-w-7xl pt-20'>
 				<Sidebar />
-				<main className='flex-1 px-4 sm:px-6 lg:px-8'>
+				<main className='flex-1 px-4 sm:px-6 lg:pl-20 lg:pr-80 lg:pt-6 min-w-0'>
 					<div className='mx-auto max-w-2xl space-y-6'>
 						<StoriesBar />
 						<Composer onCreate={addPost} />
@@ -154,7 +154,7 @@ export default function SocialFeed({ email, onLogout, mode = 'feed' }: Props) {
 						)}
 					</div>
 				</main>
-				<div className='hidden w-80 p-6 lg:block'>
+				<div className='hidden lg:block fixed top-20 right-0 h-auto max-h-[calc(100vh-5rem)] w-80 overflow-y-auto p-6 z-40'>
 					<RightPanel />
 				</div>
 			</div>

@@ -56,15 +56,19 @@ class BotGameService:
         return False
 
     @staticmethod
-    def list_games(bot_id: str, query: str | None = None, published_only: bool = True):
+    def list_games(
+            bot_id: str,
+            query: str | None = None,
+            published_only: bool = True):
         q = BotGame.query.filter_by(bot_id=bot_id)
         if published_only:
-            q = q.filter(BotGame.is_published == 1, BotGame.scan_status == "approved")
+            q = q.filter(
+                BotGame.is_published == 1,
+                BotGame.scan_status == "approved")
         if query:
             search = f"%{query.strip()}%"
-            q = q.filter(
-                or_(BotGame.title.ilike(search), BotGame.description.ilike(search))
-            )
+            q = q.filter(or_(BotGame.title.ilike(search),
+                             BotGame.description.ilike(search)))
         return q.order_by(BotGame.created_at.desc()).all()
 
     @staticmethod
@@ -162,13 +166,18 @@ class BotGameService:
         return game, None
 
     @staticmethod
-    def apply_scan_result(game_id: str, ok: bool, error: str | None, meta: dict) -> None:
+    def apply_scan_result(
+            game_id: str,
+            ok: bool,
+            error: str | None,
+            meta: dict) -> None:
         game = BotGame.query.get(game_id)
         if not game:
             return
         game.scan_status = "approved" if ok else "rejected"
         game.scan_error = error
-        game.scan_result = json.dumps(meta, ensure_ascii=False) if meta else None
+        game.scan_result = json.dumps(
+            meta, ensure_ascii=False) if meta else None
         game.is_published = 1 if ok else 0
         if ok and meta.get("entry"):
             game.entry_path = meta["entry"]

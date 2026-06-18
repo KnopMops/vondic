@@ -161,7 +161,7 @@ export const CallPanel: React.FC<CallPanelProps> = ({ onClose }) => {
 				remoteAudioRefs.current.delete(key)
 			}
 		})
-	}, [activeCalls.size, remoteStreams.size, remoteVolume])
+	}, [activeCalls, remoteStreams, remoteVolume])
 
 	// Handle remote video (webcam)
 	useEffect(() => {
@@ -199,7 +199,7 @@ export const CallPanel: React.FC<CallPanelProps> = ({ onClose }) => {
 				remoteVideoRefs.current.delete(key)
 			}
 		})
-	}, [activeCalls.size, remoteStreams.size])
+	}, [activeCalls, remoteStreams])
 
 	// Handle screen share video
 	useEffect(() => {
@@ -346,14 +346,14 @@ export const CallPanel: React.FC<CallPanelProps> = ({ onClose }) => {
 			list.push({
 				...localParticipant,
 				isLocal: true,
-				hasVideo: localStream?.getVideoTracks().length ?? 0 > 0,
-				hasAudio: localStream?.getAudioTracks().length ?? 0 > 0,
+				hasVideo: (localStream?.getVideoTracks().length ?? 0) > 0,
+				hasAudio: (localStream?.getAudioTracks().length ?? 0) > 0,
 			})
 		}
 
 		activeCalls.forEach(call => {
-			if (call.userId && call.userName && call.status === 'connected') {
-				const stream = remoteStreams.get(call.socketId)
+			if (call.userId && call.userName) {
+				const stream = call.status === 'connected' ? remoteStreams.get(call.socketId) : null
 				// Кэшируем проверку треков, чтобы избежать частых пересчётов
 				const videoTrackCount = stream ? stream.getVideoTracks().length : 0
 				const audioTrackCount = stream ? stream.getAudioTracks().length : 0
@@ -361,7 +361,7 @@ export const CallPanel: React.FC<CallPanelProps> = ({ onClose }) => {
 				list.push({
 					id: call.userId,
 					username: call.userName,
-					avatarUrl: call.userAvatar,
+					avatarUrl: call.avatarUrl,
 					isLocal: false,
 					hasVideo: videoTrackCount > 0,
 					hasAudio: audioTrackCount > 0,
@@ -391,7 +391,9 @@ export const CallPanel: React.FC<CallPanelProps> = ({ onClose }) => {
 		if (onClose) onClose()
 	}
 
-	if (!activeGroupCallId && !allCallsConnected) {
+	const hasAnyCalls = activeCalls.size > 0
+
+	if (!activeGroupCallId && !hasAnyCalls) {
 		return null
 	}
 
@@ -485,20 +487,27 @@ export const CallPanel: React.FC<CallPanelProps> = ({ onClose }) => {
 									{participantName}
 								</h3>
 								<div className='flex items-center gap-2 text-xs text-gray-400'>
+								{allCallsConnected ? (
 									<span className='flex items-center gap-1 text-green-400'>
 										<span className='w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse' />
 										{formatDuration(duration)}
 									</span>
-									<span>•</span>
-									<span>
-										{participantCount}{' '}
-										{participantCount === 1
-											? 'участник'
-											: participantCount < 5
-												? 'участника'
-												: 'участников'}
+								) : (
+									<span className='flex items-center gap-1 text-yellow-400'>
+										<span className='w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse' />
+										Звонок...
 									</span>
-								</div>
+								)}
+								<span>•</span>
+								<span>
+									{participantCount}{' '}
+									{participantCount === 1
+										? 'участник'
+										: participantCount < 5
+											? 'участника'
+											: 'участников'}
+								</span>
+							</div>
 							</div>
 						</div>
 						<div className='flex items-center gap-1'>

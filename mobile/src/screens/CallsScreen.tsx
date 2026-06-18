@@ -1,7 +1,8 @@
 import React from 'react';
-import {View, Text, StyleSheet, FlatList, TouchableOpacity} from 'react-native';
+import {View, Text, StyleSheet, FlatList} from 'react-native';
 import {useCallStore} from '@/store/callStore';
 import Icon from 'react-native-vector-icons/Ionicons';
+import ScreenHeader from '@/components/ScreenHeader';
 
 export default function CallsScreen() {
   const {callHistory, activeCalls} = useCallStore();
@@ -12,19 +13,26 @@ export default function CallsScreen() {
         <Icon
           name={
             item.type === 'incoming'
-              ? 'call-received'
+              ? 'arrow-down-left-outline'
               : item.type === 'outgoing'
-              ? 'call-made'
-              : 'call-missed'
+              ? 'arrow-up-right-outline'
+              : 'close-outline'
           }
           size={20}
           color={item.status === 'completed' ? '#6c5ce7' : '#ff6b6b'}
         />
       </View>
       <View style={styles.callInfo}>
-        <Text style={styles.callName}>{item.receiverName || item.callerName}</Text>
+        <Text style={styles.callName}>
+          {item.type === 'outgoing' ? item.receiverName : item.callerName}
+        </Text>
         <Text style={styles.callDetail}>
-          {item.type} · {new Date(item.startTime).toLocaleDateString()}
+          {item.type === 'incoming'
+            ? 'Входящий'
+            : item.type === 'outgoing'
+            ? 'Исходящий'
+            : 'Пропущенный'}{' '}
+          · {new Date(item.startTime).toLocaleDateString()}
         </Text>
       </View>
       <Text style={styles.callDuration}>
@@ -35,9 +43,7 @@ export default function CallsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Звонки</Text>
-      </View>
+      <ScreenHeader title="Звонки" />
       {activeCalls.size > 0 && (
         <View style={styles.activeCallsBanner}>
           <Text style={styles.activeCallsText}>

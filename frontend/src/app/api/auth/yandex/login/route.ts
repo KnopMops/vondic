@@ -19,7 +19,14 @@ export async function POST(req: NextRequest) {
 		
 		const backendUrl = getBackendUrl()
 
-		const response = await fetch(`${backendUrl}/api/v1/auth/yandex/login`, {
+		const loginHint =
+			searchParams.get('login_hint') || searchParams.get('email')
+		const backendLoginUrl = new URL(`${backendUrl}/api/v1/auth/yandex/login`)
+		if (loginHint) {
+			backendLoginUrl.searchParams.set('login_hint', loginHint)
+		}
+
+		const response = await fetch(backendLoginUrl.toString(), {
 			method: 'GET',
 			headers: { 'Content-Type': 'application/json' },
 		})

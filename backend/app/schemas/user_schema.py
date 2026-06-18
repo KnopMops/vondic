@@ -17,6 +17,8 @@ class UserSchema(ma.SQLAlchemyAutoSchema):
             "moderation_warnings",
             "api_key_hash",
             "api_key",
+            "registration_ip",
+            "is_blocked_system",
         )
 
     def get_avatar_url(self, obj):
@@ -48,6 +50,8 @@ class SafeUserSchema(ma.SQLAlchemyAutoSchema):
             "moderation_warnings",
             "api_key_hash",
             "api_key",
+            "registration_ip",
+            "is_blocked_system",
         )
 
     def get_avatar_url(self, obj):

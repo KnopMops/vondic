@@ -220,7 +220,10 @@ def create_app():
         if not user:
             return jsonify({"error": "Неверный токен"}), 401
 
-        deleted = user_repo.delete_messages_history(user["id"], target_id)
+        scope = data.get("scope", "for_all")
+        deleted = user_repo.delete_messages_history(
+            user["id"], target_id, scope=scope
+        )
         return jsonify({"deleted": deleted}), 200
 
     @app.route("/channels/history", methods=["POST"])

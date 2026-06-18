@@ -211,7 +211,7 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 			} catch {}
 			el.srcObject = null
 		}
-	}, [remoteStream, callInfo.status, iceConnState])
+	}, [remoteStream, remoteStream?.getTracks().length, callInfo.status, iceConnState])
 
 	
 	useEffect(() => {
@@ -269,7 +269,7 @@ const ActiveCall: React.FC<ActiveCallProps> = ({
 			} catch {}
 			el.srcObject = null
 		}
-	}, [remoteStream])
+	}, [remoteStream, remoteStream?.getVideoTracks().length])
 
 	useEffect(() => {
 		const el = localScreenRef.current

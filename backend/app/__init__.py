@@ -183,6 +183,8 @@ def create_app(config_class=Config):
                 ensure_chat_entity_avatar_columns,
                 ensure_posts_social_community_column,
                 ensure_social_communities_cover_column,
+                ensure_user_conversations_table,
+                ensure_user_conversations_secret_column,
                 ensure_users_extended_columns,
             )
 
@@ -192,8 +194,10 @@ def create_app(config_class=Config):
             ensure_chat_entity_avatar_columns(db.engine)
             ensure_channels_type_column(db.engine)
             ensure_bots_owner_id_column(db.engine)
+            ensure_user_conversations_table(db.engine)
+            ensure_user_conversations_secret_column(db.engine)
             print(
-                "[DB] Дополнительные колонки users/posts/chat/bots проверены.")
+                "[DB] Дополнительные колонки users/posts/chat/bots/conversations проверены.")
         except Exception as e:
             print(f"[DB] ensure_users_extended_columns: {e}")
 
@@ -303,10 +307,17 @@ def create_app(config_class=Config):
     from app.utils.api_errors import api_error
     from app.utils.network_access import should_allow_request
     from app.utils.static_access import authorize_static_request
+    from app.utils.decorators import check_ip_blocked
 
     @app.before_request
     def restrict_network_access():
         path = request.path or ""
+
+        if path.startswith("/api/"):
+            blocked = check_ip_blocked()
+            if blocked:
+                return blocked
+
         if path.startswith("/uploads/") or path.startswith("/static/"):
             if not authorize_static_request():
                 return api_error("STATIC_ACCESS_DENIED", 401)
@@ -425,7 +436,8 @@ def create_app(config_class=Config):
             request.args.get('download') in ('1', 'true', 'yes')
             or request.headers.get('X-Download') == '1'
         )
-        download_name = request.args.get('filename') or filename.rsplit('/', 1)[-1]
+        download_name = request.args.get(
+            'filename') or filename.rsplit('/', 1)[-1]
         uploads_url = f"{STATIC_NGINX_URL}/uploads/{filename}"
         uploads_folder = os.getenv('UPLOADS_DIR', '/app/uploads')
         return _proxy_upstream(

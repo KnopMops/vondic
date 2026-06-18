@@ -201,6 +201,50 @@ let cachedBackupMaterial: BackupMaterial | null = null
 let cachedBackupMaterialUserId: string | null = null
 
 /**
+ * Re-encrypt all locally stored E2E keys with the current v3 master key and push
+ * them to the server. Used when the device secret is lost/rotated so other
+ * devices can still restore the keys.
+ */
+async function rebackupLocalE2eKeys(
+	accessToken: string,
+	userId: string,
+): Promise<void> {
+	if (typeof window === 'undefined' || !localStorage) return
+
+	const keys = new Map<string, Uint8Array>()
+	for (let i = 0; i < localStorage.length; i++) {
+		const storageKey = localStorage.key(i)
+		if (!storageKey || !storageKey.startsWith('e2e_key_')) continue
+		const keyId = storageKey.slice('e2e_key_'.length)
+		try {
+			const b64 = localStorage.getItem(storageKey)
+			if (!b64) continue
+			keys.set(keyId, b64ToBytes(b64))
+		} catch {
+			// ignore corrupt entries
+		}
+	}
+	if (keys.size === 0) return
+
+	const { deviceId, deviceName } = getDeviceInfo()
+	for (const [keyId, keyData] of keys.entries()) {
+		try {
+			await backupKeyToServer(
+				accessToken,
+				keyId,
+				keyData,
+				deviceId,
+				deviceName,
+				userId,
+				{ allowOverwrite: true },
+			)
+		} catch {
+			// ignore individual backup failures
+		}
+	}
+}
+
+/**
  * Ensures v3 backup material: server salt + local device secret (synced when possible).
  */
 export async function ensureBackupMaterial(
@@ -234,6 +278,7 @@ export async function ensureBackupMaterial(
 
 			let localSecret = getStoredLocalDeviceSecret()
 			let shouldPublishWrapped = false
+			let rotatedDeviceSecret = false
 
 			if (data.wrapped_device_secret) {
 				const remote = await unwrapDeviceSecret(
@@ -249,10 +294,25 @@ export async function ensureBackupMaterial(
 						shouldPublishWrapped = true
 					}
 				} else if (!localSecret) {
+					// The server copy is wrapped with a legacy key we don't have, and
+					// this browser has no cached device secret. Create a fresh device
+					// secret, publish it with the stable v2 wrap key, and re-backup all
+					// locally known E2E keys so other devices can restore them.
 					console.warn(
-						'[E2E] Server has wrapped device secret but it could not be unwrapped',
+						'[E2E] Server wrapped secret unreadable and no local secret; rotating device secret',
 					)
-					return null
+					localSecret = createLocalDeviceSecret()
+					shouldPublishWrapped = true
+					rotatedDeviceSecret = true
+				} else {
+					// Local secret is available but the server copy is wrapped with a
+					// legacy key we no longer have (e.g. another device/session).
+					// Re-publish it with the stable v2 wrap key so other devices can
+					// restore backups.
+					console.warn(
+						'[E2E] Server wrapped secret uses legacy wrap; re-publishing with v2',
+					)
+					shouldPublishWrapped = true
 				}
 			} else {
 				if (!localSecret) {
@@ -277,6 +337,11 @@ export async function ensureBackupMaterial(
 					credentials: 'include',
 					body: JSON.stringify({ wrapped_device_secret: wrapped }),
 				})
+			}
+
+			if (rotatedDeviceSecret && localSecret) {
+				console.log('[E2E] Re-backing up local keys with new device secret')
+				await rebackupLocalE2eKeys(accessToken, userId)
 			}
 
 			if (!localSecret) return null

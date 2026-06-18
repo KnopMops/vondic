@@ -14,7 +14,7 @@ def get_posts():
         limit = request.args.get('limit', 20, type=int)
         offset = (page - 1) * limit
 
-        posts = PostService.get_posts_paginated(limit=limit, offset=offset)
+        posts = PostService.get_posts_paginated(page=page, per_page=limit)
         total_count = PostService.get_all_posts().count()
 
         return jsonify({
@@ -158,17 +158,7 @@ def delete_post(current_user, post_id):
 @api_key_required
 def like_post(current_user, post_id):
     try:
-        post = PostService.get_post_by_id(post_id)
-        if not post:
-            return jsonify({"error": "Post not found"}), 404
-
-        if post.privacy != 'public' and post.user_id != current_user.id:
-            return jsonify({"error": "Access denied"}), 403
-
-        success, error = PostService.like_post(post_id, current_user.id)
-        if not success:
-            return jsonify({"error": error}), 400
-
+        post = PostService.like_post(post_id, current_user.id)
         return jsonify({"message": "Post liked successfully"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -178,17 +168,7 @@ def like_post(current_user, post_id):
 @api_key_required
 def unlike_post(current_user, post_id):
     try:
-        post = PostService.get_post_by_id(post_id)
-        if not post:
-            return jsonify({"error": "Post not found"}), 404
-
-        if post.privacy != 'public' and post.user_id != current_user.id:
-            return jsonify({"error": "Access denied"}), 403
-
-        success, error = PostService.unlike_post(post_id, current_user.id)
-        if not success:
-            return jsonify({"error": error}), 400
-
+        post = PostService.unlike_post(post_id, current_user.id)
         return jsonify({"message": "Post unliked successfully"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500

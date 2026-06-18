@@ -2,6 +2,8 @@ import { Config } from '@/constants/config';
 import { User } from '@/types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createAsyncThunk, createSlice, PayloadAction } from '@reduxjs/toolkit';
+import * as Keychain from 'react-native-keychain';
+import { apiClient } from '../api/client';
 
 interface AuthState {
   user: User | null;
@@ -17,26 +19,79 @@ const initialState: AuthState = {
   isInitialized: false,
 };
 
-export const fetchUser = createAsyncThunk('auth/fetchUser', async (_, {rejectWithValue}) => {
+export const fetchUser = createAsyncThunk('auth/fetchUser', async (_, {dispatch, rejectWithValue}) => {
   try {
-    const token = await AsyncStorage.getItem('access_token');
-    if (!token) return null;
+    let token = await AsyncStorage.getItem('access_token');
 
-    const response = await fetch(`${Config.BACKEND_URL}/api/auth/me`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    if (!token) {
+      try {
+        const credentials = await Keychain.getGenericPassword({
+          service: 'com.vondic.mobile.access_token',
+        });
+        if (credentials) {
+          token = credentials.password;
+          await AsyncStorage.setItem('access_token', token);
 
-    if (!response.ok) {
-      if (response.status === 401 || response.status === 404) {
-        return null;
+          const refreshCreds = await Keychain.getGenericPassword({
+            service: 'com.vondic.mobile.refresh_token',
+          });
+          if (refreshCreds) {
+            await AsyncStorage.setItem('refresh_token', refreshCreds.password);
+          }
+        }
+      } catch (keychainError) {
+        console.warn('[authSlice] Failed to read from Keychain:', keychainError);
       }
-      throw new Error('Failed to fetch user');
     }
 
-    const data = await response.json();
-    return data.user as User;
+    if (!token) return null;
+
+    // Try to load cached user from AsyncStorage first
+    let cachedUser: User | null = null;
+    try {
+      const cachedUserRaw = await AsyncStorage.getItem('user');
+      if (cachedUserRaw) {
+        cachedUser = JSON.parse(cachedUserRaw);
+        if (cachedUser) {
+          // Immediately set the user in state so UI navigation resolves
+          dispatch(setUser(cachedUser));
+        }
+      }
+    } catch (cacheError) {
+      console.warn('[authSlice] Failed to parse cached user:', cacheError);
+    }
+
+    try {
+      const data = await apiClient.get<{ user: User }>('/auth/me');
+      if (data.user) {
+        await AsyncStorage.setItem('user', JSON.stringify(data.user));
+      }
+      return data.user;
+    } catch (networkError: any) {
+      console.warn('[authSlice] Failed to fetch user from network:', networkError);
+      const msg = networkError.message || '';
+      
+      // If it's a session expiration/unauthorized error, we clear tokens and log out
+      if (
+        msg.includes('SESSION_EXPIRED') ||
+        msg.toLowerCase().includes('unauthorized') ||
+        msg.toLowerCase().includes('session')
+      ) {
+        await AsyncStorage.multiRemove(['access_token', 'refresh_token', 'user']);
+        try {
+          await Keychain.resetGenericPassword({ service: 'com.vondic.mobile.access_token' });
+          await Keychain.resetGenericPassword({ service: 'com.vondic.mobile.refresh_token' });
+        } catch {}
+        return null;
+      }
+      
+      // If we have cached user, just return it instead of rejecting
+      if (cachedUser) {
+        return cachedUser;
+      }
+      
+      return rejectWithValue(msg || 'Failed to fetch user');
+    }
   } catch (error: any) {
     return rejectWithValue(error.message || 'Failed to fetch user');
   }
@@ -49,15 +104,24 @@ const authSlice = createSlice({
     setUser: (state, action: PayloadAction<User | null>) => {
       state.user = action.payload;
       state.isInitialized = true;
+      if (action.payload) {
+        AsyncStorage.setItem('user', JSON.stringify(action.payload)).catch(() => {});
+      } else {
+        AsyncStorage.removeItem('user').catch(() => {});
+      }
     },
     setSocketId: (state, action: PayloadAction<string>) => {
       if (state.user) {
         state.user.socket_id = action.payload;
+        AsyncStorage.setItem('user', JSON.stringify(state.user)).catch(() => {});
       }
     },
     logout: state => {
       state.user = null;
       state.isInitialized = true;
+      AsyncStorage.multiRemove(['access_token', 'refresh_token', 'user']).catch(() => {});
+      Keychain.resetGenericPassword({ service: 'com.vondic.mobile.access_token' }).catch(() => {});
+      Keychain.resetGenericPassword({ service: 'com.vondic.mobile.refresh_token' }).catch(() => {});
     },
   },
   extraReducers: builder => {

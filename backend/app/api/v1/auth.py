@@ -9,7 +9,7 @@ from app.core.extensions import cache
 from app.schemas.user_schema import user_schema
 from app.services.auth_service import AuthService
 from app.services.user_service import UserService
-from app.utils.decorators import rate_limit, token_required
+from app.utils.decorators import rate_limit, token_required, csrf_protect, record_failed_login, is_ip_locked, clear_failed_logins
 from flask import Blueprint, current_app, jsonify, request
 from itsdangerous import URLSafeTimedSerializer
 import requests
@@ -215,6 +215,7 @@ def _store_login_session(
 
 
 @rate_limit("auth-register", limit=5, window_seconds=60)
+@csrf_protect
 @auth_bp.route("/register", methods=["POST"])
 def register():
     data = request.get_json(silent=True)
@@ -273,6 +274,7 @@ def check_email():
 
 
 @rate_limit("auth-forgot-password", limit=5, window_seconds=60)
+@csrf_protect
 @auth_bp.route("/forgot-password", methods=["POST"])
 def forgot_password():
     data = request.get_json(silent=True)
@@ -313,6 +315,7 @@ def verify_email(token):
 
 
 @rate_limit("auth-login", limit=10, window_seconds=60)
+@csrf_protect
 @auth_bp.route("/login", methods=["POST"])
 def login():
     data = request.get_json(silent=True)
@@ -324,8 +327,16 @@ def login():
     if data.get("email"):
         data = {**data, "email": normalize_email(data.get("email"))}
 
+    email = data.get("email", "unknown")
+    client_ip = _get_client_ip()
+
+    locked, seconds_left = is_ip_locked(client_ip)
+    if locked:
+        from app.utils.decorators import _lockout_minutes
+        return jsonify({"error": f"Ваш IP временно заблокирован. Попробуйте через {_lockout_minutes(seconds_left)}."}), 429
+
     current_app.logger.info(
-        f"Login attempt for email: {data.get('email', 'unknown')}"
+        f"Login attempt for email: {email} from IP: {client_ip}"
     )
 
     if not data:
@@ -368,6 +379,20 @@ def login():
                 ), 400
             return jsonify(
                 {"two_factor_required": True, "method": method}), 401
+        if error in ("Invalid email or password", "InvalidTwoFactorCode"):
+            failed_user = UserService.get_user_by_email(email) if email else None
+            action = record_failed_login(client_ip, failed_user)
+            if action == "send_reset_link" and failed_user:
+                try:
+                    from app.services.auth_service import AuthService as AS
+                    AS.request_password_reset(email)
+                except Exception:
+                    pass
+                return jsonify({
+                    "error": "Ссылка для восстановления аккаунта отправлена на почту",
+                    "send_reset_link": True,
+                    "email": email,
+                }), 403
         status_code = (
             401
             if error
@@ -380,6 +405,33 @@ def login():
             else 400
         )
         return (jsonify({"error": error}), status_code)
+    clear_failed_logins(client_ip)
+
+    user_obj = result["user"]
+
+    if user_obj.is_blocked:
+        return jsonify({"error": "Аккаунт заблокирован администратором."}), 403
+
+    if user_obj.is_blocked_system:
+        if user_obj.registration_ip and client_ip == user_obj.registration_ip:
+            pass
+        else:
+            return jsonify({"error": "Аккаунт временно заблокирован системой безопасности. Восстановите аккаунт через почту."}), 403
+
+    changed = False
+    if not user_obj.registration_ip:
+        user_obj.registration_ip = client_ip
+        changed = True
+    if user_obj.is_blocked_system:
+        user_obj.is_blocked_system = 0
+        changed = True
+    if changed:
+        try:
+            from app.core.extensions import db
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
     _store_login_session(
         result["user"], result["access_token"], result["refresh_token"]
     )
@@ -473,7 +525,8 @@ def socket_token(current_user):
 @auth_bp.route("/yandex/login", methods=["GET"])
 def yandex_login():
     cid = request.args.get("cid")
-    auth_url, error = AuthService.get_yandex_auth_url()
+    login_hint = request.args.get("login_hint") or request.args.get("email")
+    auth_url, error = AuthService.get_yandex_auth_url(login_hint=login_hint)
     if error:
         return jsonify({"error": error}), 400
     if cid and auth_url:
@@ -583,6 +636,84 @@ def verify_2fa_email(current_user):
     if not success:
         return jsonify({"error": error}), 400
     return jsonify({"message": "Код 2FA подтверждён"}), 200
+
+
+@auth_bp.route("/verify-password", methods=["POST"])
+@token_required
+def verify_password(current_user):
+    data = request.get_json(silent=True) or {}
+    password = (data.get("password") or "").strip()
+    if not password:
+        return jsonify({"success": False, "error": "Password required"}), 400
+    if not current_user.check_password(password):
+        return jsonify({"success": False, "error": "Invalid password"}), 401
+    return jsonify({"success": True}), 200
+
+
+@auth_bp.route("/change-password", methods=["POST"])
+@token_required
+@csrf_protect
+def change_password(current_user):
+    data = request.get_json(silent=True) or {}
+    current_pwd = (data.get("current_password") or "").strip()
+    new_pwd = (data.get("new_password") or "").strip()
+
+    if not current_pwd or not new_pwd:
+        return jsonify({"error": "Текущий и новый пароль обязательны"}), 400
+
+    if len(new_pwd) < 6:
+        return jsonify({"error": "Пароль должен быть не менее 6 символов"}), 400
+
+    if not current_user.check_password(current_pwd):
+        return jsonify({"error": "Неверный текущий пароль"}), 401
+
+    current_user.set_password(new_pwd)
+    try:
+        from app.core.extensions import db
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({"error": "Ошибка сервера"}), 500
+
+    return jsonify({"message": "Пароль изменён"}), 200
+
+
+@auth_bp.route("/recover-account", methods=["POST"])
+@rate_limit("auth-recover", limit=3, window_seconds=300)
+@csrf_protect
+def recover_account():
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+
+    if not email:
+        return jsonify({"error": "Укажите email"}), 400
+
+    user = UserService.get_user_by_email(email)
+    if not user:
+        return jsonify({"message": "Если аккаунт существует, письмо с инструкциями отправлено на почту."}), 200
+
+    import secrets
+    new_password = secrets.token_urlsafe(12)
+
+    user.set_password(new_password)
+    try:
+        from app.core.extensions import db
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({"error": "Ошибка сервера"}), 500
+
+    try:
+        from app.services.email_service import EmailService
+        EmailService.send_system_notification_email(
+            user.email,
+            user.username,
+            f"Восстановление аккаунта\n\nВаш новый пароль: {new_password}\n\nВойдите в аккаунт и смените пароль в настройках."
+        )
+    except Exception:
+        pass
+
+    return jsonify({"message": "Если аккаунт существует, письмо с инструкциями отправлено на почту."}), 200
 
 
 @auth_bp.route("/login-alerts/toggle", methods=["POST"])

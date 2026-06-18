@@ -113,6 +113,8 @@ class PostService:
                 community, user
             ):
                 raise ForbiddenError("Нет доступа к сообществу")
+            if str(community.owner_id) != str(user_id):
+                raise ForbiddenError("Только администратор может публиковать записи в сообществе")
             is_blog = False
 
         new_post = Post(
@@ -184,6 +186,25 @@ class PostService:
         db.session.delete(existing_like)
         db_commit()
         return post
+
+    @staticmethod
+    def attach_like_flags(posts: list, viewer_id: str | None) -> None:
+        if not viewer_id or not posts:
+            return
+        post_ids = [p.get("id") for p in posts if p.get("id")]
+        if not post_ids:
+            return
+        liked_rows = (
+            Like.query.filter(
+                Like.user_id == str(viewer_id),
+                Like.post_id.in_(post_ids),
+            )
+            .with_entities(Like.post_id)
+            .all()
+        )
+        liked_ids = {row[0] for row in liked_rows}
+        for post in posts:
+            post["is_liked"] = post.get("id") in liked_ids
 
     @staticmethod
     def delete_post_by_user(post_id, user_id):

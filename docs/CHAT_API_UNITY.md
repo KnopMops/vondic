@@ -71,7 +71,7 @@
 │  └─────────────┘  └─────────────┘  └─────────────┘             │
 │                                                                 │
 │  WebSocket (Socket.IO):                                         │
-│  wss://webrtc.vondic.knopusmedia.ru/socket.io/                  │
+│  wss://webrtc.vondic.ru/socket.io/                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -113,30 +113,24 @@ Unity ──POST /groups/{id}/messages──► Vondic REST
 
 | Уровень | Токен | Использование |
 |---------|-------|---------------|
-| **API Key** | `X-API-Key: <key>` | Публичный API для игр / ботов. Долгоиграющий. |
-| **Bearer Token** | `Authorization: Bearer <token>` | Стандартный REST API для веба/мобилы. Время жизни ~1 час. |
-| **Socket Token** | Передаётся через WS `authenticate` | Одноразовый токен для WebSocket-соединения. |
+| **API Key** | `X-API-Key: <key>` | Публичный REST API для игр / ботов. Долгоиграющий. |
+| **Socket Token** | Передаётся через WS `authenticate` | Токен для WebSocket-соединения (можно передать API-ключ). |
 
 ### 3.2. Как получить API Key
 
 ```csharp
-// Твой Game Backend делает это (не Unity!)
-POST https://api.vondic.knopusmedia.ru/api/public/v1/chat/api-key
+// API-ключ создаётся в Настройки → Настройки разработчика на vondic.ru
+// или через OAuth на вашем backend (см. раздел OAuth).
+// Далее все REST-запросы:
 Headers:
-  Authorization: Bearer <access_token пользователя>
-
-Response:
-{
-  "api_key": "vd_live_xxxxxxxxxxxxxxxxxxxxxxxx",
-  "created_at": "2024-01-15T10:30:00Z"
-}
+  X-API-Key: <api_key>
 ```
 
 ### 3.3. Как получить Socket Token
 
 ```csharp
 // Перед подключением к WebSocket получи токен
-GET https://api.vondic.knopusmedia.ru/api/public/v1/chat/realtime/token
+GET https://api.vondic.ru/api/public/v1/chat/realtime/token
 Headers:
   X-API-Key: <api_key>
 
@@ -358,7 +352,7 @@ public class VondicRestClient : MonoBehaviour
 {
     [Header("Настройки")]
     [SerializeField] private string apiKey;                         // приходит с твоего game backend
-    [SerializeField] private string baseUrl = "https://api.vondic.knopusmedia.ru/api/public/v1/chat";
+    [SerializeField] private string baseUrl = "https://api.vondic.ru/api/public/v1/chat";
     [SerializeField] private int timeoutSeconds = 30;
     [SerializeField] private int maxRetries = 2;
 
@@ -535,7 +529,7 @@ public class VondicRealtime : MonoBehaviour
 {
     [Header("Настройки")]
     [SerializeField] private string apiKey;
-    [SerializeField] private string wsUrl = "wss://webrtc.vondic.knopusmedia.ru";
+    [SerializeField] private string wsUrl = "wss://webrtc.vondic.ru";
     [SerializeField] private bool autoReconnect = true;
     [SerializeField] private float reconnectDelay = 5f;
 
@@ -1532,7 +1526,7 @@ public class RestPollingChat : MonoBehaviour
 ```csharp
 string BuildAuthUrl(string clientId, string redirectUri)
 {
-    return $"https://vondic.knopusmedia.ru/oauth/authorize?" +
+    return $"https://vondic.ru/oauth/authorize?" +
            $"client_id={UnityWebRequest.EscapeURL(clientId)}&" +
            $"redirect_uri={UnityWebRequest.EscapeURL(redirectUri)}&" +
            $"response_type=code&" +
@@ -1659,7 +1653,7 @@ mergeInto(LibraryManager.library, {
 
 ## 13. Публичный API — полный справочник
 
-Базовый URL: `https://api.vondic.knopusmedia.ru/api/public/v1/chat`
+Базовый URL: `https://api.vondic.ru/api/public/v1/chat`
 
 ### Auth
 
@@ -1779,7 +1773,7 @@ mergeInto(LibraryManager.library, {
 A: Убедись, что:
 1. WebSocket подключён (`_ws.State == Open`)
 2. Отправил `authenticate` после `OnOpen`
-3. Используешь правильный URL: `wss://webrtc.vondic.knopusmedia.ru/socket.io/?EIO=4&transport=websocket`
+3. Используешь правильный URL: `wss://webrtc.vondic.ru/socket.io/?EIO=4&transport=websocket`
 4. На WebGL используешь `DispatchMessageQueue()` в `Update()`
 
 ### Q: HTTP 401 Unauthorized

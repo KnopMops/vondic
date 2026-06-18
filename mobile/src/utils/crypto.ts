@@ -8,6 +8,7 @@
  */
 
 import {cryptoPolyfill, subtle} from './webcrypto-polyfill';
+export type {CryptoKey, CryptoKeyPair} from './webcrypto-polyfill';
 
 export const crypto = cryptoPolyfill;
 export {subtle};
@@ -300,7 +301,7 @@ export const mtEncrypt = (plain: string, key: Uint8Array) => {
   return `e2e:${base64FromBytes(out)}`;
 };
 
-export const mtDecrypt = (ciphertext: string, key: Uint8Array) => {
+export const mtDecrypt = (ciphertext: string, key: Uint8Array): string | null => {
   if (!ciphertext.startsWith('e2e:')) return ciphertext;
   const raw = bytesFromBase64(ciphertext.slice(4));
   if (raw.length < 48) return null;
@@ -314,7 +315,13 @@ export const mtDecrypt = (ciphertext: string, key: Uint8Array) => {
     decrypted.byteLength,
   );
   const len = view.getUint32(0, false);
+  if (len <= 0 || len > 1_000_000 || 4 + len > decrypted.length) return null;
   const body = decrypted.slice(4, 4 + len);
-  const decoder = new TextDecoder();
-  return decoder.decode(body);
+  try {
+    const text = new TextDecoder('utf-8', {fatal: true}).decode(body);
+    if (!text || text.startsWith('e2e:') || text.startsWith('mt:')) return null;
+    return text;
+  } catch {
+    return null;
+  }
 };

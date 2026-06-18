@@ -7,6 +7,7 @@ from flask import Blueprint, jsonify, make_response, redirect, request, url_for
 from sqlalchemy import TEXT, INTEGER, TIMESTAMP
 from sqlalchemy import func
 
+from app.core.config import Config
 from app.core.extensions import db
 from app.models.oauth_client import OAuthClient
 from app.models.user import User
@@ -55,6 +56,231 @@ def _redirect_uri_is_allowed(requested: str, allowed_csv: str) -> bool:
 
 def _redirect_uri_pair_matches(stored: str, provided: str) -> bool:
     return _redirect_uri_match_key(stored) == _redirect_uri_match_key(provided)
+
+
+def _oauth_authorize_path(
+    client_id: str,
+    redirect_uri: str,
+    response_type: str,
+    scope: str,
+    state: str,
+) -> str:
+    q = urlencode(
+        {
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "response_type": response_type,
+            "scope": scope,
+            "state": state,
+        }
+    )
+    return f"/oauth/authorize?{q}"
+
+
+def _frontend_login_for_oauth(authorize_path: str, pick_account: bool = False) -> str:
+    base = (Config.FRONTEND_URL or "http://localhost:3000").rstrip("/")
+    suffix = "&pick_account=1" if pick_account else ""
+    return f"{base}/login?redirect={quote(authorize_path, safe='')}{suffix}"
+
+
+def _handle_oauth_redirect(redirect_url: str):
+    if redirect_url.startswith("http://") or redirect_url.startswith("https://"):
+        return redirect(redirect_url)
+
+    import json
+    from html import escape
+
+    is_error = "error=" in redirect_url
+    if is_error:
+        icon_html = """
+        <div class="icon-container error">
+            <svg class="icon-cross" viewBox="0 0 24 24">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+        </div>
+        """
+        title = "В доступе отказано"
+        subtitle = "Вы отклонили запрос на авторизацию. Возвращаем вас в мобильное приложение Вондик. Если перенаправление не произошло, нажмите кнопку ниже."
+        accent_btn_class = "btn-deny-accent"
+        extra_css = """
+        .icon-container.error {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: rgba(239, 68, 68, 0.2);
+            animation: pulse-error 2s infinite;
+        }
+        .icon-cross {
+            width: 32px;
+            height: 32px;
+            fill: none;
+            stroke: #ef4444;
+            stroke-width: 3;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            stroke-dasharray: 100;
+            stroke-dashoffset: 100;
+            animation: drawCross 0.4s ease-out 0.2s forwards;
+        }
+        @keyframes drawCross {
+            to { stroke-dashoffset: 0; }
+        }
+        @keyframes pulse-error {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+            70% { box-shadow: 0 0 0 12px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        .btn-deny-accent {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: var(--text);
+            box-shadow: none;
+        }
+        .btn-deny-accent:hover {
+            background: rgba(255,255,255,0.1);
+            box-shadow: none;
+            transform: translateY(-1px);
+        }
+        """
+    else:
+        icon_html = """
+        <div class="icon-container">
+            <svg class="icon-checkmark" viewBox="0 0 24 24">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+        </div>
+        """
+        title = "Авторизация успешна"
+        subtitle = "Возвращаем вас в мобильное приложение Вондик. Если перенаправление не произошло автоматически, нажмите кнопку ниже."
+        accent_btn_class = ""
+        extra_css = ""
+
+    safe_url = escape(redirect_url)
+    redirect_url_json = json.dumps(redirect_url)
+    
+    return f"""<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{escape(title)} — Вондик</title>
+    <style>
+        :root {{
+            color-scheme: dark;
+            --bg: #070b14;
+            --card: rgba(19, 26, 41, 0.92);
+            --text: #e5e7eb;
+            --muted: #9ca3af;
+            --accent: #6366f1;
+            --accent-2: #8b5cf6;
+            --success: #10b981;
+            --border: rgba(255,255,255,0.14);
+        }}
+        * {{ box-sizing: border-box; }}
+        body {{
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(1200px 500px at 20% 10%, rgba(99,102,241,0.15), transparent 60%),
+                        radial-gradient(1000px 500px at 80% 85%, rgba(139,92,246,0.12), transparent 60%),
+                        var(--bg);
+            color: var(--text);
+            font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+            padding: 16px;
+        }}
+        .card {{
+            width: min(420px, 100%);
+            border: 1px solid var(--border);
+            background: var(--card);
+            border-radius: 20px;
+            padding: 30px;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            text-align: center;
+            animation: fadeIn 0.4s ease-out;
+        }}
+        @keyframes fadeIn {{
+            from {{ opacity: 0; transform: scale(0.96); }}
+            to {{ opacity: 1; transform: scale(1); }}
+        }}
+        .icon-container {{
+            width: 72px;
+            height: 72px;
+            margin: 0 auto 20px;
+            border-radius: 50%;
+            background: rgba(16, 185, 129, 0.1);
+            border: 2px solid rgba(16, 185, 129, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            animation: pulse 2s infinite;
+        }}
+        @keyframes pulse {{
+            0% {{ box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }}
+            70% {{ box-shadow: 0 0 0 12px rgba(16, 185, 129, 0); }}
+            100% {{ box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }}
+        }}
+        .icon-checkmark {{
+            width: 32px;
+            height: 32px;
+            fill: none;
+            stroke: var(--success);
+            stroke-width: 3;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            stroke-dasharray: 100;
+            stroke-dashoffset: 100;
+            animation: drawCheck 0.6s ease-out 0.2s forwards;
+        }}
+        @keyframes drawCheck {{
+            to {{ stroke-dashoffset: 0; }}
+        }}
+        .title {{ font-size: 20px; margin: 0 0 10px; font-weight: 700; }}
+        .subtitle {{ margin: 0 0 24px; color: var(--muted); font-size: 14px; line-height: 1.5; }}
+        .btn {{
+            display: block;
+            width: 100%;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 15px;
+            padding: 12px;
+            text-decoration: none;
+            color: white;
+            background: linear-gradient(135deg, var(--accent), var(--accent-2));
+            box-shadow: 0 4px 15px rgba(99,102,241,0.35);
+            transition: all 0.2s ease;
+        }}
+        .btn:hover {{
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(99,102,241,0.45);
+        }}
+        .btn:active {{
+            transform: translateY(1px);
+        }}
+        .hint {{ margin-top: 16px; font-size: 12px; color: var(--muted); }}
+        {extra_css}
+    </style>
+</head>
+<body>
+    <div class="card">
+        {icon_html}
+        <h1 class="title">{escape(title)}</h1>
+        <p class="subtitle">{escape(subtitle)}</p>
+        <a id="redirect-btn" class="btn {accent_btn_class}" href="{safe_url}">Вернуться в приложение</a>
+        <p class="hint">{escape(redirect_url.split('?')[0])}</p>
+    </div>
+    <script>
+        const redirectUrl = {redirect_url_json};
+        // Attempt automatic redirect
+        window.location.href = redirectUrl;
+    </script>
+</body>
+</html>"""
+
 
 
 class OAuthAuthorizationCode(db.Model):
@@ -158,14 +384,6 @@ def authorize():
                 httponly=True,
                 samesite="Lax",
             )
-            if result.get("refresh_token"):
-                response.set_cookie(
-                    "refresh_token",
-                    result["refresh_token"],
-                    max_age=30 * 24 * 60 * 60,
-                    httponly=True,
-                    samesite="Lax",
-                )
             return response
         login_error = escape(error or "Ошибка входа")
         return f"""
@@ -204,16 +422,10 @@ def authorize():
         </html>
         """, 401
     if not token and request.method == "GET":
-        q = urlencode(
-            {
-                "client_id": client_id,
-                "redirect_uri": redirect_uri,
-                "response_type": "code",
-                "scope": scope,
-                "state": state,
-            }
+        authorize_path = _oauth_authorize_path(
+            client_id, redirect_uri, response_type, scope, state
         )
-        return redirect(f'/login?redirect={quote("/oauth/authorize?" + q, safe="")}')
+        return redirect(_frontend_login_for_oauth(authorize_path))
     if not token:
         return jsonify({"error": "unauthorized",
                         "message": "User authentication required"}), 401
@@ -431,7 +643,8 @@ def authorize():
                     </div>
                 </form>
                 <p class="hint">Нажимая "Разрешить", вы предоставляете приложению доступ к данным вашего аккаунта.</p>
-                <a class="back-link" href="{safe_redirect_uri}">Назад в приложение</a>
+                <a class="back-link" href="{escape(_frontend_login_for_oauth(_oauth_authorize_path(client_id, redirect_uri, response_type, scope, state), pick_account=True))}">Выбрать другой аккаунт</a>
+                <a class="back-link" href="{safe_redirect_uri}" style="margin-left:12px;">Назад в приложение</a>
             </div>
         </body>
         </html>
@@ -439,7 +652,7 @@ def authorize():
 
     action = request.form.get("action")
     if action == "deny":
-        return redirect(f"{redirect_uri}?error=access_denied&state={state}")
+        return _handle_oauth_redirect(f"{redirect_uri}?error=access_denied&state={state}")
 
     code = str(uuid.uuid4())
     expires_at = datetime.utcnow() + timedelta(minutes=10)
@@ -459,7 +672,7 @@ def authorize():
     if state:
         redirect_url += f"&state={state}"
 
-    return redirect(redirect_url)
+    return _handle_oauth_redirect(redirect_url)
 
 
 @oauth_bp.route("/token", methods=["POST"])
@@ -564,6 +777,12 @@ def userinfo():
     if not token_obj or token_obj.is_expired():
         return jsonify({"error": "invalid_token"}), 401
 
+    client = OAuthClient.query.filter_by(
+        client_id=token_obj.client_id, is_active=1
+    ).first()
+    if not client:
+        return jsonify({"error": "invalid_token"}), 401
+
     user = User.query.get(token_obj.user_id)
     if not user:
         return jsonify({"error": "user_not_found"}), 404
@@ -614,19 +833,19 @@ def create_oauth_client(current_user):
         default_scopes=default_scopes,
     )
     client.set_client_secret(client_secret)
+    client.client_secret_plain = client_secret
 
     db.session.add(client)
     db.session.commit()
 
     result = client.to_dict()
-    result["client_secret"] = client_secret
     return jsonify(result), 201
 
 
 @oauth_bp.route("/clients/<client_id>", methods=["DELETE"])
 @token_required
 def delete_oauth_client(current_user, client_id):
-    """Delete an OAuth client."""
+    """Delete an OAuth client and revoke all its tokens."""
     client = OAuthClient.query.filter_by(
         client_id=client_id, user_id=str(current_user.id)
     ).first()
@@ -635,6 +854,8 @@ def delete_oauth_client(current_user, client_id):
         return jsonify({"error": "client_not_found"}), 404
 
     client.is_active = 0
+    OAuthAccessToken.query.filter_by(client_id=client_id).delete()
+    OAuthAuthorizationCode.query.filter_by(client_id=client_id).delete()
     db.session.commit()
 
     return jsonify({"message": "deleted"}), 200

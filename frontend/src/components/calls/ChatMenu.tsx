@@ -11,6 +11,12 @@ import {
 } from 'react-icons/fi'
 import { LuBellOff as BellOff, LuPin as Pin, LuPinOff as PinOff } from 'react-icons/lu'
 
+interface ChatFolderOption {
+    id: string
+    name: string
+    icon?: string
+}
+
 interface ChatMenuProps {
     chatId: string
     chatType?: 'user' | 'group' | 'channel'
@@ -18,12 +24,16 @@ interface ChatMenuProps {
     isMuted?: boolean
     isOnline?: boolean
     isArchived?: boolean
+    folders?: ChatFolderOption[]
+    currentFolderId?: string | null
     onPin?: () => void
     onMute?: () => void
     onCall?: () => void
     onVideoCall?: () => void
     onArchive?: () => void
     onDelete?: () => void
+    onMoveToFolder?: (folderId: string | null) => void
+    onManageFolders?: () => void
 }
 
 export const ChatMenu: React.FC<ChatMenuProps> = ({
@@ -39,6 +49,10 @@ export const ChatMenu: React.FC<ChatMenuProps> = ({
     onVideoCall,
     onArchive,
     onDelete,
+    folders = [],
+    currentFolderId = null,
+    onMoveToFolder,
+    onManageFolders,
 }) => {
     const [isOpen, setIsOpen] = useState(false)
     const menuRef = useRef<HTMLDivElement>(null)
@@ -132,6 +146,65 @@ export const ChatMenu: React.FC<ChatMenuProps> = ({
                     </button>
 
                     
+                    {(folders.length > 0 || onManageFolders) && (
+                        <>
+                            <div className='my-2 border-t border-[#1e1f22]' />
+                            <div className='px-4 py-1.5 text-[10px] uppercase tracking-wider text-gray-500'>
+                                Папка
+                            </div>
+                            <button
+                                onClick={e => {
+                                    e.preventDefault()
+                                    e.stopPropagation()
+                                    onMoveToFolder?.(null)
+                                    setIsOpen(false)
+                                }}
+                                className={`w-full flex items-center gap-3 px-4 py-2 text-sm hover:bg-[#35373c] transition-colors ${
+                                    !currentFolderId ? 'text-emerald-400' : 'text-gray-300'
+                                }`}
+                                type='button'
+                            >
+                                <span>Все чаты</span>
+                            </button>
+                            {folders.map(folder => (
+                                <button
+                                    key={folder.id}
+                                    onClick={e => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                        onMoveToFolder?.(folder.id)
+                                        setIsOpen(false)
+                                    }}
+                                    className={`w-full flex items-center gap-3 px-4 py-2 text-sm hover:bg-[#35373c] transition-colors ${
+                                        currentFolderId === folder.id
+                                            ? 'text-emerald-400'
+                                            : 'text-gray-300'
+                                    }`}
+                                    type='button'
+                                >
+                                    <span>
+                                        {folder.icon ? `${folder.icon} ` : ''}
+                                        {folder.name}
+                                    </span>
+                                </button>
+                            ))}
+                            {onManageFolders ? (
+                                <button
+                                    onClick={e => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                        onManageFolders()
+                                        setIsOpen(false)
+                                    }}
+                                    className='w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-400 hover:bg-[#35373c] transition-colors'
+                                    type='button'
+                                >
+                                    <span>Управление папками…</span>
+                                </button>
+                            ) : null}
+                        </>
+                    )}
+
                     <div className='my-2 border-t border-[#1e1f22]' />
 
                     

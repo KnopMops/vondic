@@ -9,9 +9,14 @@ import {
     setUser,
 } from './features/authSlice'
 import { useAppDispatch, useAppSelector } from './hooks'
-import { getSavedAccounts, saveAccount } from './savedAccounts'
+import {
+	getSavedAccounts,
+	isAccountStale,
+	persistCurrentSessionTokens,
+	saveAccount,
+	type SavedAccount,
+} from './savedAccounts'
 import { User } from './types'
-import { getSavedAccounts, saveAccount } from './savedAccounts'
 
 interface AuthContextType {
 	user: User | null
@@ -20,7 +25,7 @@ interface AuthContextType {
 		password: string,
 		opts?: { smartCaptchaToken?: string },
 	) => Promise<void>
-	loginWithYandex: () => Promise<void>
+	loginWithYandex: (opts?: { loginHint?: string }) => Promise<void>
 	register: (
 		email: string,
 		username: string,
@@ -28,6 +33,10 @@ interface AuthContextType {
 		captchaToken?: string,
 	) => Promise<void>
 	logout: (redirectUrl?: string) => void
+	switchAccount: (
+		account: SavedAccount,
+		redirectUrl?: string,
+	) => Promise<void>
 	isLoading: boolean
 	isInitialized: boolean
 	/** true пока идёт первичная проверка cookies / fetchUser */
@@ -69,6 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 						last_login_at: Date.now(),
 						added_at: Date.now(),
 					})
+					void persistCurrentSessionTokens(userData.id)
 					// Удаляем cookie
 					document.cookie =
 						'temp_user_data=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;'
@@ -91,6 +101,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 		initAuth()
 	}, [dispatch, isInitialized, user])
+
+	// Сохраняем refresh_token в localStorage для быстрой смены аккаунта
+	useEffect(() => {
+		if (!user?.id || !isInitialized) return
+		void persistCurrentSessionTokens(user.id)
+	}, [user?.id, isInitialized])
 
 	useEffect(() => {
 		const root = document.documentElement
@@ -160,9 +176,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		}
 	}
 
-	const loginWithYandex = async () => {
+	const loginWithYandex = async (opts?: { loginHint?: string }) => {
 		try {
-			const response = await fetch('/api/auth/yandex/login', {
+			const hint = opts?.loginHint?.trim()
+			const url = hint
+				? `/api/auth/yandex/login?login_hint=${encodeURIComponent(hint)}`
+				: '/api/auth/yandex/login'
+			const response = await fetch(url, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 			})
@@ -234,6 +254,75 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		}
 	}
 
+	const switchAccount = async (
+		account: SavedAccount,
+		redirectUrl?: string,
+	) => {
+		const afterRedirect = redirectUrl || '/feed'
+		if (user?.id && String(user.id) === String(account.id)) {
+			if (typeof window !== 'undefined') {
+				window.location.assign(afterRedirect)
+			} else {
+				router.push(afterRedirect)
+			}
+			return
+		}
+		if (isAccountStale(account)) {
+			throw new Error('STALE')
+		}
+
+		if (user?.id) {
+			await persistCurrentSessionTokens(user.id)
+		}
+
+		let refreshToken = account.refresh_token
+		if (!refreshToken) {
+			throw new Error('NO_TOKEN')
+		}
+
+		if (typeof window !== 'undefined') {
+			window.dispatchEvent(new CustomEvent('vondic-before-logout'))
+			await new Promise<void>(resolve => setTimeout(resolve, 200))
+		}
+
+		const res = await fetch('/api/auth/restore', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ refresh_token: refreshToken }),
+		})
+		const data = await res.json().catch(() => ({}))
+		if (!res.ok) {
+			throw new Error(data?.error || 'Не удалось сменить аккаунт')
+		}
+
+		const userData = data.user ? { ...data.user } : null
+		if (!userData?.id) {
+			throw new Error('Не удалось получить данные пользователя')
+		}
+		if (data.access_token) {
+			userData.access_token = data.access_token
+		}
+
+		dispatch(setUser(userData))
+		localStorage.setItem('user', JSON.stringify(userData))
+		saveAccount({
+			id: userData.id,
+			email: userData.email,
+			username: userData.username,
+			avatar_url: userData.avatar_url ?? null,
+			auth_provider: account.auth_provider || 'email',
+			last_login_at: Date.now(),
+			added_at: account.added_at ?? Date.now(),
+			refresh_token: data.refresh_token || refreshToken,
+		})
+
+		if (typeof window !== 'undefined') {
+			window.location.assign(afterRedirect)
+		} else {
+			router.push(afterRedirect)
+		}
+	}
+
 	const logout = async (redirectUrl?: string) => {
 		try {
 			try {
@@ -260,6 +349,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 		if (user) {
 			const existing = getSavedAccounts().find(a => a.id === user.id)
+			const storedRefresh = await persistCurrentSessionTokens(user.id)
 			saveAccount({
 				id: user.id,
 				email: user.email,
@@ -268,6 +358,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				auth_provider: existing?.auth_provider,
 				last_login_at: existing?.last_login_at ?? Date.now(),
 				added_at: Date.now(),
+				refresh_token: storedRefresh ?? existing?.refresh_token,
 			})
 		}
 
@@ -291,6 +382,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				loginWithYandex,
 				register,
 				logout,
+				switchAccount,
 				isLoading,
 				isInitialized,
 				authReady: isInitialized && !isLoading,

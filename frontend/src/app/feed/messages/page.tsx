@@ -39,18 +39,40 @@ import {
 } from '@/lib/inviteLinks'
 import { apiUrl, webrtcUrl } from '@/lib/url-fallback'
 import { buildChatListItems } from '@/lib/chatMessageLayout'
-import { getAttachmentUrl, getAvatarUrl } from '@/lib/utils'
+import { getAttachmentUrl, getAvatarUrl, parseAsUtc } from '@/lib/utils'
 import {
 	ensureBackupMaterial,
 	beginServerKeysRestore,
 	normalizeE2eKeyId,
 	persistKeyLocally,
+	resetE2eRestoreCache,
 	restoreKeyFromServer,
 } from '@/lib/e2eKeySync'
 import {
 	applyE2eKeyExchange,
 	requestE2eKeyExchange,
 } from '@/lib/e2eGlobalExchange'
+import {
+	assignChatToFolder,
+	chatInFolder,
+	chatRefKey,
+	matchesActiveFolder,
+	createFolderId,
+	loadActiveFolderId,
+	loadChatFolders,
+	saveActiveFolderId,
+	saveChatFolders,
+	type ChatFolder,
+	type ChatRef,
+} from '@/lib/chatFolders'
+import {
+	createScheduledMessageId,
+	getDueScheduledMessages,
+	getPendingForTarget,
+	loadScheduledMessages,
+	saveScheduledMessages,
+	type ScheduledMessage,
+} from '@/lib/scheduledMessages'
 import Link from 'next/link'
 import {
 	useCallback,
@@ -70,11 +92,15 @@ import BotGameUploadModal from '@/components/bots/BotGameUploadModal'
 import DiscoveryModal from './DiscoveryModal'
 import ChannelSettingsModal from './ChannelSettingsModal'
 import CommunitySettingsModal from './CommunitySettingsModal'
+import ScheduleMessageModal from './ScheduleMessageModal'
+import SmartChatInput from './components/SmartChatInput'
 import { AppleEmoji } from '@/components/ui/AppleEmoji'
 import {
 	LuArrowLeft as ArrowLeft,
 	LuCheck as Check,
+	LuClock as Clock,
 	LuCopy as Copy,
+	LuFolder as Folder,
 	LuFilter as Filter,
 	LuHash as Hash,
 	LuInfo as Info,
@@ -91,31 +117,77 @@ import {
 	LuSmile as Smile,
 	LuSquare as Stop,
 	LuSticker as Sticker,
+	LuTrash2 as Trash2Icon,
 	LuUserPlus as UserPlus,
 	LuUsers as Users,
 	LuX as X,
 } from 'react-icons/lu'
 import { FiMoreVertical as MoreVertical } from 'react-icons/fi'
 
-const formatLastSeen = (lastSeen?: string | Date): string => {
+const formatLastSeen = (
+	lastSeen?: string | Date,
+	privacy?: { show_last_seen?: boolean } | null,
+): string => {
 	if (!lastSeen) return 'Не в сети'
 
+	const allowShow =
+		!privacy || typeof privacy !== 'object' || privacy.show_last_seen !== false
+	if (!allowShow) return 'Был недавно'
+
 	const now = new Date()
-	const lastSeenDate = new Date(lastSeen)
+	const lastSeenDate = parseAsUtc(lastSeen)
+	if (isNaN(lastSeenDate.getTime())) return 'Не в сети'
 	const diffMs = now.getTime() - lastSeenDate.getTime()
 	const diffMins = Math.floor(diffMs / 60000)
 	const diffHours = Math.floor(diffMins / 60)
 	const diffDays = Math.floor(diffHours / 24)
 
-	if (diffMins < 1) return 'только что'
-	if (diffMins < 60) return `${diffMins} мин. назад`
-	if (diffHours < 24) return `${diffHours} ч. назад`
-	if (diffDays < 7) return `${diffDays} д. назад`
+	if (diffMins < 1) return 'Был только что'
+	if (diffMins < 60) {
+		const word =
+			diffMins % 10 === 1 && diffMins % 100 !== 11
+				? 'минуту'
+				: [2, 3, 4].includes(diffMins % 10) && ![12, 13, 14].includes(diffMins % 100)
+					? 'минуты'
+					: 'минут'
+		return `Был ${diffMins} ${word} назад`
+	}
+	if (diffHours < 24) {
+		const h = diffHours
+		const word =
+			h % 10 === 1 && h % 100 !== 11
+				? 'час'
+				: [2, 3, 4].includes(h % 10) && ![12, 13, 14].includes(h % 100)
+					? 'часа'
+					: 'часов'
+		return `Был ${h} ${word} назад`
+	}
+	if (diffDays === 1) {
+		return `Был вчера в ${lastSeenDate.toLocaleTimeString('ru-RU', {
+			hour: '2-digit',
+			minute: '2-digit',
+		})}`
+	}
+	if (diffDays < 7) {
+		return `Был ${lastSeenDate.toLocaleDateString('ru-RU', {
+			weekday: 'long',
+		})} в ${lastSeenDate.toLocaleTimeString('ru-RU', {
+			hour: '2-digit',
+			minute: '2-digit',
+		})}`
+	}
 
-	return lastSeenDate.toLocaleDateString('ru-RU', {
+	const sameYear = lastSeenDate.getFullYear() === now.getFullYear()
+	const datePart = lastSeenDate.toLocaleDateString('ru-RU', {
 		day: 'numeric',
 		month: 'short',
+		...(sameYear ? {} : { year: 'numeric' }),
 	})
+	const timePart = lastSeenDate.toLocaleTimeString('ru-RU', {
+		hour: '2-digit',
+		minute: '2-digit',
+	})
+	return `Был ${datePart} в ${timePart}`
 }
 
 const getLastMessage = (
@@ -157,10 +229,24 @@ const getLastMessage = (
 
 	let content = lastMessage.content || ''
 	if (selfId && content.startsWith('e2e:')) {
-		content = decryptDmPreviewText(selfId, friendId, content)
+		const keyIds = buildE2eKeyIdCandidates(
+			selfId,
+			friendId,
+			String(lastMessage.sender_id || ''),
+			String(
+				(lastMessage as Message & { target_id?: string }).target_id ||
+					friendId,
+			),
+		)
+		content =
+			tryDecryptE2EPreviewWithKeyIds(content, keyIds) ||
+			decryptDmPreviewText(selfId, friendId, content)
 	}
 	if (content.startsWith('mt:')) {
 		content = '🔒 Зашифрованное сообщение'
+	}
+	if (content.startsWith('e2e:')) {
+		content = '🔐 Зашифрованное сообщение'
 	}
 	return content.length > 30 ? content.substring(0, 30) + '...' : content
 }
@@ -619,6 +705,7 @@ export default function MessengerPage() {
 	const [friends, setFriends] = useState<User[]>([])
 	const [recentContacts, setRecentContacts] = useState<User[]>([])
 	const [previewRevision, setPreviewRevision] = useState(0)
+	const [, setLastSeenTick] = useState(0)
 	const [selectedFriend, setSelectedFriend] = useState<User | null>(null)
 	const [isBlockedByMeChat, setIsBlockedByMeChat] = useState(false)
 	const [hasBlockedMeChat, setHasBlockedMeChat] = useState(false)
@@ -643,6 +730,7 @@ export default function MessengerPage() {
 		: 'vondic_ai_history'
 	const [botMessages, setBotMessages] = useState<Message[]>([])
 	const [botGameUploadOpen, setBotGameUploadOpen] = useState(false)
+	const [activeBotGame, setActiveBotGame] = useState<{ embed_url: string; title?: string; download_url?: string } | null>(null)
 	const [botGamesModalBotId, setBotGamesModalBotId] = useState<string | null>(
 		null,
 	)
@@ -661,6 +749,19 @@ export default function MessengerPage() {
 		? `bot_history_${user.id}_${activeBotId}`
 		: `bot_history_${activeBotId}`
 	const [hasBotHistory, setHasBotHistory] = useState(false)
+	const activeBotsStorageKey = user?.id
+		? `active_bots_${user.id}`
+		: `active_bots`
+	const [activeBots, setActiveBots] = useState<User[]>([])
+	useEffect(() => {
+		try {
+			const raw = localStorage.getItem(activeBotsStorageKey)
+			if (raw) {
+				const parsed = JSON.parse(raw)
+				if (Array.isArray(parsed)) setActiveBots(parsed)
+			}
+		} catch {}
+	}, [activeBotsStorageKey])
 	const botCommands = useMemo(
 		() => [
 			{ command: 'help', title: '/help', description: 'Список команд' },
@@ -1009,15 +1110,16 @@ export default function MessengerPage() {
 					if (res.status !== 401) {
 						console.warn('[Bot outbox] poll failed with status', res.status)
 					}
-					return
+				} else {
+					const data: any = await res.json().catch(() => ({}))
+					const items = Array.isArray(data?.items) ? data.items : []
+					if (items.length && active) {
+						appendBotOutboxItems(selectedFriend.id, items)
+					}
 				}
-				const data: any = await res.json().catch(() => ({}))
-				const items = Array.isArray(data?.items) ? data.items : []
-				if (!items.length || !active) return
-				appendBotOutboxItems(selectedFriend.id, items)
 			} catch {}
 			if (active) {
-				pollTimeout = window.setTimeout(poll, 1200)
+				pollTimeout = window.setTimeout(poll, 500)
 			}
 		}
 		poll()
@@ -1052,6 +1154,9 @@ export default function MessengerPage() {
 	} = communitiesHook
 	const [selectedGroup, setSelectedGroup] = useState<Group | null>(null)
 	const [groupParticipants, setGroupParticipants] = useState<
+		Record<string, User>
+	>({})
+	const [channelParticipants, setChannelParticipants] = useState<
 		Record<string, User>
 	>({})
 	const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false)
@@ -1099,7 +1204,6 @@ export default function MessengerPage() {
 		new Set(),
 	)
 	// Message filter state
-	const [isFilterOpen, setIsFilterOpen] = useState(false)
 	const [messageFilter, setMessageFilter] = useState<
 		'all' | 'files' | 'photos' | 'links'
 	>('all')
@@ -1137,6 +1241,7 @@ export default function MessengerPage() {
 		createChannel,
 		joinChannel,
 		getChannelInfo,
+		getChannelParticipants,
 		searchChannels,
 		updateChannel,
 	} = useChannels()
@@ -1310,6 +1415,16 @@ export default function MessengerPage() {
 		return []
 	})
 	const [showArchivedChats, setShowArchivedChats] = useState(false)
+	const [chatFolders, setChatFolders] = useState<ChatFolder[]>(() =>
+		loadChatFolders(),
+	)
+	const [activeFolderId, setActiveFolderId] = useState(() => loadActiveFolderId())
+	const [isFoldersManageOpen, setIsFoldersManageOpen] = useState(false)
+	const [newFolderName, setNewFolderName] = useState('')
+	const [scheduledMessages, setScheduledMessages] = useState<ScheduledMessage[]>(
+		() => loadScheduledMessages(),
+	)
+	const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false)
 
 	// Save pinned chats to localStorage when changed
 	useEffect(() => {
@@ -1502,6 +1617,13 @@ export default function MessengerPage() {
 
 	// Chat Settings State
 	const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+	const [isE2eKeyModalOpen, setIsE2eKeyModalOpen] = useState(false)
+	const [e2eKeyPassword, setE2eKeyPassword] = useState('')
+	const [e2eKeyRevealed, setE2eKeyRevealed] = useState<string | null>(null)
+	const [e2eKeyVerifyError, setE2eKeyVerifyError] = useState<string | null>(
+		null,
+	)
+	const [isVerifyingE2ePassword, setIsVerifyingE2ePassword] = useState(false)
 	const [deleteHistoryModalOpen, setDeleteHistoryModalOpen] = useState(false)
 	const [isDeletingHistory, setIsDeletingHistory] = useState(false)
 	const [currentBackground, setCurrentBackground] = useState(BACKGROUNDS[0])
@@ -1514,7 +1636,6 @@ export default function MessengerPage() {
 	const [bgImageOpacity, setBgImageOpacity] = useState(1)
 	const [bgImageBlur, setBgImageBlur] = useState(0)
 	const [showGridPattern, setShowGridPattern] = useState(true)
-	const settingsRef = useRef<HTMLDivElement>(null)
 
 	// Load saved theme
 	useEffect(() => {
@@ -1537,7 +1658,8 @@ export default function MessengerPage() {
 		if (savedMessageThemeId) {
 			const theme = BACKGROUNDS.find(bg => bg.id === savedMessageThemeId)
 			if (theme) setMessageTheme(theme)
-		} else if (savedThemeId) {
+		}
+		if (savedThemeId) {
 			const theme = BACKGROUNDS.find(bg => bg.id === savedThemeId)
 			if (theme) {
 				setCurrentBackground(theme)
@@ -1628,6 +1750,116 @@ export default function MessengerPage() {
 		}
 		fetchParticipants()
 	}, [selectedGroup, getGroupParticipants])
+
+	const isStandaloneChannel =
+		!!selectedChannel?.id && !selectedChannel.community_id && !selectedCommunity?.id
+
+	useEffect(() => {
+		const fetchParticipants = async () => {
+			if (!isStandaloneChannel || !selectedChannel?.id) {
+				setChannelParticipants({})
+				return
+			}
+			try {
+				const participants = await getChannelParticipants(selectedChannel.id)
+				const participantsMap = participants.reduce(
+					(acc: Record<string, User>, u: User) => {
+						if (u?.id) acc[String(u.id)] = u
+						return acc
+					},
+					{},
+				)
+				if (user?.id) {
+					participantsMap[String(user.id)] = {
+						...(participantsMap[String(user.id)] || {}),
+						id: String(user.id),
+						username: user.username || participantsMap[String(user.id)]?.username,
+						avatar_url:
+							user.avatar_url || participantsMap[String(user.id)]?.avatar_url,
+					} as User
+				}
+				setChannelParticipants(participantsMap)
+			} catch (e) {
+				console.error('Failed to fetch channel participants', e)
+			}
+		}
+		fetchParticipants()
+	}, [isStandaloneChannel, selectedChannel?.id, getChannelParticipants, user?.id, user?.username, user?.avatar_url])
+
+	useEffect(() => {
+		if (!isStandaloneChannel || !selectedChannel?.id) return
+		let cancelled = false
+		;(async () => {
+			const info = await getChannelInfo(selectedChannel.id)
+			if (!cancelled && info?.id) {
+				setSelectedChannel(prev =>
+					prev?.id === info.id ? { ...prev, ...info } : prev,
+				)
+			}
+		})()
+		return () => {
+			cancelled = true
+		}
+	}, [isStandaloneChannel, selectedChannel?.id, getChannelInfo])
+
+	useEffect(() => {
+		saveChatFolders(chatFolders)
+	}, [chatFolders])
+
+	useEffect(() => {
+		saveActiveFolderId(activeFolderId)
+	}, [activeFolderId])
+
+	useEffect(() => {
+		saveScheduledMessages(scheduledMessages)
+	}, [scheduledMessages])
+
+	const getCurrentChatTarget = useCallback((): ScheduledMessage['target'] | null => {
+		if (selectedFriend?.id) {
+			return { type: 'user', id: String(selectedFriend.id) }
+		}
+		if (selectedGroup?.id) {
+			return { type: 'group', id: String(selectedGroup.id) }
+		}
+		if (isStandaloneChannel && selectedChannel?.id) {
+			return { type: 'channel', id: String(selectedChannel.id) }
+		}
+		return null
+	}, [selectedFriend?.id, selectedGroup?.id, isStandaloneChannel, selectedChannel?.id])
+
+	const pendingScheduledForChat = useMemo(() => {
+		const target = getCurrentChatTarget()
+		if (!target) return []
+		return getPendingForTarget(scheduledMessages, target)
+	}, [scheduledMessages, getCurrentChatTarget])
+
+	const moveChatToFolder = useCallback(
+		(ref: ChatRef, folderId: string | null) => {
+			setChatFolders(prev => assignChatToFolder(prev, ref, folderId))
+		},
+		[],
+	)
+
+	const openStandaloneChannel = useCallback(
+		(channel: Channel) => {
+			setSelectedChannel(channel)
+			setSelectedFriend(null)
+			setSelectedGroup(null)
+			setSelectedCommunity(null)
+			setSelectedCommunityId('')
+			setIsChatSearchOpen(false)
+			setChatSearchQuery('')
+			setFoundMessages([])
+			void getChannelInfo(channel.id).then(info => {
+				if (info?.id) {
+					setSelectedChannel(prev =>
+						prev?.id === info.id ? { ...prev, ...info } : prev,
+					)
+				}
+			})
+		},
+		[getChannelInfo],
+	)
 
 	const handleCreateChannel = async (e: React.FormEvent) => {
 		e.preventDefault()
@@ -1907,13 +2139,81 @@ export default function MessengerPage() {
 	const isBlockedUserChat = isBlockedByMeChat || hasBlockedMeChat
 	const targetUserId = selectedFriend?.id
 	const hasActiveChat = !!(selectedFriend || selectedChannel || selectedGroup)
+	const isCommunityChannelActive =
+		!!selectedCommunity?.id || !!selectedChannel?.community_id
 	const canWriteToSelectedChannel = !selectedChannel
 		? true
-		: selectedChannel.type !== 'broadcast' ||
-		  !selectedChannel.owner_id ||
-		  !user?.id ||
-		  String(selectedChannel.owner_id) === String(user.id)
+		: isCommunityChannelActive
+			? true
+			: selectedChannel.type !== 'broadcast' ||
+				!selectedChannel.owner_id ||
+				!user?.id ||
+				String(selectedChannel.owner_id) === String(user.id)
 	const accessToken = (user as any)?.access_token as string | undefined
+	const [secretChatEnabled, setSecretChatEnabled] = useState(false)
+
+	useEffect(() => {
+		if (!selectedFriend?.id || isAiChat || isBotChat || !accessToken) {
+			setSecretChatEnabled(false)
+			return
+		}
+		let cancelled = false
+		;(async () => {
+			try {
+				const res = await fetch(
+					`/api/v1/dm/${selectedFriend.id}/settings`,
+					{ headers: { Authorization: `Bearer ${accessToken}` } },
+				)
+				if (!res.ok || cancelled) return
+				const data = await res.json()
+				if (!cancelled) setSecretChatEnabled(Boolean(data.is_secret))
+			} catch {
+				if (!cancelled) setSecretChatEnabled(false)
+			}
+		})()
+		return () => {
+			cancelled = true
+		}
+	}, [selectedFriend?.id, isAiChat, isBotChat, accessToken])
+
+	const toggleSecretChat = async () => {
+		if (!selectedFriend?.id || isAiChat || isBotChat || !accessToken) return
+		const next = !secretChatEnabled
+		try {
+			const res = await fetch(
+				`/api/v1/dm/${selectedFriend.id}/settings`,
+				{
+					method: 'PATCH',
+					headers: {
+						Authorization: `Bearer ${accessToken}`,
+						'Content-Type': 'application/json',
+					},
+					body: JSON.stringify({ is_secret: next }),
+				},
+			)
+			if (!res.ok) {
+				showToast('Не удалось изменить режим чата', 'error')
+				return
+			}
+			setSecretChatEnabled(next)
+			setRecentContacts(prev =>
+				prev.map(c =>
+					String(c.id) === String(selectedFriend.id)
+						? { ...c, is_secret: next }
+						: c,
+				),
+			)
+			showToast(
+				next
+					? 'Секретный чат: сквозное шифрование (E2E)'
+					: 'Облачный чат: стандартное шифрование на сервере',
+				'success',
+			)
+		} catch {
+			showToast('Не удалось изменить режим чата', 'error')
+		}
+	}
+
 	const isSelectedFriendOnline =
 		selectedFriend?.status?.toLowerCase() === 'online'
 	const isSelectedFriendInCall = selectedFriend
@@ -1944,10 +2244,77 @@ export default function MessengerPage() {
 		targetUserId,
 		selectedChannel?.id,
 		selectedGroup?.id,
+		secretChatEnabled,
 	)
 	const messages = isBotChat ? botMessages : chatMessages
 	const isChatLoading = isBotChat ? false : isLoading
 	const isChatTyping = isBotChat ? false : isTyping
+
+	const mentionUsers = useMemo(() => {
+		if (selectedGroup) {
+			return Object.values(groupParticipants)
+		}
+		if (selectedChannel) {
+			return Object.values(channelParticipants)
+		}
+		if (selectedFriend) {
+			return [selectedFriend]
+		}
+		return []
+	}, [selectedGroup, groupParticipants, selectedChannel, channelParticipants, selectedFriend, user])
+
+	const dispatchScheduledMessage = useCallback(
+		(item: ScheduledMessage) => {
+			if (item.target.type === 'user') {
+				if (selectedFriend?.id !== item.target.id) return false
+			} else if (item.target.type === 'group') {
+				if (selectedGroup?.id !== item.target.id) return false
+			} else if (item.target.type === 'channel') {
+				if (selectedChannel?.id !== item.target.id) return false
+			}
+			sendChatMessage(item.content, 'text', undefined, item.replyToId)
+			return true
+		},
+		[selectedFriend?.id, selectedGroup?.id, selectedChannel?.id, sendChatMessage],
+	)
+
+	useEffect(() => {
+		const tick = () => {
+			const due = getDueScheduledMessages(scheduledMessages)
+			if (!due.length) return
+			const sentIds: string[] = []
+			for (const item of due) {
+				if (dispatchScheduledMessage(item)) {
+					sentIds.push(item.id)
+				}
+			}
+			if (sentIds.length) {
+				setScheduledMessages(prev => prev.filter(m => !sentIds.includes(m.id)))
+				showToast(`Отправлено отложенных: ${sentIds.length}`, 'success')
+			}
+		}
+		tick()
+		const id = window.setInterval(tick, 5000)
+		return () => window.clearInterval(id)
+	}, [scheduledMessages, dispatchScheduledMessage, showToast])
+
+	useEffect(() => {
+		if (!isStandaloneChannel || !messages.length) return
+		setChannelParticipants(prev => {
+			const next = { ...prev }
+			let changed = false
+			for (const msg of messages) {
+				const sid = String(msg.sender_id || '')
+				if (!sid || next[sid]) continue
+				const friend = friends.find(f => String(f.id) === sid)
+				if (friend) {
+					next[sid] = friend
+					changed = true
+				}
+			}
+			return changed ? next : prev
+		})
+	}, [messages, isStandaloneChannel, friends])
 
 	useEffect(() => {
 		if (messages.length > 0) {
@@ -2082,11 +2449,17 @@ export default function MessengerPage() {
 		}
 	}, [messages, selectedFriend, markMessagesAsRead])
 
+	// Refresh relative last-seen labels (e.g. "5 минут назад")
+	useEffect(() => {
+		const interval = setInterval(() => setLastSeenTick(t => t + 1), 60_000)
+		return () => clearInterval(interval)
+	}, [])
+
 	// Listen for user status updates
 	useEffect(() => {
 		if (!socket) return
 
-		const handleStatusChange = (data: { user_id: string; status: string }) => {
+		const handleStatusChange = (data: { user_id: string; status: string; last_seen?: string }) => {
 			console.log('User status changed:', data)
 			setFriends(prev =>
 				prev.map(friend =>
@@ -2096,10 +2469,24 @@ export default function MessengerPage() {
 								status: data.status,
 								last_seen:
 									data.status.toLowerCase() === 'offline'
-										? new Date()
+										? data.last_seen ?? friend.last_seen
 										: friend.last_seen,
 							}
 						: friend,
+				),
+			)
+			setRecentContacts(prev =>
+				prev.map(contact =>
+					contact.id === data.user_id
+						? {
+								...contact,
+								status: data.status,
+								last_seen:
+									data.status.toLowerCase() === 'offline'
+										? data.last_seen ?? contact.last_seen
+										: contact.last_seen,
+							}
+						: contact,
 				),
 			)
 			setSelectedFriend(prev => {
@@ -2109,7 +2496,7 @@ export default function MessengerPage() {
 						status: data.status,
 						last_seen:
 							data.status.toLowerCase() === 'offline'
-								? new Date()
+								? data.last_seen ?? prev.last_seen
 								: prev.last_seen,
 					}
 				}
@@ -2121,23 +2508,32 @@ export default function MessengerPage() {
 			handleStatusChange({ user_id: data.user_id, status: 'Online' })
 		}
 
-		const handleUserDisconnected = (data: { user_id: string }) => {
-			handleStatusChange({ user_id: data.user_id, status: 'Offline' })
+		const handleUserDisconnected = (data: { user_id: string; last_seen?: string }) => {
+			handleStatusChange({ user_id: data.user_id, status: 'Offline', last_seen: data.last_seen })
 		}
 
-		const handleOnlineUsers = (data: string[]) => {
-			// Update friends status based on online users list
-			setFriends(prev =>
-				prev.map(friend =>
-					data.includes(friend.id)
-						? { ...friend, status: 'Online' }
-						: {
-								...friend,
-								status: 'Offline',
-								last_seen: friend.last_seen || new Date(),
-							},
-				),
-			)
+		const handleOnlineUsers = (data: Array<{ user_id: string; last_seen?: string } | string>) => {
+			const onlineIds = new Set<string>()
+			const lastSeenMap = new Map<string, string>()
+			for (const item of data) {
+				if (typeof item === 'string') {
+					onlineIds.add(item)
+				} else if (item?.user_id) {
+					onlineIds.add(item.user_id)
+					if (item.last_seen) lastSeenMap.set(item.user_id, item.last_seen)
+				}
+			}
+			const patchUser = (u: User): User => {
+				if (onlineIds.has(u.id)) return { ...u, status: 'Online' }
+				return {
+					...u,
+					status: 'Offline',
+					last_seen: lastSeenMap.get(u.id) || u.last_seen,
+				}
+			}
+			setFriends(prev => prev.map(patchUser))
+			setRecentContacts(prev => prev.map(patchUser))
+			setSelectedFriend(prev => (prev ? patchUser(prev) : prev))
 		}
 
 		// Voice channel participant handlers
@@ -2225,6 +2621,15 @@ export default function MessengerPage() {
 		}
 	}, [socket])
 
+	// Сброс чатов при смене аккаунта (не показывать статусы прошлой сессии)
+	useEffect(() => {
+		if (!user?.id) return
+		setSelectedFriend(null)
+		setSelectedUserForModal(null)
+		setFriends([])
+		setRecentContacts([])
+	}, [user?.id])
+
 	// Fetch friends
 	useEffect(() => {
 		const fetchFriends = async () => {
@@ -2243,10 +2648,6 @@ export default function MessengerPage() {
 						cleaned.map((f: any) => ({
 							...f,
 							is_bot: f.is_bot === true ? true : false,
-							last_seen:
-								f.status?.toLowerCase() === 'offline'
-									? f.last_seen || new Date()
-									: f.last_seen,
 						})),
 					)
 				}
@@ -2287,8 +2688,62 @@ export default function MessengerPage() {
 				}))
 			setRecentContacts(cleaned)
 			setPreviewRevision(v => v + 1)
+			// Decrypt E2E previews immediately after fetch
+			if (user?.id && cleaned.length > 0) {
+				const myId = String(user.id)
+				;(async () => {
+					let updated = false
+					const nextContacts = cleaned.map((c: any) => ({ ...c }))
+					for (let i = 0; i < nextContacts.length; i++) {
+						const contact = nextContacts[i]
+						const raw = String(contact.last_message_raw || '')
+						if (!raw.startsWith('e2e:')) continue
+						const peerId = String(contact.id)
+						const keyIds = buildE2eKeyIdCandidates(myId, peerId)
+						let decrypted = tryDecryptE2EPreviewWithKeyIds(raw, keyIds)
+						if (!decrypted) {
+							try {
+								const keyId = normalizeE2eKeyId(
+									[myId, peerId].sort().join(':'),
+								)
+								const keyBytes = await restoreKeyFromServer(
+									accessToken,
+									keyId,
+									myId,
+								)
+								if (keyBytes) {
+									persistKeyLocally(keyId, keyBytes)
+									decrypted = tryDecryptE2EPreviewWithKeyIds(raw, keyIds)
+								}
+							} catch {
+								// ignore
+							}
+						}
+						if (decrypted) {
+							const newText =
+								decrypted.length > 120
+									? `${decrypted.slice(0, 120)}…`
+									: decrypted
+							const currentText = String(
+								contact.last_message_text || '',
+							)
+							if (currentText !== newText) {
+								nextContacts[i] = {
+									...contact,
+									last_message_text: newText,
+								}
+								updated = true
+							}
+						}
+					}
+					if (updated) {
+						setRecentContacts(nextContacts)
+						setPreviewRevision(v => v + 1)
+					}
+				})()
+			}
 		} catch {}
-	}, [accessToken, user?.id, aiUser?.id])
+	}, [accessToken, user?.id, aiUser?.id, buildE2eKeyIdCandidates, normalizeE2eKeyId, persistKeyLocally, tryDecryptE2EPreviewWithKeyIds, restoreKeyFromServer])
 
 	useEffect(() => {
 		let active = true
@@ -2311,6 +2766,7 @@ export default function MessengerPage() {
 		}
 		;(async () => {
 			try {
+				resetE2eRestoreCache()
 				await ensureBackupMaterial(accessToken, user.id)
 				const keys = await beginServerKeysRestore(accessToken, user.id)
 				if (cancelled) return
@@ -2322,7 +2778,7 @@ export default function MessengerPage() {
 					}
 				}
 				if (!cancelled) {
-					fetchRecent()
+					await fetchRecent()
 					setPreviewRevision(v => v + 1)
 					window.dispatchEvent(new CustomEvent('e2e-keys-updated'))
 				}
@@ -2334,6 +2790,80 @@ export default function MessengerPage() {
 			cancelled = true
 		}
 	}, [accessToken, user?.id])
+
+	// Decrypt E2E previews in sidebar list after recent contacts load
+	useEffect(() => {
+		if (!accessToken || !user?.id || recentContacts.length === 0) return
+		let cancelled = false
+		const myId = String(user.id)
+
+		const decryptAll = async () => {
+			let updated = false
+			const nextContacts = recentContacts.map(c => ({
+				...c,
+			})) as Array<User & Record<string, unknown>>
+
+			for (let i = 0; i < nextContacts.length; i++) {
+				const contact = nextContacts[i]
+				const raw = String(
+					(contact as Record<string, unknown>).last_message_raw || '',
+				)
+				if (!raw.startsWith('e2e:')) continue
+
+				const peerId = String(contact.id)
+				const keyIds = buildE2eKeyIdCandidates(myId, peerId)
+				let decrypted = tryDecryptE2EPreviewWithKeyIds(raw, keyIds)
+
+				if (!decrypted) {
+					try {
+						const keyId = normalizeE2eKeyId(
+							[myId, peerId].sort().join(':'),
+						)
+						const keyBytes = await restoreKeyFromServer(
+							accessToken,
+							keyId,
+							myId,
+						)
+						if (keyBytes) {
+							persistKeyLocally(keyId, keyBytes)
+							decrypted = tryDecryptE2EPreviewWithKeyIds(raw, keyIds)
+						}
+					} catch {
+						// ignore
+					}
+				}
+
+				if (decrypted && !cancelled) {
+					const newText =
+						decrypted.length > 120
+							? `${decrypted.slice(0, 120)}…`
+							: decrypted
+					const currentText = String(
+						(contact as Record<string, unknown>).last_message_text ||
+							'',
+					)
+					if (currentText !== newText) {
+						nextContacts[i] = {
+							...(contact as User & Record<string, unknown>),
+							last_message_text: newText,
+						} as User & Record<string, unknown>
+						updated = true
+					}
+				}
+			}
+
+			if (updated && !cancelled) {
+				setRecentContacts(nextContacts)
+				setPreviewRevision(v => v + 1)
+			}
+		}
+
+		decryptAll()
+
+		return () => {
+			cancelled = true
+		}
+	}, [recentContacts, accessToken, user?.id])
 
 	// Listen for new messages — обновляем превью сразу (как в Telegram)
 	useEffect(() => {
@@ -2469,6 +2999,14 @@ export default function MessengerPage() {
 		}
 
 		const handleKeyExchange = async (data: Record<string, unknown>) => {
+			const fromId = String(data.from_user_id || '')
+			const peerIsSecret = recentContacts.some(
+				c => String(c.id) === fromId && (c as any).is_secret,
+			)
+			const activeSecret =
+				selectedFriend?.id === fromId && secretChatEnabled
+			if (!peerIsSecret && !activeSecret) return
+
 			const ok = await applyE2eKeyExchange(
 				socket,
 				data,
@@ -2491,7 +3029,7 @@ export default function MessengerPage() {
 			socket.off('e2e_key_exchange', handleKeyExchange)
 			window.removeEventListener('e2e-keys-updated', handleKeysUpdated)
 		}
-	}, [socket, user?.id, accessToken, selectedFriend?.id])
+	}, [socket, user?.id, accessToken, selectedFriend?.id, secretChatEnabled, recentContacts])
 
 	useEffect(() => {
 		if (!selectedFriend?.id) return
@@ -2504,6 +3042,10 @@ export default function MessengerPage() {
 			),
 		)
 	}, [selectedFriend?.id])
+
+	useEffect(() => {
+		setPreviewRevision(v => v + 1)
+	}, [messages])
 
 	useEffect(() => {
 		if (typeof window === 'undefined') return
@@ -2623,8 +3165,10 @@ export default function MessengerPage() {
 									name: selected.name,
 									description: selected.description || '',
 									invite_code: '',
-									owner_id: '',
+									owner_id: community.owner_id || '',
 									participants_count: 0,
+									type: 'text',
+									community_id: community.id,
 								})
 							}
 						}
@@ -2672,6 +3216,8 @@ export default function MessengerPage() {
 					role: data.role || 'User',
 					avatar_url: data.avatar_url ?? null,
 					status: data.status || 'Offline',
+					last_seen: data.last_seen ?? undefined,
+					privacy_settings: data.privacy_settings,
 					premium: !!data.premium,
 					is_bot: data.is_bot === true,
 				})
@@ -2807,25 +3353,62 @@ export default function MessengerPage() {
 		searchUsers()
 	}, [debouncedSearchQuery, aiUser.id])
 
-	// Close settings menu when clicking outside
-	useEffect(() => {
-		const handleClickOutside = (event: MouseEvent) => {
-			if (
-				settingsRef.current &&
-				!settingsRef.current.contains(event.target as Node)
-			) {
-				setIsSettingsOpen(false)
+	const resetE2eKeyModal = useCallback(() => {
+		setIsE2eKeyModalOpen(false)
+		setE2eKeyPassword('')
+		setE2eKeyRevealed(null)
+		setE2eKeyVerifyError(null)
+		setIsVerifyingE2ePassword(false)
+	}, [])
+
+	const getLocalE2eKeyForChat = useCallback(() => {
+		if (!user?.id || !selectedFriend?.id) return null
+		const keyId = normalizeE2eKeyId(
+			[String(user.id), String(selectedFriend.id)].sort().join(':'),
+		)
+		return (
+			localStorage.getItem(`e2e_key_${keyId}`) ||
+			sessionStorage.getItem(`e2e_key_${keyId}`)
+		)
+	}, [user?.id, selectedFriend?.id])
+
+	const handleVerifyE2eKeyPassword = async (e: React.FormEvent) => {
+		e.preventDefault()
+		if (!accessToken || !e2eKeyPassword.trim()) return
+
+		setIsVerifyingE2ePassword(true)
+		setE2eKeyVerifyError(null)
+		try {
+			const res = await fetch('/api/v1/auth/verify-password', {
+				method: 'POST',
+				headers: {
+					Authorization: `Bearer ${accessToken}`,
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({ password: e2eKeyPassword }),
+			})
+			if (!res.ok) {
+				setE2eKeyVerifyError('Неверный пароль')
+				return
 			}
+			const key = getLocalE2eKeyForChat()
+			if (!key) {
+				setE2eKeyVerifyError(
+					'Ключ шифрования не найден на этом устройстве. Дождитесь обмена ключами.',
+				)
+				return
+			}
+			setE2eKeyRevealed(key)
+		} catch {
+			setE2eKeyVerifyError('Не удалось проверить пароль')
+		} finally {
+			setIsVerifyingE2ePassword(false)
 		}
+	}
 
-		if (isSettingsOpen) {
-			document.addEventListener('mousedown', handleClickOutside)
-		}
-
-		return () => {
-			document.removeEventListener('mousedown', handleClickOutside)
-		}
-	}, [isSettingsOpen])
+	useEffect(() => {
+		resetE2eKeyModal()
+	}, [selectedFriend?.id, resetE2eKeyModal])
 
 	// Message Search Handler
 	const handleMessageSearch = async (e: React.FormEvent) => {
@@ -3026,6 +3609,14 @@ export default function MessengerPage() {
 		if (!isBotikChat) {
 			const targetBotId = selectedFriend?.id
 			setBotMessages(prev => [...prev, nextMessage])
+			if (selectedFriend && selectedFriend.is_bot === true && selectedFriend.id !== botUser.id) {
+				setActiveBots(prev => {
+					if (prev.some(b => b.id === selectedFriend.id)) return prev
+					const next = [...prev, selectedFriend]
+					try { localStorage.setItem(activeBotsStorageKey, JSON.stringify(next)) } catch {}
+					return next
+				})
+			}
 			if (!accessToken || !user?.id) {
 				setBotMessages(prev => [
 					...prev,
@@ -3316,7 +3907,12 @@ export default function MessengerPage() {
 			return
 		}
 		if (!canWriteToSelectedChannel) {
-			showToast('В этом канале писать может только владелец', 'error')
+			showToast(
+				isCommunityChannelActive
+					? 'Нет доступа к каналу сообщества'
+					: 'В этом канале писать может только владелец',
+				'error',
+			)
 			return
 		}
 		if (isBlockedChat || isBlockedUserChat) {
@@ -3563,6 +4159,7 @@ export default function MessengerPage() {
 		}
 		const text = msg.content?.trim()
 		if (!text) return 'Сообщение'
+		if (text.startsWith('e2e:')) return '🔒 Зашифрованное сообщение'
 		return text.length > 120 ? `${text.slice(0, 120)}…` : text
 	}
 
@@ -3570,6 +4167,9 @@ export default function MessengerPage() {
 		if (msg.sender_id === user?.id) return 'Вы'
 		if (msg.group_id || selectedGroup?.id) {
 			return groupParticipants[msg.sender_id]?.username || 'Участник'
+		}
+		if (msg.channel_id || isStandaloneChannel) {
+			return channelParticipants[msg.sender_id]?.username || 'Участник'
 		}
 		if (selectedFriend?.id) {
 			return selectedFriend.username
@@ -3785,8 +4385,26 @@ export default function MessengerPage() {
 		''
 
 	const handleDeleteAllHistory = async (scope: DeleteHistoryScope) => {
-		if (isAiChat || isBotChat) {
+		if (isAiChat) {
 			showToast('В этом чате нельзя удалить историю', 'info')
+			return
+		}
+		if (isBotChat && selectedFriend) {
+			try {
+				localStorage.removeItem(botStorageKey)
+				setBotMessages([])
+				botMessageIdsRef.current.clear()
+				setHasBotHistory(false)
+				setActiveBots(prev => {
+					const next = prev.filter(b => b.id !== selectedFriend.id)
+					try { localStorage.setItem(activeBotsStorageKey, JSON.stringify(next)) } catch {}
+					return next
+				})
+				setDeleteHistoryModalOpen(false)
+				showToast('История с ботом удалена', 'success')
+			} catch {
+				showToast('Не удалось удалить историю', 'error')
+			}
 			return
 		}
 		if (!selectedFriend && !selectedChannel && !selectedGroup) return
@@ -4054,13 +4672,13 @@ export default function MessengerPage() {
 	}
 
 	// WebRTC Handlers
-	const handleCallInitiate = async (userId: string, userName: string) => {
-		console.log('Call button clicked for:', userId, userName)
+	const handleCallInitiate = async (userId: string, userName: string, avatarUrl?: string) => {
+		console.log('Call button clicked for:', userId, userName, avatarUrl)
 		console.log('WebRTC initialized:', isInitialized)
 		console.log('WebRTC supported:', isWebRTCSupported)
 
 		try {
-			await initiateCall(userId, userName)
+			await initiateCall(userId, userName, avatarUrl)
 			showToast('Инициация звонка...', 'info')
 		} catch (error) {
 			console.error('Failed to initiate call:', error)
@@ -4249,8 +4867,21 @@ export default function MessengerPage() {
 			}
 		}
 
-		// Keep sidebar lightweight: load/display only recent by default.
-		// Full contact discovery is available via search.
+		// 1.5 Add active bot chats (not yet in recent contacts)
+		for (const bot of activeBots) {
+			if (bot?.id && !addedIds.has(bot.id)) {
+				list.push(bot)
+				addedIds.add(bot.id)
+			}
+		}
+
+		// 2. Friends stay visible after clearing history (empty chat, not blocked)
+		for (const friend of otherFriends) {
+			if (friend?.id && !addedIds.has(friend.id)) {
+				list.push(friend)
+				addedIds.add(friend.id)
+			}
+		}
 
 		// 3. Sort with pinned chats first
 		const finalUser =
@@ -4267,11 +4898,44 @@ export default function MessengerPage() {
 		normalizedSearch,
 		searchResultsWithBot,
 		recentContacts,
+		activeBots,
+		otherFriends,
 		pinnedChatIds,
 		user,
 		archivedChatIds,
 		showArchivedChats,
 	])
+	const folderFilteredSidebarList = useMemo(() => {
+		if (normalizedSearch || activeFolderId === 'all') return sidebarList
+		return sidebarList.filter(friend =>
+			matchesActiveFolder(chatFolders, activeFolderId, {
+				type: 'user',
+				id: String(friend.id),
+			}),
+		)
+	}, [sidebarList, normalizedSearch, activeFolderId, chatFolders])
+	const folderFilteredGroups = useMemo(() => {
+		if (normalizedSearch || activeFolderId === 'all') return otherGroups
+		return otherGroups.filter(group =>
+			matchesActiveFolder(chatFolders, activeFolderId, {
+				type: 'group',
+				id: String(group.id),
+			}),
+		)
+	}, [otherGroups, normalizedSearch, activeFolderId, chatFolders])
+	const standaloneChannels = useMemo(
+		() => channels.filter(ch => !ch.community_id),
+		[channels],
+	)
+	const folderFilteredStandaloneChannels = useMemo(() => {
+		if (activeFolderId === 'all') return standaloneChannels
+		return standaloneChannels.filter(channel =>
+			matchesActiveFolder(chatFolders, activeFolderId, {
+				type: 'channel',
+				id: String(channel.id),
+			}),
+		)
+	}, [standaloneChannels, activeFolderId, chatFolders])
 	const recentContactsById = useMemo(() => {
 		const map = new Map<string, any>()
 		for (const contact of recentContacts) {
@@ -4279,6 +4943,27 @@ export default function MessengerPage() {
 		}
 		return map
 	}, [recentContacts])
+	const getBotLastMessageFromStorage = useCallback(
+		(botId: string): { text: string; time: string } | null => {
+			try {
+				const key = user?.id
+					? `bot_history_${user.id}_${botId}`
+					: `bot_history_${botId}`
+				const raw = localStorage.getItem(key)
+				if (!raw) return null
+				const parsed = JSON.parse(raw)
+				if (!Array.isArray(parsed) || parsed.length === 0) return null
+				const last = parsed[parsed.length - 1]
+				return {
+					text: String(last?.content || ''),
+					time: String(last?.timestamp || ''),
+				}
+			} catch {
+				return null
+			}
+		},
+		[user?.id],
+	)
 	const getSidebarPreview = useCallback(
 		(friend: User) => {
 			if (selectedFriend?.id === friend.id) {
@@ -4302,9 +4987,18 @@ export default function MessengerPage() {
 			if (text.startsWith('mt:')) {
 				text = '🔒 Зашифрованное сообщение'
 			}
+			if (text.startsWith('e2e:')) {
+				text = '🔐 Зашифрованное сообщение'
+			}
+			if (!text && friend.is_bot === true) {
+				const botLast = getBotLastMessageFromStorage(String(friend.id))
+				if (botLast?.text) {
+					text = botLast.text
+				}
+			}
 			return text.length > 30 ? `${text.substring(0, 30)}...` : text
 		},
-		[messages, recentContactsById, selectedFriend?.id, user?.id, previewRevision],
+		[messages, recentContactsById, selectedFriend?.id, user?.id, previewRevision, getBotLastMessageFromStorage],
 	)
 	const getSidebarPreviewTime = useCallback(
 		(friend: User) => {
@@ -4316,6 +5010,19 @@ export default function MessengerPage() {
 				recentMeta?.last_message_at ||
 				recentMeta?.last_message_time ||
 				recentMeta?.updated_at
+			if (!raw && friend.is_bot === true) {
+				const botLast = getBotLastMessageFromStorage(String(friend.id))
+				if (botLast?.time) {
+					try {
+						return new Date(botLast.time).toLocaleTimeString('ru-RU', {
+							hour: '2-digit',
+							minute: '2-digit',
+						})
+					} catch {
+						return ''
+					}
+				}
+			}
 			if (!raw) return ''
 			try {
 				return new Date(raw).toLocaleTimeString('ru-RU', {
@@ -4326,7 +5033,7 @@ export default function MessengerPage() {
 				return ''
 			}
 		},
-		[messages, recentContactsById, selectedFriend?.id],
+		[messages, recentContactsById, selectedFriend?.id, getBotLastMessageFromStorage],
 	)
 
 	// Determine messages to show in chat
@@ -4493,6 +5200,44 @@ export default function MessengerPage() {
 								/>
 							)}
 						</div>
+						{!normalizedSearch && (
+							<div className='flex items-center gap-1.5 mt-3 overflow-x-auto custom-scrollbar pb-0.5'>
+								<button
+									type='button'
+									onClick={() => setActiveFolderId('all')}
+									className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+										activeFolderId === 'all'
+											? 'bg-emerald-500/20 text-emerald-300'
+											: 'bg-gray-900 text-gray-400 hover:text-gray-200'
+									}`}
+								>
+									Все
+								</button>
+								{chatFolders.map(folder => (
+									<button
+										key={folder.id}
+										type='button'
+										onClick={() => setActiveFolderId(folder.id)}
+										className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+											activeFolderId === folder.id
+												? 'bg-emerald-500/20 text-emerald-300'
+												: 'bg-gray-900 text-gray-400 hover:text-gray-200'
+										}`}
+									>
+										{folder.icon ? `${folder.icon} ` : ''}
+										{folder.name}
+									</button>
+								))}
+								<button
+									type='button'
+									onClick={() => setIsFoldersManageOpen(true)}
+									className='shrink-0 p-1.5 rounded-lg bg-gray-900 text-gray-400 hover:text-white transition-colors'
+									title='Управление папками'
+								>
+									<Folder className='w-4 h-4' />
+								</button>
+							</div>
+						)}
 					</div>
 				)}
 
@@ -4604,7 +5349,7 @@ export default function MessengerPage() {
 								</div>
 							)}
 
-							{sidebarList.length === 0 &&
+							{folderFilteredSidebarList.length === 0 &&
 								(!aiFriend || searchQuery) &&
 								!showBotInHistory && (
 									<div className='p-8 text-center text-gray-500 flex flex-col items-center gap-3'>
@@ -4618,7 +5363,7 @@ export default function MessengerPage() {
 										</span>
 									</div>
 								)}
-							{sidebarList.map(friend => (
+							{folderFilteredSidebarList.map(friend => (
 								<div
 									key={friend.id}
 									onClick={() => {
@@ -4736,7 +5481,7 @@ export default function MessengerPage() {
 												)
 											}}
 											onCall={() =>
-												handleCallInitiate(friend.id, friend.username)
+												handleCallInitiate(friend.id, friend.username, friend.avatar_url)
 											}
 											onVideoCall={() => {
 												console.log('Video call to:', friend.id)
@@ -4757,6 +5502,22 @@ export default function MessengerPage() {
 												setIsChatSearchOpen(false)
 												setDeleteHistoryModalOpen(true)
 											}}
+											folders={chatFolders.map(f => ({
+												id: f.id,
+												name: f.name,
+												icon: f.icon,
+											}))}
+											currentFolderId={chatInFolder(chatFolders, {
+												type: 'user',
+												id: String(friend.id),
+											})}
+											onMoveToFolder={folderId =>
+												moveChatToFolder(
+													{ type: 'user', id: String(friend.id) },
+													folderId,
+												)
+											}
+											onManageFolders={() => setIsFoldersManageOpen(true)}
 										/>
 									</div>
 								</div>
@@ -4801,7 +5562,7 @@ export default function MessengerPage() {
 										</div>
 									</div>
 									<div className='space-y-1'>
-										{otherGroups.map(group => (
+										{folderFilteredGroups.map(group => (
 											<div
 												key={group.id}
 												onClick={() => {
@@ -4818,18 +5579,33 @@ export default function MessengerPage() {
 												}`}
 											>
 												<div className='relative'>
-													<div
-														className={`w-12 h-12 rounded-full flex items-center justify-center bg-gray-800 ring-2 transition-all duration-300 ${
-															selectedGroup?.id === group.id
-																? currentBackground.accentColor.replace(
-																		'text-',
-																		'ring-',
-																	)
-																: 'ring-gray-950'
-														}`}
-													>
-														<UsersIcon className='w-6 h-6 text-gray-400' />
-													</div>
+													{group.avatar_url ? (
+														<img
+															src={getAvatarUrl(group.avatar_url)}
+															alt={group.name}
+															className={`w-12 h-12 rounded-full object-cover bg-gray-800 ring-2 transition-all duration-300 ${
+																selectedGroup?.id === group.id
+																	? currentBackground.accentColor.replace(
+																			'text-',
+																			'ring-',
+																		)
+																	: 'ring-gray-950'
+															}`}
+														/>
+													) : (
+														<div
+															className={`w-12 h-12 rounded-full flex items-center justify-center bg-gray-800 ring-2 transition-all duration-300 ${
+																selectedGroup?.id === group.id
+																	? currentBackground.accentColor.replace(
+																			'text-',
+																			'ring-',
+																		)
+																	: 'ring-gray-950'
+															}`}
+														>
+															<UsersIcon className='w-6 h-6 text-gray-400' />
+														</div>
+													)}
 												</div>
 												<div className='flex flex-col flex-1 min-w-0'>
 													<div className='flex justify-between items-center gap-2'>
@@ -4894,6 +5670,28 @@ export default function MessengerPage() {
 
 									{hubTab === 'channels' ? (
 										<div>
+											{activeFolderId !== 'all' && (
+												<div className='flex items-center gap-1.5 mb-2 overflow-x-auto custom-scrollbar px-1'>
+													<button
+														type='button'
+														onClick={() => setActiveFolderId('all')}
+														className='shrink-0 px-2 py-1 rounded-md text-[10px] font-medium bg-gray-900 text-gray-400 hover:text-gray-200'
+													>
+														Все
+													</button>
+													{chatFolders
+														.filter(f => f.id === activeFolderId)
+														.map(folder => (
+															<span
+																key={folder.id}
+																className='shrink-0 px-2 py-1 rounded-md text-[10px] font-medium bg-emerald-500/20 text-emerald-300'
+															>
+																{folder.icon ? `${folder.icon} ` : ''}
+																{folder.name}
+															</span>
+														))}
+												</div>
+											)}
 											<div className='flex items-center justify-between mb-2 px-1'>
 												<h3 className='text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5'>
 													<HashIcon className='w-3.5 h-3.5' />
@@ -4922,39 +5720,45 @@ export default function MessengerPage() {
 													</button>
 												</div>
 											</div>
-											{channels.filter(ch => !ch.community_id).length > 0 ? (
+											{folderFilteredStandaloneChannels.length > 0 ? (
 												<div className='space-y-1'>
-													{channels
-														.filter(ch => !ch.community_id)
-														.map(channel => (
+													{folderFilteredStandaloneChannels.map(channel => (
 															<div
 																key={channel.id}
-																onClick={() => {
-																	setSelectedChannel(channel)
-																	setSelectedFriend(null)
-																	setSelectedGroup(null)
-																	setIsChatSearchOpen(false)
-																	setChatSearchQuery('')
-																	setFoundMessages([])
-																}}
+																onClick={() => openStandaloneChannel(channel)}
 																className={`group p-3 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-200 border border-transparent ${
 																	selectedChannel?.id === channel.id
 																		? `bg-gray-800/50 ${currentBackground.borderColor} shadow-sm`
 																		: 'hover:bg-gray-900 border-transparent'
 																}`}
 															>
-																<div
-																	className={`w-12 h-12 rounded-2xl flex items-center justify-center bg-sky-950/80 ring-2 transition-all duration-300 ${
-																		selectedChannel?.id === channel.id
-																			? currentBackground.accentColor.replace(
-																					'text-',
-																					'ring-',
-																				)
-																			: 'ring-gray-950'
-																	}`}
-																>
-																	<HashIcon className='w-6 h-6 text-sky-300' />
-																</div>
+																{channel.avatar_url ? (
+																	<img
+																		src={getAvatarUrl(channel.avatar_url)}
+																		alt={channel.name}
+																		className={`w-12 h-12 rounded-full object-cover bg-gray-800 ring-2 transition-all duration-300 ${
+																			selectedChannel?.id === channel.id
+																				? currentBackground.accentColor.replace(
+																						'text-',
+																						'ring-',
+																					)
+																				: 'ring-gray-950'
+																		}`}
+																	/>
+																) : (
+																	<div
+																		className={`w-12 h-12 rounded-2xl flex items-center justify-center bg-sky-950/80 ring-2 transition-all duration-300 ${
+																			selectedChannel?.id === channel.id
+																				? currentBackground.accentColor.replace(
+																						'text-',
+																						'ring-',
+																					)
+																				: 'ring-gray-950'
+																		}`}
+																	>
+																		<HashIcon className='w-6 h-6 text-sky-300' />
+																	</div>
+																)}
 																<div className='flex flex-col flex-1 min-w-0'>
 																	<span
 																		className={`font-semibold truncate transition-colors duration-300 ${
@@ -5134,8 +5938,13 @@ export default function MessengerPage() {
 																name: ch.name,
 																description: ch.description || '',
 																invite_code: '',
-																owner_id: '',
+																owner_id:
+																	selectedCommunity?.owner_id || '',
 																participants_count: 0,
+																type: 'text',
+																community_id:
+																	selectedCommunity?.id ||
+																	ch.community_id,
 															})
 															setSelectedFriend(null)
 															setSelectedGroup(null)
@@ -5201,8 +6010,13 @@ export default function MessengerPage() {
 																	name: ch.name,
 																	description: ch.description || '',
 																	invite_code: '',
-																	owner_id: '',
+																	owner_id:
+																		selectedCommunity?.owner_id || '',
 																	participants_count: 0,
+																	type: 'text',
+																	community_id:
+																		selectedCommunity?.id ||
+																		ch.community_id,
 																})
 																setSelectedFriend(null)
 																setSelectedGroup(null)
@@ -5303,36 +6117,73 @@ export default function MessengerPage() {
 						<>
 							<div className='h-16 px-6 border-b border-white/10 flex items-center justify-between bg-black/20 backdrop-blur-md z-10 sticky top-0'>
 								{isChatSearchOpen ? (
-									<div className='flex items-center gap-2 w-full animate-in fade-in slide-in-from-top-2 duration-200'>
-										<SearchIcon className='w-5 h-5 text-gray-400' />
-										<form onSubmit={handleMessageSearch} className='flex-1'>
-											<input
-												autoFocus
-												type='text'
-												placeholder='Поиск сообщений...'
-												value={chatSearchQuery}
-												onChange={e => setChatSearchQuery(e.target.value)}
-												className='w-full bg-transparent border-none text-[color:var(--app-fg)] placeholder:text-gray-500 focus:ring-0 text-sm'
-											/>
-										</form>
-										{isSearchingMessages && (
-											<div
-												className={`w-4 h-4 border-2 border-t-transparent rounded-full animate-spin ${currentBackground.borderColor.replace(
-													'/20',
-													'',
-												)}`}
-											/>
-										)}
-										<button
-											onClick={() => {
-												setIsChatSearchOpen(false)
-												setChatSearchQuery('')
-												setFoundMessages([])
-											}}
-											className='p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-full transition-colors'
-										>
-											<XIcon className='w-5 h-5' />
-										</button>
+									<div className='flex flex-col gap-2 w-full animate-in fade-in slide-in-from-top-2 duration-200'>
+										<div className='flex items-center gap-2'>
+											<SearchIcon className='w-5 h-5 text-gray-400 shrink-0' />
+											<form
+												onSubmit={handleMessageSearch}
+												className='flex-1 min-w-0'
+											>
+												<input
+													autoFocus
+													type='text'
+													placeholder='Поиск сообщений...'
+													value={chatSearchQuery}
+													onChange={e => setChatSearchQuery(e.target.value)}
+													className='w-full bg-transparent border-none text-[color:var(--app-fg)] placeholder:text-gray-500 focus:ring-0 text-sm'
+												/>
+											</form>
+											{isSearchingMessages && (
+												<div
+													className={`w-4 h-4 border-2 border-t-transparent rounded-full animate-spin shrink-0 ${currentBackground.borderColor.replace(
+														'/20',
+														'',
+													)}`}
+												/>
+											)}
+											<button
+												onClick={() => {
+													setIsChatSearchOpen(false)
+													setChatSearchQuery('')
+													setFoundMessages([])
+												}}
+												className='p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-full transition-colors shrink-0'
+											>
+												<XIcon className='w-5 h-5' />
+											</button>
+										</div>
+										<div className='flex items-center gap-1.5 overflow-x-auto pb-0.5'>
+											{(
+												[
+													{ id: 'all', label: 'Все' },
+													{ id: 'photos', label: 'Фото' },
+													{ id: 'files', label: 'Файлы' },
+													{ id: 'links', label: 'Ссылки' },
+												] as const
+											).map(option => (
+												<button
+													key={option.id}
+													type='button'
+													onClick={() => setMessageFilter(option.id)}
+													className={`shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+														messageFilter === option.id
+															? 'bg-emerald-600/25 text-emerald-300'
+															: 'bg-gray-800/80 text-gray-400 hover:text-gray-200'
+													}`}
+												>
+													{option.label}
+												</button>
+											))}
+											{messageFilter !== 'all' && (
+												<button
+													type='button'
+													onClick={() => setMessageFilter('all')}
+													className='shrink-0 px-2 py-1 text-xs text-gray-500 hover:text-gray-300'
+												>
+													Сбросить
+												</button>
+											)}
+										</div>
 									</div>
 								) : (
 									<>
@@ -5368,34 +6219,22 @@ export default function MessengerPage() {
 														)}
 													</div>
 													<button
-														onClick={() => setIsFilterOpen(true)}
+														onClick={() => setIsSettingsOpen(true)}
 														className='flex flex-col text-left hover:bg-gray-800/50 rounded-lg p-2 -ml-2 transition-colors'
-														title='Показать фильтры сообщений'
+														title='Настройки чата'
 													>
 														<span className='font-bold text-white text-base leading-tight flex items-center gap-2'>
 															{selectedFriend.username}
+															{secretChatEnabled && (
+																<span
+																	className='text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 font-medium'
+																	title='Секретный чат (E2E)'
+																>
+																	🔐
+																</span>
+															)}
 															{selectedFriend.premium && (
 																<span className='ml-1 text-amber-400'>★</span>
-															)}
-															{messageFilter !== 'all' && (
-																<span className='inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-600/30 text-emerald-300'>
-																	<svg
-																		className='w-3 h-3'
-																		viewBox='0 0 24 24'
-																		fill='none'
-																		stroke='currentColor'
-																		strokeWidth='2'
-																	>
-																		<polygon points='22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3'></polygon>
-																	</svg>
-																	{messageFilter === 'photos'
-																		? 'Фото'
-																		: messageFilter === 'files'
-																			? 'Файлы'
-																			: messageFilter === 'links'
-																				? 'Ссылки'
-																				: ''}
-																</span>
 															)}
 														</span>
 														<span className='text-xs text-emerald-500 font-medium flex items-center gap-1.5'>
@@ -5412,7 +6251,10 @@ export default function MessengerPage() {
 																</>
 															) : (
 																<span className='text-gray-500'>
-																	{formatLastSeen(selectedFriend.last_seen)}
+																	{formatLastSeen(
+																		selectedFriend.last_seen,
+																		selectedFriend.privacy_settings,
+																	)}
 																</span>
 															)}
 														</span>
@@ -5420,89 +6262,76 @@ export default function MessengerPage() {
 												</>
 											) : selectedChannel ? (
 												<>
-													<div className='relative'>
-														<div className='w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center ring-2 ring-gray-800/50'>
-															<HashIcon className='w-5 h-5 text-gray-400' />
-														</div>
+													<div
+														className='relative cursor-pointer hover:opacity-80 transition-opacity'
+														onClick={() =>
+															isStandaloneChannel
+																? setIsChannelInfoOpen(true)
+																: undefined
+														}
+													>
+														{isStandaloneChannel && selectedChannel.avatar_url ? (
+															<img
+																src={getAvatarUrl(selectedChannel.avatar_url)}
+																alt={selectedChannel.name}
+																className='w-10 h-10 rounded-full object-cover bg-gray-800 ring-2 ring-gray-800/50'
+															/>
+														) : (
+															<div className='w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center ring-2 ring-gray-800/50'>
+																<HashIcon className='w-5 h-5 text-gray-400' />
+															</div>
+														)}
 													</div>
 													<button
-														onClick={() => setIsFilterOpen(true)}
+														onClick={() => setIsSettingsOpen(true)}
 														className='flex flex-col text-left hover:bg-gray-800/50 rounded-lg p-2 -ml-2 transition-colors'
-														title='Показать фильтры сообщений'
+														title='Настройки чата'
 													>
 														<span className='font-bold text-white text-base leading-tight flex items-center gap-2'>
 															{selectedChannel.name}
-															{messageFilter !== 'all' && (
-																<span className='inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-600/30 text-emerald-300'>
-																	<svg
-																		className='w-3 h-3'
-																		viewBox='0 0 24 24'
-																		fill='none'
-																		stroke='currentColor'
-																		strokeWidth='2'
-																	>
-																		<polygon points='22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3'></polygon>
-																	</svg>
-																	{messageFilter === 'photos'
-																		? 'Фото'
-																		: messageFilter === 'files'
-																			? 'Файлы'
-																			: messageFilter === 'links'
-																				? 'Ссылки'
-																				: ''}
-																</span>
-															)}
 														</span>
 														<span className='text-xs text-gray-500 font-medium flex items-center gap-1.5'>
 															<UsersIcon className='w-3 h-3' />
-															{selectedChannel.participants_count &&
-															selectedChannel.participants_count > 0
-																? `${selectedChannel.participants_count} участников`
-																: ''}
+															{isStandaloneChannel
+																? selectedChannel.participants_count &&
+																  selectedChannel.participants_count > 0
+																	? `${selectedChannel.participants_count} участников`
+																	: 'Канал'
+																: 'Канал сервера'}
 														</span>
 													</button>
-													<button
-														onClick={() => setIsChannelInfoOpen(true)}
-														className='ml-2 p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors'
-														title='Информация о канале'
-													>
-														<InfoIcon className='w-4 h-4' />
-													</button>
+													{isStandaloneChannel && (
+														<button
+															onClick={() => setIsChannelInfoOpen(true)}
+															className='ml-2 p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors'
+															title='Информация о канале'
+														>
+															<InfoIcon className='w-4 h-4' />
+														</button>
+													)}
 												</>
 											) : selectedGroup ? (
 												<>
 													<div className='relative'>
-														<div className='w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center ring-2 ring-gray-800/50'>
-															<UsersIcon className='w-5 h-5 text-gray-400' />
-														</div>
+														{selectedGroup.avatar_url ? (
+															<img
+																src={getAvatarUrl(selectedGroup.avatar_url)}
+																alt={selectedGroup.name}
+																className='w-10 h-10 rounded-full object-cover bg-gray-800 ring-2 ring-gray-800/50'
+															/>
+														) : (
+															<div className='w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center ring-2 ring-gray-800/50'>
+																<UsersIcon className='w-5 h-5 text-gray-400' />
+															</div>
+														)}
 													</div>
 													<button
-														onClick={() => setIsFilterOpen(true)}
+														onClick={() => setIsSettingsOpen(true)}
 														className='flex flex-col text-left hover:bg-gray-800/50 rounded-lg p-2 -ml-2 transition-colors'
-														title='Показать фильтры сообщений'
+														title='Настройки чата'
 													>
 														<span className='font-bold text-white text-base leading-tight flex items-center gap-2'>
 															{selectedGroup.name}
-															{messageFilter !== 'all' && (
-																<span className='inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-600/30 text-emerald-300'>
-																	<svg
-																		className='w-3 h-3'
-																		viewBox='0 0 24 24'
-																		fill='none'
-																		stroke='currentColor'
-																		strokeWidth='2'
-																	>
-																		<polygon points='22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3'></polygon>
-																	</svg>
-																	{messageFilter === 'photos'
-																		? 'Фото'
-																		: messageFilter === 'files'
-																			? 'Файлы'
-																			: messageFilter === 'links'
-																				? 'Ссылки'
-																				: ''}
-																</span>
-															)}
 														</span>
 														<span className='text-xs text-gray-500 font-medium flex items-center gap-1.5'>
 															<UsersIcon className='w-3 h-3' />
@@ -5545,6 +6374,7 @@ export default function MessengerPage() {
 														handleCallInitiate(
 															selectedFriend.id,
 															selectedFriend.username,
+															selectedFriend.avatar_url,
 														)
 													}
 													disabled={
@@ -5645,202 +6475,13 @@ export default function MessengerPage() {
 													<XIcon className='w-5 h-5' />
 												</button>
 											)}
-											<div className='relative' ref={settingsRef}>
-												<button
-													onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-													className={`p-2 rounded-full transition-colors ${
-														isSettingsOpen
-															? 'text-white bg-gray-800'
-															: 'text-gray-400 hover:text-white hover:bg-gray-800'
-													}`}
-												>
-													<MoreVerticalIcon className='w-5 h-5' />
-												</button>
-
-												{isSettingsOpen && (
-													<div className='absolute right-0 top-full mt-2 w-72 bg-gray-900/95 backdrop-blur-xl border border-gray-800 rounded-xl shadow-2xl p-4 z-50 animate-in fade-in zoom-in-95 duration-200'>
-														<h3 className='text-sm font-semibold text-gray-300 mb-3'>
-															Настройки чата
-														</h3>
-
-														<div className='space-y-4 max-h-[70vh] overflow-y-auto custom-scrollbar'>
-															<div>
-																<label className='text-xs text-gray-500 mb-2 block uppercase tracking-wider font-medium'>
-																	Фон чата
-																</label>
-																<div className='grid grid-cols-5 gap-2 mb-2'>
-																	{BACKGROUNDS.map(bg => (
-																		<button
-																			key={bg.id}
-																			onClick={() => handleThemeChange(bg)}
-																			title={bg.name}
-																			className={`w-8 h-8 rounded-full border-2 transition-all ${
-																				!chatBackgroundImage &&
-																				currentBackground.id === bg.id
-																					? `${bg.borderColor.replace(
-																							'/20',
-																							'',
-																						)} scale-110 shadow-lg`
-																					: 'border-transparent hover:scale-105 hover:border-gray-600'
-																			} overflow-hidden ring-1 ring-gray-950/50`}
-																		>
-																			<div
-																				className={`w-full h-full ${bg.preview}`}
-																			/>
-																		</button>
-																	))}
-																</div>
-																<div className='flex gap-2'>
-																	<button
-																		onClick={() => setIsCustomBgOpen(true)}
-																		className='flex-1 py-2 px-3 text-xs font-medium text-gray-300 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors flex items-center justify-center gap-2'
-																	>
-																		<svg
-																			className='w-4 h-4'
-																			viewBox='0 0 24 24'
-																			fill='none'
-																			stroke='currentColor'
-																			strokeWidth='2'
-																		>
-																			<rect
-																				x='3'
-																				y='3'
-																				width='18'
-																				height='18'
-																				rx='2'
-																				ry='2'
-																			></rect>
-																			<circle
-																				cx='8.5'
-																				cy='8.5'
-																				r='1.5'
-																			></circle>
-																			<polyline points='21 15 16 10 5 21'></polyline>
-																		</svg>
-																		Картинка
-																	</button>
-																	{chatBackgroundImage && (
-																		<button
-																			onClick={handleClearCustomBackground}
-																			className='py-2 px-3 text-xs font-medium text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 rounded-lg transition-colors'
-																			title='Убрать картинку'
-																		>
-																			<svg
-																				className='w-4 h-4'
-																				viewBox='0 0 24 24'
-																				fill='none'
-																				stroke='currentColor'
-																				strokeWidth='2'
-																			>
-																				<polyline points='3 6 5 6 21 6'></polyline>
-																				<path d='M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'></path>
-																			</svg>
-																		</button>
-																	)}
-																</div>
-
-																{chatBackgroundImage && (
-																	<div className='mt-3 space-y-3'>
-																		<div>
-																			<label className='text-[10px] text-gray-500 mb-1 block uppercase tracking-wider font-medium'>
-																				Прозрачность картинки
-																			</label>
-																			<input
-																				type='range'
-																				min='0.1'
-																				max='1'
-																				step='0.05'
-																				value={bgImageOpacity}
-																				onChange={e =>
-																					setBgImageOpacity(
-																						parseFloat(e.target.value),
-																					)
-																				}
-																				className='w-full'
-																			/>
-																		</div>
-																		<div>
-																			<label className='text-[10px] text-gray-500 mb-1 block uppercase tracking-wider font-medium'>
-																				Размытие картинки
-																			</label>
-																			<input
-																				type='range'
-																				min='0'
-																				max='24'
-																				step='1'
-																				value={bgImageBlur}
-																				onChange={e =>
-																					setBgImageBlur(
-																						parseInt(e.target.value, 10),
-																					)
-																				}
-																				className='w-full'
-																			/>
-																		</div>
-																	</div>
-																)}
-															</div>
-
-															<div className='pt-3 border-t border-gray-800'>
-																<label className='text-xs text-gray-500 mb-2 block uppercase tracking-wider font-medium'>
-																	Стиль сообщений
-																</label>
-																<div className='grid grid-cols-5 gap-2'>
-																	{BACKGROUNDS.map(bg => (
-																		<button
-																			key={bg.id}
-																			onClick={() =>
-																				handleMessageThemeChange(bg)
-																			}
-																			title={bg.name}
-																			className={`w-8 h-8 rounded-full border-2 transition-all ${
-																				messageTheme.id === bg.id
-																					? `${bg.borderColor.replace(
-																							'/20',
-																							'',
-																						)} scale-110 shadow-lg`
-																					: 'border-transparent hover:scale-105 hover:border-gray-600'
-																			} overflow-hidden ring-1 ring-gray-950/50`}
-																		>
-																			<div
-																				className={`w-full h-full ${bg.preview}`}
-																			/>
-																		</button>
-																	))}
-																</div>
-															</div>
-
-															<div className='pt-3 border-t border-gray-800'>
-																<label className='text-xs text-gray-500 mb-2 block uppercase tracking-wider font-medium'>
-																	Эффекты
-																</label>
-																<button
-																	onClick={() => setShowGridPattern(v => !v)}
-																	className='w-full flex items-center justify-between rounded-lg bg-gray-800/60 hover:bg-gray-800 px-3 py-2 text-sm text-gray-200 transition-colors'
-																>
-																	<span>Сетка на фоне</span>
-																	<span className='text-xs text-gray-400'>
-																		{showGridPattern ? 'Вкл' : 'Выкл'}
-																	</span>
-																</button>
-															</div>
-
-															<div className='pt-3 border-t border-gray-800'>
-																<button
-																	type='button'
-																	onClick={() => {
-																		setIsSettingsOpen(false)
-																		setDeleteHistoryModalOpen(true)
-																	}}
-																	className='w-full text-left text-sm text-rose-500 hover:text-rose-400 hover:bg-rose-500/10 px-3 py-2 rounded-lg transition-colors'
-																>
-																	Удалить переписку…
-																</button>
-															</div>
-														</div>
-													</div>
-												)}
-											</div>
+											<button
+												onClick={() => setIsSettingsOpen(true)}
+												className='p-2 rounded-full transition-colors text-gray-400 hover:text-white hover:bg-gray-800'
+												title='Настройки чата'
+											>
+												<MoreVerticalIcon className='w-5 h-5' />
+											</button>
 										</div>
 									</>
 								)}
@@ -6010,255 +6651,317 @@ export default function MessengerPage() {
 								</div>
 							)}
 
-							{isFilterOpen && (
+							{isSettingsOpen && (
 								<div
 									className='fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-start justify-center pt-20 p-4'
-									onClick={() => setIsFilterOpen(false)}
+									onClick={() => setIsSettingsOpen(false)}
+								>
+									<div
+										className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md shadow-2xl animate-in fade-in zoom-in-95 duration-200 max-h-[85vh] flex flex-col'
+										onClick={e => e.stopPropagation()}
+									>
+										<div className='flex items-center justify-between p-4 border-b border-gray-800 shrink-0'>
+											<h3 className='text-lg font-bold text-white'>
+												Настройки чата
+											</h3>
+											<button
+												onClick={() => setIsSettingsOpen(false)}
+												className='p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors'
+											>
+												<XIcon className='w-5 h-5' />
+											</button>
+										</div>
+										<div className='p-4 space-y-4 overflow-y-auto custom-scrollbar'>
+											{selectedFriend &&
+												!selectedChannel &&
+												!selectedGroup &&
+												!isAiChat &&
+												!isBotChat && (
+													<div className='rounded-xl border border-gray-800 bg-gray-950/60 p-3'>
+														<div className='flex items-start justify-between gap-3'>
+															<div>
+																<p className='text-sm font-medium text-white'>
+																	{secretChatEnabled
+																		? '🔐 Секретный чат'
+																		: '☁️ Облачный чат'}
+																</p>
+																<p className='text-xs text-gray-500 mt-1 leading-relaxed'>
+																	{secretChatEnabled
+																		? 'Сквозное шифрование: ключи только на устройствах, сервер не читает сообщения.'
+																		: 'Стандартное шифрование: сообщения защищены при передаче и хранятся на сервере (как облачные чаты в Telegram).'}
+																</p>
+															</div>
+															<button
+																type='button'
+																onClick={toggleSecretChat}
+																className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${
+																	secretChatEnabled
+																		? 'bg-emerald-600'
+																		: 'bg-gray-700'
+																}`}
+																aria-pressed={secretChatEnabled}
+															>
+																<span
+																	className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
+																		secretChatEnabled ? 'translate-x-5' : ''
+																	}`}
+																/>
+															</button>
+														</div>
+														{secretChatEnabled && (
+															<button
+																type='button'
+																onClick={() => {
+																	setIsSettingsOpen(false)
+																	setIsE2eKeyModalOpen(true)
+																}}
+																className='mt-3 w-full py-2 px-3 text-xs font-medium text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-lg transition-colors'
+															>
+																Показать ключ шифрования
+															</button>
+														)}
+													</div>
+												)}
+
+											<div>
+												<label className='text-xs text-gray-500 mb-2 block uppercase tracking-wider font-medium'>
+													Фон чата
+												</label>
+												<div className='grid grid-cols-5 gap-2 mb-2'>
+													{BACKGROUNDS.map(bg => (
+														<button
+															key={bg.id}
+															onClick={() => handleThemeChange(bg)}
+															title={bg.name}
+															className={`w-8 h-8 rounded-full border-2 transition-all ${
+																!chatBackgroundImage &&
+																currentBackground.id === bg.id
+																	? `${bg.borderColor.replace(
+																			'/20',
+																			'',
+																		)} scale-110 shadow-lg`
+																	: 'border-transparent hover:scale-105 hover:border-gray-600'
+															} overflow-hidden ring-1 ring-gray-950/50`}
+														>
+															<div
+																className={`w-full h-full ${bg.preview}`}
+															/>
+														</button>
+													))}
+												</div>
+												<div className='flex gap-2'>
+													<button
+														onClick={() => setIsCustomBgOpen(true)}
+														className='flex-1 py-2 px-3 text-xs font-medium text-gray-300 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors'
+													>
+														Картинка
+													</button>
+													{chatBackgroundImage && (
+														<button
+															onClick={handleClearCustomBackground}
+															className='py-2 px-3 text-xs font-medium text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 rounded-lg transition-colors'
+														>
+															Убрать
+														</button>
+													)}
+												</div>
+												{chatBackgroundImage && (
+													<div className='mt-3 space-y-3'>
+														<div>
+															<label className='text-[10px] text-gray-500 mb-1 block uppercase tracking-wider font-medium'>
+																Прозрачность картинки
+															</label>
+															<input
+																type='range'
+																min='0.1'
+																max='1'
+																step='0.05'
+																value={bgImageOpacity}
+																onChange={e =>
+																	setBgImageOpacity(
+																		parseFloat(e.target.value),
+																	)
+																}
+																className='w-full'
+															/>
+														</div>
+														<div>
+															<label className='text-[10px] text-gray-500 mb-1 block uppercase tracking-wider font-medium'>
+																Размытие картинки
+															</label>
+															<input
+																type='range'
+																min='0'
+																max='24'
+																step='1'
+																value={bgImageBlur}
+																onChange={e =>
+																	setBgImageBlur(
+																		parseInt(e.target.value, 10),
+																	)
+																}
+																className='w-full'
+															/>
+														</div>
+													</div>
+												)}
+											</div>
+
+											<div className='pt-3 border-t border-gray-800'>
+												<label className='text-xs text-gray-500 mb-2 block uppercase tracking-wider font-medium'>
+													Стиль сообщений
+												</label>
+												<div className='grid grid-cols-5 gap-2'>
+													{BACKGROUNDS.map(bg => (
+														<button
+															key={bg.id}
+															onClick={() => handleMessageThemeChange(bg)}
+															title={bg.name}
+															className={`w-8 h-8 rounded-full border-2 transition-all ${
+																messageTheme.id === bg.id
+																	? `${bg.borderColor.replace(
+																			'/20',
+																			'',
+																		)} scale-110 shadow-lg`
+																	: 'border-transparent hover:scale-105 hover:border-gray-600'
+															} overflow-hidden ring-1 ring-gray-950/50`}
+														>
+															<div
+																className={`w-full h-full ${bg.preview}`}
+															/>
+														</button>
+													))}
+												</div>
+											</div>
+
+											<div className='pt-3 border-t border-gray-800'>
+												<label className='text-xs text-gray-500 mb-2 block uppercase tracking-wider font-medium'>
+													Эффекты
+												</label>
+												<button
+													onClick={() => setShowGridPattern(v => !v)}
+													className='w-full flex items-center justify-between rounded-lg bg-gray-800/60 hover:bg-gray-800 px-3 py-2 text-sm text-gray-200 transition-colors'
+												>
+													<span>Сетка на фоне</span>
+													<span className='text-xs text-gray-400'>
+														{showGridPattern ? 'Вкл' : 'Выкл'}
+													</span>
+												</button>
+											</div>
+
+											<div className='pt-3 border-t border-gray-800'>
+												<button
+													type='button'
+													onClick={() => {
+														setIsSettingsOpen(false)
+														setDeleteHistoryModalOpen(true)
+													}}
+													className='w-full text-left text-sm text-rose-500 hover:text-rose-400 hover:bg-rose-500/10 px-3 py-2 rounded-lg transition-colors'
+												>
+													Удалить переписку…
+												</button>
+											</div>
+										</div>
+									</div>
+								</div>
+							)}
+
+							{isE2eKeyModalOpen && (
+								<div
+									className='fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'
+									onClick={resetE2eKeyModal}
 								>
 									<div
 										className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md shadow-2xl animate-in fade-in zoom-in-95 duration-200'
 										onClick={e => e.stopPropagation()}
 									>
 										<div className='flex items-center justify-between p-4 border-b border-gray-800'>
-											<h3 className='text-lg font-bold text-white flex items-center gap-2'>
-												<svg
-													className='w-5 h-5 text-emerald-400'
-													viewBox='0 0 24 24'
-													fill='none'
-													stroke='currentColor'
-													strokeWidth='2'
-												>
-													<polygon points='22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3'></polygon>
-												</svg>
-												Фильтр сообщений
+											<h3 className='text-lg font-bold text-white'>
+												Ключ шифрования
 											</h3>
 											<button
-												onClick={() => setIsFilterOpen(false)}
+												onClick={resetE2eKeyModal}
 												className='p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors'
 											>
 												<XIcon className='w-5 h-5' />
 											</button>
 										</div>
-										<div className='p-3 space-y-1'>
-											<button
-												onClick={() => {
-													setMessageFilter('all')
-													setIsFilterOpen(false)
-												}}
-												className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
-													messageFilter === 'all'
-														? 'bg-emerald-600/20 text-emerald-300'
-														: 'text-gray-300 hover:bg-gray-800'
-												}`}
-											>
-												<div
-													className={`w-10 h-10 rounded-full flex items-center justify-center ${
-														messageFilter === 'all'
-															? 'bg-emerald-600/30'
-															: 'bg-gray-800'
-													}`}
-												>
-													<svg
-														className='w-5 h-5'
-														viewBox='0 0 24 24'
-														fill='none'
-														stroke='currentColor'
-														strokeWidth='2'
-													>
-														<rect
-															x='3'
-															y='3'
-															width='18'
-															height='18'
-															rx='2'
-															ry='2'
-														></rect>
-														<line x1='9' y1='9' x2='15' y2='15'></line>
-														<line x1='15' y1='9' x2='9' y2='15'></line>
-													</svg>
-												</div>
-												<div className='flex-1 text-left'>
-													<div className='font-medium'>Все сообщения</div>
-													<div className='text-xs text-gray-500'>
-														Показать все сообщения
+										<div className='p-4 space-y-4'>
+											{e2eKeyRevealed ? (
+												<>
+													<p className='text-xs text-gray-500'>
+														Ключ хранится только на этом устройстве. Не
+														передавайте его третьим лицам.
+													</p>
+													<div className='rounded-xl border border-gray-800 bg-gray-950/60 p-3'>
+														<div className='text-[10px] uppercase tracking-wider text-gray-500 mb-1'>
+															ID ключа
+														</div>
+														<div className='text-xs text-gray-300 break-all font-mono'>
+															{user?.id && selectedFriend?.id
+																? normalizeE2eKeyId(
+																		[
+																			String(user.id),
+																			String(selectedFriend.id),
+																		]
+																			.sort()
+																			.join(':'),
+																	)
+																: '—'}
+														</div>
+														<div className='text-[10px] uppercase tracking-wider text-gray-500 mt-3 mb-1'>
+															Ключ (base64)
+														</div>
+														<div className='text-xs text-emerald-300 break-all font-mono select-all'>
+															{e2eKeyRevealed}
+														</div>
 													</div>
-												</div>
-												{messageFilter === 'all' && (
-													<svg
-														className='w-5 h-5 text-emerald-400'
-														viewBox='0 0 24 24'
-														fill='none'
-														stroke='currentColor'
-														strokeWidth='2'
+													<button
+														type='button'
+														onClick={() => {
+															void navigator.clipboard.writeText(e2eKeyRevealed)
+														}}
+														className='w-full py-2.5 text-sm font-medium text-gray-200 bg-gray-800 hover:bg-gray-700 rounded-xl transition-colors'
 													>
-														<polyline points='20 6 9 17 4 12'></polyline>
-													</svg>
-												)}
-											</button>
-											<button
-												onClick={() => {
-													setMessageFilter('photos')
-													setIsFilterOpen(false)
-												}}
-												className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
-													messageFilter === 'photos'
-														? 'bg-emerald-600/20 text-emerald-300'
-														: 'text-gray-300 hover:bg-gray-800'
-												}`}
-											>
-												<div
-													className={`w-10 h-10 rounded-full flex items-center justify-center ${
-														messageFilter === 'photos'
-															? 'bg-emerald-600/30'
-															: 'bg-gray-800'
-													}`}
+														Скопировать ключ
+													</button>
+												</>
+											) : (
+												<form
+													onSubmit={handleVerifyE2eKeyPassword}
+													className='space-y-4'
 												>
-													<svg
-														className='w-5 h-5'
-														viewBox='0 0 24 24'
-														fill='none'
-														stroke='currentColor'
-														strokeWidth='2'
+													<p className='text-sm text-gray-400'>
+														Введите пароль от аккаунта, чтобы увидеть ключ
+														сквозного шифрования для этого чата.
+													</p>
+													<input
+														type='password'
+														autoFocus
+														value={e2eKeyPassword}
+														onChange={e => setE2eKeyPassword(e.target.value)}
+														placeholder='Пароль'
+														className='w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-xl text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50'
+													/>
+													{e2eKeyVerifyError && (
+														<p className='text-sm text-rose-400'>
+															{e2eKeyVerifyError}
+														</p>
+													)}
+													<button
+														type='submit'
+														disabled={
+															isVerifyingE2ePassword ||
+															!e2eKeyPassword.trim()
+														}
+														className='w-full py-2.5 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors'
 													>
-														<rect
-															x='3'
-															y='3'
-															width='18'
-															height='18'
-															rx='2'
-															ry='2'
-														></rect>
-														<circle cx='8.5' cy='8.5' r='1.5'></circle>
-														<polyline points='21 15 16 10 5 21'></polyline>
-													</svg>
-												</div>
-												<div className='flex-1 text-left'>
-													<div className='font-medium'>Фотографии</div>
-													<div className='text-xs text-gray-500'>
-														Только изображения
-													</div>
-												</div>
-												{messageFilter === 'photos' && (
-													<svg
-														className='w-5 h-5 text-emerald-400'
-														viewBox='0 0 24 24'
-														fill='none'
-														stroke='currentColor'
-														strokeWidth='2'
-													>
-														<polyline points='20 6 9 17 4 12'></polyline>
-													</svg>
-												)}
-											</button>
-											<button
-												onClick={() => {
-													setMessageFilter('files')
-													setIsFilterOpen(false)
-												}}
-												className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
-													messageFilter === 'files'
-														? 'bg-emerald-600/20 text-emerald-300'
-														: 'text-gray-300 hover:bg-gray-800'
-												}`}
-											>
-												<div
-													className={`w-10 h-10 rounded-full flex items-center justify-center ${
-														messageFilter === 'files'
-															? 'bg-emerald-600/30'
-															: 'bg-gray-800'
-													}`}
-												>
-													<svg
-														className='w-5 h-5'
-														viewBox='0 0 24 24'
-														fill='none'
-														stroke='currentColor'
-														strokeWidth='2'
-													>
-														<path d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'></path>
-														<polyline points='14 2 14 8 20 8'></polyline>
-														<line x1='16' y1='13' x2='8' y2='13'></line>
-														<line x1='16' y1='17' x2='8' y2='17'></line>
-														<polyline points='10 9 9 9 8 9'></polyline>
-													</svg>
-												</div>
-												<div className='flex-1 text-left'>
-													<div className='font-medium'>Файлы</div>
-													<div className='text-xs text-gray-500'>
-														Документы и файлы
-													</div>
-												</div>
-												{messageFilter === 'files' && (
-													<svg
-														className='w-5 h-5 text-emerald-400'
-														viewBox='0 0 24 24'
-														fill='none'
-														stroke='currentColor'
-														strokeWidth='2'
-													>
-														<polyline points='20 6 9 17 4 12'></polyline>
-													</svg>
-												)}
-											</button>
-											<button
-												onClick={() => {
-													setMessageFilter('links')
-													setIsFilterOpen(false)
-												}}
-												className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
-													messageFilter === 'links'
-														? 'bg-emerald-600/20 text-emerald-300'
-														: 'text-gray-300 hover:bg-gray-800'
-												}`}
-											>
-												<div
-													className={`w-10 h-10 rounded-full flex items-center justify-center ${
-														messageFilter === 'links'
-															? 'bg-emerald-600/30'
-															: 'bg-gray-800'
-													}`}
-												>
-													<svg
-														className='w-5 h-5'
-														viewBox='0 0 24 24'
-														fill='none'
-														stroke='currentColor'
-														strokeWidth='2'
-													>
-														<circle cx='12' cy='12' r='10'></circle>
-														<line x1='2' y1='12' x2='22' y2='12'></line>
-														<path d='M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z'></path>
-													</svg>
-												</div>
-												<div className='flex-1 text-left'>
-													<div className='font-medium'>Ссылки</div>
-													<div className='text-xs text-gray-500'>
-														Сообщения со ссылками
-													</div>
-												</div>
-												{messageFilter === 'links' && (
-													<svg
-														className='w-5 h-5 text-emerald-400'
-														viewBox='0 0 24 24'
-														fill='none'
-														stroke='currentColor'
-														strokeWidth='2'
-													>
-														<polyline points='20 6 9 17 4 12'></polyline>
-													</svg>
-												)}
-											</button>
-										</div>
-										<div className='p-4 border-t border-gray-800'>
-											<button
-												onClick={() => {
-													setMessageFilter('all')
-													setIsFilterOpen(false)
-												}}
-												className='w-full py-2.5 text-sm font-medium text-gray-400 hover:text-white hover:bg-gray-800 rounded-xl transition-colors'
-											>
-												Сбросить фильтр
-											</button>
+														{isVerifyingE2ePassword
+															? 'Проверка…'
+															: 'Показать ключ'}
+													</button>
+												</form>
+											)}
 										</div>
 									</div>
 								</div>
@@ -6542,7 +7245,9 @@ export default function MessengerPage() {
 												sender={
 													msg.group_id || selectedGroup?.id
 														? groupParticipants[msg.sender_id]
-														: undefined
+														: msg.channel_id || isStandaloneChannel
+															? channelParticipants[msg.sender_id]
+															: undefined
 												}
 												isPinned={pinnedMessageIds.includes(msg.id)}
 												replyPreview={replyPreview}
@@ -6561,6 +7266,7 @@ export default function MessengerPage() {
 												botAccessToken={accessToken}
 												onBotOutboxItems={appendBotOutboxItems}
 												onBotModal={handleBotModal}
+											onBotGamePlay={game => setActiveBotGame(game)}
 											/>
 										</div>
 									)
@@ -6833,19 +7539,26 @@ export default function MessengerPage() {
 												</div>
 											)}
 
-											<textarea
-												ref={messageInputRef}
+											{pendingScheduledForChat.length > 0 && (
+												<div className='absolute bottom-full left-0 right-0 mb-2 px-2'>
+													<div className='flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200'>
+														<Clock className='w-3.5 h-3.5 shrink-0' />
+														<span>
+															{pendingScheduledForChat.length}{' '}
+															{pendingScheduledForChat.length === 1
+																? 'отложенное сообщение'
+																: 'отложенных сообщения'}
+														</span>
+													</div>
+												</div>
+											)}
+
+											<SmartChatInput
+												inputRef={messageInputRef}
 												value={input}
 												onChange={handleInputChange}
-												onKeyDown={e => {
-													if (e.key === 'Enter' && !e.shiftKey) {
-														e.preventDefault()
-														handleSendMessage()
-													}
-												}}
-												rows={1}
+												onSend={handleSendMessage}
 												disabled={!canWriteToSelectedChannel || isBlockedChat || isBlockedUserChat}
-												className='flex-1 bg-transparent border-none text-white placeholder-gray-500 focus:ring-0 resize-none py-2.5 max-h-32 min-h-[44px] custom-scrollbar'
 												placeholder={
 													!canWriteToSelectedChannel
 														? 'В этом канале писать может только владелец'
@@ -6857,15 +7570,10 @@ export default function MessengerPage() {
 																	: 'Пользователь заблокирован'
 															: 'Напишите сообщение...'
 												}
-												style={{ height: 'auto', minHeight: '44px' }}
-												onInput={e => {
-													const target = e.target as HTMLTextAreaElement
-													target.style.height = 'auto'
-													target.style.height = `${Math.min(
-														target.scrollHeight,
-														128,
-													)}px`
-												}}
+												users={mentionUsers}
+												messages={messages}
+												onScrollToMessage={jumpToMessage}
+												className='flex-1 bg-transparent border-none text-white placeholder-gray-500 focus:ring-0 resize-none py-2.5 max-h-32 min-h-[44px] custom-scrollbar'
 											/>
 
 											<button
@@ -6884,15 +7592,32 @@ export default function MessengerPage() {
 											</button>
 
 											{input.trim() || files.length > 0 ? (
-												<button
-													onClick={handleSendMessage}
-													disabled={
-														!canWriteToSelectedChannel || isBlockedChat || isBlockedUserChat || isUploading
-													}
-													className={`p-3 rounded-2xl transition-all duration-300 shadow-lg flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed ${currentBackground.buttonBg} ${currentBackground.buttonHover} text-white translate-x-0 rotate-0`}
-												>
-													<SendIcon className='w-5 h-5' />
-												</button>
+												<>
+													{input.trim() && !isBotChat && !isAiChat && (
+														<button
+															type='button'
+															onClick={() => setIsScheduleModalOpen(true)}
+															disabled={
+																!canWriteToSelectedChannel ||
+																isBlockedChat ||
+																isBlockedUserChat
+															}
+															className='p-2.5 text-gray-400 hover:text-amber-300 hover:bg-gray-700/50 rounded-full transition-all disabled:opacity-50 disabled:cursor-not-allowed'
+															title='Отложенная отправка'
+														>
+															<Clock className='w-5 h-5' />
+														</button>
+													)}
+													<button
+														onClick={handleSendMessage}
+														disabled={
+															!canWriteToSelectedChannel || isBlockedChat || isBlockedUserChat || isUploading
+														}
+														className={`p-3 rounded-2xl transition-all duration-300 shadow-lg flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed ${currentBackground.buttonBg} ${currentBackground.buttonHover} text-white translate-x-0 rotate-0`}
+													>
+														<SendIcon className='w-5 h-5' />
+													</button>
+												</>
 											) : (
 												<button
 													onClick={handleStartRecording}
@@ -7604,7 +8329,7 @@ export default function MessengerPage() {
 				<ScreenShareViewer onClose={() => setIsScreenViewerOpen(false)} />
 			)}
 
-			{((hasActiveCall && selectedFriend) || activeGroupCallId) && (
+			{hasActiveCall && selectedFriend && (
 				<IntegratedCallPanel />
 			)}
 
@@ -7677,7 +8402,10 @@ export default function MessengerPage() {
 										<span className='text-xs font-medium text-gray-300'>
 											{selectedUserForModal.status?.toLowerCase() === 'online'
 												? 'В сети'
-												: formatLastSeen(selectedUserForModal.last_seen)}
+												: formatLastSeen(
+														selectedUserForModal.last_seen,
+														selectedUserForModal.privacy_settings,
+													)}
 										</span>
 									</div>
 								</div>
@@ -7716,6 +8444,151 @@ export default function MessengerPage() {
 				botName={selectedFriend?.username}
 				onClose={() => setBotGameUploadOpen(false)}
 			/>
+
+			{activeBotGame && (
+				<div
+					className='fixed inset-0 z-[100002] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4'
+					onClick={() => setActiveBotGame(null)}
+				>
+					<div
+						className='w-full max-w-2xl rounded-2xl border border-white/10 bg-gradient-to-br from-[#0b1220] to-[#1a1035] shadow-2xl overflow-hidden flex flex-col'
+						style={{ height: '80vh' }}
+						onClick={e => e.stopPropagation()}
+					>
+						<div className='flex items-center justify-between px-5 py-3 border-b border-white/10'>
+							<h2 className='text-lg font-semibold text-white'>
+								{activeBotGame.title || 'Игра'}
+							</h2>
+							<button
+								type='button'
+								onClick={() => setActiveBotGame(null)}
+								className='p-2 rounded-full text-gray-400 hover:text-white hover:bg-white/10'
+							>
+								✕
+							</button>
+						</div>
+						<div className='flex-1 relative'>
+							<iframe
+								title={activeBotGame.title || 'Игра'}
+								src={activeBotGame.embed_url}
+								className='absolute inset-0 w-full h-full border-0 bg-black'
+								sandbox='allow-scripts allow-same-origin allow-pointer-lock'
+								allow='fullscreen'
+							/>
+						</div>
+					</div>
+				</div>
+			)}
+
+			<ScheduleMessageModal
+				isOpen={isScheduleModalOpen}
+				onClose={() => setIsScheduleModalOpen(false)}
+				chatLabel={activeChatLabel}
+				onConfirm={scheduledAt => {
+					const target = getCurrentChatTarget()
+					const content = input.trim()
+					if (!target || !content) return
+					setScheduledMessages(prev => [
+						...prev,
+						{
+							id: createScheduledMessageId(),
+							scheduledAt,
+							content,
+							target,
+							replyToId: replyToMessage?.id,
+						},
+					])
+					setInput('')
+					setReplyToMessage(null)
+					setIsScheduleModalOpen(false)
+					showToast('Сообщение запланировано', 'success')
+				}}
+			/>
+
+			{isFoldersManageOpen && (
+				<div
+					className='fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'
+					onClick={() => setIsFoldersManageOpen(false)}
+				>
+					<div
+						className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md shadow-2xl'
+						onClick={e => e.stopPropagation()}
+					>
+						<div className='flex items-center justify-between p-4 border-b border-gray-800'>
+							<h3 className='text-lg font-bold text-white'>Папки чатов</h3>
+							<button
+								onClick={() => setIsFoldersManageOpen(false)}
+								className='p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg'
+							>
+								<XIcon className='w-5 h-5' />
+							</button>
+						</div>
+						<div className='p-4 space-y-4'>
+							<div className='space-y-2 max-h-48 overflow-y-auto custom-scrollbar'>
+								{chatFolders.length === 0 ? (
+									<p className='text-sm text-gray-500 text-center py-4'>
+										Папок пока нет
+									</p>
+								) : (
+									chatFolders.map(folder => (
+										<div
+											key={folder.id}
+											className='flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-gray-800/50'
+										>
+											<span className='text-sm text-gray-200 truncate'>
+												{folder.icon ? `${folder.icon} ` : ''}
+												{folder.name}
+											</span>
+											<span className='text-xs text-gray-500 shrink-0'>
+												{folder.chats.length}
+											</span>
+											<button
+												type='button'
+												onClick={() => {
+													setChatFolders(prev =>
+														prev.filter(f => f.id !== folder.id),
+													)
+													if (activeFolderId === folder.id) {
+														setActiveFolderId('all')
+													}
+												}}
+												className='p-1 text-gray-400 hover:text-rose-400 rounded-lg'
+												title='Удалить папку'
+											>
+												<Trash2Icon className='w-4 h-4' />
+											</button>
+										</div>
+									))
+								)}
+							</div>
+							<div className='flex gap-2'>
+								<input
+									type='text'
+									value={newFolderName}
+									onChange={e => setNewFolderName(e.target.value)}
+									placeholder='Название папки'
+									className='flex-1 px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50'
+								/>
+								<button
+									type='button'
+									onClick={() => {
+										const name = newFolderName.trim()
+										if (!name) return
+										setChatFolders(prev => [
+											...prev,
+											{ id: createFolderId(), name, chats: [] },
+										])
+										setNewFolderName('')
+									}}
+									className='px-4 py-2.5 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl'
+								>
+									Добавить
+								</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			)}
 		</div>
 	)
 }

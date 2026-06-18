@@ -59,7 +59,12 @@ class CommunityService:
 
         try:
             community.members.append(user)
-            db.session.commit()
+            db.session.flush()
+            from app.services.community_channel_service import (
+                CommunityChannelService,
+            )
+
+            CommunityChannelService.sync_channel_participants(community, user)
             return community, None
         except Exception as e:
             db.session.rollback()

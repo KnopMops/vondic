@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Vondic Desktop</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    .container {
+      background: white;
+      padding: 40px;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+      width: 400px;
+    }
+    h1 { text-align: center; color: #333; margin-bottom: 30px; }
+    .form-group { margin-bottom: 20px; }
+    label { display: block; margin-bottom: 5px; color: #666; font-size: 14px; }
+    input {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    input:focus { outline: none; border-color: #667eea; }
+    button {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      cursor: pointer;
+      margin-bottom: 10px;
+      transition: opacity 0.2s;
+    }
+    button:hover { opacity: 0.9; }
+    .btn-primary { background: #667eea; color: white; }
+    .btn-yandex { background: #ffcc00; color: #000; }
+    .error { color: #e74c3c; font-size: 14px; margin-top: 10px; }
+    .success { color: #27ae60; font-size: 14px; margin-top: 10px; }
+    .user-info { text-align: center; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div id="auth-screen">
+      <h1>Vondic Desktop</h1>
+      
+      <div class="form-group">
+        <label>API Key</label>
+        <input type="text" id="api-key" placeholder="Enter your API key" />
+      </div>
+      
+      <div class="form-group">
+        <label>Cloud Password</label>
+        <input type="password" id="cloud-password" placeholder="Enter cloud password" />
+      </div>
+      
+      <button class="btn-primary" onclick="authenticate()">Sign In</button>
+      
+      <div style="text-align: center; margin: 20px 0; color: #999;">OR</div>
+      
+      <button class="btn-yandex" onclick="yandexAuth()">Sign in with Yandex</button>
+      
+      <div id="error" class="error"></div>
+    </div>
+
+    <div id="user-screen" class="user-info hidden">
+      <h1>Welcome!</h1>
+      <p id="user-name"></p>
+      <p id="user-email"></p>
+      <button class="btn-primary" onclick="logout()">Sign Out</button>
+    </div>
+  </div>
+
+  <script>
+    async function authenticate() {
+      const apiKey = document.getElementById('api-key').value;
+      const cloudPassword = document.getElementById('cloud-password').value;
+      const errorDiv = document.getElementById('error');
+      
+      errorDiv.textContent = '';
+
+      if (!apiKey) {
+        errorDiv.textContent = 'Please enter your API key';
+        return;
+      }
+
+      const result = await window.api.authWithApiKey(apiKey, cloudPassword);
+      
+      if (result.success) {
+        showUserScreen(result.user);
+      } else if (result.needsCloudPassword) {
+        errorDiv.textContent = result.message;
+        document.getElementById('cloud-password').focus();
+      } else {
+        errorDiv.textContent = result.error || 'Authentication failed';
+      }
+    }
+
+    async function yandexAuth() {
+      const result = await window.api.startYandexOAuth();
+      if (result.success) {
+        showUserScreen(result.user);
+      } else {
+        document.getElementById('error').textContent = result.error;
+      }
+    }
+
+    function showUserScreen(user) {
+      document.getElementById('auth-screen').classList.add('hidden');
+      document.getElementById('user-screen').classList.remove('hidden');
+      document.getElementById('user-name').textContent = `Username: ${user.username}`;
+      document.getElementById('user-email').textContent = `Email: ${user.email}`;
+    }
+
+    function logout() {
+      document.getElementById('auth-screen').classList.remove('hidden');
+      document.getElementById('user-screen').classList.add('hidden');
+      document.getElementById('api-key').value = '';
+      document.getElementById('cloud-password').value = '';
+    }
+  </script>
+</body>
+</html>

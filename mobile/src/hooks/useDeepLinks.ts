@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useRef } from 'react';
 import { Alert, Linking } from 'react-native';
 import * as Keychain from 'react-native-keychain';
+import InAppBrowser from 'react-native-inappbrowser-reborn';
 
 /**
  * Handles OAuth deeplink callbacks for Vondic OAuth 2.0:
@@ -99,6 +100,12 @@ export async function handleOAuthCallback(url: string): Promise<boolean> {
   if (!url.startsWith(Config.getOAuthRedirectUrl())) return false;
 
   try {
+    try {
+      InAppBrowser.close();
+    } catch (e) {
+      console.warn('[OAuth] Failed to close InAppBrowser:', e);
+    }
+
     const code = getQueryParam(url, 'code');
     const state = getQueryParam(url, 'state');
     const errorParam = getQueryParam(url, 'error');

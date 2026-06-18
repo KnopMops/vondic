@@ -131,7 +131,7 @@ export interface Message {
   channel_id?: string;
   group_id?: string;
   reply_to?: string;
-  type?: 'text' | 'voice' | 'image' | 'file';
+  type?: 'text' | 'voice' | 'image' | 'file' | 'video_note';
   attachments?: Attachment[] | string;
   is_deleted?: boolean;
   sender_username?: string;

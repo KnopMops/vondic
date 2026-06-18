@@ -39,6 +39,49 @@ def get_recent_contacts():
         return jsonify({"error": str(e)}), 500
 
 
+@dm_bp.route("/<target_id>/settings", methods=["GET", "OPTIONS"])
+def get_dm_settings(target_id):
+    from app.services.auth_service import AuthService
+
+    if request.method == "OPTIONS":
+        return make_response("", 200)
+
+    token = request.headers.get(
+        "Authorization", "").replace("Bearer ", "").strip()
+    if not token:
+        return jsonify({"error": "Требуется авторизация"}), 401
+
+    current_user, error = AuthService.get_user_by_token(token)
+    if error or not current_user:
+        return jsonify({"error": "Не авторизовано"}), 401
+
+    settings = MessageService.get_dm_settings(current_user.id, target_id)
+    return jsonify(settings), 200
+
+
+@dm_bp.route("/<target_id>/settings", methods=["PATCH"])
+def patch_dm_settings(target_id):
+    from app.services.auth_service import AuthService
+
+    token = request.headers.get(
+        "Authorization", "").replace("Bearer ", "").strip()
+    if not token:
+        return jsonify({"error": "Требуется авторизация"}), 401
+
+    current_user, error = AuthService.get_user_by_token(token)
+    if error or not current_user:
+        return jsonify({"error": "Не авторизовано"}), 401
+
+    data = request.get_json() or {}
+    if "is_secret" not in data:
+        return jsonify({"error": "is_secret is required"}), 400
+
+    settings = MessageService.set_dm_secret(
+        current_user.id, target_id, bool(data.get("is_secret"))
+    )
+    return jsonify(settings), 200
+
+
 @dm_bp.route("/<target_id>/messages", methods=["POST"])
 @token_required
 def send_dm(current_user, target_id):

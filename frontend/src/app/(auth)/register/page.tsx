@@ -13,6 +13,7 @@ export default function RegisterPage() {
 	const [username, setUsername] = useState('')
 	const [password, setPassword] = useState('')
 	const [captchaToken, setCaptchaToken] = useState('')
+	const [captchaKey, setCaptchaKey] = useState(0)
 	const [emailHint, setEmailHint] = useState<string | null>(null)
 	const [emailOk, setEmailOk] = useState<boolean | null>(null)
 	const captchaSiteKey =
@@ -57,12 +58,17 @@ export default function RegisterPage() {
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault()
 		if (emailOk === false) return
-		await register(
-			email.trim().toLowerCase(),
-			username.trim(),
-			password,
-			captchaToken,
-		)
+		try {
+			await register(
+				email.trim().toLowerCase(),
+				username.trim(),
+				password,
+				captchaToken,
+			)
+		} catch {
+			setCaptchaKey(k => k + 1)
+			setCaptchaToken('')
+		}
 	}
 
 	return (
@@ -143,7 +149,7 @@ export default function RegisterPage() {
 							/>
 						</div>
 					</div>
-					<SmartCaptcha onTokenChange={setCaptchaToken} />
+					<SmartCaptcha key={`register-${captchaKey}`} onTokenChange={setCaptchaToken} />
 
 					<div>
 						<button

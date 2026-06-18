@@ -204,7 +204,9 @@ export default function PostDetailsModal(props: Props) {
 
 							
 							<div className='mt-6 flex items-center gap-6 border-t border-white/10 pt-4 text-gray-400'>
-								<div className='flex items-center gap-2'>
+								<div
+									className={`flex items-center gap-2 ${post.is_liked ? 'text-red-500' : ''}`}
+								>
 									<Heart
 										className='h-5 w-5'
 										fill={post.is_liked ? 'currentColor' : 'none'}

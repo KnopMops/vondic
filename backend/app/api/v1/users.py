@@ -630,3 +630,26 @@ def set_pinned_chats(current_user):
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
+
+
+@users_bp.route("/me", methods=["GET"])
+@token_required
+def get_me(current_user):
+    try:
+        return jsonify(current_user.to_dict(viewer_id=current_user.id)), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@users_bp.route("/me", methods=["PUT"])
+@token_required
+def update_me(current_user):
+    try:
+        data = request.get_json() or {}
+        user, error = UserService.update_user(current_user.id, data, current_user)
+        if error:
+            return jsonify({"error": error}), 400
+        return jsonify(user.to_dict(viewer_id=current_user.id)), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+

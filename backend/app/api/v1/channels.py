@@ -1,4 +1,5 @@
 from app.schemas.channel_schema import channel_schema, channels_schema
+from app.schemas.user_schema import users_schema
 from app.services.channel_service import ChannelService
 from app.utils.decorators import token_required
 from flask import Blueprint, jsonify, request
@@ -153,6 +154,17 @@ def leave_channel(current_user):
     if error:
         return jsonify({"error": error}), 400
     return jsonify({"success": True}), 200
+
+
+@channels_bp.route("/<channel_id>/participants", methods=["GET"])
+@token_required
+def channel_participants(current_user, channel_id):
+    channel = ChannelService.get_channel_by_id(channel_id)
+    if not channel:
+        return jsonify({"error": "Channel not found"}), 404
+    if current_user not in channel.participants:
+        return jsonify({"error": "You are not a member of this channel"}), 403
+    return jsonify(users_schema.dump(channel.participants)), 200
 
 
 @channels_bp.route("/search", methods=["POST"])

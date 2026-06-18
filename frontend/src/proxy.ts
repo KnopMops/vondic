@@ -5,7 +5,7 @@ const PUBLIC_ROUTES = ['/login', '/register', '/verify', '/forgot-password', '/r
 const ROOT_ROUTE = '/'
 const FEED_ROUTE = '/feed'
 
-export default async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
 	const { pathname } = req.nextUrl
 
 	if (
@@ -45,6 +45,5 @@ export default async function middleware(req: NextRequest) {
 }
 
 export const config = {
-	// Exclude /api Server Routes, OAuth browser flow, and Next assets.
 	matcher: ['/((?!api|oauth|_next/static|_next/image|favicon.ico).*)'],
 }

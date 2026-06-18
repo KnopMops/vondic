@@ -10,6 +10,7 @@ import { setUser } from '@/lib/features/authSlice'
 import { useAppDispatch } from '@/lib/hooks'
 import { useToast } from '@/lib/ToastContext'
 import { AnimatePresence, motion } from 'framer-motion'
+import Link from 'next/link'
 import { FiBell, FiCode, FiLock, FiMail, FiMonitor, FiMessageCircle, FiMusic, FiPhoneCall, FiSettings, FiShield, FiVolume2 } from 'react-icons/fi'
 import { HiOutlineColorSwatch } from 'react-icons/hi'
 import { useEffect, useState } from 'react'
@@ -560,40 +561,21 @@ export default function SettingsPage() {
 	}
 
 	const handleChangePassword = async () => {
-		if (!newPassword || !confirmPassword || !currentPassword) {
-			showToast('Заполните все поля', 'error')
-			return
-		}
-		if (newPassword !== confirmPassword) {
-			showToast('Пароли не совпадают', 'error')
-			return
-		}
-		if (newPassword.length < 6) {
-			showToast('Пароль должен быть не менее 6 символов', 'error')
-			return
-		}
 		setChangePasswordLoading(true)
 		try {
-			const res = await fetch('/api/auth/change-password', {
+			const res = await fetch('/api/auth/forgot-password', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					current_password: currentPassword,
-					new_password: newPassword,
-				}),
+				body: JSON.stringify({ email: user?.email }),
 			})
 			const data = await res.json().catch(() => ({}))
 			if (!res.ok) {
-				throw new Error(data.error || 'Не удалось сменить пароль')
+				throw new Error(data.error || 'Не удалось отправить ссылку')
 			}
-			showToast(data.message || 'Пароль изменён', 'success')
-			setCurrentPassword('')
-			setNewPassword('')
-			setConfirmPassword('')
+			showToast('Ссылка для смены пароля отправлена на почту', 'success')
 			setChangePasswordOpen(false)
-			logout()
 		} catch (e: any) {
-			showToast(e.message || 'Не удалось сменить пароль', 'error')
+			showToast(e.message || 'Не удалось отправить ссылку', 'error')
 		} finally {
 			setChangePasswordLoading(false)
 		}
@@ -713,17 +695,19 @@ export default function SettingsPage() {
 									<FiSettings className='w-4 h-4' />
 									Системные
 								</button>
-								<button
-									onClick={() => setActiveTab('mail')}
-									className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-										activeTab === 'mail'
-											? 'bg-indigo-500/20 text-white'
-											: 'text-gray-400 hover:text-white hover:bg-white/5'
-									}`}
-								>
-									<FiMail className='w-4 h-4' />
-									Почта
-								</button>
+								{user?.premium && (
+									<button
+										onClick={() => setActiveTab('mail')}
+										className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+											activeTab === 'mail'
+												? 'bg-indigo-500/20 text-white'
+												: 'text-gray-400 hover:text-white hover:bg-white/5'
+										}`}
+									>
+										<FiMail className='w-4 h-4' />
+										Почта
+									</button>
+								)}
 								<button
 									onClick={() => setActiveTab('interface')}
 									className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
@@ -1061,7 +1045,11 @@ export default function SettingsPage() {
 										<h2 className='text-xl font-semibold'>Пароль</h2>
 									</div>
 									<div className='space-y-4'>
-										{!changePasswordOpen ? (
+										{isYandexAccount ? (
+											<p className='text-sm text-gray-400'>
+												Смена пароля недоступна для аккаунтов Yandex
+											</p>
+										) : !changePasswordOpen ? (
 											<button
 												onClick={() => setChangePasswordOpen(true)}
 												className='rounded-lg bg-white/10 border border-white/20 px-4 py-2 text-sm text-white hover:bg-white/20 transition'
@@ -1070,42 +1058,19 @@ export default function SettingsPage() {
 											</button>
 										) : (
 											<div className='space-y-3'>
-												<PasswordInput
-													placeholder='Текущий пароль'
-													value={currentPassword}
-													onChange={e => setCurrentPassword(e.target.value)}
-													wrapperClassName='w-full'
-													className='w-full rounded-lg border border-white/10 bg-black/30 p-3 text-sm text-white placeholder:text-gray-500 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition'
-												/>
-												<PasswordInput
-													placeholder='Новый пароль'
-													value={newPassword}
-													onChange={e => setNewPassword(e.target.value)}
-													wrapperClassName='w-full'
-													className='w-full rounded-lg border border-white/10 bg-black/30 p-3 text-sm text-white placeholder:text-gray-500 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition'
-												/>
-												<PasswordInput
-													placeholder='Подтвердите новый пароль'
-													value={confirmPassword}
-													onChange={e => setConfirmPassword(e.target.value)}
-													wrapperClassName='w-full'
-													className='w-full rounded-lg border border-white/10 bg-black/30 p-3 text-sm text-white placeholder:text-gray-500 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition'
-												/>
+												<p className='text-sm text-gray-400'>
+													Отправим ссылку для смены пароля на {user?.email}
+												</p>
 												<div className='flex gap-3'>
 													<button
 														onClick={handleChangePassword}
 														disabled={changePasswordLoading}
 														className='rounded-lg bg-amber-500/20 border border-amber-500/40 px-4 py-2 text-sm text-white hover:bg-amber-500/30 transition disabled:opacity-60'
 													>
-														{changePasswordLoading ? 'Сохранение...' : 'Сохранить'}
+														{changePasswordLoading ? 'Отправка...' : 'Отправить ссылку'}
 													</button>
 													<button
-														onClick={() => {
-															setChangePasswordOpen(false)
-															setCurrentPassword('')
-															setNewPassword('')
-															setConfirmPassword('')
-														}}
+														onClick={() => setChangePasswordOpen(false)}
 														className='rounded-lg bg-white/5 border border-white/10 px-4 py-2 text-sm text-gray-300 hover:bg-white/10 transition'
 													>
 														Отмена
@@ -1135,7 +1100,27 @@ export default function SettingsPage() {
 									<FiMail className='w-5 h-5 text-indigo-400' />
 									<h2 className='text-xl font-semibold'>Mail API</h2>
 								</div>
-								<MailApiSettings />
+								{user?.premium ? (
+									<MailApiSettings />
+								) : (
+									<div className='text-center py-8'>
+										<div className='mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-500/10 border border-indigo-500/20'>
+											<FiMail className='h-7 w-7 text-indigo-400' />
+										</div>
+										<h2 className='text-lg font-semibold mb-2'>
+											Mail API доступно только с Vondic Premium
+										</h2>
+										<p className='text-sm text-gray-400 mb-5'>
+											Оформите подписку, чтобы настраивать права доступа к почтовому API.
+										</p>
+										<Link
+											href='/shop'
+											className='inline-block rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 px-5 py-2 text-sm font-medium shadow-lg shadow-indigo-900/30 hover:from-indigo-500 hover:to-purple-500 transition-all'
+										>
+											Оформить Premium
+										</Link>
+									</div>
+								)}
 							</motion.div>
 						)}
 

@@ -3,6 +3,7 @@ from datetime import datetime
 
 from app.core.extensions import db
 from app.models.message import Message
+from app.services.message_service import MessageService
 from app.utils.decorators import token_required
 from flask import Blueprint, jsonify, request
 
@@ -238,6 +239,7 @@ def delete_messages_history(current_user):
                     Message.target_id == current_user.id)))
         deleted_count = deleted.delete(synchronize_session=False)
         db.session.commit()
+        MessageService.ensure_dm_conversation(current_user.id, target_id)
         return jsonify({"deleted": deleted_count}), 200
     except Exception as e:
         db.session.rollback()

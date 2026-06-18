@@ -26,6 +26,7 @@ class User(db.Model):
     blocked_by_admin = db.Column(TEXT, default=None)
     role = db.Column(TEXT, default="User")
     status = db.Column(TEXT, default="offline")
+    last_seen = db.Column(TIMESTAMP, default=None)
     balance = db.Column(Float, default=0.0)
     premium = db.Column(INTEGER, default=0)
     premium_started_at = db.Column(TIMESTAMP, default=None)
@@ -64,6 +65,8 @@ class User(db.Model):
     video_likes = db.Column(TEXT, default=None)
     video_watch_later = db.Column(TEXT, default=None)
     video_history = db.Column(TEXT, default=None)
+    registration_ip = db.Column(TEXT, default=None)
+    is_blocked_system = db.Column(INTEGER, default=0)
     created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
     updated_at = db.Column(
         TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -117,6 +120,11 @@ class User(db.Model):
             "login_alert_enabled": bool(self.login_alert_enabled),
             "is_developer": bool(self.is_developer),
             "privacy_settings": self.privacy_settings or {"show_email": False},
+            "last_seen": (
+                f"{self.last_seen.isoformat()}Z"
+                if self.last_seen and self.last_seen.tzinfo is None
+                else self.last_seen.isoformat() if self.last_seen else None
+            ),
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
         return redact_user_dict(data, viewer_id)

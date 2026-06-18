@@ -21,7 +21,7 @@ import {useCallStore} from '@/store/callStore';
 import Icon from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {Config} from '@/constants/config';
-import {crashLogger} from '@/utils/crashLogger';
+import ScreenHeader from '@/components/ScreenHeader';
 
 type NavigationProp = NativeStackNavigationProp<MainStackParamList>;
 
@@ -43,7 +43,7 @@ export default function ProfileScreen() {
         apiClient.post('/subscriptions/followers', {user_id: user.id}).catch(() => ({items: []})),
         apiClient.post('/subscriptions/following', {user_id: user.id}).catch(() => ({items: []})),
         apiClient.get(`/posts?user_id=${user.id}&per_page=1`).catch(() => ({total: 0})),
-      ]);
+      ]) as [{items?: any[]; count?: number}, {items?: any[]; count?: number}, {total?: number}];
       setStats({
         followers: Array.isArray(followersRes) ? followersRes.length : (followersRes.items?.length || followersRes.count || 0),
         following: Array.isArray(followingRes) ? followingRes.length : (followingRes.items?.length || followingRes.count || 0),
@@ -82,7 +82,8 @@ export default function ProfileScreen() {
     if (!user?.id) return;
     setSaving(true);
     try {
-      const updated = await apiClient.put('/users/update', {
+      const updated = await apiClient.put<Record<string, any>>('/users/', {
+        user_id: user.id,
         username: username.trim(),
         description: description.trim(),
       });
@@ -100,12 +101,19 @@ export default function ProfileScreen() {
     : null;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{paddingBottom: 40}}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Профиль</Text>
-      </View>
-
-      <View style={styles.profileCard}>
+    <View style={styles.container}>
+      <ScreenHeader
+        title="Профиль"
+        rightElement={
+          <TouchableOpacity
+            style={{width: 40, height: 40, alignItems: 'center', justifyContent: 'center'}}
+            onPress={() => navigation.navigate('Settings')}>
+            <Icon name="settings-outline" size={24} color="#fff" />
+          </TouchableOpacity>
+        }
+      />
+      <ScrollView style={{flex: 1}} contentContainerStyle={{paddingBottom: 40}}>
+        <View style={styles.profileCard}>
         <View style={styles.avatar}>
           {avatarUrl ? (
             <Image source={{uri: avatarUrl}} style={styles.avatarImage} />
@@ -188,28 +196,11 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity
-        style={[styles.row, {marginHorizontal: 16, marginTop: 12}]}
-        onPress={async () => {
-          const logs = await crashLogger.getLogs();
-          if (!logs.length) {
-            Alert.alert('Логи ошибок', 'Ошибок пока не было');
-            return;
-          }
-          const text = logs.slice(0, 10).map(l =>
-            `[${l.screen}] ${l.timestamp}\n${l.error}\n${l.context ? JSON.stringify(l.context).slice(0, 200) : ''}`
-          ).join('\n\n---\n\n');
-          Alert.alert('Последние ошибки', text.slice(0, 1900) + (text.length > 1900 ? '\n...' : ''));
-        }}>
-        <Icon name="bug-outline" size={22} color="#ff6b6b" />
-        <Text style={styles.rowText}>Логи ошибок</Text>
-        <Icon name="chevron-forward" size={20} color="#888" />
-      </TouchableOpacity>
-
       <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
         <Text style={styles.logoutText}>Выйти</Text>
       </TouchableOpacity>
     </ScrollView>
+    </View>
   );
 }
 

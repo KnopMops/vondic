@@ -67,10 +67,13 @@ class SignalingService:
             for sid in self.broker.repo.get_recent_dm_partner_sockets(user_id):
                 if sid:
                     sockets.add(sid)
+            payload = {"user_id": user_id, "status": status}
+            if status.lower() == "offline":
+                payload["last_seen"] = f"{datetime.utcnow().isoformat()}Z"
             for socket_id in sockets:
                 self.io.emit(
                     "user_status_changed",
-                    {"user_id": user_id, "status": status},
+                    payload,
                     room=socket_id,
                 )
         except Exception as e:
@@ -93,6 +96,7 @@ class SignalingService:
         self.io.on_event("group_call_answer", self.on_group_call_answer)
         self.io.on_event("group_call_reject", self.on_group_call_reject)
         self.io.on_event("group_call_end", self.on_group_call_end)
+        self.io.on_event("get_active_group_call", self.on_get_active_group_call)
         self.io.on_event("join_voice_channel", self.on_join_voice_channel)
         self.io.on_event("leave_voice_channel", self.on_leave_voice_channel)
         self.io.on_event("send_message", self.on_send_message)
@@ -173,7 +177,7 @@ class SignalingService:
         session["user_id"] = user_info["id"]
         self._broadcast_status(user_info["id"], "online")
 
-        join_room(user_info["id"])
+        join_room(str(user_info["id"]))
         logger.info(
             f"Пользователь {
                 user_info['username']} подключен. SID: {current_socket}")
@@ -229,7 +233,7 @@ class SignalingService:
         self.broker.remember_sid_user(sid, user_info["id"])
         self._broadcast_status(user_info["id"], "online")
 
-        join_room(user_info["id"])
+        join_room(str(user_info["id"]))
 
         logger.info(
             f"Пользователь {
@@ -430,7 +434,7 @@ class SignalingService:
                 self.voice_channel_calls.pop(channel_id, None)
 
     def on_call_user(self, payload):
-        target_user_id = payload.get("target_user_id")
+        target_user_id = str(payload.get("target_user_id")) if payload.get("target_user_id") else None
         offer_sdp = payload.get("offer")
         if not target_user_id:
             emit("error", {"message": "Не указан target_user_id"})
@@ -460,7 +464,7 @@ class SignalingService:
                 logger.error(f"dm call chat notice failed: {e}")
 
     def on_e2e_key_exchange(self, payload):
-        target_user_id = payload.get("target_user_id")
+        target_user_id = str(payload.get("target_user_id")) if payload.get("target_user_id") else None
         public_key = payload.get("public_key")
         key_id = payload.get("key_id")
         if not target_user_id or not public_key or not key_id:
@@ -748,6 +752,27 @@ class SignalingService:
                 emit("group_call_ended", payload_out, room=pid_socket)
 
         self.group_calls.pop(call_id, None)
+
+    def on_get_active_group_call(self, payload):
+        group_id = payload.get("group_id")
+        if not group_id:
+            emit("active_group_call", {"error": "Отсутствует group_id"})
+            return
+        
+        active_call = None
+        for cid, call in self.group_calls.items():
+            if str(call.get("group_id")) == str(group_id):
+                active_call = {
+                    "call_id": cid,
+                    "group_id": group_id,
+                    "caller_user_id": call.get("caller_user_id"),
+                    "caller_username": call.get("caller_username"),
+                    "caller_avatar_url": call.get("caller_avatar_url"),
+                    "participants_count": len(call.get("joined", []))
+                }
+                break
+                
+        emit("active_group_call", {"active_call": active_call})
 
     def on_get_group_history(self, payload):
         group_id = payload.get("group_id")

@@ -12,9 +12,23 @@ def _get_key():
     )
 
 
-_key_bytes = _get_key().encode()
-_mt_key = hashlib.sha256(_key_bytes + b"key").digest()
-_mt_iv = hashlib.sha256(_key_bytes + b"iv").digest()
+def _derive_mtproto_key_iv(key_value):
+    if isinstance(key_value, str):
+        key_bytes = key_value.encode()
+    else:
+        key_bytes = key_value
+    try:
+        decoded = base64.urlsafe_b64decode(key_bytes)
+        if len(decoded) >= 32:
+            key_bytes = decoded
+    except Exception:
+        pass
+    key = hashlib.sha256(key_bytes + b"key").digest()
+    iv = hashlib.sha256(key_bytes + b"iv").digest()
+    return key, iv
+
+
+_mt_key, _mt_iv = _derive_mtproto_key_iv(_get_key())
 
 
 def mtproto_decrypt(ciphertext: str | None) -> str | None:

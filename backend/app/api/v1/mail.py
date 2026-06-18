@@ -4,7 +4,7 @@ from app.services.mail_api_service import (
     set_mail_api_permissions,
 )
 from app.services.mailbox_service import MailboxService
-from app.utils.decorators import token_required
+from app.utils.decorators import premium_required, token_required
 from flask import Blueprint, jsonify, request
 
 mail_bp = Blueprint("mail", __name__, url_prefix="/api/v1/mail")
@@ -12,6 +12,7 @@ mail_bp = Blueprint("mail", __name__, url_prefix="/api/v1/mail")
 
 @mail_bp.route("/mailbox/suggest", methods=["GET"])
 @token_required
+@premium_required
 def suggest_mailbox_local_part(current_user):
     return jsonify(
         {"local_part": MailboxService.suggest_local_part(current_user)}), 200
@@ -19,6 +20,7 @@ def suggest_mailbox_local_part(current_user):
 
 @mail_bp.route("/mailbox", methods=["GET"])
 @token_required
+@premium_required
 def get_mailbox(current_user):
     box = MailboxService.get_for_user(current_user.id)
     if not box:
@@ -28,6 +30,7 @@ def get_mailbox(current_user):
 
 @mail_bp.route("/mailbox", methods=["POST"])
 @token_required
+@premium_required
 def create_mailbox(current_user):
     data = request.get_json() or {}
     local_part = data.get("local_part") or data.get("username") or ""
@@ -61,6 +64,7 @@ def create_mailbox(current_user):
 
 @mail_bp.route("/folders", methods=["GET"])
 @token_required
+@premium_required
 def list_folders(current_user):
     client = MailboxService.get_mail_client(current_user)
     if not client:
@@ -74,6 +78,7 @@ def list_folders(current_user):
 
 @mail_bp.route("/messages", methods=["GET"])
 @token_required
+@premium_required
 def list_messages(current_user):
     client = MailboxService.get_mail_client(current_user)
     if not client:
@@ -91,6 +96,7 @@ def list_messages(current_user):
 
 @mail_bp.route("/messages/<uid>", methods=["GET"])
 @token_required
+@premium_required
 def get_message(current_user, uid):
     client = MailboxService.get_mail_client(current_user)
     if not client:
@@ -109,6 +115,7 @@ def get_message(current_user, uid):
 
 @mail_bp.route("/send", methods=["POST"])
 @token_required
+@premium_required
 def send_message(current_user):
     client = MailboxService.get_mail_client(current_user)
     if not client:
@@ -149,6 +156,7 @@ def send_message(current_user):
 
 @mail_bp.route("/messages/<uid>/trash", methods=["POST"])
 @token_required
+@premium_required
 def trash_message(current_user, uid):
     client = MailboxService.get_mail_client(current_user)
     if not client:
@@ -166,12 +174,15 @@ def trash_message(current_user, uid):
 
 @mail_bp.route("/api-permissions", methods=["GET"])
 @token_required
+@premium_required
 def get_api_permissions(current_user):
-    return jsonify({"permissions": get_mail_api_permissions(current_user)}), 200
+    return jsonify(
+        {"permissions": get_mail_api_permissions(current_user)}), 200
 
 
 @mail_bp.route("/api-permissions", methods=["PUT"])
 @token_required
+@premium_required
 def update_api_permissions(current_user):
     data = request.get_json() or {}
     perms = set_mail_api_permissions(current_user, data)

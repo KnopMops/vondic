@@ -412,7 +412,7 @@ class Dispatcher:
         offset = 0
         while True:
             try:
-                updates = await bot.get_updates(offset=offset, timeout=20, limit=100)
+                updates = await bot.get_updates(offset=offset, timeout=5, limit=100)
             except Exception:
                 logger.exception(
                     "botiksdk_poll_error bot_id=%s", getattr(

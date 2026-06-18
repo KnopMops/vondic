@@ -187,7 +187,7 @@ export default function Composer({ onCreate, mode = 'feed' }: Props) {
 				</div>
 			)}
 
-			<div className='mt-3 flex items-center gap-3'>
+			<div className='mt-3 flex flex-wrap items-center gap-3'>
 				<button
 					onClick={submit}
 					type='button'

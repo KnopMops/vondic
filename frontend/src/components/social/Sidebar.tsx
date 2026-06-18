@@ -34,15 +34,17 @@ export default function Sidebar() {
 		localStorage.setItem('sidebar_expanded', String(newState))
 	}
 
-	const items = sidebarItems.map(item => {
-		if (item.href === '/feed/profile' && user?.id) {
-			return { ...item, href: `/feed/profile/${user.id}` }
-		}
-		if (item.href === '/friends') {
-			return { ...item, href: '/feed/friends' }
-		}
-		return item
-	})
+	const items = sidebarItems
+		.map(item => {
+			if (item.href === '/feed/profile' && user?.id) {
+				return { ...item, href: `/feed/profile/${user.id}` }
+			}
+			if (item.href === '/friends') {
+				return { ...item, href: '/feed/friends' }
+			}
+			return item
+		})
+		.filter(item => !(item.label === 'Почта' && !user?.premium))
 
 	// Add Admin panel for Support role
 	if (user?.role === 'Support' || user?.role === 'Admin') {
@@ -52,7 +54,7 @@ export default function Sidebar() {
 	return (
 		<>
 			<aside
-				className={`sticky top-20 hidden md:flex h-[calc(100vh-10rem)] flex-col rounded-xl border border-white/10 bg-gray-900/40 backdrop-blur-md py-4 transition-all duration-300 ml-4 ${
+				className={`fixed top-20 left-0 hidden lg:flex h-auto max-h-[calc(100vh-5rem)] flex-col rounded-r-xl border-r border-white/10 bg-gray-950 py-4 transition-all duration-300 z-40 ${
 					isExpanded ? 'w-44' : 'w-16'
 				}`}
 			>

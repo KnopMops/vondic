@@ -9,6 +9,7 @@ from app.models.notification import Notification
 from app.models.user import User
 from app.schemas.comment_schema import comment_schema, comments_schema
 from app.schemas.post_schema import post_schema, posts_schema
+from app.services.auth_service import AuthService
 from app.services.comment_service import CommentService
 from app.services.post_service import PostService
 from app.utils.decorators import token_required
@@ -35,11 +36,26 @@ def _attach_author_to_post(post: dict) -> None:
     }
 
 
+def _optional_viewer():
+    token = None
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header.split(" ", 1)[1].strip()
+    if not token:
+        token = request.cookies.get("access_token")
+    if not token:
+        return None
+    user, error = AuthService.get_user_by_token(token)
+    return user if not error else None
+
+
 def _attach_authors_to_posts(items: list) -> None:
     author_ids = {p.get("posted_by") for p in items if p.get("posted_by")}
     if not author_ids:
         return
-    authors = {u.id: u for u in User.query.filter(User.id.in_(author_ids)).all()}
+    authors = {
+        u.id: u for u in User.query.filter(
+            User.id.in_(author_ids)).all()}
     for post in items:
         author = authors.get(post.get("posted_by"))
         if not author:
@@ -122,6 +138,8 @@ def get_posts():
     )
     items = posts_schema.dump(pagination.items)
     _attach_authors_to_posts(items)
+    viewer = _optional_viewer()
+    PostService.attach_like_flags(items, viewer.id if viewer else None)
     return jsonify(
         {
             "items": items,
@@ -140,6 +158,8 @@ def get_post(post_id):
         return jsonify({"error": "Пост не найден"}), 404
     data = post_schema.dump(post)
     _attach_author_to_post(data)
+    viewer = _optional_viewer()
+    PostService.attach_like_flags([data], viewer.id if viewer else None)
     return jsonify(data), 200
 
 
@@ -156,6 +176,8 @@ def get_post_detail():
         return jsonify({"error": "Пост не найден"}), 404
     data = post_schema.dump(post)
     _attach_author_to_post(data)
+    viewer = _optional_viewer()
+    PostService.attach_like_flags([data], viewer.id if viewer else None)
     return jsonify(data), 200
 
 
@@ -268,10 +290,7 @@ def like_post(current_user):
     if not post_id:
         return jsonify({"error": "Требуется post_id"}), 400
 
-    post, error = PostService.like_post(post_id, current_user.id)
-    if error:
-        status_code = 404 if error == "Пост не найден" else 400
-        return jsonify({"error": error}), status_code
+    post = PostService.like_post(post_id, current_user.id)
     return jsonify(post_schema.dump(post)), 200
 
 
@@ -283,10 +302,7 @@ def unlike_post(current_user):
     if not post_id:
         return jsonify({"error": "Требуется post_id"}), 400
 
-    post, error = PostService.unlike_post(post_id, current_user.id)
-    if error:
-        status_code = 404 if error == "Пост не найден" else 400
-        return jsonify({"error": error}), status_code
+    post = PostService.unlike_post(post_id, current_user.id)
     return jsonify(post_schema.dump(post)), 200
 
 

@@ -10,7 +10,11 @@ class BotGame(db.Model):
     __tablename__ = "bot_games"
 
     id = db.Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
-    bot_id = db.Column(TEXT, db.ForeignKey("bots.id"), nullable=False, index=True)
+    bot_id = db.Column(
+        TEXT,
+        db.ForeignKey("bots.id"),
+        nullable=False,
+        index=True)
     created_by = db.Column(TEXT, nullable=False, index=True)
     title = db.Column(TEXT, nullable=False)
     description = db.Column(TEXT, default=None)

@@ -195,7 +195,11 @@ const MessageBubble = memo(
 								: undefined
 						return { intro, invite: parsed }
 					})()
-		const displayContent = msg.is_deleted ? 'Сообщение удалено' : msg.content
+		const displayContent = msg.is_deleted
+			? 'Сообщение удалено'
+			: typeof msg.content === 'string' && msg.content.startsWith('e2e:')
+				? '🔒 Зашифрованное сообщение'
+				: msg.content
 		const reactionEntries = reactions ? Object.entries(reactions) : []
 		const attachments = Array.isArray(msg.attachments) ? msg.attachments : []
 

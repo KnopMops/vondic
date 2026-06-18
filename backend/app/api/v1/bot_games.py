@@ -42,7 +42,8 @@ def upload_bot_game(current_user, bot_id):
     if not BotGameService.can_manage_bot(
         bot, str(current_user.id), getattr(current_user, "role", None)
     ):
-        return jsonify({"error": "Нет прав на загрузку игр для этого бота"}), 403
+        return jsonify(
+            {"error": "Нет прав на загрузку игр для этого бота"}), 403
 
     upload = request.files.get("file")
     if not upload:
@@ -91,7 +92,8 @@ def embed_bot_game(bot_id, game_id):
     game = BotGameService.get_game(bot_id, game_id)
     if not game or not game.is_published or game.scan_status != "approved":
         return "Игра недоступна", 404
-    entry = BotGameService.resolve_asset_path(game, game.entry_path or "index.html")
+    entry = BotGameService.resolve_asset_path(
+        game, game.entry_path or "index.html")
     if not entry:
         return "index.html не найден", 404
     html = entry.read_text(encoding="utf-8", errors="replace")
@@ -111,13 +113,13 @@ def embed_bot_game(bot_id, game_id):
             "Content-Security-Policy": (
                 "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; "
                 "img-src 'self' data: blob:; media-src 'self' data: blob:; "
-                "connect-src 'none'; frame-src 'none';"
-            ),
+                "connect-src 'none'; frame-src 'none';"),
         },
     )
 
 
-@bot_games_bp.route("/<bot_id>/games/<game_id>/asset/<path:asset_path>", methods=["GET"])
+@bot_games_bp.route("/<bot_id>/games/<game_id>/asset/<path:asset_path>",
+                    methods=["GET"])
 def game_asset(bot_id, game_id, asset_path):
     game = BotGameService.get_game(bot_id, game_id)
     if not game or not game.is_published or game.scan_status != "approved":

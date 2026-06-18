@@ -81,6 +81,15 @@ class AuthService:
         try:
             new_user = User(email=email, username=username, is_verified=0)
             new_user.set_password(password)
+
+            from flask import request
+            if request:
+                forwarded = request.headers.get("X-Forwarded-For", "")
+                if forwarded:
+                    new_user.registration_ip = forwarded.split(",")[0].strip()
+                else:
+                    new_user.registration_ip = request.remote_addr or ""
+
             raw_access, raw_refresh = AuthService._issue_tokens(new_user)
             db.session.add(new_user)
             db.session.commit()
@@ -139,10 +148,14 @@ class AuthService:
                 user = legacy
         if not user:
 
-            from app.api.oauth import OAuthAccessToken
+            from app.api.oauth import OAuthAccessToken, OAuthClient
             oauth_token = OAuthAccessToken.query.filter_by(token=token).first()
             if oauth_token and not oauth_token.is_expired():
-                user = User.query.get(oauth_token.user_id)
+                client = OAuthClient.query.filter_by(
+                    client_id=oauth_token.client_id, is_active=1
+                ).first()
+                if client:
+                    user = User.query.get(oauth_token.user_id)
         if not user:
             return None, "Invalid or expired token"
         fp = AuthService._hash_token(token)
@@ -202,15 +215,24 @@ class AuthService:
             return None, str(e)
 
     @staticmethod
-    def get_yandex_auth_url():
+    def get_yandex_auth_url(login_hint: str | None = None, force_confirm: bool = True):
+        from urllib.parse import urlencode
+
         client_id = Config.YANDEX_CLIENT_ID
         redirect_uri = Config.YANDEX_REDIRECT_URI
         if not client_id or not redirect_uri:
             return None, "Yandex OAuth not configured"
-        return (
-            f"https://oauth.yandex.ru/authorize?response_type=code&client_id={client_id}&redirect_uri={redirect_uri}",
-            None,
-        )
+        params = {
+            "response_type": "code",
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+        }
+        if force_confirm:
+            params["force_confirm"] = "yes"
+        hint = (login_hint or "").strip()
+        if hint:
+            params["login_hint"] = hint
+        return f"https://oauth.yandex.ru/authorize?{urlencode(params)}", None
 
     @staticmethod
     def login_yandex_user(code):

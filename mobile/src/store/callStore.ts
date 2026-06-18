@@ -2,6 +2,7 @@ import {create} from 'zustand';
 import {CallManager, CallRecord, CallState} from '@/services/CallManager';
 import {WebRTCService} from '@/services/WebRTCService';
 import {socketService} from '@/services/SocketService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface CallStore {
   isInitialized: boolean;
@@ -42,6 +43,7 @@ interface CallStore {
   joinVoiceChannel: (channelId: string) => Promise<void>;
   leaveVoiceChannel: (channelId: string) => void;
   joinGroupCall: (callId: string) => Promise<void>;
+  getActiveGroupCall: (groupId: string) => Promise<any>;
   leaveGroupCall: (callId: string) => void;
   acceptCall: (
     callerSocketId: string,
@@ -86,6 +88,15 @@ export const useCallStore = create<CallStore>((set, get) => ({
       const callManager = CallManager.getInstance(webRTCService);
       callManager.setCurrentUser(user);
 
+      try {
+        const cached = await AsyncStorage.getItem(`call_history_${user.id}`);
+        if (cached) {
+          set({callHistory: JSON.parse(cached)});
+        }
+      } catch (err) {
+        console.warn('[CallStore] Failed to load call history:', err);
+      }
+
       webRTCService.onLocalStream = (stream: any) => {
         set({localStream: stream});
       };
@@ -95,7 +106,7 @@ export const useCallStore = create<CallStore>((set, get) => ({
         const newStreams = new Map(remoteStreams);
         newStreams.set(socketId, stream);
         const call = activeCalls.get(socketId);
-        if (call) {
+        if (call && call.status !== 'ringing') {
           call.status = 'connected';
           const newCalls = new Map(activeCalls);
           newCalls.set(socketId, call);
@@ -113,6 +124,14 @@ export const useCallStore = create<CallStore>((set, get) => ({
         const {activeCalls, remoteStreams} = get();
         const newCalls = new Map(activeCalls);
         const newStreams = new Map(remoteStreams);
+        
+        // Remove duplicate stale 'calling' entries
+        for (const [key, existing] of newCalls.entries()) {
+          if (existing.userId === call.userId && existing.status === 'calling') {
+            newCalls.delete(key);
+          }
+        }
+
         if (oldSocketId) {
           newCalls.delete(oldSocketId);
           const stream = newStreams.get(oldSocketId);
@@ -156,24 +175,30 @@ export const useCallStore = create<CallStore>((set, get) => ({
         const newStreams = new Map(remoteStreams);
         newStreams.delete(call.socketId);
 
+        const isIncoming = Boolean(call.isIncoming);
         const historyRecord: CallRecord = {
           id: `${call.userId}-${Date.now()}`,
-          callerId: user.id,
-          callerName: 'Я',
-          receiverId: call.userId,
-          receiverName: call.userName || 'Неизвестно',
-          type: call.status === 'connected' ? 'outgoing' : 'missed',
+          callerId: isIncoming ? call.userId : user.id,
+          callerName: isIncoming ? (call.userName || 'Неизвестно') : 'Я',
+          receiverId: isIncoming ? user.id : call.userId,
+          receiverName: isIncoming ? 'Я' : (call.userName || 'Неизвестно'),
+          type: isIncoming 
+            ? (call.status === 'connected' ? 'incoming' : 'missed') 
+            : 'outgoing',
           duration: call.duration || 0,
           startTime: call.startTime || new Date(),
           endTime: new Date(),
           status: call.status === 'connected' ? 'completed' : 'missed',
         };
-        const newHistory = [historyRecord, ...callHistory];
+        const newHistory = [historyRecord, ...callHistory].slice(0, 100);
+        AsyncStorage.setItem(`call_history_${user.id}`, JSON.stringify(newHistory)).catch(err => {
+          console.error('[CallStore] Failed to save call history:', err);
+        });
 
         set({
           activeCalls: newCalls,
           remoteStreams: newStreams,
-          callHistory: newHistory.slice(0, 100),
+          callHistory: newHistory,
         });
       };
 
@@ -190,6 +215,13 @@ export const useCallStore = create<CallStore>((set, get) => ({
       callManager.onCallStateChange = (socketId: string, state: CallState) => {
         const {activeCalls} = get();
         const newCalls = new Map(activeCalls);
+        if (state.status === 'connected') {
+          for (const [key, existing] of newCalls.entries()) {
+            if (existing.userId === state.userId && existing.status === 'calling') {
+              newCalls.delete(key);
+            }
+          }
+        }
         newCalls.set(socketId, state);
         set({activeCalls: newCalls});
       };
@@ -277,12 +309,25 @@ export const useCallStore = create<CallStore>((set, get) => ({
   },
 
   addToHistory: (record) => {
-    const {callHistory} = get();
-    const newHistory = [record, ...callHistory];
-    set({callHistory: newHistory.slice(0, 100)});
+    const {callHistory, currentUserId} = get();
+    const newHistory = [record, ...callHistory].slice(0, 100);
+    set({callHistory: newHistory});
+    if (currentUserId) {
+      AsyncStorage.setItem(`call_history_${currentUserId}`, JSON.stringify(newHistory)).catch(err => {
+        console.error('[CallStore] Failed to save call history:', err);
+      });
+    }
   },
 
-  clearHistory: () => set({callHistory: []}),
+  clearHistory: () => {
+    const {currentUserId} = get();
+    set({callHistory: []});
+    if (currentUserId) {
+      AsyncStorage.removeItem(`call_history_${currentUserId}`).catch(err => {
+        console.error('[CallStore] Failed to clear call history:', err);
+      });
+    }
+  },
 
   startVideo: async () => {
     const {callManager} = get();
@@ -339,6 +384,12 @@ export const useCallStore = create<CallStore>((set, get) => ({
     const {callManager} = get();
     if (!callManager) throw new Error('CallManager not initialized');
     await callManager.joinGroupCall(callId);
+  },
+
+  getActiveGroupCall: async (groupId) => {
+    const {callManager} = get();
+    if (!callManager) return null;
+    return await callManager.getActiveGroupCall(groupId);
   },
 
   leaveGroupCall: (callId) => {

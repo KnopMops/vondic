@@ -3,6 +3,7 @@ import hashlib
 import json
 import logging
 import os
+import uuid
 from contextlib import contextmanager
 from datetime import datetime
 
@@ -30,6 +31,7 @@ class User(Base):
         String, nullable=True)
     socket_id: Mapped[str | None] = mapped_column(String, nullable=True)
     status: Mapped[str | None] = mapped_column(String, nullable=True)
+    last_seen: Mapped[datetime | None] = mapped_column(nullable=True)
     is_blocked: Mapped[int | None] = mapped_column(Integer, nullable=True)
     role: Mapped[str | None] = mapped_column(String, nullable=True)
 
@@ -195,6 +197,25 @@ class UserRepository:
                         """
                     )
                 )
+                conn.execute(
+                    text(
+                        """
+                        CREATE TABLE IF NOT EXISTS user_conversations (
+                            id TEXT PRIMARY KEY,
+                            user_id TEXT NOT NULL,
+                            partner_id TEXT NOT NULL,
+                            is_secret BOOLEAN NOT NULL DEFAULT 0,
+                            created_at TIMESTAMP,
+                            updated_at TIMESTAMP,
+                            CONSTRAINT uq_user_conversation UNIQUE (user_id, partner_id)
+                        )
+                        """
+                    )
+                )
+                conn.execute(
+                    text(
+                        "ALTER TABLE user_conversations "
+                        "ADD COLUMN IF NOT EXISTS is_secret BOOLEAN NOT NULL DEFAULT 0"))
         except Exception as e:
 
             logger.warning(f"Schema ensure skipped/failed: {e}")
@@ -428,6 +449,7 @@ class UserRepository:
                 if user:
                     user.socket_id = socket_id
                     user.status = "online"
+                    user.last_seen = datetime.utcnow()
                     session.commit()
         except Exception as e:
             logger.error(f"DB Error bind_socket: {e}")
@@ -441,6 +463,7 @@ class UserRepository:
                     return None
                 user.socket_id = None
                 user.status = "offline"
+                user.last_seen = datetime.utcnow()
                 session.commit()
                 return user.id
         except Exception as e:
@@ -457,6 +480,7 @@ class UserRepository:
                     return False
                 user.socket_id = None
                 user.status = "offline"
+                user.last_seen = datetime.utcnow()
                 session.commit()
                 return True
         except Exception as e:
@@ -614,6 +638,9 @@ class UserRepository:
                     is_read=0,
                 )
                 session.add(message)
+            target_id = msg_data.get("target_id")
+            if target_id and not channel_id and not group_id:
+                self._ensure_dm_conversation(msg_data["sender_id"], target_id)
             return True, None
         except Exception as e:
             logger.error(f"DB Error save_message: {e}")
@@ -908,10 +935,40 @@ class UserRepository:
             logger.error(f"Ошибка БД (история канала): {err}")
             return []
 
+    def _ensure_dm_conversation(self, user_id, partner_id):
+        """Keep chat in recent list after history is cleared."""
+        uid = str(user_id)
+        pid = str(partner_id)
+        if not uid or not pid or uid == pid:
+            return
+        try:
+            with self.engine.begin() as conn:
+                for a, b in ((uid, pid), (pid, uid)):
+                    conn.execute(
+                        text(
+                            """
+                            INSERT INTO user_conversations (id, user_id, partner_id)
+                            SELECT :id, :user_id, :partner_id
+                            WHERE NOT EXISTS (
+                                SELECT 1 FROM user_conversations
+                                WHERE user_id = :user_id AND partner_id = :partner_id
+                            )
+                            """
+                        ),
+                        {
+                            "id": str(uuid.uuid4()),
+                            "user_id": a,
+                            "partner_id": b,
+                        },
+                    )
+        except Exception as err:
+            logger.warning(f"ensure_dm_conversation skipped: {err}")
+
     def delete_messages_history(self, user_id, target_id, scope="for_all"):
         try:
             if scope == "for_me":
                 self._set_chat_cleared(user_id, target_id, "dm")
+                self._ensure_dm_conversation(user_id, target_id)
                 return 0
             with self._session() as session:
                 deleted = (
@@ -926,7 +983,7 @@ class UserRepository:
                     )
                     .delete(synchronize_session=False)
                 )
-            self._clear_chat_clear_records(target_id, "dm")
+            self._ensure_dm_conversation(user_id, target_id)
             return deleted or 0
         except Exception as err:
             logger.error(f"Ошибка БД (удаление истории): {err}")

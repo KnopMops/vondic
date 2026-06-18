@@ -27,7 +27,8 @@ def update_app_downloads_admin(current_user):
     if getattr(current_user, "role", "") != "Admin":
         return jsonify({"error": "Forbidden"}), 403
     data = request.get_json() or {}
-    patch = data.get("downloads") if isinstance(data.get("downloads"), dict) else data
+    patch = data.get("downloads") if isinstance(
+        data.get("downloads"), dict) else data
     try:
         merged = AppDownloadService.update_downloads(patch)
         return jsonify({"downloads": merged}), 200

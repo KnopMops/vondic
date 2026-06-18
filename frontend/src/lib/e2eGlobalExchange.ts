@@ -10,11 +10,12 @@ import {
 	normalizeE2eKeyId,
 	persistKeyLocally,
 	restoreKeyFromServer,
-	serverHasKeyBackup,
 } from '@/lib/e2eKeySync'
 import type { Socket } from 'socket.io-client'
 
 const pairs = new Map<string, CryptoKeyPair>()
+
+export const e2ePairs = pairs
 
 const bytesFromBase64 = (b64: string) => {
 	const binary = atob(b64)
@@ -35,7 +36,7 @@ const base64FromBytes = (bytes: Uint8Array) => {
 
 async function deriveKey(shared: ArrayBuffer, keyId: string) {
 	const encoder = new TextEncoder()
-	const salt = encoder.encode(keyId)
+	const salt = encoder.encode(normalizeE2eKeyId(keyId))
 	const combined = new Uint8Array(shared.byteLength + salt.length)
 	combined.set(new Uint8Array(shared), 0)
 	combined.set(salt, shared.byteLength)
@@ -83,13 +84,6 @@ export async function applyE2eKeyExchange(
 	const keyId = normalizeE2eKeyId(data.key_id)
 	if (!peerInKeyId(keyId, peerId, selfId)) return false
 
-	for (const variant of [keyId, data.key_id!]) {
-		const stored =
-			typeof localStorage !== 'undefined'
-				? localStorage.getItem(`e2e_key_${variant}`)
-				: null
-		if (stored) return false
-	}
 	const cached = lookupCachedServerKey(keyId)
 	if (cached?.length) return false
 
@@ -139,22 +133,20 @@ export async function applyE2eKeyExchange(
 	const derived = await deriveKey(shared, keyId)
 	persistKeyLocally(keyId, derived)
 
-	const hasBackup = await serverHasKeyBackup(accessToken, keyId)
-	if (!hasBackup) {
-		try {
-			await ensureBackupMaterial(accessToken, selfId)
-			const { deviceId, deviceName } = getDeviceInfo()
-			await backupKeyToServer(
-				accessToken,
-				keyId,
-				derived,
-				deviceId,
-				deviceName,
-				selfId,
-			)
-		} catch {
-			// ignore backup errors
-		}
+	try {
+		await ensureBackupMaterial(accessToken, selfId)
+		const { deviceId, deviceName } = getDeviceInfo()
+		await backupKeyToServer(
+			accessToken,
+			keyId,
+			derived,
+			deviceId,
+			deviceName,
+			selfId,
+			{ allowOverwrite: true },
+		)
+	} catch {
+		// ignore backup errors
 	}
 
 	if (typeof window !== 'undefined') {

@@ -5,12 +5,62 @@ from app.core.extensions import db
 from app.models.group import Group
 from app.models.message import Message
 from app.models.user import User
+from app.models.user_conversation import UserConversation
 from app.services.user_service import UserService
 from app.utils.mtproto_crypto import mtproto_decrypt
 from sqlalchemy import case, func, or_
 
 
 class MessageService:
+    @staticmethod
+    def ensure_dm_conversation(user_id, partner_id, is_secret=None):
+        """Keep DM chat in sidebar after history is cleared."""
+        uid = str(user_id)
+        pid = str(partner_id)
+        if not uid or not pid or uid == pid:
+            return
+        try:
+            for a, b in ((uid, pid), (pid, uid)):
+                row = UserConversation.query.filter_by(
+                    user_id=a, partner_id=b
+                ).first()
+                if row:
+                    if is_secret is not None and a == uid:
+                        row.is_secret = bool(is_secret)
+                else:
+                    db.session.add(UserConversation(user_id=a, partner_id=b, is_secret=bool(
+                        is_secret) if a == uid and is_secret is not None else False, ))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+    @staticmethod
+    def get_dm_settings(user_id, partner_id):
+        uid = str(user_id)
+        pid = str(partner_id)
+        row = UserConversation.query.filter_by(
+            user_id=uid, partner_id=pid).first()
+        if not row:
+            MessageService.ensure_dm_conversation(uid, pid)
+            row = UserConversation.query.filter_by(
+                user_id=uid, partner_id=pid).first()
+        return {
+            "partner_id": pid,
+            "is_secret": bool(row.is_secret) if row else False,
+        }
+
+    @staticmethod
+    def set_dm_secret(user_id, partner_id, is_secret: bool):
+        uid = str(user_id)
+        pid = str(partner_id)
+        MessageService.ensure_dm_conversation(uid, pid, is_secret=is_secret)
+        row = UserConversation.query.filter_by(
+            user_id=uid, partner_id=pid).first()
+        if row:
+            row.is_secret = bool(is_secret)
+            db.session.commit()
+        return MessageService.get_dm_settings(uid, pid)
+
     @staticmethod
     def _sanitize_text(value):
         if value is None:
@@ -102,6 +152,15 @@ class MessageService:
                     OllamaService.process_message_async(
                         new_message.id, is_dm=True)
 
+                for a, b in ((user_id, target_id), (target_id, user_id)):
+                    exists = UserConversation.query.filter_by(
+                        user_id=str(a), partner_id=str(b)
+                    ).first()
+                    if not exists:
+                        db.session.add(UserConversation(
+                            user_id=str(a), partner_id=str(b)))
+                db.session.commit()
+
             return new_message, None
         except Exception as e:
             db.session.rollback()
@@ -190,8 +249,12 @@ class MessageService:
         if not user or user not in channel.participants:
             return None, "User is not a participant of this channel"
 
-        if channel.type == "broadcast" and str(
-                channel.owner_id) != str(user_id):
+        is_community_channel = channel.community_channel is not None
+        if (
+            not is_community_channel
+            and channel.type == "broadcast"
+            and str(channel.owner_id) != str(user_id)
+        ):
             if msg_type != "voice":
                 return None, "Only owner can post text in this channel. Voice messages allowed."
 
@@ -278,6 +341,18 @@ class MessageService:
             if limit > 100:
                 limit = 100
 
+            conv_partners = (
+                db.session.query(UserConversation.partner_id)
+                .filter(UserConversation.user_id == uid)
+                .all()
+            )
+            conv_partner_ids = {str(p[0]) for p in conv_partners}
+            conv_rows = UserConversation.query.filter_by(user_id=uid).all()
+            conv_secret = {
+                str(c.partner_id): bool(getattr(c, "is_secret", False))
+                for c in conv_rows
+            }
+
             other_id_expr = case(
                 (Message.sender_id == uid, Message.target_id),
                 else_=Message.sender_id,
@@ -345,6 +420,19 @@ class MessageService:
                 }
                 ordered_ids.append(other_id)
 
+            for pid in conv_partner_ids:
+                if pid not in last_meta and pid != uid:
+                    ordered_ids.append(pid)
+
+            from app.services.friendship_service import FriendshipService
+
+            seen_ids = set(ordered_ids)
+            for friend in FriendshipService.get_friends(uid) or []:
+                fid = str(friend.get("id") or "")
+                if fid and fid != uid and fid not in seen_ids:
+                    ordered_ids.append(fid)
+                    seen_ids.add(fid)
+
             if not ordered_ids:
                 return []
 
@@ -356,11 +444,20 @@ class MessageService:
                 u = users_map.get(oid)
                 if not u:
                     continue
-                data = u.to_dict()
-                meta = last_meta.get(oid) or {}
-                for k, v in meta.items():
-                    if v is not None:
-                        data[k] = v
+                data = u.to_dict(viewer_id=uid)
+                meta = last_meta.get(oid)
+                if meta:
+                    for k, v in meta.items():
+                        if v is not None:
+                            data[k] = v
+                else:
+                    data["last_message_at"] = None
+                    data["last_message_text"] = ""
+                    data["last_message_type"] = "text"
+                    data["last_message_raw"] = ""
+                    data["last_message_sender_id"] = None
+                    data["last_message_target_id"] = None
+                data["is_secret"] = conv_secret.get(oid, False)
                 result.append(data)
             return result
         except Exception as e:

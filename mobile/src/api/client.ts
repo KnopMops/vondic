@@ -83,29 +83,41 @@ class ApiClient {
       config.body = JSON.stringify(options.body);
     }
 
+    console.log(`[API] REQUEST ${options.method || 'GET'} ${url}`, {body: options.body, hasToken: !!token});
+
     let response = await fetch(url, config);
 
     // Auto-refresh on 401
     if (response.status === 401 && token) {
+      console.log('[API] 401 received, attempting token refresh...');
       const newToken = await refreshAccessToken();
       if (newToken) {
         headers['Authorization'] = `Bearer ${newToken}`;
+        console.log('[API] Retry request with new token:', url);
         response = await fetch(url, {...config, headers});
       } else {
+        console.error('[API] Token refresh failed, SESSION_EXPIRED');
         throw new Error('SESSION_EXPIRED');
       }
     }
 
+    console.log(`[API] RESPONSE ${options.method || 'GET'} ${url} status=${response.status}`);
+
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
+      console.error(`[API] ERROR ${options.method || 'GET'} ${url}:`, errorData);
       throw new Error(errorData.error || `Request failed: ${response.status}`);
     }
 
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
-      return response.json() as Promise<T>;
+      const json = await response.json();
+      console.log(`[API] JSON ${options.method || 'GET'} ${url}:`, JSON.stringify(json).slice(0, 500));
+      return json as T;
     }
-    return response.text() as Promise<T>;
+    const text = await response.text();
+    console.log(`[API] TEXT ${options.method || 'GET'} ${url}:`, text.slice(0, 500));
+    return text as T;
   }
 
   get<T>(endpoint: string, options?: RequestOptions) {

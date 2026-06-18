@@ -1,9 +1,13 @@
 import base64
+import binascii
 import io
+import logging
 import os
 import time
 
 import requests as http_requests
+
+logger = logging.getLogger(__name__)
 from app.utils.decorators import token_required
 from flask import Blueprint, current_app, jsonify, request
 
@@ -34,7 +38,12 @@ def _decode_base64(data: str, max_size: int = None) -> bytes:
         raise ValueError("Invalid base64 payload")
     if "," in data and data.strip().lower().startswith("data:"):
         data = data.split(",", 1)[1]
-    decoded = base64.b64decode(data, validate=True)
+    # Strip any whitespace/newlines that React Native may add
+    data = data.strip().replace("\n", "").replace("\r", "").replace(" ", "")
+    try:
+        decoded = base64.b64decode(data, validate=False)
+    except (binascii.Error, Exception) as e:
+        raise ValueError(f"Invalid base64 data: {e}") from e
     if max_size and len(decoded) > max_size:
         raise ValueError(
             f"File too large. Limit is {max_size // (1024 * 1024)} MB")
@@ -69,34 +78,38 @@ def _save_upload(file_bytes: bytes, ext: str, subdir: str) -> str:
 @upload_bp.route("/voice", methods=["POST"])
 @token_required
 def upload_voice(current_user):
+    from app.core.extensions import db
+    from app.models.user_file import UserFile
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True)
         if not data:
-            return jsonify({"message": "No input data provided"}), 400
+            return jsonify({"error": "No input data provided"}), 400
 
         file_data = data.get("file")
         filename = data.get("filename")
 
         if not file_data or not filename:
-            return jsonify({"message": "Missing file or filename"}), 400
+            return jsonify({"error": "Missing file or filename"}), 400
 
         ext = _get_extension(filename)
         if ext not in VOICE_EXTENSIONS:
-            return jsonify({"message": "Invalid file extension"}), 400
+            return jsonify({"error": f"Invalid file extension: {ext}. Allowed: {VOICE_EXTENSIONS}"}), 400
 
         max_size = LIMIT_PREMIUM if current_user.premium else LIMIT_FREE
 
         try:
             file_bytes = _decode_base64(file_data, max_size)
         except ValueError as e:
-            return jsonify({"message": str(e)}), 400
+            logger.error("[upload_voice] base64 decode error: %s", e)
+            return jsonify({"error": str(e)}), 400
 
         file_size = len(file_bytes)
+        logger.info("[upload_voice] user=%s file_size=%d ext=%s", current_user.id, file_size, ext)
 
-        if current_user.disk_usage + file_size > current_user.disk_limit:
+        if (current_user.disk_usage or 0) + file_size > current_user.disk_limit:
             return jsonify(
                 {
-                    "message": "Disk space limit exceeded. Upgrade to Premium for more space."
+                    "error": "Disk space limit exceeded. Upgrade to Premium for more space."
                 }
             ), 403
 
@@ -107,9 +120,6 @@ def upload_voice(current_user):
         file_url = _save_upload(file_bytes, ext, "voice")
 
         try:
-            from app.core.extensions import db
-            from app.models.user_file import UserFile
-
             db.session.add(
                 UserFile(
                     user_id=current_user.id,
@@ -119,10 +129,10 @@ def upload_voice(current_user):
                 )
             )
             db.session.flush()
-        except Exception:
-            pass
+        except Exception as uf_err:
+            logger.warning("[upload_voice] UserFile insert failed (ignored): %s", uf_err)
 
-        current_user.disk_usage += file_size
+        current_user.disk_usage = (current_user.disk_usage or 0) + file_size
         db.session.commit()
 
         return jsonify(
@@ -134,7 +144,8 @@ def upload_voice(current_user):
         ), 201
 
     except Exception as e:
-        return jsonify({"message": f"Upload failed: {str(e)}"}), 500
+        logger.exception("[upload_voice] Unexpected error: %s", e)
+        return jsonify({"error": f"Upload failed: {str(e)}"}), 500
 
 
 @upload_bp.route("/file", methods=["POST"])
@@ -208,7 +219,9 @@ def upload_file(current_user):
 @upload_bp.route("/video", methods=["POST"])
 @token_required
 def upload_video(current_user):
-    data = request.get_json()
+    from app.core.extensions import db
+    from app.models.user_file import UserFile
+    data = request.get_json(silent=True)
     if not data:
         return jsonify({"error": "No data provided"}), 400
 
@@ -220,11 +233,12 @@ def upload_video(current_user):
 
     ext = _get_extension(filename)
     if not ext or ext.lower() not in VIDEO_EXTENSIONS:
-        return jsonify({"error": "Invalid video extension"}), 400
+        return jsonify({"error": f"Invalid video extension: {ext}. Allowed: {VIDEO_EXTENSIONS}"}), 400
 
     try:
-        file_bytes = _decode_base64(file_data, None)
+        file_bytes = _decode_base64(file_data, LIMIT_PREMIUM if current_user.premium else LIMIT_FREE)
         file_size = len(file_bytes)
+        logger.info("[upload_video] user=%s file_size=%d ext=%s", current_user.id, file_size, ext)
 
         if not current_user.premium:
             delay = file_size / THROTTLE_SPEED_BPS
@@ -233,9 +247,6 @@ def upload_video(current_user):
         file_url = _save_upload(file_bytes, ext, "video")
 
         try:
-            from app.core.extensions import db
-            from app.models.user_file import UserFile
-
             db.session.add(
                 UserFile(
                     user_id=current_user.id,
@@ -245,10 +256,10 @@ def upload_video(current_user):
                 )
             )
             db.session.flush()
-        except Exception:
-            pass
+        except Exception as uf_err:
+            logger.warning("[upload_video] UserFile insert failed (ignored): %s", uf_err)
 
-        current_user.disk_usage += file_size
+        current_user.disk_usage = (current_user.disk_usage or 0) + file_size
         db.session.commit()
 
         return jsonify(
@@ -260,6 +271,8 @@ def upload_video(current_user):
             }
         ), 201
     except ValueError as e:
+        logger.error("[upload_video] ValueError: %s", e)
         return jsonify({"error": str(e)}), 400
     except Exception as e:
+        logger.exception("[upload_video] Unexpected error: %s", e)
         return jsonify({"error": f"Failed to upload video: {str(e)}"}), 400

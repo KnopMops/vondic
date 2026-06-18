@@ -31,6 +31,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 	const [twoFactorCode, setTwoFactorCode] = useState('')
 	const [loginError, setLoginError] = useState<string | null>(null)
 	const [captchaToken, setCaptchaToken] = useState('')
+	const [captchaKey, setCaptchaKey] = useState(0)
 	const sendLoginEmailCode = async () => {
 		try {
 			const res = await fetch('/api/auth/2fa/email/send', { method: 'POST' })
@@ -76,7 +77,13 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 					if (data?.error) setLoginError(data.error)
 					return
 				}
+				if (data?.send_reset_link) {
+					window.location.href = `/reset-link-sent?email=${encodeURIComponent(data.email || '')}`
+					return
+				}
 				setLoginError(data?.error || 'Ошибка входа')
+				setCaptchaKey(k => k + 1)
+				setCaptchaToken('')
 				return
 			}
 			const userData = data.user ? { ...data.user } : null
@@ -91,6 +98,8 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 			window.location.assign('/feed')
 		} catch (err: any) {
 			setLoginError(err.message || 'Ошибка входа')
+			setCaptchaKey(k => k + 1)
+			setCaptchaToken('')
 		}
 	}
 
@@ -220,7 +229,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 						)}
 						{!twoFactorRequired && (
 							<SmartCaptcha
-								key='password'
+								key={`password-${captchaKey}`}
 								onTokenChange={setCaptchaToken}
 							/>
 						)}

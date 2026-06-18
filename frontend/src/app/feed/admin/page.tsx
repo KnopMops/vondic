@@ -36,12 +36,26 @@ type PostReport = {
 	removal_time_left?: number | null
 }
 
+type UserReport = {
+	id: number
+	reporter_id?: string
+	reporter_login?: string
+	target_user_id: string
+	target_user_login: string
+	description: string
+	attachments?: string[]
+	created_at: number
+	status?: string
+}
+
 export default function AdminSupportPage() {
 	const { user, logout } = useAuth()
 	const router = useRouter()
 	const [items, setItems] = useState<Escalation[]>([])
 	const [postReports, setPostReports] = useState<PostReport[]>([])
 	const [postReportsLoading, setPostReportsLoading] = useState(false)
+	const [userReports, setUserReports] = useState<UserReport[]>([])
+	const [userReportsLoading, setUserReportsLoading] = useState(false)
 	const [postDetailsOpen, setPostDetailsOpen] = useState(false)
 	const [postDetailsId, setPostDetailsId] = useState<string | null>(null)
 	const [violationOpen, setViolationOpen] = useState(false)
@@ -78,7 +92,6 @@ export default function AdminSupportPage() {
 	const [newGiftDesc, setNewGiftDesc] = useState('')
 	const [newGiftImageUrl, setNewGiftImageUrl] = useState('')
 	const [newGiftTotalSupply, setNewGiftTotalSupply] = useState('')
-	const [editingGiftId, setEditingGiftId] = useState<string | null>(null)
 	const [giftUploading, setGiftUploading] = useState(false)
 	const giftFileInputRef = useRef<HTMLInputElement | null>(null)
 	const [nowTs, setNowTs] = useState(() => Date.now())
@@ -211,6 +224,28 @@ export default function AdminSupportPage() {
 			console.error('Admin post reports load error', e)
 		} finally {
 			setPostReportsLoading(false)
+		}
+	}
+
+	const loadUserReports = async () => {
+		setUserReportsLoading(true)
+		try {
+			const res = await fetch('/api/support/admin/user-reports')
+			const text = await res.text()
+			let data: any = {}
+			try {
+				data = JSON.parse(text)
+			} catch {
+				console.error('Invalid JSON from backend /user-reports:', text)
+				return
+			}
+			if (data?.ok && Array.isArray(data.reports)) {
+				setUserReports(data.reports)
+			}
+		} catch (e) {
+			console.error('Admin user reports load error', e)
+		} finally {
+			setUserReportsLoading(false)
 		}
 	}
 
@@ -354,6 +389,59 @@ export default function AdminSupportPage() {
 					),
 				)
 			}
+		} catch (e) {}
+	}
+
+	const submitUserReportNoViolation = async (reportId: number) => {
+		try {
+			const res = await fetch('/api/support/admin/user-reports/action', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ action: 'no_violation', report_id: reportId }),
+			})
+			const text = await res.text()
+			let data: any = {}
+			try { data = JSON.parse(text) } catch {}
+			if (!res.ok || !data?.ok) {
+				throw new Error(data?.error || text || 'Ошибка')
+			}
+			setUserReports(prev => prev.filter(r => r.id !== reportId))
+		} catch (e) {}
+	}
+
+	const submitUserReportClose = async (reportId: number) => {
+		try {
+			const res = await fetch('/api/support/admin/user-reports/action', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ action: 'close', report_id: reportId }),
+			})
+			const text = await res.text()
+			let data: any = {}
+			try { data = JSON.parse(text) } catch {}
+			if (!res.ok || !data?.ok) {
+				throw new Error(data?.error || text || 'Ошибка')
+			}
+			setUserReports(prev =>
+				prev.map(r => r.id === reportId ? { ...r, status: 'closed' } : r),
+			)
+		} catch (e) {}
+	}
+
+	const submitUserReportResetUsername = async (reportId: number) => {
+		try {
+			const res = await fetch('/api/support/admin/user-reports/action', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ action: 'reset_username', report_id: reportId }),
+			})
+			const text = await res.text()
+			let data: any = {}
+			try { data = JSON.parse(text) } catch {}
+			if (!res.ok || !data?.ok) {
+				throw new Error(data?.error || text || 'Ошибка')
+			}
+			setUserReports(prev => prev.filter(r => r.id !== reportId))
 		} catch (e) {}
 	}
 
@@ -665,82 +753,53 @@ export default function AdminSupportPage() {
 		}
 	}
 
-		const startEditGift = (g: any) => {
-			setEditingGiftId(g.id)
-			setNewGiftName(g.name || '')
-			setNewGiftPrice(String(g.coin_price || 0))
-			setNewGiftIcon(g.icon || 'Gift')
-			setNewGiftDesc(g.description || '')
-			setNewGiftImageUrl(g.image_url || '')
-			setNewGiftTotalSupply(g.total_supply ? String(g.total_supply) : '')
+	const createGift = async () => {
+		try {
+			const name = newGiftName.trim()
+			if (!name) {
+				setGiftsError('Введите название подарка')
+				return
+			}
+			const price = parseInt(newGiftPrice || '0', 10)
+			if (Number.isNaN(price) || price < 0) {
+				setGiftsError('Цена должна быть неотрицательным числом')
+				return
+			}
 			setGiftsError(null)
-		}
-
-		const cancelEditGift = () => {
-			setEditingGiftId(null)
-			setNewGiftName('')
-			setNewGiftPrice('0')
-			setNewGiftIcon('Gift')
-			setNewGiftDesc('')
-			setNewGiftImageUrl('')
-			setNewGiftTotalSupply('')
-		}
-
-		const createGift = async () => {
-			try {
-				const name = newGiftName.trim()
-				if (!name) {
-					setGiftsError('Введите название подарка')
-					return
-				}
-				const price = parseInt(newGiftPrice || '0', 10)
-				if (Number.isNaN(price) || price < 0) {
-					setGiftsError('Цена должна быть неотрицательным числом')
-					return
-				}
-				setGiftsError(null)
-				const token = await ensureToken()
-				const isEditing = !!editingGiftId
-				const endpoint = isEditing
-					? `${backendUrl}/api/v1/gifts/admin/update`
-					: `${backendUrl}/api/v1/gifts/admin/create`
-				const body: any = {
+			const token = await ensureToken()
+			const res = await fetch(`${backendUrl}/api/v1/gifts/admin/create`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`,
+				},
+				body: JSON.stringify({
 					name,
 					coin_price: price,
 					icon: newGiftIcon,
 					description: newGiftDesc.trim() || undefined,
 					image_url: newGiftImageUrl || undefined,
 					total_supply: newGiftTotalSupply.trim() || undefined,
-				}
-				if (isEditing) {
-					body.id = editingGiftId
-				}
-				const res = await fetch(endpoint, {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-						Authorization: `Bearer ${token}`,
-					},
-					body: JSON.stringify(body),
-				})
-				const text = await res.text()
-				let data: any = {}
-				try {
-					data = JSON.parse(text)
-				} catch {}
-				if (!res.ok || !data?.gift) {
-					throw new Error(data?.error || text || (isEditing ? 'Не удалось обновить подарок' : 'Не удалось создать подарок'))
-				}
-				if (isEditing) {
-					setGifts(prev => prev.map(g => g.id === editingGiftId ? data.gift : g))
-				} else {
-					setGifts(prev => [...prev, data.gift])
-				}
-				cancelEditGift()
-			} catch (e: any) {
-				setGiftsError(e.message || 'Не удалось сохранить подарок')
+				}),
+			})
+			const text = await res.text()
+			let data: any = {}
+			try {
+				data = JSON.parse(text)
+			} catch {}
+			if (!res.ok || !data?.gift) {
+				throw new Error(data?.error || text || 'Не удалось создать подарок')
 			}
+			setGifts(prev => [...prev, data.gift])
+			setNewGiftName('')
+			setNewGiftPrice('0')
+			setNewGiftDesc('')
+			setNewGiftImageUrl('')
+			setNewGiftTotalSupply('')
+		} catch (e: any) {
+			setGiftsError(e.message || 'Не удалось создать подарок')
 		}
+	}
 
 	const deleteGift = async (id: string) => {
 		try {
@@ -798,6 +857,7 @@ export default function AdminSupportPage() {
 		if (!roleAllowed) return
 		loadEscalations()
 		loadPostReports()
+		loadUserReports()
 	}, [roleAllowed])
 
 	useEffect(() => {
@@ -882,6 +942,118 @@ export default function AdminSupportPage() {
 													</div>
 												</div>
 											))
+										)}
+									</div>
+									<div className='rounded-xl border border-gray-800 bg-gray-950 p-4'>
+										<div className='flex items-center justify-between mb-3'>
+											<div className='text-sm font-semibold text-white'>
+												Жалобы на пользователей
+											</div>
+											<div className='text-xs text-gray-400'>
+												Обращения на пользователей
+											</div>
+										</div>
+										{userReportsLoading ? (
+											<div className='text-xs text-gray-500'>
+												Загрузка жалоб...
+											</div>
+										) : userReports.filter(r => r.status !== 'closed').length === 0 ? (
+											<div className='text-sm text-gray-400'>Нет жалоб</div>
+										) : (
+											<div className='space-y-3'>
+												{userReports.filter(r => r.status !== 'closed').map(r => (
+													<div
+														key={r.id}
+														className='rounded-lg border border-gray-800 bg-gray-900/60 p-4 text-sm text-gray-200 space-y-2'
+													>
+														<div className='flex items-center justify-between'>
+															<div className='font-semibold text-white'>
+																Жалоба #{r.id}
+															</div>
+															{r.created_at && (
+																<div className='text-xs text-gray-500'>
+																	{new Date(
+																		r.created_at * 1000,
+																	).toLocaleString()}
+																</div>
+															)}
+														</div>
+														<div className='text-gray-400'>
+															На пользователя: {r.target_user_login}
+														</div>
+														<div className='text-gray-400'>
+															ID пользователя: {r.target_user_id}
+														</div>
+														{r.reporter_login && (
+															<div className='text-gray-400'>
+																Отправил: {r.reporter_login}
+															</div>
+														)}
+														{r.status && (
+															<div className='text-xs text-gray-500'>
+																Статус: {r.status}
+															</div>
+														)}
+														<div className='text-gray-200 whitespace-pre-wrap'>
+															{r.description}
+														</div>
+														{r.attachments && r.attachments.length > 0 && (
+															<div className='space-y-1'>
+																<div className='text-xs text-gray-400'>
+																	Вложения:
+																</div>
+																<div className='space-y-1'>
+																	{r.attachments.map(a => (
+																		<a
+																			key={a}
+																			href={getAttachmentUrl(a)}
+																			target='_blank'
+																			rel='noreferrer'
+																			className='block text-xs text-indigo-300 hover:text-indigo-200 truncate'
+																		>
+																			{a}
+																		</a>
+																	))}
+																</div>
+															</div>
+														)}
+														<div className='flex flex-wrap gap-2 pt-2'>
+															<a
+																href={`/feed/profile/${r.target_user_id}`}
+																target='_blank'
+																rel='noreferrer'
+																className='rounded-md border border-blue-500/40 bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-200 hover:bg-blue-500/20'
+															>
+																Перейти к профилю
+															</a>
+															<button
+																onClick={() => submitUserReportNoViolation(r.id)}
+																className='rounded-md border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs font-medium text-gray-200 hover:bg-gray-800'
+															>
+																Нарушений не найдено
+															</button>
+															<button
+																onClick={() => submitUserReportClose(r.id)}
+																className='rounded-md border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs font-medium text-gray-200 hover:bg-gray-800'
+															>
+																Закрыть
+															</button>
+															{user?.role === 'Admin' && (
+																<button
+																	onClick={() => {
+																		if (window.confirm('Заменить username пользователя на его ID?')) {
+																			submitUserReportResetUsername(r.id)
+																		}
+																	}}
+																	className='rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-200 hover:bg-amber-500/20'
+																>
+																	Сменить username на ID
+																</button>
+															)}
+														</div>
+													</div>
+												))}
+											</div>
 										)}
 									</div>
 									<div className='rounded-xl border border-gray-800 bg-gray-950 p-4'>
@@ -1448,21 +1620,13 @@ export default function AdminSupportPage() {
 														</span>
 													)}
 												</div>
-												<div className='flex justify-end gap-2'>
-													{editingGiftId && (
-														<button
-															onClick={cancelEditGift}
-															className='rounded-md bg-gray-700 px-4 py-2 text-sm font-medium text-white hover:bg-gray-600'
-															>
-																Отмена
-															</button>
-														)}
+												<div className='flex justify-end'>
 													<button
 														onClick={createGift}
 														className='rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-60'
 														disabled={giftsLoading}
 													>
-														{editingGiftId ? 'Сохранить изменения' : 'Создать подарок'}
+														Создать подарок
 													</button>
 												</div>
 											</div>
@@ -1481,28 +1645,20 @@ export default function AdminSupportPage() {
 																key={g.id}
 																className='flex items-center justify-between rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm'
 															>
-																	<div>
-																		<div className='font-medium text-gray-100'>
-																			{g.name}
-																		</div>
-																		<div className='text-xs text-gray-400'>
-																			{g.coin_price} коинов · {g.icon}
-																		</div>
+																<div>
+																	<div className='font-medium text-gray-100'>
+																		{g.name}
 																	</div>
-																	<div className='flex items-center gap-2'>
-																		<button
-																			onClick={() => startEditGift(g)}
-																			className='text-xs text-indigo-400 hover:text-indigo-300'
-																			>
-																				Редактировать
-																			</button>
-																		<button
-																			onClick={() => deleteGift(g.id)}
-																			className='text-xs text-red-500 hover:text-red-600'
-																			>
-																				Удалить
-																			</button>
+																	<div className='text-xs text-gray-400'>
+																		{g.coinPrice} коинов · {g.icon}
 																	</div>
+																</div>
+																<button
+																	onClick={() => deleteGift(g.id)}
+																	className='text-xs text-red-500 hover:text-red-600'
+																>
+																	Удалить
+																</button>
 															</div>
 														))}
 														{gifts.length === 0 && (

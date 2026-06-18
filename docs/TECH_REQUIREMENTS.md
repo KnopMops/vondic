@@ -16,7 +16,7 @@
 ### Разрешённые CORS Origin (nginx)
 
 ```
-https://vondic.knopusmedia.ru
+https://vondic.ru
 http://localhost:3000
 http://127.0.0.1:3000
 http://localhost:5000
@@ -92,21 +92,16 @@ read_messages, write_messages
 
 | Среда | URL |
 |-------|-----|
-| **REST API** | `https://api.vondic.knopusmedia.ru/api/public/v1/chat` |
-| **OAuth** | `https://vondic.knopusmedia.ru/oauth` |
-| **WebSocket** | `https://webrtc.vondic.knopusmedia.ru` (полный URL из `GET /config`) |
+| **REST API** | `https://api.vondic.ru/api/public/v1/chat` |
+| **OAuth** | `https://vondic.ru/oauth` |
+| **WebSocket** | `https://webrtc.vondic.ru` (полный URL из `GET /config`) |
 
 ### 3.2. Аутентификация
 
-Все защищённые эндпоинты принимают **один из** способов (приоритет: `access_token` > `api_key`):
+Все защищённые эндпоинты требуют API-ключ в заголовке:
 
 ```
 X-API-Key: {api_key}
-Authorization: ApiKey {api_key}
-Authorization: Bearer {access_token}
-?api_key={api_key}
-?access_token={access_token}
-JSON body: { "api_key": "..." } или { "access_token": "..." }
 ```
 
 ### 3.3. Rate limits
@@ -182,7 +177,7 @@ call_invite
 
 ```python
 cors_allowed_origins = [
-    "https://vondic.knopusmedia.ru",
+    "https://vondic.ru",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:5000",
@@ -228,8 +223,8 @@ cors_allowed_origins = [
 ### 5.1. SSL
 
 - nginx слушает **443 ssl** с сертификатами:
-  - `/etc/nginx/ssl/vondic.knopusmedia.ru.crt`
-  - `/etc/nginx/ssl/vondic.knopusmedia.ru.key`
+  - `/etc/nginx/ssl/vondic.ru.crt`
+  - `/etc/nginx/ssl/vondic.ru.key`
 - HTTP запросы редиректятся на HTTPS.
 
 ### 5.2. Проксирование

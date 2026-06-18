@@ -79,6 +79,14 @@ export default function Post({
 	const [likeCount, setLikeCount] = useState(likes)
 	const [isLiked, setIsLiked] = useState(isLikedByCurrentUser)
 	const [isLiking, setIsLiking] = useState(false)
+
+	useEffect(() => {
+		setIsLiked(isLikedByCurrentUser)
+	}, [isLikedByCurrentUser, id])
+
+	useEffect(() => {
+		setLikeCount(likes)
+	}, [likes, id])
 	const [showComments, setShowComments] = useState(false)
 	const [commentCount, setCommentCount] = useState(comments_count)
 	const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false)
@@ -584,7 +592,7 @@ export default function Post({
 						</div>
 					)}
 
-					<div className='mt-4 flex items-center gap-6'>
+					<div className='mt-4 flex flex-wrap items-center gap-4 sm:gap-6'>
 						<button
 							onClick={handleLike}
 							disabled={isLiking}

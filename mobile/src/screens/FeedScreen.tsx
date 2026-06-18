@@ -19,12 +19,15 @@ import {usePosts} from '@/hooks/usePosts';
 import {apiClient} from '@/api/client';
 import {useAppSelector} from '@/store/hooks';
 import Icon from 'react-native-vector-icons/Ionicons';
+import {appLog} from '@/utils/appLogger';
+import ScreenHeader from '@/components/ScreenHeader';
 
 interface Comment {
   id: string;
   content: string;
   author_name?: string;
   created_at?: string;
+  posted_by?: string;
 }
 
 export default function FeedScreen() {
@@ -41,6 +44,7 @@ export default function FeedScreen() {
   const [editPostContent, setEditPostContent] = useState('');
   const [creating, setCreating] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [likedMap, setLikedMap] = useState<Record<string, boolean>>({});
 
   const handleCreatePost = async () => {
     if (!newPostContent.trim()) return;
@@ -98,13 +102,48 @@ export default function FeedScreen() {
   };
 
   const handleLike = async (postId: string, isLiked: boolean) => {
+    const nextIsLiked = !isLiked;
+    appLog('FeedScreen', 'handleLike', {postId, isLiked, nextIsLiked});
+    setLikedMap(prev => ({...prev, [postId]: nextIsLiked}));
     try {
       const endpoint = isLiked ? '/posts/unlike' : '/posts/like';
       await apiClient.post(endpoint, {post_id: postId});
-      refresh();
+      appLog('FeedScreen', 'handleLike success', {postId, endpoint});
+      setLikedMap(prev => {
+        const next = {...prev};
+        delete next[postId];
+        return next;
+      });
+      await refresh();
     } catch (err: any) {
-      Alert.alert('Ошибка', 'Не удалось поставить лайк');
+      appLog('FeedScreen', 'handleLike error', {postId, message: err?.message || String(err)});
+      setLikedMap(prev => ({...prev, [postId]: isLiked}));
+      Alert.alert('Ошибка', err.message || 'Не удалось поставить лайк');
     }
+  };
+
+  const handleDeleteComment = async (postId: string, commentId: string) => {
+    appLog('FeedScreen', 'handleDeleteComment', {postId, commentId});
+    Alert.alert('Удалить комментарий', 'Вы уверены?', [
+      {text: 'Отмена', style: 'cancel'},
+      {
+        text: 'Удалить',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await apiClient.delete('/comments', {body: {comment_id: commentId, user_id: user?.id}} as any);
+            appLog('FeedScreen', 'deleteComment success', {postId, commentId});
+            refresh();
+            if (commentingPostId === postId) {
+              loadComments(postId);
+            }
+          } catch (err: any) {
+            appLog('FeedScreen', 'deleteComment error', {postId, commentId, message: err?.message || String(err)});
+            Alert.alert('Ошибка', err.message || 'Не удалось удалить комментарий');
+          }
+        },
+      },
+    ]);
   };
 
   const handleComment = async (postId: string) => {
@@ -125,7 +164,7 @@ export default function FeedScreen() {
   const loadComments = useCallback(async (postId: string) => {
     setLoadingComments(postId);
     try {
-      const data = await apiClient.get<any[]>('/posts/' + postId + '/comments');
+      const data = await apiClient.get<any>('/posts/' + postId + '/comments');
       const comments = Array.isArray(data) ? data : (data.comments || []);
       setPostComments(prev => ({...prev, [postId]: comments}));
     } catch (err) {
@@ -165,7 +204,7 @@ export default function FeedScreen() {
       });
     }
 
-    const isLiked = !!item.is_liked;
+    const isLiked = likedMap[item.id] !== undefined ? likedMap[item.id] : !!item.is_liked;
     const isCommenting = commentingPostId === item.id;
     const comments = postComments[item.id] || [];
 
@@ -238,12 +277,22 @@ export default function FeedScreen() {
             ) : (
               <>
                 {comments.length > 0 ? (
-                  comments.map((c, idx) => (
-                    <View key={c.id || idx} style={styles.commentItem}>
-                      <Text style={styles.commentAuthor}>{c.author_name || 'Пользователь'}</Text>
-                      <Text style={styles.commentText}>{c.content}</Text>
-                    </View>
-                  ))
+                  comments.map((c, idx) => {
+                    const isOwnComment = c.posted_by === user?.id;
+                    return (
+                      <View key={c.id || idx} style={styles.commentItem}>
+                        <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
+                          <Text style={styles.commentAuthor}>{c.author_name || 'Пользователь'}</Text>
+                          {isOwnComment && (
+                            <TouchableOpacity onPress={() => handleDeleteComment(item.id, c.id)}>
+                              <Icon name="trash-outline" size={14} color="#ff4757" />
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                        <Text style={styles.commentText}>{c.content}</Text>
+                      </View>
+                    );
+                  })
                 ) : (
                   <Text style={styles.noCommentsText}>Пока нет комментариев</Text>
                 )}
@@ -269,12 +318,14 @@ export default function FeedScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Лента</Text>
-        <TouchableOpacity style={styles.createButton} onPress={() => setCreateModalVisible(true)}>
-          <Icon name="add-circle" size={28} color="#6c5ce7" />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title="Лента"
+        rightElement={
+          <TouchableOpacity style={styles.createButton} onPress={() => setCreateModalVisible(true)}>
+            <Icon name="add-circle" size={28} color="#6c5ce7" />
+          </TouchableOpacity>
+        }
+      />
 
       <FlatList
         data={posts}

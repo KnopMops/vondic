@@ -406,7 +406,7 @@ export default function CommunityPage() {
 						</div>
 
 						<div className='mt-4'>
-							<Composer onCreate={handleCreatePost} />
+							{isOwner && <Composer onCreate={handleCreatePost} />}
 						</div>
 
 						<div className='mt-4 space-y-4'>

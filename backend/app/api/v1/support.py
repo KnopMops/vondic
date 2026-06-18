@@ -228,7 +228,7 @@ def admin_user_reports_action(current_user):
     except Exception:
         return jsonify({"error": "Invalid report_id"}), 400
 
-    if action not in ("no_violation", "close"):
+    if action not in ("no_violation", "close", "reset_username"):
         return jsonify({"error": "Недопустимое действие"}), 400
 
     report = UserReport.query.get(report_id)
@@ -240,6 +240,21 @@ def admin_user_reports_action(current_user):
             db.session.delete(report)
             db.session.commit()
             return jsonify({"ok": True, "removed": True})
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({"error": str(e)}), 500
+
+    if action == "reset_username":
+        if role != "admin":
+            return jsonify({"error": "Только администратор"}), 403
+        target = User.query.get(report.target_user_id)
+        if not target:
+            return jsonify({"error": "Пользователь не найден"}), 404
+        try:
+            target.username = target.id
+            db.session.delete(report)
+            db.session.commit()
+            return jsonify({"ok": True, "removed": True, "new_username": target.id})
         except Exception as e:
             db.session.rollback()
             return jsonify({"error": str(e)}), 500

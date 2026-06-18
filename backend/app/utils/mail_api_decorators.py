@@ -1,3 +1,4 @@
+from datetime import datetime
 from functools import wraps
 
 from app.services.mail_api_service import user_has_mail_permission
@@ -5,17 +6,30 @@ from app.services.user_service import UserService
 from flask import jsonify, request
 
 
+def _check_mail_premium(user):
+    if not user.premium or (
+        user.premium_expired_at and user.premium_expired_at < datetime.utcnow()
+    ):
+        return (
+            jsonify(
+                {"error": "Mail API доступно только с подпиской Vondic Premium"}
+            ),
+            403,
+        )
+    return None
+
+
 def _resolve_api_key_user():
-    data = request.get_json(silent=True) or {}
-    api_key = data.get("api_key")
-    if not api_key:
-        api_key = request.headers.get("X-API-Key")
+    api_key = request.headers.get("X-API-Key")
     if not api_key:
         auth_header = request.headers.get("Authorization", "")
         if auth_header.startswith("ApiKey "):
             api_key = auth_header.split(" ", 1)[1].strip()
     if not api_key:
         api_key = request.args.get("api_key")
+    if not api_key:
+        data = request.get_json(silent=True) or {}
+        api_key = data.get("api_key")
     if not api_key:
         return None
     return UserService.get_user_by_api_key(api_key)
@@ -28,7 +42,11 @@ def mail_api_key_only(f):
         if not user:
             return jsonify({"error": "Invalid or missing api_key"}), 401
         if not user.is_developer:
-            return jsonify({"error": "Developer mode required for Mail API"}), 403
+            return jsonify(
+                {"error": "Developer mode required for Mail API"}), 403
+        premium_error = _check_mail_premium(user)
+        if premium_error:
+            return premium_error
         return f(current_user=user, *args, **kwargs)
 
     wrapped._mail_api_key_only = True
@@ -43,7 +61,11 @@ def mail_api_key_required(permission: str):
             if not user:
                 return jsonify({"error": "Invalid or missing api_key"}), 401
             if not user.is_developer:
-                return jsonify({"error": "Developer mode required for Mail API"}), 403
+                return jsonify(
+                    {"error": "Developer mode required for Mail API"}), 403
+            premium_error = _check_mail_premium(user)
+            if premium_error:
+                return premium_error
             if not user_has_mail_permission(user, permission):
                 return (
                     jsonify(

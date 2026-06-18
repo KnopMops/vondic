@@ -1124,7 +1124,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 			className='mx-auto max-w-3xl space-y-6'
 		>
 			<div
-				className={`relative h-48 rounded-2xl overflow-hidden shadow-lg ${
+				className={`relative h-32 sm:h-48 rounded-2xl overflow-hidden shadow-lg ${
 					user.premium ? '' : activeTheme.class
 				}`}
 				style={
@@ -1156,7 +1156,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 					transition={{ delay: 0.2 }}
 					onClick={() => hasProfileStories && setIsStoriesOpen(true)}
 					disabled={!hasProfileStories || loadingStories}
-					className='-mt-20 relative z-10 disabled:cursor-default'
+					className='-mt-14 sm:-mt-20 relative z-10 disabled:cursor-default'
 				>
 					<div
 						className={`rounded-full p-[3px] ${
@@ -1165,7 +1165,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 								: 'bg-gray-700'
 						}`}
 					>
-						<div className='flex h-32 w-32 items-center justify-center rounded-full bg-gray-900 overflow-hidden shadow-xl'>
+						<div className='flex h-24 w-24 sm:h-32 sm:w-32 items-center justify-center rounded-full bg-gray-900 overflow-hidden shadow-xl'>
 							{user.avatar_url && (!isBlocked || isAdmin) ? (
 								<img
 									src={getAttachmentUrl(user.avatar_url)}
@@ -1189,7 +1189,7 @@ export default function UserProfile({ user, currentUser }: Props) {
 				<div className='flex-1 pb-2 w-full'>
 					<div className='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4'>
 						<div>
-							<h1 className='text-3xl font-bold text-white'>
+							<h1 className='text-2xl sm:text-3xl font-bold text-white'>
 								{user.username}
 								{Boolean(user.premium) && (
 									<span className='ml-2 text-amber-400'>★</span>

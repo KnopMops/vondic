@@ -8,6 +8,7 @@ import { userShowsEmail } from '@/lib/userPrivacy'
 import { getAttachmentUrl, getAvatarUrl, formatMskDateTime } from '@/lib/utils'
 import {
 	getSavedAccounts,
+	isAccountStale,
 	removeSavedAccount,
 	type SavedAccount,
 } from '@/lib/savedAccounts'
@@ -31,21 +32,21 @@ type Props = {
 export default function Header({ email, onLogout }: Props) {
 	const { user } = useAppSelector(state => state.auth)
 	const { isConnected } = useSocket()
-	const { logout, loginWithYandex } = useAuth()
+	const { logout, loginWithYandex, switchAccount } = useAuth()
+	const [switchingAccountId, setSwitchingAccountId] = useState<string | null>(
+		null,
+	)
 	const pathname = usePathname()
 	const [isDropdownOpen, setIsDropdownOpen] = useState(false)
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 	const [showAccountSwitcher, setShowAccountSwitcher] = useState(false)
 	const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>([])
 
-	const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000
-	const isStale = (account: SavedAccount) =>
-		Date.now() - account.last_login_at > THREE_DAYS_MS
-
 	const [searchQuery, setSearchQuery] = useState('')
 	const [searchResults, setSearchResults] = useState<SearchResult | null>(null)
 	const [isSearching, setIsSearching] = useState(false)
 	const [showResults, setShowResults] = useState(false)
+	const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
 	const searchRef = useRef<HTMLDivElement>(null)
 
 	useEffect(() => {
@@ -99,9 +100,16 @@ export default function Header({ email, onLogout }: Props) {
 	}
 
 	return (
-		<header className='sticky top-0 z-50 border-b border-white/10 bg-black/20 backdrop-blur-xl'>
+		<header className='fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-gray-950 md:bg-gray-950/80 backdrop-blur-xl'>
 			<div className='mx-auto flex max-w-7xl items-center justify-between px-4 py-3'>
 				<div className='flex items-center gap-3'>
+					<button
+						onClick={() => setIsMobileMenuOpen(true)}
+						className='p-2 -ml-2 text-gray-400 hover:text-white transition-colors md:hidden'
+						aria-label='Открыть меню'
+					>
+						<Menu className='h-6 w-6' />
+					</button>
 					<Link href='/feed' aria-label='Перейти в ленту'>
 						<BrandLogo size={28} />
 					</Link>
@@ -225,6 +233,13 @@ export default function Header({ email, onLogout }: Props) {
 				</div>
 
 				<div className='relative flex items-center gap-3'>
+					<button
+						onClick={() => setIsMobileSearchOpen(true)}
+						className='flex h-9 w-9 items-center justify-center rounded-full bg-black/30 ring-1 ring-white/15 text-gray-300 hover:text-white transition-all sm:hidden'
+						aria-label='Поиск'
+					>
+						<Search className='h-4 w-4' />
+					</button>
 					<div className='relative'>
 						<button
 							onClick={() => setIsDropdownOpen(!isDropdownOpen)}
@@ -254,14 +269,41 @@ export default function Header({ email, onLogout }: Props) {
 											<div
 												key={account.id}
 												className='group relative flex items-center gap-3 rounded-lg p-2 hover:bg-white/5 cursor-pointer transition-colors'
-													onClick={() => {
-														if (account.auth_provider === 'yandex') {
-															localStorage.setItem('post_logout_provider', 'yandex')
+													onClick={async () => {
+														if (String(user?.id) === String(account.id)) {
+															setShowAccountSwitcher(false)
+															setIsDropdownOpen(false)
+															return
 														}
-														if (isStale(account)) {
+														if (isAccountStale(account)) {
+															if (account.auth_provider === 'yandex') {
+																localStorage.setItem(
+																	'post_logout_provider',
+																	'yandex',
+																)
+															}
 															logout('/login')
-														} else {
-															window.location.assign(`/login?switch=1&email=${encodeURIComponent(account.email)}`)
+															return
+														}
+														setSwitchingAccountId(account.id)
+														try {
+															await switchAccount(account)
+														} catch {
+															if (account.auth_provider === 'yandex') {
+																localStorage.setItem(
+																	'post_logout_provider',
+																	'yandex',
+																)
+																await loginWithYandex({
+																	loginHint: account.email,
+																})
+															} else {
+																window.location.assign(
+																	`/login?switch=1&email=${encodeURIComponent(account.email)}`,
+																)
+															}
+														} finally {
+															setSwitchingAccountId(null)
 														}
 													}}
 											>
@@ -279,9 +321,16 @@ export default function Header({ email, onLogout }: Props) {
 												<div className='flex-1 min-w-0'>
 													<p className='text-sm text-white font-medium truncate'>
 														{account.username}
+														{String(user?.id) === String(account.id) && (
+															<span className='ml-1 text-xs text-indigo-400'>
+																· сейчас
+															</span>
+														)}
 													</p>
 													<p className='text-xs text-gray-400 truncate'>
-														{account.email}
+														{switchingAccountId === account.id
+															? 'Переключение…'
+															: account.email}
 													</p>
 												</div>
 												<button
@@ -388,73 +437,183 @@ export default function Header({ email, onLogout }: Props) {
 								)}
 							</div>
 						)}
-					</div>
-					
-					{isDropdownOpen && (
-						<div
-							className='fixed inset-0 z-40'
-							onClick={() => setIsDropdownOpen(false)}
-						/>
+				</div>
+				
+				{isDropdownOpen && (
+					<div
+						className='fixed inset-0 z-40'
+						onClick={() => setIsDropdownOpen(false)}
+					/>
+				)}
+			</div>
+		</div>
+
+		{isMobileSearchOpen && (
+			<div className='fixed inset-0 z-[9999] bg-gray-950 sm:hidden flex flex-col'>
+				<div className='flex items-center gap-3 p-4 border-b border-white/10'>
+					<button
+						onClick={() => setIsMobileSearchOpen(false)}
+						className='p-2 text-gray-400 hover:text-white transition-colors'
+						aria-label='Закрыть поиск'
+					>
+						<CloseIcon className='h-5 w-5' />
+					</button>
+					<input
+						type='text'
+						placeholder='@ - пользователь, # - пост'
+						value={searchQuery}
+						onChange={e => handleSearch(e.target.value)}
+						autoFocus
+						className='flex-1 rounded-xl bg-black/30 px-4 py-2 text-sm text-gray-200 placeholder-gray-500 border border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-all'
+					/>
+				</div>
+				<div className='flex-1 overflow-y-auto p-4 custom-scrollbar'>
+					{isSearching ? (
+						<div className='p-4 text-center text-gray-400'>Поиск...</div>
+					) : searchResults ? (
+						<div className='space-y-2'>
+							{searchResults.type === 'users' && (
+								<div className='space-y-1'>
+									{searchResults.results.length === 0 ? (
+										<div className='p-4 text-center text-gray-500'>Пользователи не найдены</div>
+									) : (
+										searchResults.results.map((u: User) => (
+											<Link
+												key={u.id}
+												href={`/feed/profile/${u.id}`}
+												className='flex items-center gap-3 rounded-lg p-2 hover:bg-white/5 transition-colors'
+												onClick={() => {
+													setIsMobileSearchOpen(false)
+													setShowResults(false)
+												}}
+											>
+												<img
+													src={getAvatarUrl(u.avatar_url)}
+													alt={u.username}
+													className='h-10 w-10 rounded-full object-cover ring-2 ring-gray-800'
+												/>
+												<div>
+													<div className='text-sm font-semibold text-gray-200'>
+														{u.username}
+														{u.premium && <span className='ml-1 text-amber-400'>★</span>}
+													</div>
+													{userShowsEmail(u, user?.id) && u.email && (
+														<div className='text-xs text-gray-500'>{u.email}</div>
+													)}
+												</div>
+											</Link>
+										))
+									)}
+								</div>
+							)}
+							{searchResults.type === 'posts' && (
+								<div className='space-y-1'>
+									{searchResults.results.length === 0 ? (
+										<div className='p-4 text-center text-gray-500'>Посты не найдены</div>
+									) : (
+										searchResults.results.map((post: any) => (
+											<Link
+												key={post.id}
+												href={`/feed?post=${post.id}`}
+												className='flex items-start gap-3 rounded-lg p-3 hover:bg-white/5 transition-colors'
+												onClick={() => {
+													setIsMobileSearchOpen(false)
+													setShowResults(false)
+												}}
+											>
+												<img
+													src={getAvatarUrl(post.author?.avatar_url)}
+													alt={post.author?.username || 'User'}
+													className='h-8 w-8 rounded-full object-cover flex-shrink-0 ring-2 ring-gray-800'
+												/>
+												<div className='flex-1 min-w-0'>
+													<div className='flex items-center justify-between'>
+														<span className='text-sm font-semibold text-gray-200 truncate'>
+															{post.author?.username || 'Unknown User'}
+														</span>
+														<span className='text-xs text-gray-500 whitespace-nowrap ml-2'>
+															{formatMskDateTime(post.created_at)}
+														</span>
+													</div>
+													<div className='text-sm text-gray-400 truncate mt-0.5'>{post.content}</div>
+												</div>
+											</Link>
+										))
+									)}
+								</div>
+							)}
+							{searchResults.type === 'unknown' && (
+								<div className='p-4 text-center text-gray-500 text-sm'>
+									Начните запрос с <span className='text-indigo-300'>@</span> для поиска пользователей или с{' '}
+									<span className='text-indigo-300'>#</span> для поиска постов
+								</div>
+							)}
+						</div>
+					) : (
+						<div className='p-4 text-center text-gray-500 text-sm'>
+							Начните вводить запрос
+						</div>
 					)}
 				</div>
 			</div>
+		)}
 
-			{isMobileMenuOpen && (
-				<div className='fixed inset-0 z-[9999] md:hidden'>
-					<div
-						className='absolute inset-0 bg-black/60 backdrop-blur-sm'
-						onClick={() => setIsMobileMenuOpen(false)}
-					/>
-					<div className='absolute left-0 top-0 bottom-0 w-64 max-w-[80vw] bg-gray-950 border-r border-white/10 p-4 flex flex-col animate-in slide-in-from-left duration-200'>
-						<div className='flex items-center justify-between mb-6'>
-							<BrandLogo size={28} />
-							<button
-								onClick={() => setIsMobileMenuOpen(false)}
-								className='p-2 text-gray-400 hover:text-white transition-colors'
-								aria-label='Закрыть'
-							>
-								<CloseIcon className='h-5 w-5' />
-							</button>
-						</div>
-						<nav className='flex flex-col gap-2'>
-							{sidebarItems.map(item => {
-								const Icon = (item as any).icon
-								let href = item.href
-								if (href === '/feed/profile' && user?.id) {
-									href = `/feed/profile/${user.id}`
-								}
-								if (href === '/friends') {
-									href = '/feed/friends'
-								}
-								return (
-									<Link
-										key={item.label}
-										href={href}
-										onClick={() => setIsMobileMenuOpen(false)}
-										className={`flex items-center gap-4 rounded-xl px-3 py-3 text-gray-300 hover:bg-white/10 hover:text-white transition-colors ${
-											pathname?.startsWith(href) ? 'bg-white/15 text-white' : ''
-										}`}
-									>
-										<Icon className='h-5 w-5' />
-										<span className='text-sm font-medium'>{item.label}</span>
-									</Link>
-								)
-							})}
-							{(user?.role === 'Support' || user?.role === 'Admin') && (
+		{isMobileMenuOpen && (
+			<div className='fixed inset-0 z-[9999] md:hidden'>
+				<div
+					className='absolute inset-0 bg-black/60 backdrop-blur-sm'
+					onClick={() => setIsMobileMenuOpen(false)}
+				/>
+				<div className='absolute left-0 top-0 bottom-0 w-64 max-w-[80vw] bg-gradient-to-b from-indigo-950 to-gray-950 border-r border-indigo-500/20 p-4 flex flex-col animate-in slide-in-from-left duration-200 shadow-2xl shadow-indigo-900/30'>
+					<div className='flex items-center justify-between mb-6'>
+						<BrandLogo size={28} />
+						<button
+							onClick={() => setIsMobileMenuOpen(false)}
+							className='p-2 text-gray-400 hover:text-white transition-colors'
+							aria-label='Закрыть'
+						>
+							<CloseIcon className='h-5 w-5' />
+						</button>
+					</div>
+					<nav className='flex flex-col gap-2'>
+						{sidebarItems.map(item => {
+							const Icon = (item as any).icon
+							let href = item.href
+							if (href === '/feed/profile' && user?.id) {
+								href = `/feed/profile/${user.id}`
+							}
+							if (href === '/friends') {
+								href = '/feed/friends'
+							}
+							return (
 								<Link
-									href='/feed/admin'
+									key={item.label}
+									href={href}
 									onClick={() => setIsMobileMenuOpen(false)}
 									className={`flex items-center gap-4 rounded-xl px-3 py-3 text-gray-300 hover:bg-white/10 hover:text-white transition-colors ${
-										pathname?.startsWith('/feed/admin') ? 'bg-white/15 text-white' : ''
+										pathname?.startsWith(href) ? 'bg-white/15 text-white' : ''
 									}`}
 								>
-									<span className='text-sm font-medium'>Админка</span>
+									<Icon className='h-5 w-5' />
+									<span className='text-sm font-medium'>{item.label}</span>
 								</Link>
-							)}
-						</nav>
-					</div>
+							)
+						})}
+						{(user?.role === 'Support' || user?.role === 'Admin') && (
+							<Link
+								href='/feed/admin'
+								onClick={() => setIsMobileMenuOpen(false)}
+								className={`flex items-center gap-4 rounded-xl px-3 py-3 text-gray-300 hover:bg-white/10 hover:text-white transition-colors ${
+									pathname?.startsWith('/feed/admin') ? 'bg-white/15 text-white' : ''
+								}`}
+							>
+								<span className='text-sm font-medium'>Админка</span>
+							</Link>
+						)}
+					</nav>
 				</div>
-			)}
-		</header>
+			</div>
+		)}
+	</header>
 	)
 }
