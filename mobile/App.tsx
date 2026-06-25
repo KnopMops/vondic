@@ -3,7 +3,7 @@ import 'react-native-gesture-handler';
 import React, {useEffect, useRef, useState} from 'react';
 import {StatusBar, Animated, View, Text, TouchableOpacity, StyleSheet} from 'react-native';
 import {GestureHandlerRootView} from 'react-native-gesture-handler';
-import {NavigationContainer, createNavigationContainerRef} from '@react-navigation/native';
+import {NavigationContainer} from '@react-navigation/native';
 import {SafeAreaProvider, useSafeAreaInsets} from 'react-native-safe-area-context';
 import {Provider} from 'react-redux';
 import {store} from '@/store';
@@ -19,6 +19,8 @@ import {useCallStore} from '@/store/callStore';
 import {pushService} from '@/services/PushService';
 import {appLog} from '@/utils/appLogger';
 import Icon from 'react-native-vector-icons/Ionicons';
+import {requestAllAppPermissions} from '@/utils/permissions';
+import Video from 'react-native-video';
 
 // Verify the secure RNG is wired up before any crypto-dependent screen mounts.
 try {
@@ -32,8 +34,7 @@ try {
 appLog('App', 'Application module loaded');
 
 crashLogger.setupGlobalHandler();
-
-export const navigationRef = createNavigationContainerRef<MainStackParamList>();
+import {navigationRef} from '@/navigation/navigationRef';
 
 function IncomingCallListener(): React.JSX.Element | null {
   const incomingCall = useCallStore(state => state.incomingCall);
@@ -95,6 +96,16 @@ function AppInitializer(): React.JSX.Element | null {
     }
     appLog('AppInitializer', 'user initialized', {userId: user.id});
 
+    // Запрашиваем все системные разрешения (уведомления, микрофон, камера)
+    requestAllAppPermissions().catch(err => {
+      appLog('AppInitializer', 'Ошибка запроса системных разрешений', err);
+    });
+
+    // Инициализируем Push-уведомления независимо от состояния сокета/WebRTC
+    pushService.initialize(user.id).catch(err => {
+      console.error('[PushService] initialize failed:', err);
+    });
+
     let mounted = true;
 
     (async () => {
@@ -112,11 +123,6 @@ function AppInitializer(): React.JSX.Element | null {
         }
 
         await socketService.connect();
-
-        // Push-уведомления и CallKeep — опционально, не должны ломать вход.
-        pushService.initialize().catch(err => {
-          console.error('[PushService] initialize failed:', err);
-        });
       } catch (err: any) {
         console.error('[AppInitializer] failed to initialize realtime:', err);
       }
@@ -133,6 +139,7 @@ function AppInitializer(): React.JSX.Element | null {
 function GlobalNotificationBanner(): React.JSX.Element | null {
   const [visible, setVisible] = useState(false);
   const [notification, setNotification] = useState<any>(null);
+  const [playAudio, setPlayAudio] = useState(false);
   const translateY = useRef(new Animated.Value(-150)).current;
   const timeoutRef = useRef<any>(null);
   const insets = useSafeAreaInsets();
@@ -159,6 +166,7 @@ function GlobalNotificationBanner(): React.JSX.Element | null {
 
       setNotification(msg);
       setVisible(true);
+      setPlayAudio(true);
 
       Animated.spring(translateY, {
         toValue: 0,
@@ -205,24 +213,34 @@ function GlobalNotificationBanner(): React.JSX.Element | null {
     : notification.content || 'Файл/Изображение';
 
   return (
-    <Animated.View style={[styles.bannerContainer, { top: (insets.top || 16) + 8, transform: [{ translateY }] }]}>
-      <TouchableOpacity activeOpacity={0.9} style={styles.banner} onPress={handlePress}>
-        <View style={styles.iconContainer}>
-          <Icon name="mail" size={24} color="#fff" />
-        </View>
-        <View style={styles.content}>
-          <Text style={styles.bannerTitle} numberOfLines={1}>
-            {title}
-          </Text>
-          <Text style={styles.bannerBody} numberOfLines={1}>
-            {body}
-          </Text>
-        </View>
-        <TouchableOpacity style={styles.closeBtn} onPress={dismiss}>
-          <Icon name="close" size={20} color="#888" />
+    <>
+      {playAudio && (
+        <Video
+          source={require('./android/app/src/main/res/raw/message.mp3')}
+          paused={false}
+          onEnd={() => setPlayAudio(false)}
+          style={{ width: 0, height: 0, position: 'absolute' }}
+        />
+      )}
+      <Animated.View style={[styles.bannerContainer, { top: (insets.top || 16) + 8, transform: [{ translateY }] }]}>
+        <TouchableOpacity activeOpacity={0.9} style={styles.banner} onPress={handlePress}>
+          <View style={styles.iconContainer}>
+            <Icon name="mail" size={24} color="#fff" />
+          </View>
+          <View style={styles.content}>
+            <Text style={styles.bannerTitle} numberOfLines={1}>
+              {title}
+            </Text>
+            <Text style={styles.bannerBody} numberOfLines={1}>
+              {body}
+            </Text>
+          </View>
+          <TouchableOpacity style={styles.closeBtn} onPress={dismiss}>
+            <Icon name="close" size={20} color="#888" />
+          </TouchableOpacity>
         </TouchableOpacity>
-      </TouchableOpacity>
-    </Animated.View>
+      </Animated.View>
+    </>
   );
 }
 

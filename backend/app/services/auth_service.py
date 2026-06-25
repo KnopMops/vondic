@@ -8,6 +8,7 @@ import requests
 from app.core.config import Config
 from app.core.extensions import cache, db
 from app.models.user import User
+from app.models.user_session import UserSession
 from app.services.email_service import EmailService
 from email_validator import EmailNotValidError, validate_email
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -21,10 +22,44 @@ class AuthService:
         return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
     @staticmethod
-    def _issue_tokens(user: User) -> tuple[str, str]:
-        """Persist slow password-style hashes; return raw bearer strings once."""
+    def _create_session(user: User, raw_access: str, raw_refresh: str,
+                        device_type: str = "web", device_name: str | None = None,
+                        ip_address: str | None = None) -> UserSession:
+        from sqlalchemy import func
+        session_count = UserSession.query.filter_by(user_id=user.id).count()
+        if session_count >= UserSession.MAX_SESSIONS:
+            oldest = (
+                UserSession.query.filter_by(user_id=user.id)
+                .order_by(UserSession.last_active.asc())
+                .first()
+            )
+            if oldest:
+                db.session.delete(oldest)
+                db.session.flush()
+        expires_at = None
+        if device_type == "web":
+            expires_at = datetime.utcnow() + UserSession.WEB_SESSION_TTL
+        session = UserSession(
+            user_id=user.id,
+            device_type=device_type,
+            device_name=device_name,
+            ip_address=ip_address,
+            access_token_lookup=raw_access.split(".", 1)[0],
+            access_token_hash=generate_password_hash(raw_access),
+            refresh_token_lookup=raw_refresh.split(".", 1)[0],
+            refresh_token_hash=generate_password_hash(raw_refresh),
+            expires_at=expires_at,
+        )
+        db.session.add(session)
+        return session
+
+    @staticmethod
+    def _issue_tokens(user: User, device_type: str = "web",
+                      device_name: str | None = None,
+                      ip_address: str | None = None) -> tuple[str, str]:
         raw_access = f"{secrets.token_hex(16)}.{secrets.token_urlsafe(40)}"
         raw_refresh = f"{secrets.token_hex(16)}.{secrets.token_urlsafe(40)}"
+        AuthService._create_session(user, raw_access, raw_refresh, device_type, device_name, ip_address)
         user.access_token_lookup = raw_access.split(".", 1)[0]
         user.refresh_token_lookup = raw_refresh.split(".", 1)[0]
         user.access_token = generate_password_hash(raw_access)
@@ -60,13 +95,17 @@ class AuthService:
         return normalized, None
 
     @staticmethod
-    def register_user(data):
+    def register_user(data, ip_address=None):
         email, email_error = AuthService._validate_registration_email(
             data.get("email"))
         if email_error:
             return (None, email_error)
         username = data.get("username")
         password = data.get("password")
+        device_type = (data.get("device_type") or "web").strip().lower()
+        device_name = data.get("device_name")
+        if device_type not in ("web", "mobile", "desktop"):
+            device_type = "web"
         if not email or not username or (not password):
             return (None, "Missing required fields")
         from app.utils.email_utils import email_exists
@@ -90,7 +129,7 @@ class AuthService:
                 else:
                     new_user.registration_ip = request.remote_addr or ""
 
-            raw_access, raw_refresh = AuthService._issue_tokens(new_user)
+            raw_access, raw_refresh = AuthService._issue_tokens(new_user, device_type, device_name, ip_address)
             db.session.add(new_user)
             db.session.commit()
 
@@ -123,13 +162,25 @@ class AuthService:
         if "." in token:
             lookup, _, _sec = token.partition(".")
             if lookup and _sec and "." not in _sec:
-                cand = User.query.filter_by(access_token_lookup=lookup).first()
-                if (
-                    cand
-                    and cand.access_token
-                    and check_password_hash(cand.access_token, token)
-                ):
-                    user = cand
+                session = UserSession.query.filter_by(access_token_lookup=lookup).first()
+                if session and session.access_token_hash and check_password_hash(session.access_token_hash, token):
+                    if session.is_expired():
+                        db.session.delete(session)
+                        db.session.commit()
+                        return None, "Invalid or expired token"
+                    session.last_active = datetime.utcnow()
+                    if session.expires_at and session.device_type == "web":
+                        session.expires_at = datetime.utcnow() + UserSession.WEB_SESSION_TTL
+                    db.session.commit()
+                    user = User.query.get(session.user_id)
+                if not user:
+                    cand = User.query.filter_by(access_token_lookup=lookup).first()
+                    if (
+                        cand
+                        and cand.access_token
+                        and check_password_hash(cand.access_token, token)
+                    ):
+                        user = cand
         if not user:
             token_hash = AuthService._hash_token(token)
             if token_hash:
@@ -167,22 +218,31 @@ class AuthService:
         return user, None
 
     @staticmethod
-    def refresh_with_refresh_token(refresh_token: str | None):
+    def refresh_with_refresh_token(refresh_token: str | None, device_type: str | None = None, ip_address: str | None = None):
         token = (refresh_token or "").strip()
         if not token:
             return None, "Invalid refresh token"
         user = None
+        session = None
         if "." in token:
             lookup, _, _sec = token.partition(".")
             if lookup and _sec and "." not in _sec:
-                cand = User.query.filter_by(
-                    refresh_token_lookup=lookup).first()
-                if (
-                    cand
-                    and cand.refresh_token
-                    and check_password_hash(cand.refresh_token, token)
-                ):
-                    user = cand
+                session = UserSession.query.filter_by(refresh_token_lookup=lookup).first()
+                if session and session.refresh_token_hash and check_password_hash(session.refresh_token_hash, token):
+                    if session.is_expired():
+                        db.session.delete(session)
+                        db.session.commit()
+                        return None, "Invalid refresh token"
+                    user = User.query.get(session.user_id)
+                if not user:
+                    session = None
+                    cand = User.query.filter_by(refresh_token_lookup=lookup).first()
+                    if (
+                        cand
+                        and cand.refresh_token
+                        and check_password_hash(cand.refresh_token, token)
+                    ):
+                        user = cand
         if not user:
             th = AuthService._hash_token(token)
             if th:
@@ -199,7 +259,7 @@ class AuthService:
             return None, "Invalid refresh token"
         if user.is_blocked:
             return None, "User is blocked"
-        raw_access, raw_refresh = AuthService._issue_tokens(user)
+        raw_access, raw_refresh = AuthService._issue_tokens(user, device_type or "web", ip_address=ip_address)
         try:
             db.session.commit()
             return (
@@ -235,7 +295,7 @@ class AuthService:
         return f"https://oauth.yandex.ru/authorize?{urlencode(params)}", None
 
     @staticmethod
-    def login_yandex_user(code):
+    def login_yandex_user(code, device_type="web", device_name=None, ip_address=None):
         client_id = Config.YANDEX_CLIENT_ID
         client_secret = Config.YANDEX_CLIENT_SECRET
         redirect_uri = Config.YANDEX_REDIRECT_URI
@@ -293,13 +353,13 @@ class AuthService:
 
             user = User(email=email, username=username, is_verified=1)
             user.set_password(secrets.token_hex(16))
-            raw_access, raw_refresh = AuthService._issue_tokens(user)
+            raw_access, raw_refresh = AuthService._issue_tokens(user, device_type, device_name, ip_address)
             user.avatar_url = avatar_url
             db.session.add(user)
         else:
             if user.is_blocked:
                 return None, "User is blocked"
-            raw_access, raw_refresh = AuthService._issue_tokens(user)
+            raw_access, raw_refresh = AuthService._issue_tokens(user, device_type, device_name, ip_address)
 
         try:
             db.session.commit()
@@ -389,6 +449,7 @@ class AuthService:
         user.set_password(new_password)
         user.reset_password_token = None
         user.reset_password_expires = None
+        user.reset_ip_required = None
         try:
             db.session.commit()
             return (True, "Password reset successfully")
@@ -409,6 +470,11 @@ class AuthService:
             access_hash = AuthService._hash_token(access_token)
             if access_hash and access_hash not in revoked:
                 revoked.append(access_hash)
+            lookup = access_token.split(".", 1)[0] if "." in access_token else None
+            if lookup:
+                sess = UserSession.query.filter_by(access_token_lookup=lookup).first()
+                if sess:
+                    db.session.delete(sess)
         if refresh_token:
             refresh_hash = AuthService._hash_token(refresh_token)
             if refresh_hash and refresh_hash not in revoked:
@@ -482,11 +548,15 @@ class AuthService:
             return None, str(e)
 
     @staticmethod
-    def login_user(data):
+    def login_user(data, ip_address=None):
         from app.utils.email_utils import find_user_by_email, normalize_email
 
         email = normalize_email(data.get("email"))
         password = data.get("password")
+        device_type = (data.get("device_type") or "web").strip().lower()
+        device_name = data.get("device_name")
+        if device_type not in ("web", "mobile", "desktop"):
+            device_type = "web"
         if not email or not password:
             return (None, "Missing email or password")
         user = find_user_by_email(email)
@@ -516,7 +586,7 @@ class AuthService:
                     if not AuthService.verify_totp(
                             user.two_factor_secret, totp_code):
                         return (None, "InvalidTwoFactorCode")
-        raw_access, raw_refresh = AuthService._issue_tokens(user)
+        raw_access, raw_refresh = AuthService._issue_tokens(user, device_type, device_name, ip_address)
         try:
             db.session.commit()
             return (

@@ -247,6 +247,8 @@ def create_app(config_class=Config):
     app.register_blueprint(public_mail_bp)
     app.register_blueprint(oauth_bp)
     app.register_blueprint(auth_bp)
+    from app.api.v1.devices import devices_bp
+    app.register_blueprint(devices_bp)
     app.register_blueprint(bots_bp)
     app.register_blueprint(bot_games_bp, url_prefix="/api/v1/bots")
     app.register_blueprint(channels_bp)

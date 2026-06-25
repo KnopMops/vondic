@@ -58,6 +58,52 @@ class SignalingService:
         except Exception as e:
             logger.error(f"Error loading existing interactions: {e}")
 
+    def _get_user_devices(self, user_id: str):
+        try:
+            from webrtc.database import Device
+            session = self.broker.repo.session_factory()
+            try:
+                devices = session.query(Device).filter_by(user_id=str(user_id)).all()
+                result = [{"token": d.token, "platform": d.platform} for d in devices]
+                return result
+            finally:
+                session.close()
+        except Exception as e:
+            logger.error(f"Error fetching devices for {user_id}: {e}")
+            return []
+
+    def _push_notify_user(self, user_id: str, title: str, body: str, data: dict | None = None):
+        try:
+            from webrtc.fcm_push import send_push_notification
+            devices = self._get_user_devices(user_id)
+            for dev in devices:
+                send_push_notification(dev["token"], title, body, data)
+        except Exception as e:
+            logger.error(f"Error sending push to {user_id}: {e}")
+
+    def _push_call_user(self, user_id: str, call_data: dict):
+        try:
+            from webrtc.fcm_push import send_call_wake
+            devices = self._get_user_devices(user_id)
+            for dev in devices:
+                send_call_wake(dev["token"], call_data)
+        except Exception as e:
+            logger.error(f"Error sending call push to {user_id}: {e}")
+
+    @staticmethod
+    def _get_push_body(content: str | None, msg_type: str) -> str:
+        if msg_type == "image":
+            return "отправил изображение"
+        if msg_type == "file":
+            return "отправил файл"
+        if msg_type == "voice":
+            return "отправил голосовое сообщение"
+        if content and content.startswith("e2e:"):
+            return "отправил зашифрованное сообщение"
+        if content and len(content) > 100:
+            return "отправил сообщение: " + content[:100] + "..."
+        return "отправил сообщение: " + (content or "Новое сообщение")
+
     def _broadcast_status(self, user_id, status):
         try:
             sockets = set()
@@ -454,6 +500,22 @@ class SignalingService:
         emit("incoming_call", incoming_payload, room=target_user_id)
         logger.info(
             f"Звонок от {request.sid} к пользователю {target_user_id}")
+
+        try:
+            target_socket = self.broker.get_user_socket(target_user_id)
+            if not target_socket:
+                caller_name = caller.get("username", "Пользователь") if caller else "Пользоватeler"
+                self._push_call_user(
+                    target_user_id,
+                    {
+                        "caller_user_id": caller.get("id") if caller else None,
+                        "caller_username": caller_name,
+                        "caller_avatar_url": caller.get("avatar_url") if caller else None,
+                    },
+                )
+        except Exception as e:
+            logger.error(f"Call push error: {e}")
+
         if caller and caller.get("id"):
             try:
                 self._persist_dm_call_notice(
@@ -1151,6 +1213,19 @@ class SignalingService:
                     "message_sent", {"status": "saved",
                                      "message": full_message_payload}
                 )
+                try:
+                    sender_info = self.broker.resolve_recipient(request.sid)
+                    sender_name = sender_info.get("username", "Пользователь") if sender_info else "Пользователь"
+                    push_title = f"{sender_name} написал"
+                    push_body = self._get_push_body(content, msg_type)
+                    self._push_notify_user(
+                        target_user_id,
+                        push_title,
+                        push_body,
+                        {"message_id": message_id, "sender_id": sender_id},
+                    )
+                except Exception as e:
+                    logger.error(f"Push notification error for DM: {e}")
 
             try:
                 import requests

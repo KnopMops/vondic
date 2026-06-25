@@ -10,11 +10,14 @@ import {
   Platform,
   PermissionsAndroid,
   Linking,
+  Modal,
+  Image,
 } from 'react-native';
 import {launchCamera} from 'react-native-image-picker';
 import AudioRecorderPlayer from 'react-native-audio-recorder-player';
 import Icon from 'react-native-vector-icons/Ionicons';
 import Video from 'react-native-video';
+import Clipboard from '@react-native-clipboard/clipboard';
 import {apiClient} from '@/api/client';
 import {Config} from '@/constants/config';
 import {useRoute, useNavigation} from '@react-navigation/native';
@@ -23,6 +26,7 @@ import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import type {MainStackParamList} from '@/navigation/MainStack';
 import {useChat} from '@/hooks/useChat';
 import {useAppSelector} from '@/store/hooks';
+import {Message} from '@/types';
 import {socketService} from '@/services/SocketService';
 import {crashLogger} from '@/utils/crashLogger';
 import {appLog} from '@/utils/appLogger';
@@ -116,7 +120,18 @@ function ChatScreenInner() {
     );
   }
 
-  const {messages, isLoading, hasMore, isTyping, fetchHistory, sendMessage, sendTyping} = chatHook;
+  const {
+    messages,
+    setMessages,
+    isLoading,
+    hasMore,
+    isTyping,
+    fetchHistory,
+    sendMessage,
+    editMessage,
+    deleteMessage,
+    sendTyping,
+  } = chatHook;
 
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
@@ -136,6 +151,130 @@ function ChatScreenInner() {
   const [playingMsgId, setPlayingMsgId] = useState<string | null>(null);
   const [playPosition, setPlayPosition] = useState(0);
   const [playDuration, setPlayDuration] = useState(0);
+
+  // Custom states for message actions
+  const [selectedMessage, setSelectedMessage] = useState<any>(null);
+  const [contextMenuVisible, setContextMenuVisible] = useState(false);
+  const [replyToMessage, setReplyToMessage] = useState<any>(null);
+  const [editingMessage, setEditingMessage] = useState<any>(null);
+  const [forwardingMessage, setForwardingMessage] = useState<any>(null);
+  const [forwardModalVisible, setForwardModalVisible] = useState(false);
+  const [chatsList, setChatsList] = useState<any[]>([]);
+  const [loadingChats, setLoadingChats] = useState(false);
+
+  const formatDividerDate = (dateStr: string) => {
+    if (!dateStr) return '';
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return '';
+      const now = new Date();
+      if (
+        date.getDate() === now.getDate() &&
+        date.getMonth() === now.getMonth() &&
+        date.getFullYear() === now.getFullYear()
+      ) {
+        return 'Сегодня';
+      }
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+      if (
+        date.getDate() === yesterday.getDate() &&
+        date.getMonth() === yesterday.getMonth() &&
+        date.getFullYear() === yesterday.getFullYear()
+      ) {
+        return 'Вчера';
+      }
+      return date.toLocaleDateString('ru-RU', {
+        day: 'numeric',
+        month: 'long',
+      }) + (date.getFullYear() !== now.getFullYear() ? ` ${date.getFullYear()}` : '');
+    } catch {
+      return '';
+    }
+  };
+
+  const loadForwardChats = async () => {
+    setLoadingChats(true);
+    try {
+      const recent = await apiClient.get<{items: any[]}>('/dm/recent');
+      const dmChats = (recent?.items || []).map((r: any) => ({
+        id: r.id || r.target_id,
+        name: r.username || r.name || 'Неизвестно',
+        avatar_url: r.avatar_url,
+        type: 'dm' as const,
+      }));
+
+      const [groupsData, channelsData] = await Promise.all([
+        apiClient.post<any[]>('/groups/my', {}).catch(() => []),
+        apiClient.post<any[]>('/channels/my', {}).catch(() => []),
+      ]);
+
+      const groupChats = (Array.isArray(groupsData) ? groupsData : []).map((g: any) => ({
+        id: g.id,
+        name: g.name,
+        avatar_url: g.avatar_url,
+        type: 'group' as const,
+      }));
+
+      const channelChats = (Array.isArray(channelsData) ? channelsData : []).map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        avatar_url: c.avatar_url,
+        type: 'channel' as const,
+      }));
+
+      setChatsList([...dmChats, ...groupChats, ...channelChats]);
+    } catch (err) {
+      console.error('[Chat] Failed to load forward chats:', err);
+    } finally {
+      setLoadingChats(false);
+    }
+  };
+
+  useEffect(() => {
+    if (forwardModalVisible) {
+      loadForwardChats();
+    }
+  }, [forwardModalVisible]);
+
+  const handleForwardTo = async (chat: any) => {
+    if (!forwardingMessage) return;
+    try {
+      const payload: any = {};
+      if (chat.type === 'dm') payload.target_id = chat.id;
+      else if (chat.type === 'group') payload.group_id = chat.id;
+      else if (chat.type === 'channel') payload.channel_id = chat.id;
+
+      await apiClient.post(`/messages/${forwardingMessage.id}/forward`, payload);
+      
+      if (
+        (chat.type === 'dm' && type === 'dm' && chat.id === id) ||
+        (chat.type === 'group' && type === 'group' && chat.id === id) ||
+        (chat.type === 'channel' && type === 'channel' && chat.id === id)
+      ) {
+        const newMsg: Message = {
+          id: `forward-${Date.now()}`,
+          sender_id: user?.id || '',
+          content: forwardingMessage.content,
+          attachments: forwardingMessage.attachments,
+          type: forwardingMessage.type,
+          forwarded_from_id: forwardingMessage.id,
+          timestamp: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+          isOwn: true,
+        };
+        setMessages(prev => [newMsg, ...prev]);
+      }
+      
+      Alert.alert('Успешно', `Сообщение переслано в ${chat.name}`);
+    } catch (err) {
+      console.error('[Chat] Forward error:', err);
+      Alert.alert('Ошибка', 'Не удалось переслать сообщение');
+    } finally {
+      setForwardModalVisible(false);
+      setForwardingMessage(null);
+    }
+  };
 
   const recorderRef = useRef<AudioRecorderPlayer | null>(null);
   if (!recorderRef.current) {
@@ -283,7 +422,8 @@ function ChatScreenInner() {
 
         if (response && response.url) {
           console.log('[ChatScreen] Voice message sent with URL:', response.url);
-          await sendMessage(response.url, 'voice');
+          await sendMessage(response.url, 'voice', undefined, replyToMessage?.id);
+          setReplyToMessage(null);
         } else {
           throw new Error('Upload response did not contain URL');
         }
@@ -463,7 +603,15 @@ function ChatScreenInner() {
     appLog('ChatScreen', 'Sending message...', {textLen: inputText.length});
     setSending(true);
     try {
-      await sendMessage(inputText.trim(), 'text');
+      if (editingMessage) {
+        await editMessage(editingMessage.id, inputText.trim());
+        setEditingMessage(null);
+      } else if (replyToMessage) {
+        await sendMessage(inputText.trim(), 'text', undefined, replyToMessage.id);
+        setReplyToMessage(null);
+      } else {
+        await sendMessage(inputText.trim(), 'text');
+      }
       setInputText('');
     } catch (err: any) {
       crashLogger.logCrash(err, 'ChatScreen_sendMessage', {text: inputText});
@@ -471,7 +619,7 @@ function ChatScreenInner() {
     } finally {
       setSending(false);
     }
-  }, [inputText, sendMessage]);
+  }, [inputText, sendMessage, editMessage, editingMessage, replyToMessage]);
 
   const [activeGroupCall, setActiveGroupCall] = useState<any>(null);
 
@@ -525,6 +673,11 @@ function ChatScreenInner() {
 
 
 
+  const handleMessageLongPress = (msg: any) => {
+    setSelectedMessage(msg);
+    setContextMenuVisible(true);
+  };
+
   const renderMessage = ({item, index}: {item: any; index: number}) => {
     try {
       if (!item || typeof item !== 'object') {
@@ -554,20 +707,83 @@ function ChatScreenInner() {
 
       const msgType = item.type || 'text';
 
-      if (msgType === 'voice') {
-        const isPlaying = playingMsgId === item.id;
-        const progress = isPlaying && playDuration > 0 ? playPosition / playDuration : 0;
+      // Date Divider logic
+      let showDateDivider = false;
+      let dateDividerText = '';
+      if (timeStr) {
+        const currentMsgDate = new Date(timeStr);
+        if (!isNaN(currentMsgDate.getTime())) {
+          if (index === messages.length - 1) {
+            showDateDivider = true;
+            dateDividerText = formatDividerDate(timeStr);
+          } else {
+            const prevMsg = messages[index + 1];
+            const prevTimeStr = prevMsg?.timestamp || prevMsg?.created_at;
+            if (prevTimeStr) {
+              const prevMsgDate = new Date(prevTimeStr);
+              if (!isNaN(prevMsgDate.getTime())) {
+                if (
+                  currentMsgDate.getDate() !== prevMsgDate.getDate() ||
+                  currentMsgDate.getMonth() !== prevMsgDate.getMonth() ||
+                  currentMsgDate.getFullYear() !== prevMsgDate.getFullYear()
+                ) {
+                  showDateDivider = true;
+                  dateDividerText = formatDividerDate(timeStr);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      const renderReplyHeader = () => {
+        if (!item.reply_to_id) return null;
+        const parentMsg = messages.find(m => m.id === item.reply_to_id);
+        const parentSender = parentMsg
+          ? (parentMsg.sender_username || parentMsg.sender_name || (parentMsg.sender?.username) || 'Пользователь')
+          : 'Сообщение';
+        const parentContent = parentMsg
+          ? (parentMsg.type === 'voice' ? '🎙 Голосовое сообщение' : parentMsg.type === 'video_note' ? '🎬 Видеосообщение' : parentMsg.content)
+          : 'Предыдущее сообщение';
 
         return (
-          <View
+          <TouchableOpacity
+            onPress={() => {
+              const idx = messages.findIndex(m => m.id === item.reply_to_id);
+              if (idx !== -1) {
+                flatListRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.5 });
+              }
+            }}
             style={[
-              styles.messageBubble,
-              isOwn ? styles.ownBubble : styles.otherBubble,
-              styles.voiceBubble,
-            ]}>
-            {!isOwn && type !== 'dm' && (
-              <Text style={styles.senderName}>{senderName}</Text>
-            )}
+              styles.replyHeaderContainer,
+              { borderLeftColor: isOwn ? '#fff' : '#6c5ce7' }
+            ]}
+          >
+            <Text style={[styles.replyHeaderSender, { color: isOwn ? '#fff' : '#6c5ce7' }]} numberOfLines={1}>
+              {parentSender}
+            </Text>
+            <Text style={styles.replyHeaderContent} numberOfLines={1}>
+              {parentContent}
+            </Text>
+          </TouchableOpacity>
+        );
+      };
+
+      const renderForwardedHeader = () => {
+        if (!item.forwarded_from_id) return null;
+        return (
+          <View style={styles.forwardedHeaderContainer}>
+            <Icon name="arrow-redo" size={12} color="#aaa" style={{ marginRight: 4 }} />
+            <Text style={styles.forwardedHeaderText}>Переслано</Text>
+          </View>
+        );
+      };
+
+      const renderBubbleContent = () => {
+        if (msgType === 'voice') {
+          const isPlaying = playingMsgId === item.id;
+          const progress = isPlaying && playDuration > 0 ? playPosition / playDuration : 0;
+          return (
             <View style={styles.voicePlayerRow}>
               <TouchableOpacity
                 onPress={() => handlePlayVoice(item.id, contentText)}
@@ -597,31 +813,15 @@ function ChatScreenInner() {
                 </Text>
               </View>
             </View>
-            {timeText ? (
-              <Text style={[styles.messageTime, {color: isOwn ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.3)'}]}>
-                {timeText}
-              </Text>
-            ) : null}
-          </View>
-        );
-      }
-
-      if (msgType === 'video_note') {
-        // Build absolute URL for playback
-        let videoUrl = contentText;
-        if (videoUrl && videoUrl.startsWith('/')) {
-          videoUrl = `${Config.BACKEND_URL}${videoUrl}`;
+          );
         }
-        return (
-          <View
-            style={[
-              styles.messageBubble,
-              isOwn ? styles.ownBubble : styles.otherBubble,
-              styles.videoNoteBubble,
-            ]}>
-            {!isOwn && type !== 'dm' && (
-              <Text style={styles.senderName}>{senderName}</Text>
-            )}
+
+        if (msgType === 'video_note') {
+          let videoUrl = contentText;
+          if (videoUrl && videoUrl.startsWith('/')) {
+            videoUrl = `${Config.BACKEND_URL}${videoUrl}`;
+          }
+          return (
             <View style={styles.videoNoteCircle}>
               {videoUrl ? (
                 <Video
@@ -642,72 +842,89 @@ function ChatScreenInner() {
                 </View>
               )}
             </View>
-            {timeText ? (
-              <Text style={[styles.messageTime, {color: isOwn ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.3)'}]}>
-                {timeText}
-              </Text>
-            ) : null}
-          </View>
-        );
-      }
+          );
+        }
 
-      if (msgType === 'call_invite') {
-        return (
-          <TouchableOpacity
-            style={[
-              styles.messageBubble,
-              isOwn ? styles.ownBubble : styles.otherBubble,
-              styles.callInviteBubble,
-            ]}
-            onPress={async () => {
-              try {
-                const activeCall = await useCallStore.getState().getActiveGroupCall(id);
-                if (activeCall) {
-                  await useCallStore.getState().joinGroupCall(activeCall.call_id);
-                  navigation.navigate('Call', {
-                    targetUserId: id,
-                    isIncoming: false,
-                    callerSocketId: '',
-                    isGroupCall: true,
-                    callId: activeCall.call_id,
-                    groupId: id,
-                    groupName: name,
-                  });
-                } else {
-                  Alert.alert('Звонок завершен', 'Этот групповой звонок уже завершен.');
-                }
-              } catch (err) {
-                console.error('[ChatScreen] Join group call from invite message failed:', err);
-                Alert.alert('Ошибка', 'Не удалось присоединиться к звонку');
-              }
-            }}
-          >
+        if (msgType === 'call_invite') {
+          return (
             <View style={{flexDirection: 'row', alignItems: 'center', gap: 10}}>
               <Icon name="call" size={24} color="#fff" />
               <View style={{flex: 1}}>
-                {!isOwn && type !== 'dm' && (
-                  <Text style={styles.senderName}>{senderName}</Text>
-                )}
                 <Text style={styles.messageText}>{contentText}</Text>
                 <Text style={styles.callInviteActionText}>Нажмите, чтобы присоединиться</Text>
               </View>
             </View>
-            {timeText ? <Text style={styles.messageTime}>{timeText}</Text> : null}
-          </TouchableOpacity>
-        );
-      }
+          );
+        }
 
-      return (
-        <View
-          style={[
-            styles.messageBubble,
-            isOwn ? styles.ownBubble : styles.otherBubble,
-          ]}>
-          {!isOwn && type !== 'dm' && (
+        return contentText ? <Text style={styles.messageText}>{contentText}</Text> : null;
+      };
+
+      // Styles
+      let bubbleStyle: any[] = [styles.messageBubble, isOwn ? styles.ownBubble : styles.otherBubble];
+      if (msgType === 'voice') bubbleStyle.push(styles.voiceBubble);
+      else if (msgType === 'video_note') bubbleStyle.push(styles.videoNoteBubble);
+      else if (msgType === 'call_invite') bubbleStyle.push(styles.callInviteBubble);
+
+      const contentJSX = (
+        <TouchableOpacity
+          onLongPress={() => handleMessageLongPress(item)}
+          onPress={msgType === 'call_invite' ? async () => {
+            try {
+              const activeCall = await useCallStore.getState().getActiveGroupCall(id);
+              if (activeCall) {
+                await useCallStore.getState().joinGroupCall(activeCall.call_id);
+                navigation.navigate('Call', {
+                  targetUserId: id,
+                  isIncoming: false,
+                  callerSocketId: '',
+                  isGroupCall: true,
+                  callId: activeCall.call_id,
+                  groupId: id,
+                  groupName: name,
+                });
+              } else {
+                Alert.alert('Звонок завершен', 'Этот групповой звонок уже завершен.');
+              }
+            } catch (err) {
+              console.error('[ChatScreen] Join group call failed:', err);
+              Alert.alert('Ошибка', 'Не удалось присоединиться к звонку');
+            }
+          } : undefined}
+          activeOpacity={0.85}
+          style={bubbleStyle}
+        >
+          {!isOwn && type !== 'dm' && msgType !== 'call_invite' && (
             <Text style={styles.senderName}>{senderName}</Text>
           )}
-          {contentText ? <Text style={styles.messageText}>{contentText}</Text> : null}
-          {timeText ? <Text style={styles.messageTime}>{timeText}</Text> : null}
+
+          {renderForwardedHeader()}
+          {renderReplyHeader()}
+          {renderBubbleContent()}
+
+          <View style={styles.timeContainer}>
+            {item.is_edited ? (
+              <Text style={[styles.editedText, { color: isOwn ? 'rgba(255,255,255,0.5)' : '#888' }]}>изм.</Text>
+            ) : null}
+            {timeText ? (
+              <Text style={[styles.messageTime, { color: isOwn ? 'rgba(255,255,255,0.6)' : '#888', marginTop: 0 }]}>
+                {timeText}
+              </Text>
+            ) : null}
+          </View>
+        </TouchableOpacity>
+      );
+
+      return (
+        <View style={{ width: '100%', alignItems: 'stretch' }}>
+          {contentJSX}
+          {showDateDivider && (
+            <View style={styles.dateDividerContainer}>
+              <View style={styles.dateDividerBubble}>
+                <Text style={styles.dateDividerText}>{dateDividerText}</Text>
+              </View>
+            </View>
+          )}
         </View>
       );
     } catch (err: any) {
@@ -834,6 +1051,39 @@ function ChatScreenInner() {
           }
         />
 
+        {/* Active Reply / Edit Panel */}
+        {(replyToMessage || editingMessage) && (
+          <View style={styles.actionPanel}>
+            <View style={[
+              styles.actionPanelIndicator,
+              { backgroundColor: editingMessage ? '#e1b12c' : '#6c5ce7' }
+            ]} />
+            <View style={{ flex: 1, paddingLeft: 8 }}>
+              <Text style={[
+                styles.actionPanelTitle,
+                { color: editingMessage ? '#e1b12c' : '#6c5ce7' }
+              ]}>
+                {editingMessage ? 'Редактирование' : 'Ответ на сообщение'}
+              </Text>
+              <Text style={styles.actionPanelSub} numberOfLines={1}>
+                {editingMessage
+                  ? editingMessage.content
+                  : (replyToMessage?.content || (replyToMessage?.type === 'voice' ? '🎙 Голосовое сообщение' : replyToMessage?.type === 'video_note' ? '🎬 Видеосообщение' : ''))}
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => {
+                setReplyToMessage(null);
+                setEditingMessage(null);
+                if (editingMessage) setInputText('');
+              }}
+              style={styles.actionPanelClose}
+            >
+              <Icon name="close-circle" size={20} color="#888" />
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Input / Recording */}
         <View style={styles.inputContainer}>
           {isRecording ? (
@@ -912,6 +1162,161 @@ function ChatScreenInner() {
             )}
           </View>
         </View>
+
+        {/* Custom Context Menu Modal */}
+        <Modal
+          visible={contextMenuVisible}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setContextMenuVisible(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setContextMenuVisible(false)}
+          >
+            <View style={styles.menuContainer}>
+              <Text style={styles.menuTitle} numberOfLines={1}>
+                {selectedMessage?.content ? `"${selectedMessage.content.slice(0, 30)}..."` : 'Сообщение'}
+              </Text>
+              
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setReplyToMessage(selectedMessage);
+                  setEditingMessage(null);
+                  setContextMenuVisible(false);
+                }}
+              >
+                <Icon name="arrow-undo-outline" size={20} color="#fff" />
+                <Text style={styles.menuItemText}>Ответить</Text>
+              </TouchableOpacity>
+
+              {selectedMessage?.type !== 'voice' && selectedMessage?.type !== 'video_note' && (
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => {
+                    Clipboard.setString(selectedMessage?.content || '');
+                    setContextMenuVisible(false);
+                  }}
+                >
+                  <Icon name="copy-outline" size={20} color="#fff" />
+                  <Text style={styles.menuItemText}>Копировать</Text>
+                </TouchableOpacity>
+              )}
+
+              {selectedMessage?.sender_id === user?.id && (!selectedMessage?.type || selectedMessage?.type === 'text') && (
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => {
+                    setEditingMessage(selectedMessage);
+                    setReplyToMessage(null);
+                    setInputText(selectedMessage?.content || '');
+                    setContextMenuVisible(false);
+                  }}
+                >
+                  <Icon name="pencil-outline" size={20} color="#fff" />
+                  <Text style={styles.menuItemText}>Изменить</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setForwardingMessage(selectedMessage);
+                  setContextMenuVisible(false);
+                  setForwardModalVisible(true);
+                }}
+              >
+                <Icon name="arrow-redo-outline" size={20} color="#fff" />
+                <Text style={styles.menuItemText}>Переслать</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.menuItem, styles.menuDeleteBtn]}
+                onPress={() => {
+                  Alert.alert(
+                    'Удалить сообщение',
+                    'Вы уверены, что хотите удалить это сообщение?',
+                    [
+                      { text: 'Отмена', style: 'cancel' },
+                      {
+                        text: 'Удалить',
+                        style: 'destructive',
+                        onPress: async () => {
+                          try {
+                            await deleteMessage(selectedMessage.id);
+                          } catch (e) {
+                            console.error('[Chat] Delete failed:', e);
+                          }
+                          setContextMenuVisible(false);
+                        },
+                      },
+                    ]
+                  );
+                }}
+              >
+                <Icon name="trash-outline" size={20} color="#ff6b6b" />
+                <Text style={[styles.menuItemText, { color: '#ff6b6b' }]}>Удалить</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+
+        {/* Forward Destination Modal */}
+        <Modal
+          visible={forwardModalVisible}
+          animationType="slide"
+          onRequestClose={() => setForwardModalVisible(false)}
+        >
+          <View style={styles.forwardModalContainer}>
+            <View style={styles.forwardModalHeader}>
+              <Text style={styles.forwardModalTitle}>Переслать сообщение</Text>
+              <TouchableOpacity onPress={() => setForwardModalVisible(false)}>
+                <Icon name="close" size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+            
+            {loadingChats ? (
+              <View style={styles.forwardLoading}>
+                <Text style={{ color: '#aaa' }}>Загрузка чатов...</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={chatsList}
+                keyExtractor={(item) => `${item.type}-${item.id}`}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.forwardChatItem}
+                    onPress={() => handleForwardTo(item)}
+                  >
+                    {item.avatar_url ? (
+                      <Image
+                        source={{ uri: item.avatar_url.startsWith('http') ? item.avatar_url : Config.BACKEND_URL + item.avatar_url }}
+                        style={styles.forwardAvatar}
+                      />
+                    ) : (
+                      <View style={styles.forwardAvatarPlaceholder}>
+                        <Text style={styles.forwardAvatarText}>{item.name.charAt(0).toUpperCase()}</Text>
+                      </View>
+                    )}
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <Text style={styles.forwardChatName}>{item.name}</Text>
+                      <Text style={styles.forwardChatType}>
+                        {item.type === 'dm' ? 'Личный чат' : item.type === 'group' ? 'Группа' : 'Канал'}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={
+                  <View style={{ padding: 40, alignItems: 'center' }}>
+                    <Text style={{ color: '#666' }}>Нет доступных чатов</Text>
+                  </View>
+                }
+              />
+            )}
+          </View>
+        </Modal>
       </View>
     );
   } catch (renderErr: any) {
@@ -1240,5 +1645,186 @@ const styles = StyleSheet.create({
     color: '#6c5ce7',
     fontSize: 13,
     fontWeight: 'bold',
+  },
+  timeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    marginTop: 4,
+    gap: 4,
+  },
+  editedText: {
+    fontSize: 9,
+    fontStyle: 'italic',
+  },
+  replyHeaderContainer: {
+    borderLeftWidth: 2,
+    paddingLeft: 8,
+    marginVertical: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 4,
+    paddingVertical: 2,
+  },
+  replyHeaderSender: {
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  replyHeaderContent: {
+    fontSize: 12,
+    color: '#ccc',
+  },
+  forwardedHeaderContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  forwardedHeaderText: {
+    fontSize: 11,
+    color: '#aaa',
+    fontStyle: 'italic',
+  },
+  actionPanel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#16161a',
+    borderTopWidth: 1,
+    borderTopColor: '#222226',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  actionPanelIndicator: {
+    width: 3,
+    height: '100%',
+    borderRadius: 2,
+  },
+  actionPanelTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  actionPanelSub: {
+    fontSize: 12,
+    color: '#bbb',
+    marginTop: 2,
+  },
+  actionPanelClose: {
+    padding: 4,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  menuContainer: {
+    width: 250,
+    backgroundColor: '#1e1e24',
+    borderRadius: 14,
+    padding: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  menuTitle: {
+    color: '#888',
+    fontSize: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2a2a32',
+    marginBottom: 4,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 12,
+    borderRadius: 8,
+  },
+  menuItemText: {
+    color: '#fff',
+    fontSize: 15,
+  },
+  menuDeleteBtn: {
+    borderTopWidth: 1,
+    borderTopColor: '#2a2a32',
+    marginTop: 4,
+    paddingTop: 12,
+  },
+  forwardModalContainer: {
+    flex: 1,
+    backgroundColor: '#0f0f0f',
+  },
+  forwardModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1a1a1a',
+  },
+  forwardModalTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  forwardChatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomColor: '#1a1a1a',
+    borderBottomWidth: 1,
+  },
+  forwardAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  forwardAvatarPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#6c5ce7',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  forwardAvatarText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  forwardChatName: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  forwardChatType: {
+    color: '#888',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  forwardLoading: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dateDividerContainer: {
+    alignItems: 'center',
+    marginVertical: 12,
+    width: '100%',
+  },
+  dateDividerBubble: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  dateDividerText: {
+    color: '#aaa',
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

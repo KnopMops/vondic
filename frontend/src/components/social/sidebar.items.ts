@@ -1,6 +1,5 @@
 import type { ComponentType } from 'react'
 import {
-	LuLifeBuoy as LifeBuoy,
 	LuMail as Mail,
 	LuMessageCircle as MessageCircle,
 	LuMusic as Music,
@@ -27,7 +26,5 @@ export const sidebarItems: SidebarItem[] = [
 	{ label: 'Друзья', icon: Users, href: '/friends' },
 	{ label: 'Магазин', icon: ShoppingBag, href: '/shop' },
 	{ label: 'VМьюзик', icon: Music, href: '/feed/music' },
-
-	{ label: 'Тех. поддержка', icon: LifeBuoy, href: '/feed/support' },
 	{ label: 'Настройки', icon: Settings, href: '/feed/settings' },
 ]

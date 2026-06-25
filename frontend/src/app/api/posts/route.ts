@@ -130,7 +130,7 @@ export async function POST(req: NextRequest) {
 		}
 
 		const body = await req.json()
-		const { title, content, attachments, is_blog } = body
+		const { title, content, attachments, is_blog, social_community_id } = body
 
 		const response = await fetch(`${BACKEND_URL}/api/v1/posts/`, {
 			method: 'POST',
@@ -143,6 +143,7 @@ export async function POST(req: NextRequest) {
 				content,
 				attachments,
 				is_blog,
+				social_community_id,
 			}),
 		})
 

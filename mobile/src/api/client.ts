@@ -36,6 +36,9 @@ async function refreshAccessToken(): Promise<string | null> {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${refresh}`,
       },
+      body: JSON.stringify({
+        device_type: 'mobile',
+      }),
     });
 
     if (!res.ok) {

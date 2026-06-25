@@ -1,7 +1,7 @@
 import { getAccessToken, getRefreshToken } from '@/lib/auth.utils'
 import { NextRequest, NextResponse } from 'next/server'
 
-const PUBLIC_ROUTES = ['/login', '/register', '/verify', '/forgot-password', '/reset-password']
+const PUBLIC_ROUTES = ['/login', '/register', '/verify', '/forgot-password', '/reset-password', '/download']
 const ROOT_ROUTE = '/'
 const FEED_ROUTE = '/feed'
 
@@ -21,7 +21,7 @@ export async function proxy(req: NextRequest) {
 	const accessToken = await getAccessToken(req)
 	const refreshToken = await getRefreshToken(req)
 
-	const isPublicRoute = PUBLIC_ROUTES.includes(pathname)
+	const isPublicRoute = PUBLIC_ROUTES.includes(pathname) || pathname.startsWith('/download') || pathname.startsWith('/login') || pathname.startsWith('/feed/messages/anon') || pathname.startsWith('/reset-verify')
 	const isRootRoute = pathname === ROOT_ROUTE
 
 	if (!accessToken && !refreshToken) {
@@ -35,7 +35,7 @@ export async function proxy(req: NextRequest) {
 		return NextResponse.redirect(url)
 	}
 
-	if (isPublicRoute && pathname !== '/verify' && pathname !== '/login') {
+	if (isPublicRoute && pathname !== '/verify' && pathname !== '/login' && !pathname.startsWith('/login') && !pathname.startsWith('/download') && !pathname.startsWith('/feed/messages/anon') && !pathname.startsWith('/reset-verify')) {
 		const url = req.nextUrl.clone()
 		url.pathname = FEED_ROUTE
 		return NextResponse.redirect(url)

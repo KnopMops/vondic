@@ -4,7 +4,9 @@ import { useSocket } from '@/lib/SocketContext'
 import { useNotificationStore } from '@/lib/stores/notificationStore'
 import { useToast } from '@/lib/ToastContext'
 import { usePathname } from 'next/navigation'
-import { FiBell } from 'react-icons/fi'
+import { FiBell as BellIcon } from 'react-icons/fi'
+import { LuLifeBuoy as LifeBuoy } from 'react-icons/lu'
+import Link from 'next/link'
 import React, { useEffect, useMemo, useState } from 'react'
 
 export const NotificationBell: React.FC = () => {
@@ -392,13 +394,11 @@ export const NotificationBell: React.FC = () => {
 
 	const items = useMemo(() => notifications.slice(0, 10), [notifications])
 
+	if (pathname?.startsWith('/feed/messages')) return null
+
 	return (
 		<div
-			className={`fixed z-50 ${
-				pathname?.startsWith('/feed/messages')
-					? 'top-4 right-4'
-					: 'bottom-4 right-4'
-			}`}
+			className='fixed bottom-4 left-4 z-50'
 		>
 			<button
 				onClick={() => {
@@ -407,7 +407,7 @@ export const NotificationBell: React.FC = () => {
 				}}
 				className='relative rounded-full bg-black/30 text-[color:var(--app-fg)] px-3 py-2 hover:bg-black/40 backdrop-blur transition'
 			>
-				<FiBell className='h-4 w-4' />
+				<BellIcon className='h-4 w-4' />
 				{unreadCount > 0 && (
 					<span className='absolute -top-1 -right-1 bg-red-600 text-white text-xs rounded-full px-1'>
 						{unreadCount}
@@ -423,6 +423,15 @@ export const NotificationBell: React.FC = () => {
 						className='w-full max-w-md bg-black/80 backdrop-blur rounded-lg border border-white/10 shadow-xl p-2'
 						onClick={e => e.stopPropagation()}
 					>
+						<Link
+							href='/feed/support'
+							onClick={() => setOpen(false)}
+							className='flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-indigo-400 hover:bg-white/5 transition-colors mb-1'
+						>
+							<LifeBuoy className='h-4 w-4' />
+							Техническая поддержка
+						</Link>
+						<div className='border-t border-white/10 my-1' />
 						{items.length === 0 && (
 							<div className='text-sm text-gray-300 px-2 py-3'>
 								Нет уведомлений

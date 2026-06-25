@@ -18,6 +18,7 @@ import FriendsScreen from '@/screens/FriendsScreen';
 import CommunitiesScreen from '@/screens/CommunitiesScreen';
 import MailScreen from '@/screens/MailScreen';
 import SettingsScreen from '@/screens/SettingsScreen';
+import QRScanScreen from '@/screens/QRScanScreen';
 import DrawerContent from '@/components/DrawerContent';
 import {useAppSelector} from '@/store/hooks';
 
@@ -54,6 +55,7 @@ export type MainStackParamList = {
   Communities: undefined;
   Mail: undefined;
   Settings: undefined;
+  QRScan: undefined;
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -157,6 +159,7 @@ export default function MainStack() {
       <Stack.Screen name="Communities" component={CommunitiesScreen} />
       <Stack.Screen name="Mail" component={MailScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
+      <Stack.Screen name="QRScan" component={QRScanScreen} />
     </Stack.Navigator>
   );
 }

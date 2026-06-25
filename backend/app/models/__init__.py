@@ -5,6 +5,7 @@ from .channel import Channel
 from .comment import Comment
 from .community import Community
 from .community_channel import CommunityChannel
+from .device import Device
 from .e2e_key_backup import E2EKeyBackup
 from .escalation import Escalation
 from .friendship import Friendship
@@ -25,6 +26,7 @@ from .user import User
 from .user_conversation import UserConversation
 from .user_file import UserFile
 from .user_report import UserReport
+from .user_session import UserSession
 from .video import Video
 from .video_check import VideoCheck
 from .video_comment import VideoComment
@@ -37,6 +39,7 @@ __all__ = [
     "Bot",
     "Channel",
     "Comment",
+    "Device",
     "E2EKeyBackup",
     "Escalation",
     "Friendship",
@@ -56,6 +59,7 @@ __all__ = [
     "UserConversation",
     "UserFile",
     "UserReport",
+    "UserSession",
     "Video",
     "VideoCheck",
     "VideoComment",

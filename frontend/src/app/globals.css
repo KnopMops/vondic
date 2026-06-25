@@ -40,31 +40,30 @@
 	--app-font-family: var(--font-geist-sans), system-ui, -apple-system,
 		'Segoe UI', Roboto, Arial, 'Noto Sans', 'Liberation Sans', sans-serif;
 
-	/* palette tokens */
-	/* softer dark by default (less contrast than pure black/white) */
-	--app-bg: #0b1220;
+	/* palette tokens — Vondic dark theme */
+	--app-bg: #1a2232;
 	--app-fg: #e7eaf0;
 	--app-surface: #ffffff;
-	--app-border: #334155;
-	--app-muted: #94a3b8;
-	--app-accent: #6366f1; /* indigo-500 */
-	--app-accent-2: #a855f7; /* purple-500 */
+	--app-border: #2a3a4e;
+	--app-muted: #8896a8;
+	--app-accent: #2dd4a8; /* emerald-teal */
+	--app-accent-2: #22b893; /* secondary teal */
 
 	/* rgb triplets for alpha mixing */
-	--app-bg-rgb: 11 18 32;
+	--app-bg-rgb: 26 34 50;
 	--app-fg-rgb: 231 234 240;
 	--app-surface-rgb: 255 255 255;
-	--app-accent-rgb: 99 102 241;
+	--app-accent-rgb: 45 212 168;
 
 	/* messenger */
 	--chat-bubble-own: linear-gradient(
 		145deg,
-		rgb(var(--app-accent-rgb) / 0.52),
-		rgb(var(--app-accent-rgb) / 0.34)
+		rgb(45 212 168 / 0.50),
+		rgb(45 212 168 / 0.30)
 	);
-	--chat-bubble-other: rgb(var(--app-bg-rgb) / 0.72);
-	--chat-bubble-border: rgb(var(--app-surface-rgb) / 0.1);
-	--chat-composer-bg: rgb(var(--app-bg-rgb) / 0.35);
+	--chat-bubble-other: rgb(26 34 50 / 0.72);
+	--chat-bubble-border: rgb(255 255 255 / 0.06);
+	--chat-composer-bg: rgb(26 34 50 / 0.40);
 }
 
 :root[data-theme='light'] {
@@ -82,15 +81,15 @@
 }
 
 :root[data-theme='dark'] {
-	--background: #0a0a0a;
-	--foreground: #ededed;
-	--app-bg: #0a0a0a;
-	--app-fg: #ededed;
+	--background: #1a2232;
+	--foreground: #e7eaf0;
+	--app-bg: #1a2232;
+	--app-fg: #e7eaf0;
 	--app-surface: #ffffff;
-	--app-border: #334155;
-	--app-muted: #94a3b8;
-	--app-bg-rgb: 10 10 10;
-	--app-fg-rgb: 237 237 237;
+	--app-border: #2a3a4e;
+	--app-muted: #8896a8;
+	--app-bg-rgb: 26 34 50;
+	--app-fg-rgb: 231 234 240;
 	--app-surface-rgb: 255 255 255;
 	color-scheme: dark;
 }
@@ -160,8 +159,34 @@
 }
 
 ::selection {
-	background: rgb(var(--app-accent-rgb) / 0.35);
+	background: rgb(45 212 168 / 0.35);
 	color: var(--app-fg);
+}
+
+/* Messages right panel */
+.messages-right-panel {
+	background: rgb(26 34 50 / 0.60);
+	border-left: 1px solid rgb(255 255 255 / 0.06);
+	backdrop-filter: blur(12px);
+}
+
+.messages-right-card {
+	background: rgb(26 34 50 / 0.50);
+	border: 1px solid rgb(255 255 255 / 0.06);
+	border-radius: 16px;
+	padding: 16px;
+}
+
+.messages-action-btn {
+	background: var(--app-accent);
+	color: #0a0f18;
+	border-radius: 12px;
+	font-weight: 600;
+	transition: all 0.2s;
+}
+.messages-action-btn:hover {
+	background: #25c49d;
+	transform: translateY(-1px);
 }
 
 @theme inline {
@@ -173,8 +198,8 @@
 
 @media (prefers-color-scheme: dark) {
 	:root {
-		--background: #0a0a0a;
-		--foreground: #ededed;
+		--background: #1a2232;
+		--foreground: #e7eaf0;
 	}
 }
 
@@ -214,7 +239,7 @@ body {
 /* Messenger bubbles — tied to --app-accent / --app-bg */
 .chat-bubble-own {
 	background: var(--chat-bubble-own);
-	border: 1px solid rgb(var(--app-accent-rgb) / 0.22);
+	border: 1px solid rgb(45 212 168 / 0.22);
 	color: rgb(var(--app-fg-rgb) / 0.96);
 	box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
 }
@@ -246,10 +271,10 @@ body {
 .chat-bubble-own-emerald {
 	background: linear-gradient(
 		145deg,
-		rgb(16 185 129 / 0.45),
-		rgb(16 185 129 / 0.28)
+		rgb(45 212 168 / 0.50),
+		rgb(45 212 168 / 0.30)
 	);
-	border: 1px solid rgb(16 185 129 / 0.22);
+	border: 1px solid rgb(45 212 168 / 0.22);
 }
 
 .chat-bubble-own-rose {
@@ -273,22 +298,22 @@ body {
 .chat-date-pill {
 	font-size: 0.75rem;
 	font-weight: 500;
-	color: rgb(var(--app-fg-rgb) / 0.72);
-	background: rgb(var(--app-bg-rgb) / 0.55);
-	border: 1px solid rgb(var(--app-surface-rgb) / 0.08);
+	color: rgb(231 234 240 / 0.72);
+	background: rgb(26 34 50 / 0.65);
+	border: 1px solid rgb(255 255 255 / 0.06);
 	padding: 0.35rem 0.85rem;
 	border-radius: 9999px;
 	backdrop-filter: blur(8px);
 }
 
 .chat-composer-bar {
-	background: rgb(var(--app-bg-rgb) / 0.4);
-	border-top: 1px solid rgb(var(--app-surface-rgb) / 0.08);
+	background: rgb(26 34 50 / 0.40);
+	border-top: 1px solid rgb(255 255 255 / 0.06);
 }
 
 .chat-composer-input {
-	background: rgb(var(--app-bg-rgb) / 0.45);
-	border: 1px solid rgb(var(--app-surface-rgb) / 0.1);
+	background: rgb(26 34 50 / 0.45);
+	border: 1px solid rgb(255 255 255 / 0.06);
 }
 
 /* Animations */

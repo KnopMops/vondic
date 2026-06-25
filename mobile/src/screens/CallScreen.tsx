@@ -19,6 +19,7 @@ import {useCallStore} from '@/store/callStore';
 import {RTCView} from 'react-native-webrtc';
 import Icon from 'react-native-vector-icons/Ionicons';
 import IncallManager from 'react-native-incall-manager';
+import Video from 'react-native-video';
 
 type RoutePropType = RouteProp<MainStackParamList, 'Call'>;
 type NavigationProp = NativeStackNavigationProp<MainStackParamList, 'Call'>;
@@ -95,6 +96,27 @@ export default function CallScreen() {
   if (isGroup ? (!!activeGroupCallId || !!incomingCall) : (!!directCall || !!incomingCall)) {
     wasCallActive.current = true;
   }
+
+  useEffect(() => {
+    if (call?.status === 'ringing') {
+      console.log('[CallScreen] Playing custom ringtone');
+      (IncallManager as any).startRingtone('_BUNDLE_');
+    } else {
+      IncallManager.stopRingtone();
+    }
+
+    if (call?.status === 'calling') {
+      console.log('[CallScreen] Playing default ringback');
+      (IncallManager as any).startRingback('_DEFAULT_');
+    } else {
+      IncallManager.stopRingback();
+    }
+
+    return () => {
+      IncallManager.stopRingtone();
+      IncallManager.stopRingback();
+    };
+  }, [call?.status]);
 
   // Handle call timer/duration
   useEffect(() => {
@@ -357,6 +379,14 @@ export default function CallScreen() {
 
   return (
     <View style={styles.container}>
+      {call?.status === 'ringing' && (
+        <Video
+          source={require('../../android/app/src/main/res/raw/rington.wav')}
+          paused={false}
+          repeat={true}
+          style={{ width: 0, height: 0, position: 'absolute' }}
+        />
+      )}
       {showVideo ? (
         <RTCView streamURL={remoteStream.toURL()} style={styles.remoteVideo} objectFit="cover" />
       ) : (

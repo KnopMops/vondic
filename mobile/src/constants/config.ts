@@ -16,4 +16,8 @@ export const Config = {
   TURN_USERNAME: NativeConfig.TURN_USERNAME || 'vondic',
   TURN_PASSWORD: NativeConfig.TURN_PASSWORD || 'Dim4566212Len',
   FORCE_RELAY: NativeConfig.FORCE_RELAY === 'true',
+  NAMMA_PUSH_URL: NativeConfig.NAMMA_PUSH_URL || 'https://vondic.ru/push',
+  NAMMA_PUSH_AUTH_TOKEN: NativeConfig.NAMMA_PUSH_AUTH_TOKEN || '',
+  NOVU_API_URL: NativeConfig.NOVU_API_URL || 'http://192.168.120.248/novu',
 };
+

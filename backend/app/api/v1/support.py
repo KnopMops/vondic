@@ -646,6 +646,125 @@ def user_chats(current_user):
     return jsonify({"ok": True, "chats": chats})
 
 
+@support_bp.route("/messenger/chats", methods=["GET"])
+@token_required
+def messenger_chats(current_user):
+    rows = (
+        Escalation.query.filter_by(user_id=str(current_user.id))
+        .order_by(Escalation.created_at.desc())
+        .all()
+    )
+    result = []
+    for r in rows:
+        last_msg = (
+            SupportChatMessage.query.filter_by(escalation_id=r.id)
+            .order_by(SupportChatMessage.created_at.desc())
+            .first()
+        )
+        unread = (
+            SupportChatMessage.query.filter(
+                SupportChatMessage.escalation_id == r.id,
+                SupportChatMessage.sender != "user",
+                SupportChatMessage.read.is_(False),
+            ).count()
+        )
+        result.append({
+            "id": r.id,
+            "question": r.question,
+            "status": r.status or "open",
+            "created_at": r.created_at,
+            "last_message": last_msg.content if last_msg else r.question,
+            "last_message_at": last_msg.created_at if last_msg else r.created_at,
+            "last_sender": last_msg.sender if last_msg else "user",
+            "unread_count": unread,
+        })
+    return jsonify({"ok": True, "chats": result})
+
+
+@support_bp.route("/messenger/<int:esc_id>/messages", methods=["GET"])
+@token_required
+def messenger_escalation_messages(current_user, esc_id: int):
+    escalation = Escalation.query.get(esc_id)
+    if not escalation:
+        return jsonify({"error": "Не найдено"}), 404
+    role = str(current_user.role or "").strip().lower()
+    is_support = role in ("support", "admin")
+    if not is_support and str(escalation.user_id) != str(current_user.id):
+        return jsonify({"error": "Доступ запрещён"}), 403
+    since_id = int(request.args.get("since_id", "0") or "0")
+    if since_id > 0:
+        rows = (
+            SupportChatMessage.query.filter(
+                SupportChatMessage.escalation_id == esc_id,
+                SupportChatMessage.id > since_id,
+            )
+            .order_by(SupportChatMessage.created_at.asc())
+            .all()
+        )
+    else:
+        rows = (
+            SupportChatMessage.query.filter_by(escalation_id=esc_id)
+            .order_by(SupportChatMessage.created_at.asc())
+            .all()
+        )
+    messages = [
+        {
+            "id": r.id,
+            "sender": r.sender or "admin",
+            "content": r.content,
+            "created_at": r.created_at,
+        }
+        for r in rows
+    ]
+    if not is_support and rows:
+        unread_ids = [r.id for r in rows if r.sender != "user" and not r.read]
+        if unread_ids:
+            SupportChatMessage.query.filter(
+                SupportChatMessage.id.in_(unread_ids)
+            ).update({"read": True}, synchronize_session=False)
+            db.session.commit()
+    return jsonify({
+        "ok": True,
+        "messages": messages,
+        "status": escalation.status or "open",
+    })
+
+
+@support_bp.route("/messenger/<int:esc_id>/send", methods=["POST"])
+@token_required
+def messenger_send(current_user, esc_id: int):
+    data = request.get_json(force=True) or {}
+    content = str(data.get("message", "")).strip()
+    if not content:
+        return jsonify({"ok": False, "error": "Пустое сообщение"}), 400
+    escalation = Escalation.query.get(esc_id)
+    if not escalation:
+        return jsonify({"ok": False, "error": "Не найдено"}), 404
+    role = str(current_user.role or "").strip().lower()
+    is_support = role in ("support", "admin")
+    if not is_support and str(escalation.user_id) != str(current_user.id):
+        return jsonify({"ok": False, "error": "Доступ запрещён"}), 403
+    if (escalation.status or "").lower() == "closed":
+        return jsonify({"ok": False, "error": "Чат закрыт"}), 400
+    sender = "support" if is_support else "user"
+    msg = SupportChatMessage(
+        escalation_id=esc_id,
+        sender=sender,
+        content=content,
+    )
+    db.session.add(msg)
+    if is_support:
+        escalation.status = "answered"
+        escalation.answered_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify({
+        "ok": True,
+        "id": msg.id,
+        "sender": sender,
+        "created_at": msg.created_at,
+    })
+
+
 @support_bp.route("/chats/<int:esc_id>/delete", methods=["POST"])
 @token_required
 def user_chat_delete(current_user, esc_id: int):
@@ -868,3 +987,121 @@ def admin_post_report_action(current_user):
             pass
 
     return jsonify({"ok": True, "status": status})
+
+
+import uuid
+
+
+@support_bp.route("/anon/create", methods=["POST"])
+def anon_create():
+    data = request.get_json(force=True) or {}
+    question = str(data.get("question", "")).strip()
+    if not question:
+        return jsonify({"ok": False, "error": "Пустое сообщение"}), 400
+    anon_token = uuid.uuid4().hex
+    user_id = f"anon:{anon_token}"
+    esc_id = save_escalation(user_id, question)
+    msg = SupportChatMessage(
+        escalation_id=esc_id,
+        sender="user",
+        content=question,
+    )
+    db.session.add(msg)
+    db.session.commit()
+    return jsonify({
+        "ok": True,
+        "escalation_id": esc_id,
+        "anon_token": anon_token,
+    })
+
+
+@support_bp.route("/anon/<int:esc_id>/messages", methods=["GET"])
+def anon_messages(esc_id: int):
+    anon_token = request.args.get("token", "")
+    if not anon_token:
+        return jsonify({"error": "Токен обязателен"}), 400
+    escalation = Escalation.query.get(esc_id)
+    if not escalation:
+        return jsonify({"error": "Не найдено"}), 404
+    if escalation.user_id != f"anon:{anon_token}":
+        return jsonify({"error": "Доступ запрещён"}), 403
+    since_id = int(request.args.get("since_id", "0") or "0")
+    if since_id > 0:
+        rows = (
+            SupportChatMessage.query.filter(
+                SupportChatMessage.escalation_id == esc_id,
+                SupportChatMessage.id > since_id,
+            )
+            .order_by(SupportChatMessage.created_at.asc())
+            .all()
+        )
+    else:
+        rows = (
+            SupportChatMessage.query.filter_by(escalation_id=esc_id)
+            .order_by(SupportChatMessage.created_at.asc())
+            .all()
+        )
+    messages = [
+        {
+            "id": r.id,
+            "sender": r.sender or "admin",
+            "content": r.content,
+            "created_at": r.created_at,
+        }
+        for r in rows
+    ]
+    unread_ids = [r.id for r in rows if r.sender != "user" and not r.read]
+    if unread_ids:
+        SupportChatMessage.query.filter(
+            SupportChatMessage.id.in_(unread_ids)
+        ).update({"read": True}, synchronize_session=False)
+        db.session.commit()
+    return jsonify({
+        "ok": True,
+        "messages": messages,
+        "status": escalation.status or "open",
+    })
+
+
+@support_bp.route("/anon/<int:esc_id>/send", methods=["POST"])
+def anon_send(esc_id: int):
+    data = request.get_json(force=True) or {}
+    anon_token = data.get("token", "")
+    content = str(data.get("message", "")).strip()
+    if not anon_token:
+        return jsonify({"ok": False, "error": "Токен обязателен"}), 400
+    if not content:
+        return jsonify({"ok": False, "error": "Пустое сообщение"}), 400
+    escalation = Escalation.query.get(esc_id)
+    if not escalation:
+        return jsonify({"ok": False, "error": "Не найдено"}), 404
+    if escalation.user_id != f"anon:{anon_token}":
+        return jsonify({"ok": False, "error": "Доступ запрещён"}), 403
+    if (escalation.status or "").lower() == "closed":
+        return jsonify({"ok": False, "error": "Чат закрыт"}), 400
+    msg = SupportChatMessage(
+        escalation_id=esc_id,
+        sender="user",
+        content=content,
+    )
+    db.session.add(msg)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@support_bp.route("/anon/<int:esc_id>/check", methods=["GET"])
+def anon_check(esc_id: int):
+    anon_token = request.args.get("token", "")
+    if not anon_token:
+        return jsonify({"error": "Токен обязателен"}), 400
+    escalation = Escalation.query.get(esc_id)
+    if not escalation:
+        return jsonify({"error": "Не найдено"}), 404
+    if escalation.user_id != f"anon:{anon_token}":
+        return jsonify({"error": "Доступ запрещён"}), 403
+    return jsonify({
+        "ok": True,
+        "status": escalation.status or "open",
+        "question": escalation.question,
+        "created_at": escalation.created_at,
+    })

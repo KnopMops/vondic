@@ -7,6 +7,7 @@ import { useEffect, useRef } from 'react';
 import { Alert, Linking } from 'react-native';
 import * as Keychain from 'react-native-keychain';
 import InAppBrowser from 'react-native-inappbrowser-reborn';
+import { registerForPush } from '@/utils/push';
 
 /**
  * Handles OAuth deeplink callbacks for Vondic OAuth 2.0:
@@ -59,6 +60,7 @@ async function exchangeCodeForToken(code: string, redirectUri: string): Promise<
       redirect_uri: redirectUri,
       client_id: Config.OAUTH_CLIENT_ID,
       client_secret: Config.OAUTH_CLIENT_SECRET,
+      device_type: 'mobile',
     });
 
     const res = await fetch(`${Config.BACKEND_URL}/oauth/token`, {
@@ -149,6 +151,9 @@ export async function handleOAuthCallback(url: string): Promise<boolean> {
     // Set user in Redux
     if (result.user) {
       store.dispatch(setUser(result.user));
+      registerForPush(result.user.id).catch(err => {
+        console.error('[Push] registerForPush error:', err);
+      });
     } else {
       // Fallback: fetch user from /oauth/userinfo
       const userRes = await fetch(`${Config.OAUTH_URL}/oauth/userinfo`, {
@@ -157,6 +162,9 @@ export async function handleOAuthCallback(url: string): Promise<boolean> {
       if (userRes.ok) {
         const userData = await userRes.json();
         store.dispatch(setUser(userData));
+        registerForPush(userData.id).catch(err => {
+          console.error('[Push] registerForPush error:', err);
+        });
       } else {
         Alert.alert('Ошибка', 'Не удалось получить данные пользователя.');
         return false;

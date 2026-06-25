@@ -110,6 +110,7 @@ interface MessageBubbleProps {
 	onBotOutboxItems?: (botId: string, items: any[]) => void
 	onBotModal?: (botId: string, modal: string) => void
 	onBotGamePlay?: (game: { embed_url: string; title?: string; download_url?: string }) => void
+	onSenderClick?: (senderId: string) => void
 }
 
 const REACTIONS = ['❤️', '🔥', '😂', '👍', '😮', '😢']
@@ -138,6 +139,7 @@ const MessageBubble = memo(
 		onBotOutboxItems,
 		onBotModal,
 		onBotGamePlay,
+		onSenderClick,
 	}: MessageBubbleProps) => {
 		const [isDetailsOpen, setIsDetailsOpen] = useState(false)
 		const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -471,7 +473,10 @@ const MessageBubble = memo(
 						)}
 					</div>
 					{showSenderName && (
-						<div className='text-[13px] font-semibold text-indigo-400/90 mb-1 px-0.5'>
+						<div
+							onClick={(e) => { e.stopPropagation(); onSenderClick?.(msg.sender_id) }}
+							className='text-[13px] font-semibold text-indigo-400/90 mb-1 px-0.5 cursor-pointer hover:text-indigo-300 transition-colors'
+						>
 							{sender?.username || msg.sender_username || 'User'}
 						</div>
 					)}

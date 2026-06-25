@@ -18,6 +18,7 @@ import {logout, setUser} from '@/store/authSlice';
 import {apiClient, clearTokens} from '@/api/client';
 import {socketService} from '@/services/SocketService';
 import {useCallStore} from '@/store/callStore';
+import {pushService} from '@/services/PushService';
 import Icon from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {Config} from '@/constants/config';
@@ -67,6 +68,7 @@ export default function ProfileScreen() {
         onPress: async () => {
           socketService.disconnect();
           useCallStore.getState().cleanup();
+          pushService.cleanup();
           await clearTokens();
           await AsyncStorage.multiRemove([
             'e2e_master_key',

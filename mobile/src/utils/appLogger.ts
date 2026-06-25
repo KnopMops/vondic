@@ -59,6 +59,29 @@ async function persistLogs(logs: LogEntry[]) {
 }
 
 export function appLog(tag: string, message: string, data?: any) {
+  // eslint-disable-next-line no-console
+  console.log(`[${tag}] ${message}`, data);
+
+  const lowerTag = tag.toLowerCase();
+  const lowerMsg = message.toLowerCase();
+
+  // Разрешаем только логи, связанные с пушами/FCM/Firebase/Токенами
+  const isPushRelated =
+    lowerTag.includes('push') ||
+    lowerTag.includes('firebase') ||
+    lowerTag.includes('messaging') ||
+    lowerTag.includes('fcm') ||
+    lowerTag.includes('token') ||
+    lowerMsg.includes('push') ||
+    lowerMsg.includes('firebase') ||
+    lowerMsg.includes('messaging') ||
+    lowerMsg.includes('fcm') ||
+    lowerMsg.includes('token');
+
+  if (!isPushRelated) {
+    return;
+  }
+
   const entry: LogEntry = {
     timestamp: new Date().toISOString(),
     tag,
@@ -68,8 +91,6 @@ export function appLog(tag: string, message: string, data?: any) {
   try {
     useAppLogs.getState().addLog(entry);
   } catch {}
-  // eslint-disable-next-line no-console
-  console.log(`[${tag}] ${message}`, data);
 }
 
 // Load persisted logs when the module is imported so the panel shows history after a restart.

@@ -102,6 +102,12 @@ export default function AdminSupportPage() {
 	const [downloadsError, setDownloadsError] = useState<string | null>(null)
 	const [downloadsSaved, setDownloadsSaved] = useState(false)
 
+	const [userSearchQuery, setUserSearchQuery] = useState('')
+	const [userSearchResults, setUserSearchResults] = useState<any[]>([])
+	const [userSearchLoading, setUserSearchLoading] = useState(false)
+	const [resetLinkResult, setResetLinkResult] = useState<{ link: string; ip: string; username: string } | null>(null)
+	const [resetLinkLoading, setResetLinkLoading] = useState<string | null>(null)
+
 	useEffect(() => {
 		const t = setInterval(() => setNowTs(Date.now()), 1000)
 		return () => clearInterval(t)
@@ -852,6 +858,49 @@ export default function AdminSupportPage() {
 	}
 
 	const roleAllowed = user?.role === 'Support' || user?.role === 'Admin'
+
+	const searchUsers = async (q: string) => {
+		setUserSearchQuery(q)
+		if (q.length < 2) {
+			setUserSearchResults([])
+			return
+		}
+		setUserSearchLoading(true)
+		try {
+			const res = await ensureToken()
+			const meRes = await fetch('/api/auth/me')
+			const meData = await meRes.json()
+			const token = meData?.user?.access_token || meData?.access_token
+			const searchRes = await fetch(`/api/admin/users/search?q=${encodeURIComponent(q)}`, {
+				headers: { Authorization: `Bearer ${token}` },
+			})
+			const data = await searchRes.json()
+			setUserSearchResults(data.users || [])
+		} catch {}
+		setUserSearchLoading(false)
+	}
+
+	const generateResetLink = async (userId: string) => {
+		setResetLinkLoading(userId)
+		setResetLinkResult(null)
+		try {
+			const meRes = await fetch('/api/auth/me')
+			const meData = await meRes.json()
+			const token = meData?.user?.access_token || meData?.access_token
+			const res = await fetch('/api/admin/users/generate-reset-link', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+				body: JSON.stringify({ user_id: userId }),
+			})
+			const data = await res.json()
+			if (data.ok) {
+				setResetLinkResult({ link: data.verify_link, ip: data.registration_ip, username: data.username })
+			} else {
+				alert(data.error || 'Ошибка')
+			}
+		} catch { alert('Ошибка сети') }
+		setResetLinkLoading(null)
+	}
 
 	useEffect(() => {
 		if (!roleAllowed) return
@@ -1674,6 +1723,77 @@ export default function AdminSupportPage() {
 								</div>
 							)}
 						</div>
+
+						{user?.role === 'Admin' && (
+							<div className='rounded-2xl bg-white/5 border border-white/10 p-6'>
+								<h2 className='text-lg font-bold text-white mb-4'>Поиск пользователей</h2>
+								<input
+									type='text'
+									value={userSearchQuery}
+									onChange={e => searchUsers(e.target.value)}
+									placeholder='Email, username или роль (Admin/Support)...'
+									className='w-full rounded-xl bg-black/30 border border-white/10 px-4 py-2.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 mb-4'
+								/>
+								{userSearchLoading && <div className='text-sm text-gray-400'>Поиск...</div>}
+								{userSearchResults.length > 0 && (
+									<div className='space-y-2'>
+										{userSearchResults.map((u: any) => (
+											<div key={u.id} className='flex items-center justify-between rounded-lg bg-white/5 p-3'>
+												<div className='flex-1 min-w-0'>
+													<div className='text-sm font-medium text-white truncate'>
+														{u.username}
+														{u.role !== 'User' && (
+															<span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${u.role === 'Admin' ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400'}`}>
+																{u.role}
+															</span>
+														)}
+														{u.is_blocked === 1 && (
+															<span className='ml-2 text-xs px-2 py-0.5 rounded-full bg-red-500/20 text-red-400'>Заблокирован</span>
+														)}
+														{u.is_blocked_system === 1 && (
+															<span className='ml-2 text-xs px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400'>Систем. блок</span>
+														)}
+													</div>
+													<div className='text-xs text-gray-400 truncate'>{u.email}</div>
+													<div className='text-[10px] text-gray-500 mt-0.5'>
+														IP: {u.registration_ip || 'неизвестен'} · Регистрация: {u.created_at ? new Date(u.created_at).toLocaleDateString() : '?'}
+													</div>
+												</div>
+												<button
+													onClick={() => generateResetLink(u.id)}
+													disabled={resetLinkLoading === u.id}
+													className='ml-3 shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors'
+												>
+													{resetLinkLoading === u.id ? '...' : 'Ссылка сброса'}
+												</button>
+											</div>
+										))}
+									</div>
+								)}
+								{resetLinkResult && (
+									<div className='mt-4 rounded-xl bg-green-500/10 border border-green-500/20 p-4'>
+										<div className='text-sm font-medium text-green-400 mb-2'>
+											Ссылка для {resetLinkResult.username} (IP: {resetLinkResult.ip})
+										</div>
+										<div className='flex items-center gap-2'>
+											<input
+												readOnly
+												value={resetLinkResult.link}
+												className='flex-1 rounded-lg bg-black/30 border border-white/10 px-3 py-1.5 text-xs text-gray-200 font-mono'
+												onClick={e => (e.target as HTMLInputElement).select()}
+											/>
+											<button
+												onClick={() => navigator.clipboard.writeText(resetLinkResult.link)}
+												className='shrink-0 rounded-lg bg-white/10 px-3 py-1.5 text-xs text-white hover:bg-white/20 transition-colors'
+											>
+												Копировать
+											</button>
+										</div>
+										<div className='text-[10px] text-gray-500 mt-2'>Действует 1 час. Восстановление доступно только с IP регистрации ({resetLinkResult.ip}).</div>
+									</div>
+								)}
+							</div>
+						)}
 					</div>
 				</main>
 			</div>

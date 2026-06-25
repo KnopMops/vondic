@@ -2,6 +2,7 @@ import { GlobalCallUI, WebRTCProvider } from '@/components/calls'
 import DesktopReleaseBanner from '@/components/DesktopReleaseBanner'
 import GlobalPlayer from '@/components/music/GlobalPlayer'
 import NotificationBell from '@/components/notifications/NotificationBell'
+import SupportWidget from '@/components/support/SupportWidget'
 import ThemeInit from '@/components/ThemeInit'
 import { UrlFallbackProvider } from '@/components/UrlFallbackProvider'
 import { AuthProvider } from '@/lib/AuthContext'
@@ -60,9 +61,10 @@ export default function RootLayout({
 										<ToastProvider>
 											<WebRTCProvider>
 												{children}
-												<GlobalCallUI />
-												<GlobalPlayer />
-												<NotificationBell />
+											<GlobalCallUI />
+											<GlobalPlayer />
+											<NotificationBell />
+											<SupportWidget />
 											</WebRTCProvider>
 										</ToastProvider>
 									</SocketProvider>

@@ -133,6 +133,7 @@ export async function refreshAccessToken(
 				'Content-Type': 'application/json',
 				Authorization: `Bearer ${refreshToken}`,
 			},
+			body: JSON.stringify({ device_type: 'web' }),
 		})
 
 		if (!response.ok) {

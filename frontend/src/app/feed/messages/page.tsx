@@ -110,6 +110,7 @@ import {
 	LuUserPlus as UserPlus,
 	LuUsers as Users,
 	LuX as X,
+	LuLifeBuoy as LifeBuoyIcon,
 } from 'react-icons/lu'
 import ChannelSettingsModal from './ChannelSettingsModal'
 import ChatDateSeparator from './ChatDateSeparator'
@@ -121,6 +122,7 @@ import DeleteChatHistoryModal, {
 import DiscoveryModal from './DiscoveryModal'
 import MessageBubble from './MessageBubble'
 import ScheduleMessageModal from './ScheduleMessageModal'
+import ProfileModal from '@/components/messenger/ProfileModal'
 
 const formatLastSeen = (
 	lastSeen?: string | Date,
@@ -597,22 +599,22 @@ const BACKGROUNDS = [
 	{
 		id: 'default',
 		name: 'Стандартный',
-		class: 'bg-gray-950',
-		preview: 'bg-gray-950',
-		accentColor: 'text-indigo-400',
-		buttonBg: 'bg-indigo-600',
-		buttonHover: 'hover:bg-indigo-700',
+		class: 'bg-[#1a2232]',
+		preview: 'bg-[#1a2232]',
+		accentColor: 'text-[#2dd4a8]',
+		buttonBg: 'bg-[#2dd4a8]',
+		buttonHover: 'hover:bg-[#25c49d]',
 		ownMessageBg: 'chat-bubble-own',
-		borderColor: 'border-blue-500/20',
-		ringColor: 'focus:ring-blue-500/50',
-		gradientText: 'from-blue-500 to-purple-600',
+		borderColor: 'border-[#2dd4a8]/20',
+		ringColor: 'focus:ring-[#2dd4a8]/50',
+		gradientText: 'from-[#2dd4a8] to-[#22b893]',
 	},
 	{
 		id: 'blue',
 		name: 'Синий',
 		class:
-			'bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-blue-800/30 via-gray-950 to-gray-950',
-		preview: 'bg-gradient-to-tr from-blue-600 to-gray-900',
+			'bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-blue-800/30 via-[#1a2232] to-[#1a2232]',
+		preview: 'bg-gradient-to-tr from-blue-600 to-[#1a2232]',
 		accentColor: 'text-blue-400',
 		buttonBg: 'bg-blue-600',
 		buttonHover: 'hover:bg-blue-700',
@@ -625,8 +627,8 @@ const BACKGROUNDS = [
 		id: 'purple',
 		name: 'Фиолетовый',
 		class:
-			'bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-purple-800/30 via-gray-950 to-gray-950',
-		preview: 'bg-gradient-to-tr from-purple-600 to-gray-900',
+			'bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-purple-800/30 via-[#1a2232] to-[#1a2232]',
+		preview: 'bg-gradient-to-tr from-purple-600 to-[#1a2232]',
 		accentColor: 'text-purple-400',
 		buttonBg: 'bg-purple-600',
 		buttonHover: 'hover:bg-purple-700',
@@ -639,22 +641,22 @@ const BACKGROUNDS = [
 		id: 'emerald',
 		name: 'Изумрудный',
 		class:
-			'bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-emerald-800/30 via-gray-950 to-gray-950',
-		preview: 'bg-gradient-to-tr from-emerald-600 to-gray-900',
-		accentColor: 'text-emerald-400',
-		buttonBg: 'bg-emerald-600',
-		buttonHover: 'hover:bg-emerald-700',
+			'bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-emerald-800/30 via-[#1a2232] to-[#1a2232]',
+		preview: 'bg-gradient-to-tr from-emerald-600 to-[#1a2232]',
+		accentColor: 'text-[#2dd4a8]',
+		buttonBg: 'bg-[#2dd4a8]',
+		buttonHover: 'hover:bg-[#25c49d]',
 		ownMessageBg: 'chat-bubble-own-emerald',
-		borderColor: 'border-emerald-500/20',
-		ringColor: 'focus:ring-emerald-500/50',
-		gradientText: 'from-emerald-400 to-teal-500',
+		borderColor: 'border-[#2dd4a8]/20',
+		ringColor: 'focus:ring-[#2dd4a8]/50',
+		gradientText: 'from-[#2dd4a8] to-teal-500',
 	},
 	{
 		id: 'rose',
 		name: 'Розовый',
 		class:
-			'bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-rose-800/30 via-gray-950 to-gray-950',
-		preview: 'bg-gradient-to-tr from-rose-600 to-gray-900',
+			'bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-rose-800/30 via-[#1a2232] to-[#1a2232]',
+		preview: 'bg-gradient-to-tr from-rose-600 to-[#1a2232]',
 		accentColor: 'text-rose-400',
 		buttonBg: 'bg-rose-600',
 		buttonHover: 'hover:bg-rose-700',
@@ -968,20 +970,6 @@ export default function MessengerPage() {
 
 	useEffect(() => {
 		try {
-			const raw = localStorage.getItem(aiStorageKey)
-			if (raw) {
-				const parsed = JSON.parse(raw)
-				if (Array.isArray(parsed)) {
-					setAiMessages(parsed)
-					return
-				}
-			}
-		} catch {}
-		setAiMessages([])
-	}, [aiStorageKey])
-
-	useEffect(() => {
-		try {
 			localStorage.setItem(aiStorageKey, JSON.stringify(aiMessages))
 		} catch {}
 	}, [aiMessages, aiStorageKey])
@@ -1171,8 +1159,17 @@ export default function MessengerPage() {
 	const [communityInviteCode, setCommunityInviteCode] = useState('')
 	const [showInviteCode, setShowInviteCode] = useState(false)
 	const [input, setInput] = useState('')
-	const [activeTab, setActiveTab] = useState<'direct' | 'community'>('direct')
+	const [activeTab, setActiveTab] = useState<'direct' | 'community' | 'support'>('direct')
 	const [hubTab, setHubTab] = useState<'channels' | 'servers'>('channels')
+
+	const [supportChats, setSupportChats] = useState<{id:number;question:string;status:string;created_at:number;last_message:string;last_message_at:number;last_sender:string;unread_count:number}[]>([])
+	const [selectedSupportId, setSelectedSupportId] = useState<number | null>(null)
+	const [supportMessages, setSupportMessages] = useState<{id:number;sender:string;content:string;created_at:number}[]>([])
+	const [supportInput, setSupportInput] = useState('')
+	const [supportStatus, setSupportStatus] = useState('open')
+	const supportChatRef = useRef<HTMLDivElement | null>(null)
+	const supportPollRef = useRef<number | null>(null)
+	const lastSupportMsgIdRef = useRef(0)
 	const messagesEndRef = useRef<HTMLDivElement>(null)
 	const messageRefs = useRef<Record<string, HTMLDivElement | null>>({})
 	const containerRef = useRef<HTMLDivElement>(null)
@@ -1290,6 +1287,7 @@ export default function MessengerPage() {
 				groupId?: string
 				channelId?: string
 				serverId?: string
+				supportId?: number
 			} | null,
 		) => {
 			if (typeof window === 'undefined') return
@@ -1300,11 +1298,13 @@ export default function MessengerPage() {
 			params.delete('group_id')
 			params.delete('channel_id')
 			params.delete('server_id')
+			params.delete('support_id')
 			if (next?.botId) params.set('bot_id', next.botId)
 			if (next?.directId) params.set('direct_id', next.directId)
 			if (next?.groupId) params.set('group_id', next.groupId)
 			if (next?.channelId) params.set('channel_id', next.channelId)
 			if (next?.serverId) params.set('server_id', next.serverId)
+			if (next?.supportId) params.set('support_id', String(next.supportId))
 			const query = params.toString()
 			const nextUrl = query
 				? `${window.location.pathname}?${query}`
@@ -1449,6 +1449,155 @@ export default function MessengerPage() {
 	const [files, setFiles] = useState<File[]>([])
 	const [isUploading, setIsUploading] = useState(false)
 	const fileInputRef = useRef<HTMLInputElement>(null)
+
+	const loadSupportChats = async () => {
+		try {
+			const res = await fetch('/api/support/messenger/chats')
+			const text = await res.text()
+			let data: any = {}
+			try { data = JSON.parse(text) } catch { return }
+			if (data?.ok && Array.isArray(data.chats)) {
+				setSupportChats(data.chats)
+			}
+		} catch {}
+	}
+
+	const loadSupportMessages = async (escId: number, sinceId = 0) => {
+		try {
+			const url = sinceId > 0
+				? `/api/support/messenger/${escId}/messages?since_id=${sinceId}`
+				: `/api/support/messenger/${escId}/messages`
+			const res = await fetch(url)
+			const text = await res.text()
+			let data: any = {}
+			try { data = JSON.parse(text) } catch { return }
+			if (data?.ok && Array.isArray(data.messages)) {
+				if (sinceId > 0) {
+					setSupportMessages(prev => {
+						const existingIds = new Set(prev.map(m => m.id))
+						const newMsgs = data.messages.filter((m: {id:number}) => !existingIds.has(m.id))
+						return newMsgs.length > 0 ? [...prev, ...newMsgs] : prev
+					})
+				} else {
+					setSupportMessages(data.messages)
+				}
+				if (data.status) setSupportStatus(data.status)
+				const maxId = Math.max(...data.messages.map((m: {id:number}) => m.id), 0)
+				if (maxId > lastSupportMsgIdRef.current) lastSupportMsgIdRef.current = maxId
+			}
+		} catch {}
+	}
+
+	const sendSupportMessage = async () => {
+		if (!selectedSupportId || !supportInput.trim() || supportStatus === 'closed') return
+		const text = supportInput.trim()
+		setSupportInput('')
+		const tempId = Date.now()
+		setSupportMessages(prev => [
+			...prev,
+			{ id: tempId, sender: 'user', content: text, created_at: Date.now() },
+		])
+		try {
+			const res = await fetch(`/api/support/messenger/${selectedSupportId}/send`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ message: text }),
+			})
+			const data = await res.json()
+			if (data?.ok && data?.id) {
+				setSupportMessages(prev =>
+					prev.map(m => m.id === tempId ? { ...m, id: data.id } : m)
+				)
+				lastSupportMsgIdRef.current = data.id
+			}
+		} catch {}
+	}
+
+	useEffect(() => {
+		loadSupportChats()
+	}, [activeTab === 'support'])
+
+	useEffect(() => {
+		if (selectedSupportId) {
+			lastSupportMsgIdRef.current = 0
+			loadSupportMessages(selectedSupportId)
+			if (supportPollRef.current) window.clearInterval(supportPollRef.current)
+			supportPollRef.current = window.setInterval(() => {
+				if (selectedSupportId) {
+					loadSupportMessages(selectedSupportId, lastSupportMsgIdRef.current)
+				}
+			}, 3000)
+		} else {
+			if (supportPollRef.current) {
+				window.clearInterval(supportPollRef.current)
+				supportPollRef.current = null
+			}
+		}
+		return () => {
+			if (supportPollRef.current) {
+				window.clearInterval(supportPollRef.current)
+				supportPollRef.current = null
+			}
+		}
+	}, [selectedSupportId])
+
+	const supportChatsPollRef = useRef<number | null>(null)
+	useEffect(() => {
+		if (activeTab === 'support') {
+			loadSupportChats()
+			if (supportChatsPollRef.current) window.clearInterval(supportChatsPollRef.current)
+			supportChatsPollRef.current = window.setInterval(loadSupportChats, 10000)
+		} else {
+			if (supportChatsPollRef.current) {
+				window.clearInterval(supportChatsPollRef.current)
+				supportChatsPollRef.current = null
+			}
+		}
+		return () => {
+			if (supportChatsPollRef.current) {
+				window.clearInterval(supportChatsPollRef.current)
+				supportChatsPollRef.current = null
+			}
+		}
+	}, [activeTab === 'support'])
+
+	useEffect(() => {
+		if (!supportChatRef.current) return
+		supportChatRef.current.scrollTop = supportChatRef.current.scrollHeight
+	}, [supportMessages.length, selectedSupportId])
+
+	useEffect(() => {
+		const params = new URLSearchParams(window.location.search)
+		const supportId = params.get('support_id')
+		if (supportId) {
+			const numId = Number(supportId)
+			if (numId > 0) {
+				setSelectedSupportId(numId)
+				setActiveTab('support')
+				setSelectedFriend(null)
+				setSelectedChannel(null)
+				setSelectedGroup(null)
+			}
+		}
+	}, [])
+
+	const deleteSupportChat = async (escId: number) => {
+		try {
+			const res = await fetch('/api/support/chats/delete', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ escId }),
+			})
+			const data = await res.json()
+			if (res.ok && data?.ok) {
+				setSupportChats(prev => prev.filter(c => c.id !== escId))
+				if (selectedSupportId === escId) {
+					setSelectedSupportId(null)
+					setSupportMessages([])
+				}
+			}
+		} catch {}
+	}
 
 	const fileToDataUrl = (file: File) =>
 		new Promise<string>((resolve, reject) => {
@@ -2136,7 +2285,7 @@ export default function MessengerPage() {
 		!!selectedFriend && Boolean((selectedFriend as any).is_blocked)
 	const isBlockedUserChat = isBlockedByMeChat || hasBlockedMeChat
 	const targetUserId = selectedFriend?.id
-	const hasActiveChat = !!(selectedFriend || selectedChannel || selectedGroup)
+	const hasActiveChat = !!(selectedFriend || selectedChannel || selectedGroup || selectedSupportId)
 	const isCommunityChannelActive =
 		!!selectedCommunity?.id || !!selectedChannel?.community_id
 	const canWriteToSelectedChannel = !selectedChannel
@@ -3235,6 +3384,10 @@ export default function MessengerPage() {
 	}, [getGroupDetails, getChannelInfo])
 
 	useEffect(() => {
+		if (selectedSupportId) {
+			updateChatUrl({ supportId: selectedSupportId })
+			return
+		}
 		if (selectedFriend?.id) {
 			if (selectedFriend.is_bot) {
 				updateChatUrl({ botId: selectedFriend.id })
@@ -3264,6 +3417,7 @@ export default function MessengerPage() {
 		}
 		updateChatUrl(null)
 	}, [
+		selectedSupportId,
 		selectedFriend?.id,
 		selectedFriend?.is_bot,
 		selectedGroup?.id,
@@ -3896,6 +4050,10 @@ export default function MessengerPage() {
 	}
 
 	const handleSendMessage = () => {
+		if (selectedSupportId) {
+			sendSupportMessage()
+			return
+		}
 		if (isAiChat) {
 			sendAiMessage()
 			return
@@ -5125,39 +5283,39 @@ export default function MessengerPage() {
 	return (
 		<div className='flex h-[100dvh] w-full overflow-hidden bg-[color:var(--app-bg)] text-[color:var(--app-fg)] font-sans'>
 			<div
-				className={`w-80 border-r border-white/10 bg-black/20 flex-shrink-0 z-20 shadow-xl flex-col ${
+				className={`w-80 border-r border-white/6 bg-black/25 flex-shrink-0 z-20 shadow-xl flex-col backdrop-blur-md ${
 					hasActiveChat ? 'hidden md:flex' : 'flex'
 				}`}
 			>
-				<div className='p-4 border-b border-white/10 bg-black/20 backdrop-blur-sm'>
+				<div className='p-4 border-b border-white/6 bg-black/20 backdrop-blur-sm'>
 					<div className='flex justify-between items-center mb-4'>
 						<div className='flex items-center gap-3'>
 							<Link
 								href='/feed'
-								className='p-2 -ml-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-full transition-colors'
+								className='p-2 -ml-2 text-[var(--app-muted)] hover:text-[var(--app-fg)] hover:bg-white/5 rounded-full transition-colors'
 							>
 								<ArrowLeftIcon className='w-5 h-5' />
 							</Link>
-							<h2 className='text-xl font-bold tracking-tight text-white flex items-center gap-2'>
-								<span className='bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent transition-all duration-500'>
+							<h2 className='text-xl font-bold tracking-tight text-[var(--app-fg)] flex items-center gap-2'>
+								<span className='bg-gradient-to-r from-[#2dd4a8] to-[#22b893] bg-clip-text text-transparent transition-all duration-500'>
 									Vondic
 								</span>
 							</h2>
 						</div>
 					</div>
 
-					<div className='flex p-1 bg-black/30 rounded-lg border border-white/10 relative'>
+					<div className='flex p-1 bg-black/20 rounded-lg border border-white/6 relative'>
 						<div
-							className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white/10 rounded-md transition-all duration-300 ease-out ${
-								activeTab === 'direct' ? 'left-1' : 'left-[calc(50%+4px)]'
+							className={`absolute top-1 bottom-1 w-[calc(33.33%-3px)] bg-white/8 rounded-md transition-all duration-300 ease-out ${
+								activeTab === 'direct' ? 'left-1' : activeTab === 'community' ? 'left-[calc(33.33%+2px)]' : 'left-[calc(66.66%+3px)]'
 							}`}
 						/>
 						<button
 							onClick={() => setActiveTab('direct')}
 							className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md relative z-10 transition-colors ${
 								activeTab === 'direct'
-									? 'text-white'
-									: 'text-gray-400 hover:text-gray-200'
+									? 'text-[var(--app-fg)]'
+									: 'text-[var(--app-muted)] hover:text-[var(--app-fg)]'
 							}`}
 						>
 							<MessageSquareIcon className='w-4 h-4' />
@@ -5167,27 +5325,38 @@ export default function MessengerPage() {
 							onClick={() => setActiveTab('community')}
 							className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md relative z-10 transition-colors ${
 								activeTab === 'community'
-									? 'text-white'
-									: 'text-gray-400 hover:text-gray-200'
+									? 'text-[var(--app-fg)]'
+									: 'text-[var(--app-muted)] hover:text-[var(--app-fg)]'
 							}`}
 							title='Каналы (Telegram) и серверы (Discord)'
 						>
 							<HashIcon className='w-4 h-4' />
 							Каналы
 						</button>
+						<button
+							onClick={() => setActiveTab('support')}
+							className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md relative z-10 transition-colors ${
+								activeTab === 'support'
+									? 'text-[var(--app-fg)]'
+									: 'text-[var(--app-muted)] hover:text-[var(--app-fg)]'
+							}`}
+						>
+							<LifeBuoyIcon className='w-4 h-4' />
+							Поддержка
+						</button>
 					</div>
 				</div>
 
-				{activeTab !== 'community' && (
+				{activeTab === 'direct' && (
 					<div className='px-4 py-3'>
 						<div className='relative'>
-							<SearchIcon className='absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500' />
+							<SearchIcon className='absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--app-muted)]' />
 							<input
 								type='text'
 								placeholder='Поиск чатов...'
 								value={searchQuery}
 								onChange={e => setSearchQuery(e.target.value)}
-								className={`w-full bg-gray-900 rounded-xl py-2 pl-10 pr-4 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:ring-2 transition-all duration-300 ${currentBackground.ringColor}`}
+								className={`w-full bg-white/5 rounded-xl py-2 pl-10 pr-4 text-sm text-[var(--app-fg)] placeholder-[var(--app-muted)] focus:outline-none focus:ring-2 transition-all duration-300 ${currentBackground.ringColor}`}
 							/>
 							{isSearchingUsers && (
 								<div
@@ -5205,8 +5374,8 @@ export default function MessengerPage() {
 									onClick={() => setActiveFolderId('all')}
 									className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
 										activeFolderId === 'all'
-											? 'bg-emerald-500/20 text-emerald-300'
-											: 'bg-gray-900 text-gray-400 hover:text-gray-200'
+											? 'bg-[var(--app-accent)]/15 text-[var(--app-accent)]'
+											: 'bg-white/5 text-[var(--app-muted)] hover:text-[var(--app-fg)]'
 									}`}
 								>
 									Все
@@ -5218,8 +5387,8 @@ export default function MessengerPage() {
 										onClick={() => setActiveFolderId(folder.id)}
 										className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
 											activeFolderId === folder.id
-												? 'bg-emerald-500/20 text-emerald-300'
-												: 'bg-gray-900 text-gray-400 hover:text-gray-200'
+												? 'bg-[var(--app-accent)]/15 text-[var(--app-accent)]'
+												: 'bg-white/5 text-[var(--app-muted)] hover:text-[var(--app-fg)]'
 										}`}
 									>
 										{folder.icon ? `${folder.icon} ` : ''}
@@ -5229,7 +5398,7 @@ export default function MessengerPage() {
 								<button
 									type='button'
 									onClick={() => setIsFoldersManageOpen(true)}
-									className='shrink-0 p-1.5 rounded-lg bg-gray-900 text-gray-400 hover:text-white transition-colors'
+									className='shrink-0 p-1.5 rounded-lg bg-white/5 text-[var(--app-muted)] hover:text-[var(--app-fg)] transition-colors'
 									title='Управление папками'
 								>
 									<Folder className='w-4 h-4' />
@@ -5240,7 +5409,7 @@ export default function MessengerPage() {
 				)}
 
 				<div className='flex-1 overflow-y-auto custom-scrollbar px-2 space-y-1 pb-4'>
-					{activeTab === 'direct' ? (
+					{activeTab === 'direct' && (
 						<>
 							{aiFriend && !searchQuery && !showArchivedChats && (
 								<div
@@ -5254,25 +5423,25 @@ export default function MessengerPage() {
 									}}
 									className={`group p-3 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-200 border border-transparent ${
 										selectedFriend?.id === aiFriend.id
-											? `bg-gray-800/50 ${currentBackground.borderColor} shadow-sm`
-											: 'hover:bg-gray-900 border-transparent'
+											? `bg-white/8 ${currentBackground.borderColor} shadow-sm`
+											: 'hover:bg-white/5 border-transparent'
 									}`}
 								>
 									<div className='relative'>
 										<img
 											src={getAvatarUrl(aiFriend.avatar_url)}
 											alt={aiFriend.username}
-											className={`w-12 h-12 rounded-full object-cover bg-gray-800 ring-2 transition-all duration-300 ${
+											className={`w-12 h-12 rounded-full object-cover bg-white/5 ring-2 transition-all duration-300 ${
 												selectedFriend?.id === aiFriend.id
 													? currentBackground.accentColor.replace(
 															'text-',
 															'ring-',
 														)
-													: 'ring-gray-950'
+													: 'ring-[var(--app-bg)]'
 											}`}
 										/>
-										<div className='absolute bottom-0 right-0 w-3.5 h-3.5 bg-gray-950 rounded-full flex items-center justify-center'>
-											<div className='w-2.5 h-2.5 rounded-full bg-emerald-500' />
+										<div className='absolute bottom-0 right-0 w-3.5 h-3.5 bg-[var(--app-bg)] rounded-full flex items-center justify-center'>
+											<div className='w-2.5 h-2.5 rounded-full bg-[var(--app-accent)]' />
 										</div>
 									</div>
 									<div className='flex flex-col flex-1 min-w-0'>
@@ -5281,14 +5450,14 @@ export default function MessengerPage() {
 												className={`font-semibold truncate transition-colors duration-300 ${
 													selectedFriend?.id === aiFriend.id
 														? currentBackground.accentColor
-														: 'text-gray-200 group-hover:text-white'
+														: 'text-[var(--app-fg)] group-hover:text-[var(--app-fg)]'
 												}`}
 											>
 												Вондик AI
 											</span>
-											<span className='text-[10px] text-gray-600'>AI</span>
+											<span className='text-[10px] text-[var(--app-muted)]'>AI</span>
 										</div>
-										<span className='text-xs text-gray-500 truncate group-hover:text-gray-400 transition-colors'>
+										<span className='text-xs text-[var(--app-muted)] truncate group-hover:text-[var(--app-muted)] transition-colors'>
 											Всегда онлайн
 										</span>
 									</div>
@@ -5306,25 +5475,25 @@ export default function MessengerPage() {
 									}}
 									className={`group p-3 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-200 border border-transparent ${
 										selectedFriend?.id === botFriend.id
-											? `bg-gray-800/50 ${currentBackground.borderColor} shadow-sm`
-											: 'hover:bg-gray-900 border-transparent'
+											? `bg-white/8 ${currentBackground.borderColor} shadow-sm`
+											: 'hover:bg-white/5 border-transparent'
 									}`}
 								>
 									<div className='relative'>
 										<img
 											src={getAvatarUrl(botFriend.avatar_url)}
 											alt={botFriend.username}
-											className={`w-12 h-12 rounded-full object-cover bg-gray-800 ring-2 transition-all duration-300 ${
+											className={`w-12 h-12 rounded-full object-cover bg-white/5 ring-2 transition-all duration-300 ${
 												selectedFriend?.id === botFriend.id
 													? currentBackground.accentColor.replace(
 															'text-',
 															'ring-',
 														)
-													: 'ring-gray-950'
+													: 'ring-[var(--app-bg)]'
 											}`}
 										/>
-										<div className='absolute bottom-0 right-0 w-3.5 h-3.5 bg-gray-950 rounded-full flex items-center justify-center'>
-											<div className='w-2.5 h-2.5 rounded-full bg-emerald-500' />
+										<div className='absolute bottom-0 right-0 w-3.5 h-3.5 bg-[var(--app-bg)] rounded-full flex items-center justify-center'>
+											<div className='w-2.5 h-2.5 rounded-full bg-[var(--app-accent)]' />
 										</div>
 									</div>
 									<div className='flex flex-col flex-1 min-w-0'>
@@ -5333,14 +5502,14 @@ export default function MessengerPage() {
 												className={`font-semibold truncate transition-colors duration-300 ${
 													selectedFriend?.id === botFriend.id
 														? currentBackground.accentColor
-														: 'text-gray-200 group-hover:text-white'
+														: 'text-[var(--app-fg)] group-hover:text-[var(--app-fg)]'
 												}`}
 											>
 												{botFriend.username}
 											</span>
-											<span className='text-[10px] text-gray-600'>BOT</span>
+											<span className='text-[10px] text-[var(--app-muted)]'>BOT</span>
 										</div>
-										<span className='text-xs text-gray-500 truncate group-hover:text-gray-400 transition-colors'>
+										<span className='text-xs text-[var(--app-muted)] truncate group-hover:text-[var(--app-muted)] transition-colors'>
 											Всегда онлайн
 										</span>
 									</div>
@@ -5350,8 +5519,8 @@ export default function MessengerPage() {
 							{folderFilteredSidebarList.length === 0 &&
 								(!aiFriend || searchQuery) &&
 								!showBotInHistory && (
-									<div className='p-8 text-center text-gray-500 flex flex-col items-center gap-3'>
-										<div className='w-12 h-12 bg-gray-900 rounded-full flex items-center justify-center text-gray-700'>
+									<div className='p-8 text-center text-[var(--app-muted)] flex flex-col items-center gap-3'>
+										<div className='w-12 h-12 bg-white/5 rounded-full flex items-center justify-center text-[var(--app-muted)]'>
 											<SearchIcon className='w-6 h-6' />
 										</div>
 										<span className='text-sm'>
@@ -5373,33 +5542,33 @@ export default function MessengerPage() {
 										setChatSearchQuery('')
 										setFoundMessages([])
 									}}
-									className={`group p-3 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-200 border border-transparent hover:bg-gray-900 ${
+									className={`group p-3 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-200 border border-transparent hover:bg-white/5 ${
 										selectedFriend?.id === friend.id
-											? `bg-gray-800/50 ${currentBackground.borderColor} shadow-sm`
+											? `bg-white/8 ${currentBackground.borderColor} shadow-sm`
 											: 'bg-transparent'
 									}`}
 								>
 									<div className='relative'>
 										<img
 											src={getAvatarUrl(friend.avatar_url)}
-											className={`w-12 h-12 rounded-full object-cover bg-gray-800 ring-2 transition-all duration-300 ${
+											className={`w-12 h-12 rounded-full object-cover bg-white/5 ring-2 transition-all duration-300 ${
 												selectedFriend?.id === friend.id
 													? currentBackground.accentColor.replace(
 															'text-',
 															'ring-',
 														)
-													: 'ring-gray-950'
+													: 'ring-[var(--app-bg)]'
 											}`}
 											alt={friend.username}
 										/>
 
 										{!friend.is_bot && (
-											<div className='absolute bottom-0 right-0 w-3.5 h-3.5 bg-gray-950 rounded-full flex items-center justify-center'>
+											<div className='absolute bottom-0 right-0 w-3.5 h-3.5 bg-[var(--app-bg)] rounded-full flex items-center justify-center'>
 												<div
 													className={`w-2.5 h-2.5 rounded-full ${
 														friend.status?.toLowerCase() === 'online'
-															? 'bg-emerald-500'
-															: 'bg-gray-500'
+															? 'bg-[var(--app-accent)]'
+															: 'bg-[var(--app-muted)]'
 													}`}
 												/>
 											</div>
@@ -5411,7 +5580,7 @@ export default function MessengerPage() {
 												className={`font-semibold truncate transition-colors duration-300 flex items-center gap-1 ${
 													selectedFriend?.id === friend.id
 														? currentBackground.accentColor
-														: 'text-gray-200 group-hover:text-white'
+														: 'text-[var(--app-fg)] group-hover:text-[var(--app-fg)]'
 												}`}
 											>
 												{pinnedChatIds.includes(friend.id) && (
@@ -5422,11 +5591,11 @@ export default function MessengerPage() {
 													<span className='text-amber-400'>★</span>
 												)}
 											</span>
-											<span className='text-[10px] text-gray-600'>
+											<span className='text-[10px] text-[var(--app-muted)]'>
 												{getSidebarPreviewTime(friend)}
 											</span>
 										</div>
-										<span className='text-xs text-gray-500 truncate group-hover:text-gray-400 transition-colors'>
+										<span className='text-xs text-[var(--app-muted)] truncate group-hover:text-[var(--app-muted)] transition-colors'>
 											{getSidebarPreview(friend)}
 										</span>
 									</div>
@@ -5635,7 +5804,8 @@ export default function MessengerPage() {
 								</div>
 							)}
 						</>
-					) : (
+					)}
+					{activeTab === 'community' && (
 						<div className='flex flex-col gap-2'>
 							{!selectedCommunity && (
 								<div className='mt-2 space-y-3 px-2'>
@@ -6078,6 +6248,72 @@ export default function MessengerPage() {
 							)}
 						</div>
 					)}
+					{activeTab === 'support' && (
+						<div className='space-y-1'>
+							{supportChats.length === 0 && (
+								<div className='p-4 text-center text-gray-500 text-sm'>
+									Нет обращений
+								</div>
+							)}
+							{supportChats.map(chat => (
+								<div
+									key={chat.id}
+									onClick={() => {
+										setSelectedSupportId(chat.id)
+										setSelectedFriend(null)
+										setSelectedChannel(null)
+										setSelectedGroup(null)
+									}}
+									className={`p-3 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-200 border ${
+										selectedSupportId === chat.id
+											? `bg-gray-800/50 ${currentBackground.borderColor} shadow-sm`
+											: 'hover:bg-gray-900 border-transparent'
+									}`}
+								>
+									<div className='relative shrink-0'>
+										<div className='w-10 h-10 rounded-full bg-emerald-900/60 flex items-center justify-center'>
+											<LifeBuoyIcon className='w-5 h-5 text-emerald-300' />
+										</div>
+										{chat.unread_count > 0 && (
+											<div className='absolute -top-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center'>
+												{chat.unread_count > 9 ? '9+' : chat.unread_count}
+											</div>
+										)}
+									</div>
+									<div className='flex-1 min-w-0'>
+										<div className='flex items-center justify-between'>
+											<span className='text-sm font-medium text-gray-200 truncate'>
+												Заявка #{chat.id}
+											</span>
+											<div className='flex items-center gap-1 shrink-0 ml-2'>
+												{chat.status === 'closed' && (
+													<span className='text-[10px] text-gray-500'>закрыта</span>
+												)}
+												{chat.status === 'closed' && (
+													<button
+														onClick={e => {
+															e.stopPropagation()
+															deleteSupportChat(chat.id)
+														}}
+														className='p-1 rounded-md text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-colors'
+														title='Удалить чат'
+													>
+														<Trash2Icon className='w-3.5 h-3.5' />
+													</button>
+												)}
+											</div>
+										</div>
+										<div className='text-xs text-gray-500 truncate mt-0.5'>
+											{chat.question?.slice(0, 40)}
+										</div>
+										<div className='text-[10px] text-gray-600 truncate mt-0.5'>
+											{chat.last_message?.slice(0, 50)}
+										</div>
+									</div>
+								</div>
+							))}
+						</div>
+					)}
 				</div>
 			</div>
 
@@ -6111,13 +6347,93 @@ export default function MessengerPage() {
 				)}
 
 				<div className='relative z-10 flex flex-col flex-1 min-h-0'>
-					{selectedFriend || selectedChannel || selectedGroup ? (
+					{selectedSupportId ? (
 						<>
 							<div className='h-16 px-6 border-b border-white/10 flex items-center justify-between bg-black/20 backdrop-blur-md z-10 sticky top-0'>
+								<div className='flex items-center gap-3'>
+									<div className='w-9 h-9 rounded-full bg-emerald-900/60 flex items-center justify-center'>
+										<LifeBuoyIcon className='w-5 h-5 text-emerald-300' />
+									</div>
+									<div>
+										<div className='font-medium text-white'>Заявка #{selectedSupportId}</div>
+										<div className='text-xs text-gray-400'>
+											{supportStatus === 'closed' ? 'Закрыта' : 'Техническая поддержка'}
+										</div>
+									</div>
+								</div>
+								<div className='flex items-center gap-2'>
+									<button
+										onClick={() => {
+											setSelectedSupportId(null)
+											setSupportMessages([])
+										}}
+										className='p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-full transition-colors'
+									>
+										<XIcon className='w-5 h-5' />
+									</button>
+								</div>
+							</div>
+							<div
+								ref={supportChatRef}
+								className='flex-1 overflow-y-auto custom-scrollbar px-4 py-4 space-y-3'
+							>
+								{supportMessages.map(msg => (
+									<div
+										key={`${msg.id}-${msg.created_at}`}
+										className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+									>
+										<div
+											className={`max-w-[70%] px-3 py-2 rounded-lg ${
+												msg.sender === 'user'
+													? 'bg-blue-600 text-white'
+													: msg.sender === 'support'
+														? 'bg-emerald-700 text-white'
+														: 'bg-gray-800 text-gray-100'
+											}`}
+										>
+											<div className='text-[10px] opacity-70 mb-1'>
+												{msg.sender === 'user' ? 'Вы' : msg.sender === 'support' ? 'Оператор' : 'Бот'}
+											</div>
+											<div className='text-sm whitespace-pre-wrap break-words'>{msg.content}</div>
+											<div className='text-[10px] opacity-50 mt-1'>
+												{new Date(msg.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+											</div>
+										</div>
+									</div>
+								))}
+							</div>
+							{supportStatus !== 'closed' ? (
+								<div className='p-4 border-t border-white/10 bg-black/20 backdrop-blur-md'>
+									<div className='flex gap-2 items-center'>
+										<input
+											value={supportInput}
+											onChange={e => setSupportInput(e.target.value)}
+											onKeyDown={e => { if (e.key === 'Enter') sendSupportMessage() }}
+											placeholder='Сообщение поддержке...'
+											className='flex-1 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-600'
+										/>
+										<button
+											onClick={sendSupportMessage}
+											disabled={!supportInput.trim()}
+											className='px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-medium'
+										>
+											<SendIcon className='w-4 h-4' />
+										</button>
+									</div>
+								</div>
+							) : (
+								<div className='p-4 border-t border-white/10 bg-black/20 backdrop-blur-md text-center text-sm text-gray-500'>
+									Чат закрыт
+								</div>
+							)}
+						</>
+					) : selectedFriend || selectedChannel || selectedGroup ? (
+						<>
+							<div className='h-16 px-6 border-b border-white/6 flex items-center justify-between bg-black/20 backdrop-blur-lg z-10 sticky top-0'>
 								{isChatSearchOpen ? (
 									<div className='flex flex-col gap-2 w-full animate-in fade-in slide-in-from-top-2 duration-200'>
 										<div className='flex items-center gap-2'>
-											<SearchIcon className='w-5 h-5 text-gray-400 shrink-0' />
+											<SearchIcon className='w-5 h-5 text-[var(--app-muted)] shrink-0' />
 											<form
 												onSubmit={handleMessageSearch}
 												className='flex-1 min-w-0'
@@ -6128,7 +6444,7 @@ export default function MessengerPage() {
 													placeholder='Поиск сообщений...'
 													value={chatSearchQuery}
 													onChange={e => setChatSearchQuery(e.target.value)}
-													className='w-full bg-transparent border-none text-[color:var(--app-fg)] placeholder:text-gray-500 focus:ring-0 text-sm'
+													className='w-full bg-transparent border-none text-[color:var(--app-fg)] placeholder:text-[var(--app-muted)] focus:ring-0 text-sm'
 												/>
 											</form>
 											{isSearchingMessages && (
@@ -6145,7 +6461,7 @@ export default function MessengerPage() {
 													setChatSearchQuery('')
 													setFoundMessages([])
 												}}
-												className='p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-full transition-colors shrink-0'
+												className='p-2 text-[var(--app-muted)] hover:text-[var(--app-fg)] hover:bg-white/5 rounded-full transition-colors shrink-0'
 											>
 												<XIcon className='w-5 h-5' />
 											</button>
@@ -6165,8 +6481,8 @@ export default function MessengerPage() {
 													onClick={() => setMessageFilter(option.id)}
 													className={`shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
 														messageFilter === option.id
-															? 'bg-emerald-600/25 text-emerald-300'
-															: 'bg-gray-800/80 text-gray-400 hover:text-gray-200'
+															? 'bg-[var(--app-accent)]/25 text-[var(--app-accent)]'
+															: 'bg-white/5 text-[var(--app-muted)] hover:text-[var(--app-fg)]'
 													}`}
 												>
 													{option.label}
@@ -6176,7 +6492,7 @@ export default function MessengerPage() {
 												<button
 													type='button'
 													onClick={() => setMessageFilter('all')}
-													className='shrink-0 px-2 py-1 text-xs text-gray-500 hover:text-gray-300'
+													className='shrink-0 px-2 py-1 text-xs text-[var(--app-muted)] hover:text-[var(--app-fg)]'
 												>
 													Сбросить
 												</button>
@@ -6192,7 +6508,7 @@ export default function MessengerPage() {
 													setSelectedGroup(null)
 													setSelectedChannel(null)
 												}}
-												className='p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors'
+												className='p-2 text-[var(--app-muted)] hover:text-[var(--app-fg)] hover:bg-white/8 rounded-full transition-colors'
 												title='К списку серверов'
 											>
 												<ArrowLeftIcon className='w-5 h-5' />
@@ -6208,24 +6524,24 @@ export default function MessengerPage() {
 													>
 														<img
 															src={getAvatarUrl(selectedFriend.avatar_url)}
-															className='w-10 h-10 rounded-full object-cover bg-gray-800 ring-2 ring-gray-800/50'
+															className='w-10 h-10 rounded-full object-cover bg-white/5 ring-2 ring-white/10'
 															alt={selectedFriend.username}
 														/>
 														{selectedFriend.status?.toLowerCase() ===
 															'online' && (
-															<div className='absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-gray-900 rounded-full animate-pulse' />
+															<div className='absolute bottom-0 right-0 w-3 h-3 bg-[var(--app-accent)] border-2 border-[var(--app-bg)] rounded-full animate-pulse' />
 														)}
 													</div>
 													<button
 														onClick={() => setIsSettingsOpen(true)}
-														className='flex flex-col text-left hover:bg-gray-800/50 rounded-lg p-2 -ml-2 transition-colors'
+														className='flex flex-col text-left hover:bg-white/5 rounded-lg p-2 -ml-2 transition-colors'
 														title='Настройки чата'
 													>
-														<span className='font-bold text-white text-base leading-tight flex items-center gap-2'>
+														<span className='font-bold text-[var(--app-fg)] text-base leading-tight flex items-center gap-2'>
 															{selectedFriend.username}
 															{secretChatEnabled && (
 																<span
-																	className='text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 font-medium'
+																	className='text-[10px] px-1.5 py-0.5 rounded-md bg-[var(--app-accent)]/15 text-[var(--app-accent)] font-medium'
 																	title='Секретный чат (E2E)'
 																>
 																	🔐
@@ -6235,10 +6551,10 @@ export default function MessengerPage() {
 																<span className='ml-1 text-amber-400'>★</span>
 															)}
 														</span>
-														<span className='text-xs text-emerald-500 font-medium flex items-center gap-1.5'>
+														<span className='text-xs text-[var(--app-accent)] font-medium flex items-center gap-1.5'>
 															{isChatTyping ? (
 																<>
-																	<span className='w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse' />
+																	<span className='w-1.5 h-1.5 rounded-full bg-[var(--app-accent)] animate-pulse' />
 																	Печатает...
 																</>
 															) : selectedFriend.status?.toLowerCase() ===
@@ -7265,7 +7581,14 @@ export default function MessengerPage() {
 												onBotOutboxItems={appendBotOutboxItems}
 												onBotModal={handleBotModal}
 											onBotGamePlay={game => setActiveBotGame(game)}
-											/>
+											onSenderClick={(senderId) => {
+												const friend = friends?.find((f: any) => String(f.id) === String(senderId))
+												const groupUser = groupParticipants[senderId]
+												const channelUser = channelParticipants[senderId]
+												const target = friend || groupUser || channelUser
+												if (target) { setSelectedUserForModal(target); setIsUserProfileModalOpen(true) }
+											}}
+										/>
 										</div>
 									)
 								})}
@@ -7630,24 +7953,29 @@ export default function MessengerPage() {
 							</div>
 						</>
 					) : (
-						<div className='flex-1 flex flex-col items-center justify-center text-gray-500 gap-6 p-8 relative overflow-hidden'>
-							<div className='absolute inset-0 bg-gradient-to-tr from-blue-900/10 via-transparent to-purple-900/10 pointer-events-none' />
+						<div className='flex-1 flex flex-col items-center justify-center text-[var(--app-muted)] gap-6 p-8 relative overflow-hidden'>
+							<div className='absolute inset-0 bg-gradient-to-tr from-[#2dd4a8]/5 via-transparent to-[#22b893]/5 pointer-events-none' />
 
-							<div className='w-32 h-32 rounded-[2rem] bg-gray-900 shadow-2xl flex items-center justify-center border border-gray-800 rotate-12 transition-transform duration-700 hover:rotate-6 group'>
-								<MessageSquareIcon className='w-16 h-16 text-gray-700 group-hover:text-blue-500/50 transition-colors duration-500' />
+							<div className='w-32 h-32 rounded-[2rem] bg-white/5 shadow-2xl flex items-center justify-center border border-white/6 rotate-12 transition-transform duration-700 hover:rotate-6 group'>
+								<MessageSquareIcon className='w-16 h-16 text-[var(--app-muted)] group-hover:text-[var(--app-accent)]/50 transition-colors duration-500' />
 							</div>
 
 							<div className='text-center space-y-2 max-w-sm z-10'>
-								<h3 className='text-2xl font-bold text-gray-200'>
-									Вондик Мессенджер
+								<h3 className='text-2xl font-bold text-[var(--app-fg)]'>
+									<span className='bg-gradient-to-r from-[#2dd4a8] to-[#22b893] bg-clip-text text-transparent'>
+										Vondic
+									</span>{' '}
+									Мессенджер
 								</h3>
-								<p className='text-gray-500'>
+								<p className='text-[var(--app-muted)]'>
 									Выберите чат слева или найдите друга, чтобы начать общение.
 								</p>
 							</div>
 						</div>
 					)}
 				</div>
+
+				{/* Правая панель скрыта — вместо неё модалка профиля */}
 			</div>
 
 			{isForwardOpen && (forwardMessage || selectedMessageIds.size > 0) && (
@@ -8357,75 +8685,15 @@ export default function MessengerPage() {
 				className='hidden'
 			/>
 
-			<AnimatePresence>
-				{isUserProfileModalOpen && selectedUserForModal && (
-					<div
-						className='fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200'
-						onClick={() => setIsUserProfileModalOpen(false)}
-					>
-						<motion.div
-							initial={{ scale: 0.9, opacity: 0 }}
-							animate={{ scale: 1, opacity: 1 }}
-							exit={{ scale: 0.9, opacity: 0 }}
-							className='w-full max-w-sm bg-gray-900 rounded-3xl overflow-hidden border border-white/10 shadow-2xl'
-							onClick={e => e.stopPropagation()}
-						>
-							<div className='relative h-32 bg-gradient-to-br from-indigo-600 to-purple-700'>
-								<div className='absolute -bottom-12 left-6'>
-									<img
-										src={getAvatarUrl(selectedUserForModal.avatar_url)}
-										className='w-24 h-24 rounded-full object-cover border-4 border-gray-900 shadow-xl'
-										alt={selectedUserForModal.username}
-									/>
-								</div>
-							</div>
-							<div className='pt-14 p-6'>
-								<div className='mb-6'>
-									<h2 className='text-2xl font-bold text-white flex items-center gap-2'>
-										{selectedUserForModal.username}
-										{selectedUserForModal.premium && (
-											<span className='text-amber-400 text-xl'>★</span>
-										)}
-									</h2>
-									{selectedUserForModal.privacy_settings?.show_email === true &&
-										selectedUserForModal.email && (
-											<p className='text-gray-400 text-sm'>
-												{selectedUserForModal.email}
-											</p>
-										)}
-									<div className='mt-2 flex items-center gap-2'>
-										<span
-											className={`w-2 h-2 rounded-full ${selectedUserForModal.status?.toLowerCase() === 'online' ? 'bg-emerald-500' : 'bg-gray-500'}`}
-										/>
-										<span className='text-xs font-medium text-gray-300'>
-											{selectedUserForModal.status?.toLowerCase() === 'online'
-												? 'В сети'
-												: formatLastSeen(
-														selectedUserForModal.last_seen,
-														selectedUserForModal.privacy_settings,
-													)}
-										</span>
-									</div>
-								</div>
-								<div className='flex flex-col gap-2'>
-									<Link
-										href={`/feed/profile/${selectedUserForModal.id}`}
-										className='w-full py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-center font-semibold transition-all shadow-lg shadow-indigo-500/20 active:scale-95'
-									>
-										Перейти к профилю
-									</Link>
-									<button
-										onClick={() => setIsUserProfileModalOpen(false)}
-										className='w-full py-3 px-4 rounded-xl bg-white/5 hover:bg-white/10 text-white text-center font-semibold transition-all active:scale-95'
-									>
-										Закрыть
-									</button>
-								</div>
-							</div>
-						</motion.div>
-					</div>
-				)}
-			</AnimatePresence>
+			{isUserProfileModalOpen && selectedUserForModal && (
+				<ProfileModal
+					userId={selectedUserForModal.id}
+					onClose={() => setIsUserProfileModalOpen(false)}
+					onOpenSettings={() => { setIsUserProfileModalOpen(false); setIsSettingsOpen(true) }}
+					onDeleteHistory={() => { setIsUserProfileModalOpen(false); setDeleteHistoryModalOpen(true) }}
+					onDiscovery={() => { setIsUserProfileModalOpen(false); setIsDiscoveryOpen(true) }}
+				/>
+			)}
 
 			<DeleteChatHistoryModal
 				isOpen={deleteHistoryModalOpen}
@@ -8587,6 +8855,7 @@ export default function MessengerPage() {
 					</div>
 				</div>
 			)}
+
 		</div>
 	)
 }

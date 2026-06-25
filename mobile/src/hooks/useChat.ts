@@ -587,6 +587,7 @@ export const useChat = (
         ...msg,
         timestamp: msg.timestamp || msg.created_at || new Date().toISOString(),
         created_at: msg.created_at || msg.timestamp,
+        reply_to_id: msg.reply_to_id || msg.reply_to,
       };
     };
 
@@ -649,6 +650,24 @@ export const useChat = (
 
     const onMessageDeleted = (data: any) => {
       setMessages(prev => prev.filter(m => m.id !== data.message_id));
+    };
+
+    const onMessageEdited = (data: any) => {
+      if (!data || !data.id) return;
+      appLog('useChat', 'onMessageEdited', {msgId: data.id, hasContent: !!data.content});
+      const normalized = normalizeMsg(data);
+      const decrypted = decryptMessage(normalized);
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === decrypted.id
+            ? {
+                ...m,
+                content: decrypted.content,
+                is_edited: true,
+              }
+            : m,
+        ),
+      );
     };
 
     const onE2EKeyExchange = async (data: any) => {
@@ -725,6 +744,7 @@ export const useChat = (
     socketService.on('typing', onTyping);
     socketService.on('messages_read_update', onMessagesReadUpdate);
     socketService.on('message_deleted', onMessageDeleted);
+    socketService.on('message_edited', onMessageEdited);
     socketService.on('e2e_key_exchange', onE2EKeyExchange);
 
     return () => {
@@ -733,6 +753,7 @@ export const useChat = (
       socketService.off('typing', onTyping);
       socketService.off('messages_read_update', onMessagesReadUpdate);
       socketService.off('message_deleted', onMessageDeleted);
+      socketService.off('message_edited', onMessageEdited);
       socketService.off('e2e_key_exchange', onE2EKeyExchange);
     };
   }, [
@@ -773,6 +794,7 @@ export const useChat = (
         ...msg,
         timestamp: msg.timestamp || msg.created_at || new Date().toISOString(),
         created_at: msg.created_at || msg.timestamp,
+        reply_to_id: msg.reply_to_id || msg.reply_to,
       });
 
       await hydrateKeysFromLocalStorage();
@@ -827,6 +849,46 @@ export const useChat = (
     [currentUserId],
   );
 
+  const editMessage = useCallback(
+    async (messageId: string, content: string) => {
+      if (!messageId || !content) return;
+      try {
+        if (!channelId && !groupId && targetUserId && e2eKeyId && secretChatEnabled) {
+          await loadStoredKey();
+          const key = e2eKeysRef.current.get(e2eKeyId);
+          if (!key) {
+            console.warn('[useChat] editMessage E2EE key not found');
+            return;
+          }
+          const encryptedContent = mtEncrypt(content, key);
+          socketService.emit('edit_message', {
+            message_id: messageId,
+            content: encryptedContent,
+          });
+        } else {
+          socketService.emit('edit_message', {
+            message_id: messageId,
+            content: content,
+          });
+        }
+        setMessages(prev =>
+          prev.map(m =>
+            m.id === messageId
+              ? {
+                  ...m,
+                  content: content,
+                  is_edited: true,
+                }
+              : m,
+          ),
+        );
+      } catch (err) {
+        console.error('[Chat] Failed to edit message:', err);
+      }
+    },
+    [channelId, groupId, targetUserId, e2eKeyId, secretChatEnabled, loadStoredKey],
+  );
+
   const sendTyping = useCallback(() => {
     if (!currentUserId) return;
     const payload: any = {sender_id: currentUserId};
@@ -869,6 +931,7 @@ export const useChat = (
 
   return {
     messages,
+    setMessages,
     isLoading,
     hasMore,
     isTyping,
@@ -876,6 +939,7 @@ export const useChat = (
     fetchHistory,
     sendMessage,
     deleteMessage,
+    editMessage,
     sendTyping,
     markAsRead,
     addReaction,

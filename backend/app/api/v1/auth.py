@@ -1,11 +1,11 @@
 import hashlib
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from app.core.config import Config
-from app.core.extensions import cache
+from app.core.extensions import cache, db
 from app.schemas.user_schema import user_schema
 from app.services.auth_service import AuthService
 from app.services.user_service import UserService
@@ -235,7 +235,7 @@ def register():
     captcha_ok, captcha_error = _verify_smart_captcha(captcha_token)
     if not captcha_ok:
         return jsonify({"error": captcha_error}), 400
-    user, error = AuthService.register_user(data)
+    user, error = AuthService.register_user(data, ip_address=_get_client_ip())
     if error:
         return (jsonify({"error": error}), 400)
     try:
@@ -300,10 +300,58 @@ def reset_password_route():
     new_password = data.get("new_password") or data.get("password")
     if not token or not new_password:
         return jsonify({"error": "Токен и новый пароль обязательны"}), 400
+    from app.services.email_service import EmailService
+    email = EmailService.confirm_password_reset_token(token)
+    if email:
+        from app.utils.email_utils import find_user_by_email
+        user = find_user_by_email(email)
+        if user and getattr(user, "reset_ip_required", None):
+            client_ip = _get_client_ip()
+            if client_ip != user.reset_ip_required:
+                return jsonify({"error": f"Восстановление возможно только с IP регистрации ({user.reset_ip_required})"}), 403
     success, message = AuthService.reset_password(token, new_password)
     if not success:
         return jsonify({"error": message}), 400
     return jsonify({"message": message}), 200
+
+
+@auth_bp.route("/verify-reset", methods=["POST"])
+def verify_reset_route():
+    data = request.get_json(force=True) or {}
+    token = data.get("token")
+    if not token:
+        return jsonify({"error": "Токен обязателен"}), 400
+    from app.services.email_service import EmailService
+    from app.services.auth_service import AuthService
+    from app.utils.email_utils import find_user_by_email
+    email = EmailService.confirm_password_reset_token(token)
+    if not email:
+        return jsonify({"error": "Неверный или просроченный токен"}), 400
+    user = find_user_by_email(email)
+    if not user:
+        return jsonify({"error": "Пользователь не найден"}), 404
+    if not getattr(user, "reset_verify_token", None):
+        return jsonify({"error": "Токен подтверждения уже использован или не найден"}), 400
+    token_hash = AuthService._hash_token(token)
+    if user.reset_verify_token != token_hash:
+        return jsonify({"error": "Неверный токен"}), 400
+    if user.reset_verify_expires and user.reset_verify_expires < datetime.utcnow():
+        return jsonify({"error": "Токен подтверждения истёк"}), 400
+    reg_ip = getattr(user, "reset_ip_required", None)
+    if reg_ip:
+        client_ip = _get_client_ip()
+        if client_ip != reg_ip:
+            return jsonify({"error": f"Восстановление доступно только с IP регистрации ({reg_ip})"}), 403
+    raw_reset_token = EmailService.generate_password_reset_token(user.email)
+    user.reset_password_token = AuthService._hash_token(raw_reset_token)
+    user.reset_password_expires = datetime.utcnow() + timedelta(hours=1)
+    user.reset_verify_token = None
+    user.reset_verify_expires = None
+    db.session.commit()
+    return jsonify({
+        "ok": True,
+        "reset_token": raw_reset_token,
+    })
 
 
 @auth_bp.route("/verify-email/<token>", methods=["GET"])
@@ -352,7 +400,7 @@ def login():
         if not captcha_ok:
             return jsonify({"error": captcha_error}), 400
 
-    result, error = AuthService.login_user(data)
+    result, error = AuthService.login_user(data, ip_address=client_ip)
     if error:
         if error in (
             "TwoFactorEmailRequired",
@@ -459,7 +507,9 @@ def refresh_session():
         token = (body.get("refresh_token") or "").strip()
     if not token:
         return jsonify({"error": "Требуется refresh_token"}), 400
-    result, error = AuthService.refresh_with_refresh_token(token)
+    body = request.get_json(silent=True) or {}
+    device_type = (body.get("device_type") or "web").strip().lower()
+    result, error = AuthService.refresh_with_refresh_token(token, device_type, _get_client_ip())
     if error:
         return jsonify({"error": error}), 401
     try:
@@ -550,11 +600,12 @@ def yandex_login():
 @auth_bp.route("/yandex/callback", methods=["GET"])
 def yandex_callback():
     code = request.args.get("code")
-    cid = request.args.get("state") or request.args.get("cid")
+    cid = request.args.get("state") or request.args.get("cid") or ""
+    device_type = "web"
     if not code:
-        return jsonify({"error": "Не предоставлен код"}), 400
+        return jsonify({"error": "Не所提供之 код"}), 400
 
-    result, error = AuthService.login_yandex_user(code)
+    result, error = AuthService.login_yandex_user(code, device_type, ip_address=_get_client_ip())
     if error:
         return jsonify({"error": error}), 400
 
@@ -886,3 +937,114 @@ def get_ai_user():
 
     ai_user = OllamaService.get_ai_user()
     return jsonify(user_schema.dump(ai_user)), 200
+
+
+@auth_bp.route("/device-sessions", methods=["GET"])
+@token_required
+def list_device_sessions(current_user):
+    from app.models.user_session import UserSession
+    token = _extract_access_token()
+    current_lookup = token.split(".")[0] if token and "." in token else (token or "")
+    sessions = UserSession.query.filter_by(user_id=current_user.id).order_by(UserSession.last_active.desc()).all()
+    result = []
+    for s in sessions:
+        d = s.to_dict()
+        d["is_current"] = (s.access_token_lookup == current_lookup)
+        result.append(d)
+    return jsonify({
+        "sessions": result,
+    })
+
+
+@auth_bp.route("/device-sessions/<session_id>", methods=["DELETE"])
+@token_required
+def delete_device_session(current_user, session_id):
+    from app.models.user_session import UserSession
+    token = _extract_access_token()
+    current_lookup = token.split(".")[0] if token and "." in token else (token or "")
+    session = UserSession.query.filter_by(id=session_id, user_id=current_user.id).first()
+    if not session:
+        return jsonify({"error": "Сессия не найдена"}), 404
+    if session.access_token_lookup == current_lookup:
+        return jsonify({"error": "Нельзя завершить текущую сессию"}), 400
+    if session.device_type == "mobile":
+        return jsonify({"error": "Сессия мобильного приложения не может быть завершена с сайта"}), 403
+    db.session.delete(session)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+_QR_SESSION_PREFIX = "qr_session:"
+_QR_SESSION_TTL = 300  # 5 минут
+
+
+@auth_bp.route("/qr/generate", methods=["POST"])
+def qr_generate():
+    import secrets
+    qr_token = secrets.token_urlsafe(32)
+    cache.set(
+        f"{_QR_SESSION_PREFIX}{qr_token}",
+        {"status": "pending"},
+        timeout=_QR_SESSION_TTL,
+    )
+    return jsonify({"qr_token": qr_token})
+
+
+@auth_bp.route("/qr/status", methods=["GET"])
+def qr_status():
+    qr_token = request.args.get("qr_token", "")
+    key = f"{_QR_SESSION_PREFIX}{qr_token}"
+    session = cache.get(key)
+    if not session:
+        return jsonify({"status": "expired"}), 200
+    if session["status"] == "confirmed":
+        result = {
+            "status": "confirmed",
+            "access_token": session.get("access_token"),
+            "refresh_token": session.get("refresh_token"),
+            "user": session.get("user"),
+        }
+        cache.delete(key)
+        return jsonify(result), 200
+    if session["status"] == "cancelled":
+        cache.delete(key)
+        return jsonify({"status": "cancelled"}), 200
+    return jsonify({"status": "pending"}), 200
+
+
+@auth_bp.route("/qr/scan", methods=["POST"])
+@token_required
+def qr_scan(current_user):
+    data = request.get_json(silent=True) or {}
+    qr_token = data.get("qr_token", "")
+    if not qr_token:
+        return jsonify({"error": "Требуется qr_token"}), 400
+    key = f"{_QR_SESSION_PREFIX}{qr_token}"
+    session = cache.get(key)
+    if not session:
+        return jsonify({"error": "QR код не найден или истёк"}), 404
+    if session["status"] != "pending":
+        return jsonify({"error": "QR код уже использован"}), 400
+    device_type = (data.get("device_type") or "mobile").strip().lower()
+    if device_type not in ("web", "mobile", "desktop"):
+        device_type = "mobile"
+    raw_access, raw_refresh = AuthService._issue_tokens(
+        current_user, device_type, f"QR login from {device_type}",
+        ip_address=_get_client_ip()
+    )
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({"error": "Ошибка сервера"}), 500
+    cache.set(
+        key,
+        {
+            "status": "confirmed",
+            "access_token": raw_access,
+            "refresh_token": raw_refresh,
+            "user": user_schema.dump(current_user),
+        },
+        timeout=_QR_SESSION_TTL,
+    )
+    return jsonify({"ok": True})

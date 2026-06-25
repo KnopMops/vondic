@@ -218,6 +218,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 					email: email.trim().toLowerCase(),
 					username: username.trim(),
 					password,
+					device_type: 'web',
 					smart_captcha_token: captchaToken,
 				}),
 			})

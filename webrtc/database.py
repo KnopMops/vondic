@@ -36,6 +36,18 @@ class User(Base):
     role: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
+class Device(Base):
+    __tablename__ = "devices"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    token: Mapped[str] = mapped_column(Text, unique=True, nullable=False, index=True)
+    platform: Mapped[str] = mapped_column(String, nullable=False, default="android")
+    device_type: Mapped[str] = mapped_column(String, nullable=False, default="mobile")
+    created_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    updated_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
+
 class OAuthAccessToken(Base):
     __tablename__ = "oauth_access_tokens"
 
@@ -219,6 +231,21 @@ class UserRepository:
                     text(
                         "ALTER TABLE user_conversations "
                         "ADD COLUMN IF NOT EXISTS is_secret BOOLEAN NOT NULL DEFAULT 0"))
+                conn.execute(
+                    text(
+                        """
+                        CREATE TABLE IF NOT EXISTS devices (
+                            id TEXT PRIMARY KEY,
+                            user_id TEXT NOT NULL,
+                            token TEXT UNIQUE NOT NULL,
+                            platform TEXT NOT NULL DEFAULT 'android',
+                            device_type TEXT NOT NULL DEFAULT 'mobile',
+                            created_at TIMESTAMP,
+                            updated_at TIMESTAMP
+                        )
+                        """
+                    )
+                )
         except Exception as e:
 
             logger.warning(f"Schema ensure skipped/failed: {e}")

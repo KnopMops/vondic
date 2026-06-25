@@ -131,11 +131,19 @@ export interface Message {
   channel_id?: string;
   group_id?: string;
   reply_to?: string;
+  reply_to_id?: string;
   type?: 'text' | 'voice' | 'image' | 'file' | 'video_note';
   attachments?: Attachment[] | string;
   is_deleted?: boolean;
+  is_edited?: boolean;
+  created_at?: string;
   sender_username?: string;
+  sender_name?: string;
   sender_avatar?: string | null;
+  sender?: {
+    username: string;
+  };
+  forwarded_from_id?: string;
   forwarded_from?: {
     sender_id: string;
     sender_name: string;

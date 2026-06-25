@@ -683,6 +683,9 @@ def token():
     code = request.form.get("code")
     redirect_uri = request.form.get("redirect_uri")
     refresh_token = request.form.get("refresh_token")
+    device_type = (request.form.get("device_type") or "web").strip().lower()
+    if device_type not in ("web", "mobile", "desktop"):
+        device_type = "web"
 
     if grant_type == "authorization_code":
 
@@ -714,7 +717,17 @@ def token():
             scope=auth_code.scope
         )
         db.session.add(token_obj)
-        db.session.commit()
+
+        from app.services.auth_service import AuthService
+        user = User.query.get(auth_code.user_id)
+        if user:
+            fwd = request.headers.get("x-forwarded-for", "")
+            rip = request.headers.get("x-real-ip", "")
+            ip = (fwd.split(",")[0].strip() if fwd else rip.strip()) or request.remote_addr or ""
+            AuthService._issue_tokens(user, device_type, ip_address=ip)
+            db.session.commit()
+        else:
+            db.session.commit()
 
         return jsonify({
             "access_token": access_token,
@@ -751,7 +764,17 @@ def token():
         )
         db.session.add(token_obj)
         db.session.delete(old_token)
-        db.session.commit()
+
+        from app.services.auth_service import AuthService
+        user = User.query.get(old_token.user_id)
+        if user:
+            fwd = request.headers.get("x-forwarded-for", "")
+            rip = request.headers.get("x-real-ip", "")
+            ip = (fwd.split(",")[0].strip() if fwd else rip.strip()) or request.remote_addr or ""
+            AuthService._issue_tokens(user, device_type, ip_address=ip)
+            db.session.commit()
+        else:
+            db.session.commit()
 
         return jsonify({
             "access_token": access_token,

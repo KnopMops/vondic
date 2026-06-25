@@ -96,3 +96,5 @@ free-qwen-api/
 
 android/
 ios/
+
+fcm-service-account.json

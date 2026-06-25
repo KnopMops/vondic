@@ -9,6 +9,7 @@ import { isOAuthLoginRedirect } from '@/lib/features/auth-oauth-flow'
 import {
 	getSavedAccounts,
 	isAccountStale,
+	removeSavedAccount,
 	saveAccount,
 	type SavedAccount,
 } from '@/lib/savedAccounts'
@@ -126,6 +127,7 @@ export default function LoginPage() {
 				body: JSON.stringify({
 					email: email.trim().toLowerCase(),
 					password,
+					device_type: 'web',
 					smart_captcha_token: captchaToken || undefined,
 				}),
 			})
@@ -176,6 +178,7 @@ export default function LoginPage() {
 			const body: any = {
 				email: email.trim().toLowerCase(),
 				password,
+				device_type: 'web',
 			}
 			if (twoFactorMethod === 'email') body.email_code = twoFactorCode
 			else body.totp_code = twoFactorCode
@@ -243,35 +246,48 @@ export default function LoginPage() {
 				{showAccountPicker && !twoFactorRequired && (
 					<div className='space-y-2'>
 						{savedAccounts.map(account => (
-							<button
-								key={account.id}
-								type='button'
-								disabled={!!switchingAccountId}
-								onClick={() => void handleSavedAccountClick(account)}
-								className='flex w-full items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-3 text-left hover:bg-white/10 transition-colors disabled:opacity-50'
-							>
-								<div className='w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold shrink-0'>
-									{account.avatar_url ? (
-										<img
-											src={getAvatarUrl(account.avatar_url)}
-											alt={account.username}
-											className='w-full h-full object-cover'
-										/>
-									) : (
-										account.username.charAt(0).toUpperCase()
-									)}
-								</div>
-								<div className='flex-1 min-w-0'>
-									<p className='text-sm font-medium text-white truncate'>
-										{account.username}
-									</p>
-									<p className='text-xs text-gray-400 truncate'>
-										{switchingAccountId === account.id
-											? 'Вход…'
-											: account.email}
-									</p>
-								</div>
-							</button>
+							<div key={account.id} className='relative group'>
+								<button
+									type='button'
+									disabled={!!switchingAccountId}
+									onClick={() => void handleSavedAccountClick(account)}
+									className='flex w-full items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-3 text-left hover:bg-white/10 transition-colors disabled:opacity-50'
+								>
+									<div className='w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold shrink-0'>
+										{account.avatar_url ? (
+											<img
+												src={getAvatarUrl(account.avatar_url)}
+												alt={account.username}
+												className='w-full h-full object-cover'
+											/>
+										) : (
+											account.username.charAt(0).toUpperCase()
+										)}
+									</div>
+									<div className='flex-1 min-w-0'>
+										<p className='text-sm font-medium text-white truncate'>
+											{account.username}
+										</p>
+										<p className='text-xs text-gray-400 truncate'>
+											{switchingAccountId === account.id
+												? 'Вход…'
+												: account.email}
+										</p>
+									</div>
+								</button>
+								<button
+									type='button'
+									onClick={(e) => {
+										e.stopPropagation()
+										removeSavedAccount(account.id)
+										setSavedAccounts(getSavedAccounts())
+									}}
+									className='absolute top-2 right-2 w-6 h-6 rounded-full bg-black/50 text-gray-400 hover:text-red-400 hover:bg-red-500/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-xs'
+									title='Удалить из списка'
+								>
+									×
+								</button>
+							</div>
 						))}
 						<button
 							type='button'
@@ -421,7 +437,13 @@ export default function LoginPage() {
 							)}
 
 							{!twoFactorRequired && (
-								<div className='text-right'>
+								<div className='flex items-center justify-between'>
+									<Link
+										href='/login/qr'
+										className='text-sm text-gray-400 hover:text-white transition-colors'
+									>
+										Войти по QR-коду
+									</Link>
 									<Link
 										href='/forgot-password'
 										className='text-sm text-indigo-400 hover:text-indigo-300 transition-colors'

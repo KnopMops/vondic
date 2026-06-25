@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timedelta
 
 from app.core.extensions import db
@@ -652,4 +653,70 @@ def update_me(current_user):
         return jsonify(user.to_dict(viewer_id=current_user.id)), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@users_bp.route("/admin/search", methods=["GET"])
+@token_required
+def admin_search_users(current_user):
+    role = str(getattr(current_user, "role", "") or "").strip().lower()
+    if role not in ("admin", "support"):
+        return jsonify({"error": "Доступ запрещён"}), 403
+    q = request.args.get("q", "").strip()
+    if not q or len(q) < 2:
+        return jsonify({"ok": True, "users": []})
+    like_q = f"%{q}%"
+    users = User.query.filter(
+        db.or_(
+            User.username.ilike(like_q),
+            User.email.ilike(like_q),
+            User.role.ilike(like_q),
+        )
+    ).limit(50).all()
+    result = []
+    for u in users:
+        result.append({
+            "id": u.id,
+            "username": u.username,
+            "email": u.email,
+            "role": u.role or "User",
+            "is_blocked": u.is_blocked or 0,
+            "is_blocked_system": u.is_blocked_system or 0,
+            "registration_ip": getattr(u, "registration_ip", None),
+            "created_at": u.created_at.isoformat() if u.created_at else None,
+        })
+    return jsonify({"ok": True, "users": result})
+
+
+@users_bp.route("/admin/generate-reset-link", methods=["POST"])
+@token_required
+def admin_generate_reset_link(current_user):
+    role = str(getattr(current_user, "role", "") or "").strip().lower()
+    if role not in ("admin",):
+        return jsonify({"error": "Только администраторы"}), 403
+    data = request.get_json(force=True) or {}
+    user_id = data.get("user_id")
+    if not user_id:
+        return jsonify({"error": "user_id обязателен"}), 400
+    user = User.query.get(str(user_id))
+    if not user:
+        return jsonify({"error": "Пользователь не найден"}), 404
+    if not user.registration_ip:
+        return jsonify({"error": "registration_ip неизвестен — восстановление невозможно"}), 400
+    from app.services.email_service import EmailService
+    from app.services.auth_service import AuthService
+    raw_verify_token = EmailService.generate_password_reset_token(user.email)
+    user.reset_verify_token = AuthService._hash_token(raw_verify_token)
+    user.reset_verify_expires = datetime.utcnow() + timedelta(hours=1)
+    user.reset_ip_required = user.registration_ip
+    db.session.commit()
+    FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://vondic.ru")
+    verify_link = f"{FRONTEND_URL}/reset-verify?token={raw_verify_token}"
+    return jsonify({
+        "ok": True,
+        "verify_link": verify_link,
+        "registration_ip": user.registration_ip,
+        "expires_in": 3600,
+        "username": user.username,
+        "email": user.email,
+    })
 

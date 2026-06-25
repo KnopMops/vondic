@@ -54,20 +54,30 @@ class PostService:
             query = query.filter(
                 Post.social_community_id == social_community_id
             )
-        else:
-            query = query.filter(Post.social_community_id.is_(None))
-
-        if filter_mode == "subscriptions" and user_id:
+        elif filter_mode == "subscriptions" and user_id:
+            from sqlalchemy import or_
             subscriptions = Subscription.query.filter_by(
                 subscriber_id=user_id
             ).all()
             target_ids = [sub.target_id for sub in subscriptions]
+            user_community_ids = [
+                c.id for c in SocialCommunity.query.filter(
+                    SocialCommunity.members.any(User.id == user_id)
+                ).all()
+            ]
+            or_conditions = []
             if target_ids:
-                query = query.filter(User.id.in_(target_ids))
+                or_conditions.append(User.id.in_(target_ids))
+            if user_community_ids:
+                or_conditions.append(Post.social_community_id.in_(user_community_ids))
+            if or_conditions:
+                query = query.filter(or_(*or_conditions))
             else:
                 return Post.query.filter(Post.id.is_(None)).paginate(
                     page=page, per_page=per_page, error_out=False
                 )
+        else:
+            query = query.filter(Post.social_community_id.is_(None))
 
         if user_id and filter_mode != "subscriptions":
             query = query.filter(User.id == user_id)

@@ -166,7 +166,16 @@ export default function SettingsPage() {
 			if (!res.ok) {
 				throw new Error(data.error || 'Не удалось получить сессии')
 			}
-			const items = Array.isArray(data.items) ? data.items : []
+			const items = (Array.isArray(data.sessions) ? data.sessions : []).map((s: any) => ({
+				session_id: s.id,
+				device: s.device_type || 'web',
+				browser: s.device_name || s.device_type || 'web',
+				ip: s.ip_address || '—',
+				user_agent: s.device_name || s.device_type || 'web',
+				last_seen: s.last_active,
+				created_at: s.created_at,
+				is_current: false,
+			}))
 			setSessions(items)
 		} catch (e: any) {
 			showToast(e.message || 'Не удалось получить сессии', 'error')
@@ -534,24 +543,12 @@ export default function SettingsPage() {
 	const terminateSession = async (sessionId: string) => {
 		setTerminatingSessionIds(prev => [...prev, sessionId])
 		try {
-			const res = await fetch('/api/auth/sessions/terminate', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ session_id: sessionId }),
+			const res = await fetch(`/api/auth/sessions/${sessionId}`, {
+				method: 'DELETE',
 			})
 			const data = await res.json()
 			if (!res.ok) throw new Error(data.error || 'Не удалось завершить сессию')
-			const items = Array.isArray(data.items) ? data.items : []
-			if (items.length) {
-				setSessions(items)
-			} else {
-				setSessions(prev => prev.filter(item => item.session_id !== sessionId))
-			}
-			if (data.logout_current) {
-				showToast('Сессия завершена', 'success')
-				logout()
-				return
-			}
+			setSessions(prev => prev.filter(item => item.session_id !== sessionId))
 			showToast('Сессия завершена', 'success')
 		} catch (e: any) {
 			showToast(e.message || 'Не удалось завершить сессию', 'error')
@@ -604,12 +601,16 @@ export default function SettingsPage() {
 		if (value === 'firefox') return 'Firefox'
 		if (value === 'safari') return 'Safari'
 		if (value === 'opera') return 'Opera'
+		if (value === 'web') return 'Браузер'
+		if (value === 'desktop') return 'Desktop'
+		if (value === 'mobile') return 'Mobile'
 		return value
 	}
 
 	const formatDevice = (value?: string) => {
 		if (!value) return ''
 		if (value === 'unknown') return ''
+		if (value === 'web') return 'Браузер'
 		if (value === 'desktop') return 'Компьютер'
 		if (value === 'mobile') return 'Телефон'
 		if (value === 'tablet') return 'Планшет'
@@ -1002,7 +1003,11 @@ export default function SettingsPage() {
 																	<div className='flex flex-col items-end gap-2'>
 																		{isCurrent ? (
 																			<span className='rounded-full bg-emerald-500/20 px-2 py-1 text-[11px] text-emerald-300'>
-																				Это устройство
+																				Текущая
+																			</span>
+																		) : session.device === 'mobile' ? (
+																			<span className='rounded-full bg-gray-500/20 px-2 py-1 text-[11px] text-gray-400'>
+																				Мобильное приложение
 																			</span>
 																		) : (
 																			<button

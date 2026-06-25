@@ -2,90 +2,110 @@
  * Push Notification Service
  *
  * Stack:
- * - @react-native-firebase/messaging (FCM / APNs)
+ * - @react-native-firebase/messaging (FCM)
+ * - Novu self-hosted (subscribers & credentials API)
  * - react-native-callkeep (CallKit iOS / ConnectionService Android)
  * - react-native-incall-manager (audio routing)
  */
 
-import {Platform} from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import messaging, {FirebaseMessagingTypes} from '@react-native-firebase/messaging';
+import {Platform, AppState} from 'react-native';
+import messaging from '@react-native-firebase/messaging';
 import RNCallKeep from 'react-native-callkeep';
-import {apiClient} from '@/api/client';
-import {socketService} from './SocketService';
 import {useCallStore} from '@/store/callStore';
-import {store} from '@/store';
-import {setUser} from '@/store/authSlice';
 import {handleOAuthCallback} from '@/hooks/useDeepLinks';
+import {navigationRef} from '@/navigation/navigationRef';
+import {appLog} from '@/utils/appLogger';
+import {
+  requestPushPermission,
+  getPushToken,
+  registerDeviceOnBackend,
+  registerForPush,
+} from '@/utils/push';
 
 const CALL_CHANNEL_ID = 'vondic_calls';
-const MSG_CHANNEL_ID = 'vondic_messages';
 
 class PushService {
-  private fcmToken: string | null = null;
+  private pushToken: string | null = null;
   private callkeepConfigured = false;
+  private initialized = false;
+  private currentUserId: string | null = null;
 
-  async initialize(): Promise<void> {
-    await this.requestPermission();
-    await this.setupMessaging();
-    if (Platform.OS === 'ios' || Platform.OS === 'android') {
+  private tokenRefreshUnsubscribe: (() => void) | null = null;
+  private messageUnsubscribe: (() => void) | null = null;
+  private notificationOpenedUnsubscribe: (() => void) | null = null;
+
+  async initialize(userId: string): Promise<void> {
+    if (!userId) {
+      appLog('PushService', 'Cannot initialize without userId');
+      return;
+    }
+
+    if (this.initialized && this.currentUserId === userId) {
+      if (this.pushToken) {
+        await registerDeviceOnBackend(userId, this.pushToken);
+      }
+      return;
+    }
+
+    // Clean up if initializing with a different user
+    if (this.initialized && this.currentUserId !== userId) {
+      this.cleanup();
+    }
+
+    this.initialized = true;
+    this.currentUserId = userId;
+
+    const hasPermission = await requestPushPermission();
+    appLog('PushService', 'Has notification permission: ' + hasPermission);
+
+    // Настраиваем слушатели FCM в любом случае (в т.ч. для тихих data-only звонков)
+    await this.setupFirebaseMessaging(userId);
+
+    if (Platform.OS === 'ios') {
       await this.setupCallKeep();
     }
   }
 
-  private async requestPermission(): Promise<boolean> {
-    const authStatus = await messaging().requestPermission();
-    const enabled =
-      authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
-      authStatus === messaging.AuthorizationStatus.PROVISIONAL;
-    console.log('[Push] Permission:', enabled);
-    return enabled;
-  }
-
-  private async setupMessaging(): Promise<void> {
-    // Get and register token
-    const token = await messaging().getToken();
-    await this.registerToken(token);
-
-    // Listen for token refresh
-    messaging().onTokenRefresh(async newToken => {
-      await this.registerToken(newToken);
-    });
-
-    // Foreground messages
-    messaging().onMessage(async remoteMessage => {
-      this.handleForegroundMessage(remoteMessage);
-    });
-
-    // Background / quit-state handler
-    messaging().setBackgroundMessageHandler(async remoteMessage => {
-      this.handleBackgroundMessage(remoteMessage);
-    });
-
-    // Check if app was opened from a notification (cold start)
-    const initialNotification = await messaging().getInitialNotification();
-    if (initialNotification) {
-      this.handleNotificationOpen(initialNotification);
+  private async setupFirebaseMessaging(userId: string): Promise<void> {
+    // 1. Get and register token
+    try {
+      const token = await getPushToken();
+      if (token) {
+        this.pushToken = token;
+        await registerDeviceOnBackend(userId, token);
+      }
+    } catch (error) {
+      appLog('PushService', 'Failed to get/register FCM token', error);
     }
 
-    // Listen for notification-open events
-    messaging().onNotificationOpenedApp(remoteMessage => {
+    // 2. Listen for token refresh
+    this.tokenRefreshUnsubscribe = messaging().onTokenRefresh(async (newToken: string) => {
+      appLog('PushService', 'Token refreshed');
+      this.pushToken = newToken;
+      await registerDeviceOnBackend(userId, newToken);
+    });
+
+    // 4. Foreground message listener
+    this.messageUnsubscribe = messaging().onMessage(async (remoteMessage) => {
+      appLog('PushService', 'Notification received in foreground', remoteMessage);
+      this.handleIncomingNotification(remoteMessage);
+    });
+
+    // 5. Notification opened listener (app in background/inactive)
+    this.notificationOpenedUnsubscribe = messaging().onNotificationOpenedApp((remoteMessage) => {
+      appLog('PushService', 'Notification opened from background', remoteMessage);
       this.handleNotificationOpen(remoteMessage);
     });
-  }
 
-  private async registerToken(token: string): Promise<void> {
-    this.fcmToken = token;
-    try {
-      await apiClient.post('/devices/register', {
-        token,
-        platform: Platform.OS,
-        device_type: 'mobile',
-      });
-      console.log('[Push] Token registered:', token.slice(0, 20) + '...');
-    } catch (error) {
-      console.error('[Push] Failed to register token:', error);
-    }
+    // 6. Initial notification (app launched from closed state)
+    messaging().getInitialNotification().then((remoteMessage) => {
+      if (remoteMessage) {
+        appLog('PushService', 'App opened from quit state via notification', remoteMessage);
+        setTimeout(() => {
+          this.handleNotificationOpen(remoteMessage);
+        }, 1000);
+      }
+    });
   }
 
   private async setupCallKeep(): Promise<void> {
@@ -118,7 +138,7 @@ class PushService {
       this.callkeepConfigured = true;
 
       RNCallKeep.addEventListener('answerCall', ({callUUID}) => {
-        console.log('[CallKeep] answerCall', callUUID);
+        appLog('PushService', '[CallKeep] answerCall ' + callUUID);
         const state = useCallStore.getState();
         if (state.incomingCall) {
           state.acceptCall(state.incomingCall.socketId);
@@ -127,7 +147,7 @@ class PushService {
       });
 
       RNCallKeep.addEventListener('endCall', ({callUUID}) => {
-        console.log('[CallKeep] endCall', callUUID);
+        appLog('PushService', '[CallKeep] endCall ' + callUUID);
         const state = useCallStore.getState();
         if (state.incomingCall) {
           state.rejectCall(state.incomingCall.socketId);
@@ -140,53 +160,96 @@ class PushService {
         state.setMuted(muted);
       });
     } catch (error) {
-      console.error('[CallKeep] Setup failed:', error);
+      appLog('PushService', '[CallKeep] Setup failed', error);
     }
   }
 
-  private handleForegroundMessage(message: FirebaseMessagingTypes.RemoteMessage): void {
-    const data = message.data || {};
+  private handleIncomingNotification(remoteMessage: any): void {
+    const data = remoteMessage.data || {};
     const type = data.type as string;
 
     if (type === 'incoming_call') {
       this.showIncomingCallNotification(data);
-    } else if (type === 'new_message') {
-      // Foreground message — app is active, show in-app toast or ignore
-      console.log('[Push] New message foreground:', data);
+    } else {
+      appLog('PushService', 'Non-call notification received in foreground', remoteMessage);
     }
   }
 
-  private handleBackgroundMessage(message: FirebaseMessagingTypes.RemoteMessage): void {
-    const data = message.data || {};
-    const type = data.type as string;
+  private handleNotificationOpen(remoteMessage: any): void {
+    const data = remoteMessage.data || {};
+    appLog('PushService', 'Notification opened with data', data);
 
-    if (type === 'incoming_call') {
-      // Show native incoming call UI even if app is killed
-      this.showIncomingCallNotification(data);
-    }
-  }
-
-  private handleNotificationOpen(message: FirebaseMessagingTypes.RemoteMessage): void {
-    const data = message.data || {};
     if (data.deeplink) {
       handleOAuthCallback(data.deeplink as string).catch(() => {});
+      return;
     }
+
+    // Handle incoming call notifications
+    if (data.type === 'incoming_call') {
+      const callerId = data.caller_user_id || data.caller_id;
+      this.navigateWhenReady('Call', {
+        targetUserId: data.group_id ? data.group_id : callerId,
+        isIncoming: true,
+        callerSocketId: data.caller_socket_id || callerId,
+        isGroupCall: data.is_group === 'true' || !!data.group_id,
+        callId: data.call_id,
+        groupId: data.group_id,
+      });
+      return;
+    }
+
+    // Handle normal messages notifications
+    const groupId = data.group_id;
+    const channelId = data.channel_id;
+    const senderId = data.sender_id || data.sender_user_id;
+
+    if (groupId || channelId || senderId) {
+      const type = groupId ? 'group' : channelId ? 'channel' : 'dm';
+      const id = groupId || channelId || senderId;
+      let name = remoteMessage.notification?.title || 'Чат';
+
+      // Parse group name if title is like "Ivan (Group Name)"
+      if (type === 'group' && name.includes('(') && name.endsWith(')')) {
+        const idx = name.indexOf('(');
+        name = name.slice(idx + 1, -1);
+      }
+
+      this.navigateWhenReady('Chat', {
+        type,
+        id,
+        name,
+      });
+    }
+  }
+
+  private navigateWhenReady(screen: string, params: any) {
+    if (navigationRef.isReady()) {
+      navigationRef.navigate(screen as any, params);
+      return;
+    }
+
+    let attempts = 0;
+    const interval = setInterval(() => {
+      attempts++;
+      if (navigationRef.isReady()) {
+        clearInterval(interval);
+        navigationRef.navigate(screen as any, params);
+      } else if (attempts > 50) { // 5 seconds max
+        clearInterval(interval);
+        appLog('PushService', 'Navigation ref not ready after 5 seconds');
+      }
+    }, 100);
   }
 
   private showIncomingCallNotification(data: Record<string, any>): void {
-    if (!this.callkeepConfigured) return;
+    const callerId = data.caller_user_id || data.caller_id || 'unknown';
+    const callerName = data.caller_username || data.caller_name || 'Unknown';
 
-    const callerId = data.caller_id || 'unknown';
-    const callerName = data.caller_name || 'Unknown';
-    const callUUID = `vondic-call-${callerId}-${Date.now()}`;
-
-    if (Platform.OS === 'ios') {
+    if (Platform.OS === 'ios' && this.callkeepConfigured) {
+      const callUUID = `vondic-call-${callerId}-${Date.now()}`;
       RNCallKeep.displayIncomingCall(callUUID, String(callerId), callerName, 'generic', true);
-    } else {
-      RNCallKeep.displayIncomingCall(callUUID, String(callerId), callerName, 'generic', false);
     }
 
-    // Also update our store so UI can navigate to CallScreen
     const state = useCallStore.getState();
     state.setIncomingCall({
       socketId: data.caller_socket_id || callerId,
@@ -199,7 +262,26 @@ class PushService {
   }
 
   getToken(): string | null {
-    return this.fcmToken;
+    return this.pushToken;
+  }
+
+  cleanup(): void {
+    appLog('PushService', 'Cleaning up listeners...');
+    if (this.tokenRefreshUnsubscribe) {
+      this.tokenRefreshUnsubscribe();
+      this.tokenRefreshUnsubscribe = null;
+    }
+    if (this.messageUnsubscribe) {
+      this.messageUnsubscribe();
+      this.messageUnsubscribe = null;
+    }
+    if (this.notificationOpenedUnsubscribe) {
+      this.notificationOpenedUnsubscribe();
+      this.notificationOpenedUnsubscribe = null;
+    }
+    this.initialized = false;
+    this.pushToken = null;
+    this.currentUserId = null;
   }
 }
 

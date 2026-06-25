@@ -76,6 +76,12 @@ export default function SettingsScreen() {
           <Text style={styles.linkText}>Конфиденциальность</Text>
           <Icon name="chevron-forward" size={20} color="#888" />
         </TouchableOpacity>
+
+        <TouchableOpacity style={styles.linkRow} onPress={() => navigation.navigate('QRScan')}>
+          <Icon name="qr-code-outline" size={22} color="#fff" />
+          <Text style={styles.linkText}>Войти по QR-коду на сайте</Text>
+          <Icon name="chevron-forward" size={20} color="#888" />
+        </TouchableOpacity>
       </View>
     </View>
   );
