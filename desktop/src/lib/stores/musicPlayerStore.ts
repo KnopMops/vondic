@@ -1,21 +1,6 @@
 import { create } from 'zustand'
 import { audioManager } from '@/lib/services/musicPlayer'
 
-// Persisted user preferences (client-side only)
-let _initialVolume = 0.7
-let _initialMuted = false
-try {
-  const vol = (typeof window !== 'undefined') ? localStorage.getItem('vmusic_volume') : null
-  if (vol != null) {
-    const n = Number(vol)
-    if (!Number.isNaN(n)) _initialVolume = n
-  }
-  const muted = (typeof window !== 'undefined') ? localStorage.getItem('vmusic_muted') : null
-  if (muted === 'true') _initialMuted = true
-} catch {
-  // ignore
-}
-
 interface Track {
   id: string
   title: string
@@ -72,8 +57,8 @@ export const useMusicPlayerStore = create<MusicPlayerState>((set, get) => ({
   isPlaying: false,
   currentTime: 0,
   duration: 0,
-  volume: _initialVolume,
-  isMuted: _initialMuted,
+  volume: 0.7,
+  isMuted: false,
   isShuffled: false,
   repeatMode: 'none',
   queue: [],
@@ -97,28 +82,12 @@ export const useMusicPlayerStore = create<MusicPlayerState>((set, get) => ({
     const audio = getAudio()
     const state = get()
     audio.volume = state.isMuted ? 0 : vol
-    // Persist volume preference
-    try {
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('vmusic_volume', String(vol))
-      }
-    } catch {
-      // ignore
-    }
   },
   setIsMuted: (muted) => {
     set({ isMuted: muted })
     const audio = getAudio()
     const state = get()
     audio.volume = muted ? 0 : state.volume
-    // Persist mute preference
-    try {
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('vmusic_muted', String(muted))
-      }
-    } catch {
-      // ignore
-    }
   },
   setIsShuffled: (shuffled) => set({ isShuffled: shuffled }),
   setRepeatMode: (mode) => set({ repeatMode: mode }),

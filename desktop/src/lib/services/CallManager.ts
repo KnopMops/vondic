@@ -36,6 +36,11 @@ export class CallManager {
 	public onCallStateChange?: (socketId: string, state: CallState) => void
 	public onRemoteStream?: (socketId: string, stream: MediaStream) => void
 	public onGroupCallIdChange?: (groupId: string | null) => void
+	public onVoiceChannelParticipantJoined?: (
+		channelId: string,
+		participant: { userId: string; username: string; avatarUrl?: string; socketId: string },
+	) => void
+	public onVoiceChannelParticipantLeft?: (channelId: string, socketId: string) => void
 
 	constructor(webRTCService: WebRTCService, socket: Socket) {
 		this.webRTCService = webRTCService
@@ -298,6 +303,15 @@ export class CallManager {
 			if (!channel_id || !socket_id) return
 			if (socket_id === this.socket.id) return
 
+			if (this.onVoiceChannelParticipantJoined) {
+				this.onVoiceChannelParticipantJoined(channel_id, {
+					userId: user_id,
+					username: username || 'Unknown',
+					avatarUrl: avatar_url,
+					socketId: socket_id,
+				})
+			}
+
 			// Check if we already have a connection to this participant
 			const existingPc = this.webRTCService.peerConnections.get(socket_id)
 			if (existingPc && existingPc.signalingState === 'stable') {
@@ -413,6 +427,9 @@ export class CallManager {
 		this.socket.on('voice_channel_participant_left', (data: any) => {
 			const { channel_id, socket_id } = data
 			if (!channel_id || !socket_id) return
+			if (this.onVoiceChannelParticipantLeft) {
+				this.onVoiceChannelParticipantLeft(channel_id, socket_id)
+			}
 			this.handleCallEnded(socket_id)
 		})
 
@@ -538,6 +555,31 @@ export class CallManager {
 				this.handleCallAcceptedSignal(responder_socket_id)
 			} else {
 				console.error('Invalid call_accepted data structure:', args)
+			}
+		})
+
+		// Ответ SDP в едином событии call_answer
+		this.socket.on('call_answer', (...args: any[]) => {
+			console.log('DEBUG: call_answer raw args:', JSON.stringify(args, null, 2))
+			let sender_socket_id: string | undefined
+			let answer: RTCSessionDescriptionInit | undefined
+
+			const firstArg = args[0]
+			if (typeof firstArg === 'object' && firstArg !== null) {
+				sender_socket_id = firstArg.socket_id || firstArg.sender_socket_id || firstArg.from_socket_id
+				answer = firstArg.answer
+			}
+
+			if (sender_socket_id && sender_socket_id === this.socket.id) {
+				sender_socket_id = undefined
+			}
+
+			if (sender_socket_id && answer) {
+				this.webRTCService.handleAnswer({
+					sender_socket_id: sender_socket_id,
+					answer: answer,
+				})
+				this.handleCallAcceptedSignal(sender_socket_id)
 			}
 		})
 
@@ -931,22 +973,34 @@ export class CallManager {
 	}
 
 	leaveVoiceChannel(channelId: string): void {
-		// End all active calls before leaving the channel
+		// End only voice-channel calls before leaving
 		for (const [socketId, call] of this.currentCalls.entries()) {
 			if (call.callId === channelId) {
-				this.endCall(socketId);
+				this.endCall(socketId)
 			}
 		}
-		
+
 		this.socket.emit('leave_voice_channel', { channel_id: channelId })
 
 		this.activeGroupCallId = null
 		if (this.onGroupCallIdChange) this.onGroupCallIdChange(null)
 
-		// Close all peer connections gracefully for this context
-		this.webRTCService.peerConnections.forEach(pc => pc.close())
-		this.webRTCService.peerConnections.clear()
-		this.currentCalls.clear()
+		// Close only peer connections belonging to this voice channel
+		for (const [socketId, call] of this.currentCalls.entries()) {
+			if (call.callId === channelId) {
+				const pc = this.webRTCService.peerConnections.get(socketId)
+				if (pc) {
+					pc.close()
+					this.webRTCService.peerConnections.delete(socketId)
+				}
+			}
+		}
+		// Remove voice channel calls from currentCalls without touching other calls
+		for (const [socketId, call] of this.currentCalls.entries()) {
+			if (call.callId === channelId) {
+				this.currentCalls.delete(socketId)
+			}
+		}
 	}
 
 	joinGroupCall(callId: string): void {
@@ -1007,6 +1061,7 @@ export class CallManager {
 	async initiateDirectCall(
 		targetUserId: string,
 		targetUserName: string,
+		targetAvatarUrl?: string,
 	): Promise<void> {
 		try {
 			// Only initialize local stream if it's not already initialized
@@ -1020,6 +1075,7 @@ export class CallManager {
 				socketId: '', // Будет обновлено при ответе
 				userId: targetUserId,
 				userName: targetUserName,
+				avatarUrl: targetAvatarUrl,
 				status: 'calling',
 				startTime: new Date(),
 			}
@@ -1288,6 +1344,7 @@ export class CallManager {
 		this.currentCalls.clear()
 		this.socket.off('incoming_call')
 		this.socket.off('call_accepted')
+		this.socket.off('call_answer')
 		this.socket.off('answer')
 		this.socket.off('offer')
 		this.socket.off('call_end')

@@ -3,9 +3,9 @@ import { getAccessToken } from '@/lib/auth.utils'
 import { getBackendUrl } from '@/lib/server-urls'
 
 async function proxyE2EKeys(
-  request: NextRequest,
-  path: string[],
-  method: 'GET' | 'POST' | 'PUT',
+	request: NextRequest,
+	path: string[],
+	method: 'GET' | 'POST' | 'PUT',
 ) {
   try {
     const backendUrl = getBackendUrl()

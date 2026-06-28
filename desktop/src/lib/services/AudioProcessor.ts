@@ -206,38 +206,18 @@ export class AudioProcessor {
 
 export function getDiscordLikeAudioConstraints(): MediaTrackConstraints {
 	return {
-		
 		echoCancellation: true,
 		noiseSuppression: true,
 		autoGainControl: true,
-
-		
 		sampleRate: 48000,
 		sampleSize: 16,
 		channelCount: 1,
-
-		
 		advanced: [
 			{
 				echoCancellation: true,
 				noiseSuppression: true,
 				autoGainControl: true,
 				sampleRate: 48000,
-				
-				googEchoCancellation: true,
-				googNoiseSuppression: true,
-				googAutoGainControl: true,
-				googHighpassFilter: true,
-				googTypingNoiseDetection: true,
-				googAudioMirroring: false,
-				
-				googExperimentalEchoCancellation: true,
-				googExperimentalNoiseSuppression: true,
-				googExperimentalAutoGainControl: true,
-				googNoiseReduction: true,
-				
-				googEchoCancellationWithAutomaticGainControl: true,
-				googImprovedEchoCancellation: true,
 			},
 			{
 				echoCancellation: true,
@@ -262,16 +242,6 @@ export function getEnhancedAudioConstraints(): MediaTrackConstraints {
 		channelCount: { ideal: 1 },
 
 		
-		googEchoCancellation: { exact: true },
-		googNoiseSuppression: { exact: true },
-		googAutoGainControl: { exact: true },
-		googHighpassFilter: { exact: true },
-		googTypingNoiseDetection: { exact: true },
-		googAudioMirroring: { exact: false },
 
-		
-		googExperimentalEchoCancellation: { exact: true },
-		googExperimentalNoiseSuppression: { exact: true },
-		googExperimentalAutoGainControl: { exact: true },
 	} as any
 }

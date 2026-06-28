@@ -28,7 +28,9 @@ export default function DiscoveryModal({
 	joinCommunity,
 }: DiscoveryModalProps) {
 	const [query, setQuery] = useState('')
-	const [activeTab, setActiveTab] = useState<'channels' | 'communities'>('channels')
+	const [activeTab, setActiveTab] = useState<'channels' | 'communities'>(
+		'communities',
+	)
 	const [results, setResults] = useState<any[]>([])
 	const [isSearching, setIsSearching] = useState(false)
 	const [joiningId, setJoiningId] = useState<string | null>(null)
@@ -110,7 +112,7 @@ export default function DiscoveryModal({
 								: 'bg-gray-800 text-gray-400 hover:text-white'
 						}`}
 					>
-						Сообщества
+						Серверы
 					</button>
 				</div>
 
@@ -120,7 +122,7 @@ export default function DiscoveryModal({
 						value={query}
 						onChange={e => setQuery(e.target.value)}
 						onKeyDown={e => e.key === 'Enter' && handleSearch()}
-						placeholder={`Поиск ${activeTab === 'channels' ? 'каналов' : 'сообществ'}...`}
+						placeholder={`Поиск ${activeTab === 'channels' ? 'каналов' : 'серверов'}...`}
 						className='flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50'
 					/>
 					<button

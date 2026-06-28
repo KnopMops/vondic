@@ -13,7 +13,6 @@ export async function POST(req: NextRequest) {
 		const body = await req.json().catch(() => ({}))
 		const file = body?.file
 		const filename = body?.filename
-		const channelId = body?.channel_id
 
 		if (!file || !filename) {
 			return NextResponse.json(
@@ -33,7 +32,6 @@ export async function POST(req: NextRequest) {
 				access_token: token,
 				file,
 				filename,
-				channel_id: channelId || null,
 			}),
 		})
 

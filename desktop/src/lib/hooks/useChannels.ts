@@ -162,6 +162,25 @@ export const useChannels = () => {
 		[token],
 	)
 
+	const getChannelParticipants = useCallback(
+		async (channelId: string) => {
+			if (!token) return []
+			try {
+				const res = await fetch(
+					`/api/v1/channels/${channelId}/participants`,
+					{ method: 'GET' },
+				)
+				if (!res.ok) throw new Error('Failed to fetch participants')
+				const data = await res.json()
+				return Array.isArray(data) ? data : []
+			} catch (err: any) {
+				console.error(err)
+				return []
+			}
+		},
+		[token],
+	)
+
 	const updateChannel = useCallback(
 		async (id: string, data: { name?: string; description?: string; avatar_url?: string }) => {
 			if (!token) throw new Error('Unauthorized')
@@ -189,6 +208,7 @@ export const useChannels = () => {
 		createChannel,
 		joinChannel,
 		getChannelInfo,
+		getChannelParticipants,
 		searchChannels,
 		updateChannel,
 	}

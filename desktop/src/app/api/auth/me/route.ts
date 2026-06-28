@@ -1,12 +1,12 @@
 import {
-	clearTokens,
-	getAccessToken,
-	getRefreshToken,
-	refreshAccessToken,
-	setTokens,
+    clearTokens,
+    getAccessToken,
+    getRefreshToken,
+    refreshAccessToken,
+    setTokens,
 } from '@/lib/auth.utils'
-import { NextRequest, NextResponse } from 'next/server'
 import { getBackendUrl } from '@/lib/server-urls'
+import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(req: NextRequest) {
 	try {

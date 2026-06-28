@@ -9,7 +9,8 @@ export async function POST(req: NextRequest) {
 		return NextResponse.json({ error: 'Bad Request' }, { status: 400 })
 	}
 
-	
+	let ragAnswer = ''
+
 	try {
 		const supportUrl =
 			process.env.NEXT_PUBLIC_SUPPORT_API_URL || 'http://127.0.0.1:8000'
@@ -25,19 +26,12 @@ export async function POST(req: NextRequest) {
 		} catch {
 			ragData = { answer: ragText }
 		}
-		const answer =
+		ragAnswer =
 			typeof ragData === 'string'
 				? ragData
 				: ragData?.answer || ragData?.response || ragData?.text || ''
-		if (answer && answer.trim()) {
-			return NextResponse.json(
-				{ ok: true, answer, escalation_id: body?.esc_id ?? undefined },
-				{ status: 200 },
-			)
-		}
 	} catch {}
 
-	// 2) Если RAG не дал ответа — эскалируем на бэкенд (с авто-рефрешем токена)
 	return withAccessTokenRefresh(req, async accessToken => {
 		try {
 			const backendUrl = getBackendUrl()
@@ -50,15 +44,21 @@ export async function POST(req: NextRequest) {
 				body: JSON.stringify(body),
 			})
 			const text = await response.text()
+			let data: any
 			try {
-				const data = JSON.parse(text)
-				return NextResponse.json(data, { status: response.status })
+				data = JSON.parse(text)
 			} catch {
 				return NextResponse.json(
 					{ error: 'Invalid backend response', raw: text },
 					{ status: 500 },
 				)
 			}
+
+			if (ragAnswer && ragAnswer.trim()) {
+				data.rag_answer = ragAnswer
+			}
+
+			return NextResponse.json(data, { status: response.status })
 		} catch (error) {
 			return NextResponse.json(
 				{ error: 'Internal Server Error' },

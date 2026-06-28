@@ -27,7 +27,6 @@ export async function POST(req: NextRequest) {
 		})
 		const file = body?.file
 		const filename = body?.filename
-		const channelId = body?.channel_id
 
 		console.log('[Upload] Received file upload request:', {
 			hasFile: !!file,
@@ -56,7 +55,6 @@ export async function POST(req: NextRequest) {
 				access_token: token,
 				file,
 				filename,
-				channel_id: channelId || null,
 			}),
 		})
 

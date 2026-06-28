@@ -1,10 +1,12 @@
 {
 	"name": "vondic-desktop",
-	"version": "1.0.1",
+	"version": "3.0.0",
 	"description": "Vondic Desktop Client",
 	"main": "electron/main.js",
 	"scripts": {
 		"start": "electron .",
+		"dev": "next dev",
+		"build": "next build && node scripts/post-build.js",
 		"bundle": "bun build ./electron/main.js --outfile=dist/main.js --target=node --format=cjs --external electron && bun build ./electron/updater.js --outfile=dist/updater.js --target=node --format=cjs --external electron && bun build ./electron/preload.js --outfile=dist/preload.js --target=node --format=cjs --external electron",
 		"dist": "bun run bundle && electron-builder"
 	},
@@ -16,12 +18,33 @@
 	"author": "",
 	"license": "MIT",
 	"devDependencies": {
+		"@tailwindcss/postcss": "^4",
+		"@types/node": "^20",
+		"@types/react": "^19",
+		"@types/react-dom": "^19",
 		"electron": "^28.0.0",
-		"electron-builder": "^24.0.0"
+		"electron-builder": "^24.0.0",
+		"tailwindcss": "^4",
+		"typescript": "5.9.3"
 	},
 	"dependencies": {
+		"@reduxjs/toolkit": "^2.11.2",
+		"@tanstack/react-query": "^5.90.20",
 		"dotenv": "^16.3.1",
-		"node-fetch": "^2.7.0"
+		"emoji-picker-react": "^4.18.0",
+		"framer-motion": "^12.33.0",
+		"jose": "^6.1.3",
+		"lucide-react": "^0.563.0",
+		"next": "16.1.6",
+		"node-fetch": "^2.7.0",
+		"qrcode": "^1.5.4",
+		"react": "19.2.3",
+		"react-dom": "19.2.3",
+		"react-easy-crop": "^5.5.7",
+		"react-icons": "^5.5.0",
+		"react-redux": "^9.2.0",
+		"socket.io-client": "^4.8.3",
+		"zustand": "^5.0.11"
 	},
 	"build": {
 		"appId": "com.vondic.desktop",
@@ -37,6 +60,7 @@
 		],
 		"files": [
 			"**/*",
+			".next/**/*",
 			"!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
 			"!**/node_modules/*/{test,__tests__,spec,__specs__,docs,.docusaurus}",
 			"!**/node_modules/.cache",

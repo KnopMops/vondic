@@ -1,13 +1,18 @@
 'use client'
 
+import AudioPlayer from '@/components/social/AudioPlayer'
+import PostDetailsModal from '@/components/social/PostDetailsModal'
+import VideoPlayer from '@/components/social/VideoPlayer'
 import { AppleEmoji } from '@/components/ui/AppleEmoji'
 import { Attachment, User } from '@/lib/types'
+import { MessageGroupPosition } from '@/lib/chatMessageLayout'
 import {
 	inviteEntityLabel,
 	parseInviteLink,
 } from '@/lib/inviteLinks'
 import { renderRichFormattedContent } from '@/lib/messageRichText'
 import { formatMskTime, getAttachmentUrl, getAvatarUrl } from '@/lib/utils'
+import { motion } from 'framer-motion'
 import { memo, useEffect, useRef, useState } from 'react'
 import {
 	LuCheck as Check,
@@ -24,7 +29,8 @@ interface Message {
 	timestamp: string
 	isOwn: boolean
 	is_read?: boolean
-	type?: 'text' | 'voice'
+	is_edited?: boolean
+	type?: 'text' | 'voice' | 'video_note'
 	channel_id?: string
 	group_id?: string
 	reply_to?: string
@@ -46,8 +52,42 @@ interface Message {
 	}
 }
 
+const getBubbleRadius = (
+	isOwn: boolean,
+	position: MessageGroupPosition = 'single',
+) => {
+	if (isOwn) {
+		switch (position) {
+			case 'first':
+				return 'rounded-[17px] rounded-br-[5px]'
+			case 'middle':
+				return 'rounded-[17px] rounded-tr-[5px] rounded-br-[5px]'
+			case 'last':
+				return 'rounded-[17px] rounded-tr-[5px] rounded-br-[3px]'
+			default:
+				return 'rounded-[17px] rounded-br-[3px]'
+		}
+	}
+	switch (position) {
+		case 'first':
+			return 'rounded-[17px] rounded-bl-[5px]'
+		case 'middle':
+			return 'rounded-[17px] rounded-tl-[5px] rounded-bl-[5px]'
+		case 'last':
+			return 'rounded-[17px] rounded-tl-[5px] rounded-bl-[3px]'
+		default:
+			return 'rounded-[17px] rounded-bl-[3px]'
+	}
+}
+
+const getClusterMargin = (position: MessageGroupPosition) => {
+	if (position === 'first' || position === 'middle') return 'mb-1.5'
+	return 'mb-4'
+}
+
 interface MessageBubbleProps {
 	msg: Message
+	groupPosition?: MessageGroupPosition
 	theme?: {
 		ownMessageBg: string
 	}
@@ -68,6 +108,9 @@ interface MessageBubbleProps {
 	currentUserId?: string
 	botAccessToken?: string
 	onBotOutboxItems?: (botId: string, items: any[]) => void
+	onBotModal?: (botId: string, modal: string) => void
+	onBotGamePlay?: (game: { embed_url: string; title?: string; download_url?: string }) => void
+	onSenderClick?: (senderId: string) => void
 }
 
 const REACTIONS = ['❤️', '🔥', '😂', '👍', '😮', '😢']
@@ -75,6 +118,7 @@ const REACTIONS = ['❤️', '🔥', '😂', '👍', '😮', '😢']
 const MessageBubble = memo(
 	({
 		msg,
+		groupPosition = 'single',
 		theme,
 		sender,
 		isPinned,
@@ -93,7 +137,11 @@ const MessageBubble = memo(
 		currentUserId,
 		botAccessToken,
 		onBotOutboxItems,
+		onBotModal,
+		onBotGamePlay,
+		onSenderClick,
 	}: MessageBubbleProps) => {
+		const [isDetailsOpen, setIsDetailsOpen] = useState(false)
 		const [isMenuOpen, setIsMenuOpen] = useState(false)
 		const [isReactionsOpen, setIsReactionsOpen] = useState(false)
 		const [isEditing, setIsEditing] = useState(false)
@@ -149,9 +197,13 @@ const MessageBubble = memo(
 
 		const getInvitePayload = (content: string) => {
 			try {
-				if (!content || typeof content !== 'string' || !content.trim().startsWith('{'))
+				if (
+					!content ||
+					typeof content !== 'string' ||
+					!content.trim().startsWith('{')
+				)
 					return null
-					const data = JSON.parse(content)
+				const data = JSON.parse(content)
 				if (
 					data &&
 					data.type === 'invite' &&
@@ -160,7 +212,7 @@ const MessageBubble = memo(
 				) {
 					return data as {
 						type: 'invite'
-						entity?: 'group' | 'channel' | 'community'
+						entity?: 'group' | 'channel' | 'community' | 'server'
 						title: string
 						link: string
 						from_name?: string
@@ -175,6 +227,16 @@ const MessageBubble = memo(
 		const sharedPost = msg.is_deleted ? null : getSharedPost(msg.content)
 		const stickerPayload = msg.is_deleted ? null : getStickerPayload(msg.content)
 		const invitePayload = msg.is_deleted ? null : getInvitePayload(msg.content)
+
+		const storyReplyMatch = !msg.is_deleted && msg.content
+			? msg.content.match(/__STORY_REPLY__(\{.*?\})__/)
+			: null
+		const storyReplyData = storyReplyMatch
+			? JSON.parse(storyReplyMatch[1]) as { url: string; type: string; text: string }
+			: null
+		const userTextForStoryReply = storyReplyMatch
+			? msg.content.replace(storyReplyMatch[0], '').trim()
+			: null
 		const inviteInMessage =
 			msg.is_deleted || invitePayload
 				? null
@@ -199,9 +261,20 @@ const MessageBubble = memo(
 			? 'Сообщение удалено'
 			: typeof msg.content === 'string' && msg.content.startsWith('e2e:')
 				? '🔒 Зашифрованное сообщение'
-				: msg.content
+				: (msg.content || '').replace(/\n*\s*__STORY_REPLY__\{.*?\}__\s*/g, '').trim()
 		const reactionEntries = reactions ? Object.entries(reactions) : []
 		const attachments = Array.isArray(msg.attachments) ? msg.attachments : []
+		const isGroupChat = !!(msg.group_id || msg.channel_id)
+		const showAvatar =
+			!msg.isOwn &&
+			isGroupChat &&
+			(groupPosition === 'single' || groupPosition === 'last')
+		const showSenderName =
+			!msg.isOwn &&
+			isGroupChat &&
+			(groupPosition === 'single' || groupPosition === 'first')
+		const bubbleRadius = getBubbleRadius(msg.isOwn, groupPosition)
+		const clusterMargin = getClusterMargin(groupPosition)
 
 		const renderInviteCard = (
 			title: string,
@@ -232,32 +305,36 @@ const MessageBubble = memo(
 		const renderFormattedContent = (content: string) =>
 			renderRichFormattedContent(content, msg.isOwn)
 
+		const ownBubbleClass = theme?.ownMessageBg || 'chat-bubble-own'
+
 		return (
-			<div
-				className={`flex w-full mb-2 transition-all duration-300 ease-out animate-in fade-in slide-in-from-bottom-2 ${
-					msg.isOwn ? 'justify-end' : 'justify-start'
+			<motion.div
+				initial={{ opacity: 0, y: 5 }}
+				animate={{ opacity: 1, y: 0 }}
+				transition={{ duration: 0.18, ease: 'easeOut' }}
+				className={`flex w-full ${clusterMargin} ${
+					msg.isOwn ? 'justify-end pl-6 md:pl-10' : 'justify-start pr-6 md:pr-10'
 				} ${isDeleting ? 'message-deleting' : ''} ${
 					isMenuOpen || isReactionsOpen ? 'relative z-40' : ''
 				}`}
 			>
-					{!msg.isOwn && (msg.group_id || msg.channel_id) && (
-						<div className='flex items-end mr-2'>
+				{!msg.isOwn && isGroupChat && (
+					<div className='flex items-end mr-2.5 w-10 shrink-0'>
+						{showAvatar ? (
 							<img
 								src={getAvatarUrl(sender?.avatar_url || msg.sender_avatar)}
 								alt={sender?.username || msg.sender_username || 'User'}
-								className='w-8 h-8 rounded-full bg-gray-800 object-cover'
+								className='w-10 h-10 rounded-full bg-black/30 object-cover ring-1 ring-white/10'
 								title={sender?.username || msg.sender_username || 'User'}
 							/>
-						</div>
-					)}
+						) : (
+							<div className='w-10' aria-hidden />
+						)}
+					</div>
+				)}
 				<div
-					className={`relative max-w-[75%] px-5 py-3 shadow-md text-sm md:text-base transition-colors duration-500 ${
-						msg.isOwn
-							? `${
-									theme?.ownMessageBg ||
-									'bg-gradient-to-br from-blue-600 to-blue-700'
-								} text-white rounded-2xl rounded-tr-sm`
-							: 'bg-gray-800 border border-gray-700 text-gray-100 rounded-2xl rounded-tl-sm'
+					className={`relative max-w-[min(72%,480px)] px-4 py-2.5 text-[15px] leading-relaxed transition-colors duration-300 ${bubbleRadius} ${
+						msg.isOwn ? ownBubbleClass : 'chat-bubble-other'
 					} ${
 						isSelectionMode && msg.isOwn
 							? isSelected
@@ -395,19 +472,30 @@ const MessageBubble = memo(
 							</div>
 						)}
 					</div>
+					{showSenderName && (
+						<div
+							onClick={(e) => { e.stopPropagation(); onSenderClick?.(msg.sender_id) }}
+							className='text-[13px] font-semibold text-indigo-400/90 mb-1 px-0.5 cursor-pointer hover:text-indigo-300 transition-colors'
+						>
+							{sender?.username || msg.sender_username || 'User'}
+						</div>
+					)}
 					{replyPreview && (
-						<div className='mb-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-gray-200'>
-							<div className='font-semibold text-gray-300'>
+						<div className='mb-2 rounded-xl border-l-2 border-indigo-500/35 bg-black/20 px-3 py-2 text-xs text-gray-300'>
+							<div className='font-semibold text-indigo-400/90'>
 								{replyPreview.sender}
 							</div>
-							<div className='truncate text-gray-400'>{replyPreview.text}</div>
+							<div className='truncate text-gray-500'>{replyPreview.text}</div>
 						</div>
 					)}
 					{msg.forwarded_from && (
-						<div className='mb-2 flex items-center gap-2 rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-xs'>
-							<Repeat2 className='w-3.5 h-3.5 text-blue-400 flex-shrink-0' />
-							<span className='text-blue-300 truncate'>
-								Переслано от <span className='font-semibold text-white'>{msg.forwarded_from.sender_name}</span>
+						<div className='mb-2 flex items-center gap-2 rounded-xl border border-indigo-500/20 bg-indigo-500/10 px-3 py-2 text-xs'>
+							<Repeat2 className='w-3.5 h-3.5 text-indigo-400 flex-shrink-0' />
+							<span className='text-indigo-300/90 truncate'>
+								Переслано от{' '}
+								<span className='font-semibold text-gray-200'>
+									{msg.forwarded_from.sender_name}
+								</span>
 							</span>
 						</div>
 					)}
@@ -452,10 +540,47 @@ const MessageBubble = memo(
 							</div>
 							<audio
 								controls
+								// voice notes should be stored as attachment; fallback to content if server sent url there
 								src={getAttachmentUrl(attachments[0]?.url || msg.content)}
 								className='w-full h-8'
 							/>
 						</div>
+					) : msg.type === 'video_note' ? (
+						<div className='py-1'>
+							<div
+								style={{
+									width: 200,
+									height: 200,
+									borderRadius: '50%',
+									overflow: 'hidden',
+									position: 'relative',
+									border: '3px solid rgba(99,102,241,0.6)',
+									boxShadow: '0 0 0 1px rgba(99,102,241,0.25)',
+								}}
+							>
+								<video
+									src={getAttachmentUrl(msg.content)}
+									style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+									controls
+									preload='metadata'
+									playsInline
+									loop={false}
+								/>
+							</div>
+						</div>
+					) : invitePayload ? (
+						renderInviteCard(
+							invitePayload.title,
+							invitePayload.link,
+							invitePayload.entity === 'group'
+								? 'Группа'
+								: invitePayload.entity === 'channel'
+									? 'Канал'
+									: invitePayload.entity === 'community' ||
+										  invitePayload.entity === 'server'
+										? 'Сервер'
+										: undefined,
+						)
 					) : inviteInMessage ? (
 						<div className='space-y-2'>
 							{inviteInMessage.intro ? (
@@ -471,16 +596,6 @@ const MessageBubble = memo(
 								inviteEntityLabel(inviteInMessage.invite.entity),
 							)}
 						</div>
-					) : invitePayload ? (
-						renderInviteCard(
-							invitePayload.title,
-							invitePayload.link,
-							invitePayload.entity === 'group'
-								? 'Группа'
-								: invitePayload.entity === 'channel'
-									? 'Канал'
-									: 'Сервер',
-						)
 					) : stickerPayload ? (
 						<img
 							src={getAttachmentUrl(stickerPayload.url)}
@@ -488,42 +603,110 @@ const MessageBubble = memo(
 							className='w-full max-w-[240px] rounded-lg object-contain'
 						/>
 					) : sharedPost ? (
-						<div
-							className='flex flex-col gap-2 rounded-lg bg-black/20 p-3 transition-colors hover:bg-black/30'
-						>
-							<div className='flex items-center gap-2 border-b border-white/10 pb-2'>
-								{sharedPost.author_avatar ? (
+						<>
+							<div
+								onClick={() => setIsDetailsOpen(true)}
+								className='flex cursor-pointer flex-col gap-2 rounded-lg bg-black/20 p-3 transition-colors hover:bg-black/30'
+							>
+								<div className='flex items-center gap-2 border-b border-white/10 pb-2'>
+									{sharedPost.author_avatar ? (
+										<img
+											src={getAttachmentUrl(sharedPost.author_avatar)}
+											alt={sharedPost.author}
+											className='h-6 w-6 rounded-full object-cover'
+										/>
+									) : (
+										<div className='flex h-6 w-6 items-center justify-center rounded-full bg-indigo-500 text-[10px] font-bold text-white'>
+											{sharedPost.author[0]?.toUpperCase()}
+										</div>
+									)}
+									<span className='text-xs font-semibold text-white/90'>
+										{sharedPost.author}
+									</span>
+									<span className='ml-auto text-[10px] text-white/50'>
+										Пост
+									</span>
+								</div>
+								<p className='line-clamp-4 text-sm text-white/90'>
+									{sharedPost.text}
+								</p>
+								{sharedPost.image && (
 									<img
-										src={getAttachmentUrl(sharedPost.author_avatar)}
-										alt={sharedPost.author}
-										className='h-6 w-6 rounded-full object-cover'
+										src={getAttachmentUrl(sharedPost.image)}
+										alt='Shared content'
+										className='mt-1 max-h-48 w-full rounded-md object-cover'
+									/>
+								)}
+							</div>
+							{isDetailsOpen && (
+								<PostDetailsModal
+									postId={sharedPost.id}
+									isOpen={isDetailsOpen}
+									onClose={() => setIsDetailsOpen(false)}
+								/>
+							)}
+						</>
+					) : (
+						<div className='relative min-w-[52px] pr-14 pb-0.5'>
+							<div className='space-y-1.5'>
+								{renderFormattedContent(displayContent)}
+							</div>
+							<span
+								className={`absolute bottom-0.5 right-0 text-[11px] leading-none tabular-nums select-none ${
+									msg.isOwn
+										? 'text-[color:var(--app-fg)]/55'
+										: 'text-[color:var(--app-muted)]'
+								}`}
+							>
+								{formatMskTime(
+									(msg as Message & { created_at?: string }).timestamp ||
+										(msg as Message & { created_at?: string }).created_at ||
+										'',
+								)}
+								{msg.is_edited && (
+									<span className='ml-1 text-[10px] opacity-60'>ред.</span>
+								)}
+								{msg.isOwn && (
+									<span className='inline-flex align-middle ml-1'>
+										{msg.is_read ? (
+											<CheckCheck className='h-3.5 w-3.5 text-indigo-300/80' />
+					) : storyReplyData ? (
+						<div className='space-y-2'>
+							<div className='relative w-[80px] h-[80px] rounded-xl overflow-hidden bg-black/30 border border-white/10'>
+								{storyReplyData.type === 'video' ? (
+									<video
+										src={getAttachmentUrl(storyReplyData.url)}
+										className='w-full h-full object-cover'
+										muted
+										preload='metadata'
 									/>
 								) : (
-									<div className='flex h-6 w-6 items-center justify-center rounded-full bg-indigo-500 text-[10px] font-bold text-white'>
-										{sharedPost.author[0]?.toUpperCase()}
+									<img
+										src={getAttachmentUrl(storyReplyData.url)}
+										alt=''
+										className='w-full h-full object-cover'
+									/>
+								)}
+								{storyReplyData.type === 'video' && (
+									<div className='absolute inset-0 flex items-center justify-center bg-black/30'>
+										<span className='text-white text-lg'>▶</span>
 									</div>
 								)}
-								<span className='text-xs font-semibold text-white/90'>
-									{sharedPost.author}
-								</span>
-								<span className='ml-auto text-[10px] text-white/50'>
-									Пост
-								</span>
 							</div>
-							<p className='line-clamp-4 text-sm text-white/90'>
-								{sharedPost.text}
-							</p>
-							{sharedPost.image && (
-								<img
-									src={getAttachmentUrl(sharedPost.image)}
-									alt='Shared content'
-									className='mt-1 max-h-48 w-full rounded-md object-cover'
-								/>
+							{userTextForStoryReply && (
+								<div className='relative min-w-[52px] pr-14 pb-0.5'>
+									<div className='space-y-1.5'>
+										{renderFormattedContent(userTextForStoryReply)}
+									</div>
+								</div>
 							)}
 						</div>
 					) : (
-						<div className='space-y-2'>
-							{renderFormattedContent(displayContent)}
+											<Check className='h-3.5 w-3.5 text-[color:var(--app-fg)]/45' />
+										)}
+									</span>
+								)}
+							</span>
 						</div>
 					)}
 					{attachments.length > 0 && (
@@ -563,24 +746,10 @@ const MessageBubble = memo(
 									)
 								}
 								if (isVideo) {
-									return (
-										<video
-											key={a.url}
-											src={getAttachmentUrl(a.url)}
-											controls
-											className='w-full rounded-lg'
-										/>
-									)
+									return <VideoPlayer key={a.url} src={a.url} />
 								}
 								if (isAudio) {
-									return (
-										<audio
-											key={a.url}
-											src={getAttachmentUrl(a.url)}
-											controls
-											className='w-full'
-										/>
-									)
+									return <AudioPlayer key={a.url} src={a.url} />
 								}
 								return (
 									<a
@@ -600,6 +769,37 @@ const MessageBubble = memo(
 						</div>
 					)}
 
+					{msg.game?.embed_url && (
+						<div className='mt-2 w-full max-w-md rounded-xl overflow-hidden border border-white/10 bg-black/40'>
+							<div className='flex items-center gap-3 p-3'>
+								<div className='flex-1 min-w-0'>
+									{msg.game.title && (
+										<p className='text-sm font-medium text-white truncate'>
+											{msg.game.title}
+										</p>
+									)}
+									<p className='text-xs text-gray-400'>HTML5-игра</p>
+								</div>
+								<button
+									type='button'
+									onClick={() => onBotGamePlay?.(msg.game!)}
+									className='shrink-0 rounded-lg bg-indigo-600 hover:bg-indigo-500 px-4 py-2 text-xs font-medium text-white'
+								>
+									Играть
+								</button>
+							</div>
+							{msg.game.download_url && (
+								<div className='px-3 py-2 border-t border-white/10'>
+									<a
+										href={msg.game.download_url}
+										className='text-xs text-indigo-300 hover:text-indigo-200'
+									>
+										Скачать игру (ZIP)
+									</a>
+								</div>
+							)}
+						</div>
+					)}
 
 					{Array.isArray(msg.reply_markup?.inline_keyboard) && (
 						<div className='mt-3 flex flex-col gap-2'>
@@ -611,6 +811,21 @@ const MessageBubble = memo(
 											onClick={async (e) => {
 												e.preventDefault()
 												e.stopPropagation()
+												const modalId =
+													typeof btn.modal === 'string'
+														? btn.modal
+														: typeof btn.callback_data === 'string' &&
+															  btn.callback_data.startsWith('ui:')
+															? btn.callback_data.slice(3)
+															: null
+												if (modalId) {
+													onBotModal?.(msg.sender_id, modalId)
+													return
+												}
+												if (btn.url) {
+													window.open(btn.url, '_blank')
+													return
+												}
 												console.log('[Button] Clicked:', btn.callback_data, btn.text)
 												if (btn.callback_data) {
 													// Send callback to backend via frontend proxy
@@ -665,9 +880,6 @@ const MessageBubble = memo(
 														console.error('[Button] Error:', e)
 													}
 												}
-												if (btn.url) {
-													window.open(btn.url, '_blank')
-												}
 											}}
 											className='w-full bg-blue-600/80 hover:bg-blue-500 text-white font-medium py-2.5 px-4 rounded-lg transition-colors text-sm cursor-pointer'
 											type='button'
@@ -679,7 +891,7 @@ const MessageBubble = memo(
 							))}
 						</div>
 					)}
-
+					
 					{reactionEntries.length > 0 && (
 						<div className='mt-2 flex flex-wrap gap-1'>
 							{reactionEntries.map(([emoji, info]) => (
@@ -698,31 +910,40 @@ const MessageBubble = memo(
 							))}
 						</div>
 					)}
-					<div
-						className={`text-[10px] mt-1 flex items-center gap-1 ${
-							msg.isOwn
-								? 'justify-end text-blue-200/80'
-								: 'justify-start text-gray-400'
-						}`}
-					>
-						{!msg.isOwn && (msg.group_id || msg.channel_id) && (
-							<span className='font-bold text-gray-300 mr-2'>
-								{sender?.username || msg.sender_username || 'User'}
-							</span>
-						)}
-						{formatMskTime((msg as any).timestamp || (msg as any).created_at || '')}
-						{msg.isOwn && (
-							<div className='flex items-center'>
-								{msg.is_read ? (
-									<CheckCheck className='h-3.5 w-3.5 text-blue-400' />
-								) : (
-									<Check className='h-3.5 w-3.5 text-white/70' />
-								)}
-							</div>
-						)}
-					</div>
+					{(msg.type === 'voice' ||
+						msg.type === 'video_note' ||
+						stickerPayload ||
+						sharedPost ||
+						attachments.length > 0 ||
+						isEditing) && (
+						<div
+							className={`text-[11px] mt-2 flex items-center gap-1 justify-end ${
+								msg.isOwn
+									? 'text-[color:var(--app-fg)]/55'
+									: 'text-[color:var(--app-muted)]'
+							}`}
+						>
+							{formatMskTime(
+								(msg as Message & { created_at?: string }).timestamp ||
+									(msg as Message & { created_at?: string }).created_at ||
+									'',
+							)}
+							{msg.is_edited && (
+								<span className='ml-1 text-[10px] opacity-60'>ред.</span>
+							)}
+							{msg.isOwn && (
+								<span className='inline-flex'>
+									{msg.is_read ? (
+										<CheckCheck className='h-3.5 w-3.5 text-indigo-300/80' />
+									) : (
+										<Check className='h-3.5 w-3.5 text-[color:var(--app-fg)]/45' />
+									)}
+								</span>
+							)}
+						</div>
+					)}
 				</div>
-			</div>
+			</motion.div>
 		)
 	},
 )

@@ -40,22 +40,66 @@
 	--app-font-family: var(--font-geist-sans), system-ui, -apple-system,
 		'Segoe UI', Roboto, Arial, 'Noto Sans', 'Liberation Sans', sans-serif;
 
-	/* palette tokens */
-	/* softer dark by default (less contrast than pure black/white) */
-	--app-bg: #0b1220;
-	--app-fg: #e7eaf0;
-	--app-surface: #ffffff;
-	--app-border: #334155;
-	--app-muted: #94a3b8;
-	--app-accent: #6366f1; /* indigo-500 */
-	--app-accent-2: #a855f7; /* purple-500 */
+	/* palette tokens — Vondic dark theme */
+	--app-bg: #0f0e1b;
+	--app-fg: #f3f2f8;
+	--app-surface: #151326;
+	--app-border: rgba(139, 92, 246, 0.12);
+	--app-muted: #8b89a8;
+	--app-accent: #8b5cf6; /* violet */
+	--app-accent-2: #a78bfa; /* secondary violet */
 
 	/* rgb triplets for alpha mixing */
-	--app-bg-rgb: 11 18 32;
-	--app-fg-rgb: 231 234 240;
-	--app-surface-rgb: 255 255 255;
-	--app-accent-rgb: 99 102 241;
+	--app-bg-rgb: 15 14 27;
+	--app-fg-rgb: 243 242 248;
+	--app-surface-rgb: 21 19 38;
+	--app-accent-rgb: 139 92 246;
+
+	/* messenger */
+	--chat-bubble-own: linear-gradient(
+		145deg,
+		rgb(139 92 246 / 0.50),
+		rgb(139 92 246 / 0.30)
+	);
+	--chat-bubble-other: rgb(21 19 38 / 0.72);
+	--chat-bubble-border: rgb(255 255 255 / 0.06);
+	--chat-composer-bg: rgb(21 19 38 / 0.40);
 }
+
+:root {
+	--app-glass-bg: rgb(var(--app-surface-rgb) / 0.55);
+	--app-glass-border: rgb(var(--app-accent-rgb) / 0.12);
+	--app-glass-blur: 16px;
+	--app-glow: rgb(var(--app-accent-rgb) / 0.15);
+}
+::selection { background: rgb(var(--app-accent-rgb) / 0.35); color: var(--app-fg); }
+:root[data-color-scheme='purple'] { --app-accent:#8b5cf6; --app-accent-2:#a78bfa; --app-accent-rgb:139 92 246; --app-bg:#0f0e1b; --app-surface:#151326; --app-bg-rgb:15 14 27; --app-surface-rgb:21 19 38; }
+:root[data-color-scheme='blue']    { --app-accent:#3b82f6; --app-accent-2:#60a5fa; --app-accent-rgb:59 130 246; --app-bg:#0a0f1a; --app-surface:#111827; --app-bg-rgb:10 15 26; --app-surface-rgb:17 24 39; }
+:root[data-color-scheme='dark-blue']{ --app-accent:#2563eb; --app-accent-2:#3b82f6; --app-accent-rgb:37 99 235; --app-bg:#050a14; --app-surface:#0c1526; --app-bg-rgb:5 10 20; --app-surface-rgb:12 21 38; }
+:root[data-color-scheme='red']     { --app-accent:#ef4444; --app-accent-2:#f87171; --app-accent-rgb:239 68 68; --app-bg:#140a0c; --app-surface:#1f1114; --app-bg-rgb:20 10 12; --app-surface-rgb:31 17 20; }
+.glass-panel {
+	background: var(--app-glass-bg);
+	border: 1px solid var(--app-glass-border);
+	backdrop-filter: blur(var(--app-glass-blur));
+	-webkit-backdrop-filter: blur(var(--app-glass-blur));
+	border-radius: 1.25rem;
+	box-shadow: 0 4px 32px rgb(0 0 0 / 0.2);
+}
+.glass-sidebar {
+	background: rgb(var(--app-surface-rgb) / 0.60);
+	border-right: 1px solid var(--app-glass-border);
+	backdrop-filter: blur(20px);
+}
+.glass-header {
+	background: rgb(var(--app-bg-rgb) / 0.80);
+	border-bottom: 1px solid var(--app-glass-border);
+	backdrop-filter: blur(20px);
+}
+.btn-accent { background: var(--app-accent); color:#fff; border-radius:.75rem; font-weight:600; }
+.btn-accent:hover { background: var(--app-accent-2); }
+.text-accent { color: var(--app-accent-2); }
+.feed-bg-glow::before { content:''; position:fixed; left:-10%; top:-20%; width:50%; height:50%; border-radius:50%; filter:blur(120px); background:var(--app-glow); pointer-events:none; z-index:0; }
+.feed-bg-glow::after  { content:''; position:fixed; right:-10%; top:40%; width:40%; height:60%; border-radius:50%; filter:blur(120px); background:rgb(var(--app-accent-rgb)/0.08); pointer-events:none; z-index:0; }
 
 :root[data-theme='light'] {
 	--background: #ffffff;
@@ -72,16 +116,16 @@
 }
 
 :root[data-theme='dark'] {
-	--background: #0a0a0a;
-	--foreground: #ededed;
-	--app-bg: #0a0a0a;
-	--app-fg: #ededed;
-	--app-surface: #ffffff;
-	--app-border: #334155;
-	--app-muted: #94a3b8;
-	--app-bg-rgb: 10 10 10;
-	--app-fg-rgb: 237 237 237;
-	--app-surface-rgb: 255 255 255;
+	--background: #0f0e1b;
+	--foreground: #f3f2f8;
+	--app-bg: #0f0e1b;
+	--app-fg: #f3f2f8;
+	--app-surface: #151326;
+	--app-border: rgba(139, 92, 246, 0.12);
+	--app-muted: #8b89a8;
+	--app-bg-rgb: 15 14 27;
+	--app-fg-rgb: 243 242 248;
+	--app-surface-rgb: 21 19 38;
 	color-scheme: dark;
 }
 
@@ -150,8 +194,34 @@
 }
 
 ::selection {
-	background: rgb(var(--app-accent-rgb) / 0.35);
+	background: rgb(139 92 246 / 0.35);
 	color: var(--app-fg);
+}
+
+/* Messages right panel */
+.messages-right-panel {
+	background: rgb(26 34 50 / 0.60);
+	border-left: 1px solid rgb(255 255 255 / 0.06);
+	backdrop-filter: blur(12px);
+}
+
+.messages-right-card {
+	background: rgb(26 34 50 / 0.50);
+	border: 1px solid rgb(255 255 255 / 0.06);
+	border-radius: 16px;
+	padding: 16px;
+}
+
+.messages-action-btn {
+	background: var(--app-accent);
+	color: #0a0f18;
+	border-radius: 12px;
+	font-weight: 600;
+	transition: all 0.2s;
+}
+.messages-action-btn:hover {
+	background: #25c49d;
+	transform: translateY(-1px);
 }
 
 @theme inline {
@@ -163,8 +233,8 @@
 
 @media (prefers-color-scheme: dark) {
 	:root {
-		--background: #0a0a0a;
-		--foreground: #ededed;
+		--background: #0f0e1b;
+		--foreground: #f3f2f8;
 	}
 }
 
@@ -199,6 +269,86 @@ body {
 .custom-scrollbar {
 	scrollbar-width: thin;
 	scrollbar-color: rgba(75, 85, 99, 0.4) transparent;
+}
+
+/* Messenger bubbles — tied to --app-accent / --app-bg */
+.chat-bubble-own {
+	background: var(--chat-bubble-own);
+	border: 1px solid rgb(45 212 168 / 0.22);
+	color: rgb(var(--app-fg-rgb) / 0.96);
+	box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+}
+
+.chat-bubble-other {
+	background: var(--chat-bubble-other);
+	border: 1px solid var(--chat-bubble-border);
+	color: rgb(var(--app-fg-rgb) / 0.92);
+	box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+}
+
+.chat-bubble-own-purple,
+.chat-bubble-own-emerald,
+.chat-bubble-own-rose,
+.chat-bubble-own-blue {
+	color: rgb(var(--app-fg-rgb) / 0.96);
+	box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+}
+
+.chat-bubble-own-purple {
+	background: linear-gradient(
+		145deg,
+		rgb(168 85 247 / 0.48),
+		rgb(168 85 247 / 0.3)
+	);
+	border: 1px solid rgb(168 85 247 / 0.22);
+}
+
+.chat-bubble-own-emerald {
+	background: linear-gradient(
+		145deg,
+		rgb(45 212 168 / 0.50),
+		rgb(45 212 168 / 0.30)
+	);
+	border: 1px solid rgb(45 212 168 / 0.22);
+}
+
+.chat-bubble-own-rose {
+	background: linear-gradient(
+		145deg,
+		rgb(244 63 94 / 0.45),
+		rgb(244 63 94 / 0.28)
+	);
+	border: 1px solid rgb(244 63 94 / 0.22);
+}
+
+.chat-bubble-own-blue {
+	background: linear-gradient(
+		145deg,
+		rgb(59 130 246 / 0.48),
+		rgb(59 130 246 / 0.3)
+	);
+	border: 1px solid rgb(59 130 246 / 0.22);
+}
+
+.chat-date-pill {
+	font-size: 0.75rem;
+	font-weight: 500;
+	color: rgb(231 234 240 / 0.72);
+	background: rgb(26 34 50 / 0.65);
+	border: 1px solid rgb(255 255 255 / 0.06);
+	padding: 0.35rem 0.85rem;
+	border-radius: 9999px;
+	backdrop-filter: blur(8px);
+}
+
+.chat-composer-bar {
+	background: rgb(26 34 50 / 0.40);
+	border-top: 1px solid rgb(255 255 255 / 0.06);
+}
+
+.chat-composer-input {
+	background: rgb(26 34 50 / 0.45);
+	border: 1px solid rgb(255 255 255 / 0.06);
 }
 
 /* Animations */
@@ -263,4 +413,67 @@ body {
 .animate-gradient-x {
 	background-size: 200% 200%;
 	animation: gradient-x 3s ease infinite;
+}
+
+.bg-grid-pattern {
+	background-image:
+		linear-gradient(to right, rgb(var(--app-surface-rgb) / 0.05) 1px, transparent 1px),
+		linear-gradient(to bottom, rgb(var(--app-surface-rgb) / 0.05) 1px, transparent 1px);
+	background-size: 24px 24px;
+}
+
+/* Mobile base fixes */
+@media (max-width: 768px) {
+	html,
+	body {
+		overflow-x: hidden;
+	}
+
+	/* Ensure inputs and selects are readable on iOS */
+	input,
+	textarea,
+	select {
+		font-size: 16px;
+	}
+
+	/* Larger touch targets for small buttons */
+	button,
+	[role='button'],
+	a {
+		min-height: 36px;
+		min-width: 36px;
+	}
+
+	/* Prevent long URLs / text from breaking layout */
+	p,
+	span,
+	h1,
+	h2,
+	h3,
+	h4,
+	h5,
+	h6,
+	div {
+		word-break: break-word;
+		overflow-wrap: anywhere;
+	}
+
+	/* Make fixed overlays leave room for the bottom nav */
+	.bottom-nav-safe {
+		padding-bottom: calc(4rem + env(safe-area-inset-bottom));
+	}
+}
+
+/* Drawer / bottom-sheet helpers */
+.drawer-backdrop {
+	background-color: rgb(0 0 0 / 0.6);
+	backdrop-filter: blur(4px);
+}
+
+.mobile-full-sheet {
+	position: fixed;
+	inset: 0;
+	z-index: 9999;
+	display: flex;
+	flex-direction: column;
 }

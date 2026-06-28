@@ -8,7 +8,7 @@ import {
 import { SiApple, SiLinux } from 'react-icons/si'
 import { FaWindows } from 'react-icons/fa6'
 
-const DESKTOP_VERSION = 'v1.0.1'
+const DESKTOP_VERSION = 'v3.0.0'
 const GITHUB_RELEASE_URL =
 	'https://github.com/KnopMops/vondic/releases/tag/vondic-desktop'
 const WINDOWS_DOWNLOAD_URL =

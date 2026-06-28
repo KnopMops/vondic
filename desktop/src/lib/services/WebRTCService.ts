@@ -1,5 +1,5 @@
 import { Socket } from 'socket.io-client'
-import { AudioProcessor, getDiscordLikeAudioConstraints } from './AudioProcessor'
+import { getDiscordLikeAudioConstraints } from './AudioProcessor'
 
 /** Внутренний coturn (LAN). Переопределение: NEXT_PUBLIC_INTERNAL_TURN_HOST */
 const DEFAULT_INTERNAL_TURN_HOST = '192.168.120.248'
@@ -40,7 +40,6 @@ export class WebRTCService {
 	private useInternalTurnOnly: boolean = false
 	/** Резолвнутый хост internal TURN (для фильтра iceServers и логов) */
 	private internalTurnHostResolved: string = DEFAULT_INTERNAL_TURN_HOST
-	private audioProcessor: AudioProcessor | null = null
 	private iceDisconnectTimeouts: Map<string, NodeJS.Timeout> = new Map()
 
 	
@@ -62,6 +61,7 @@ export class WebRTCService {
 		this.userId = userId
 		this.configuration = {
 			iceServers: [
+				{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
 				{ urls: 'stun:192.168.120.248:3478' },
 			],
 		}
@@ -190,7 +190,9 @@ export class WebRTCService {
 
 	async initializeLocalStream(): Promise<MediaStream> {
 		try {
-			// Discord-like audio constraints with advanced processing
+			// Use the browser's native audio processing (Discord-like).
+			// Avoiding a custom Web Audio chain prevents latency, glitches and
+			// the "robotic/choppy" sound users report.
 			const audioConstraints = getDiscordLikeAudioConstraints()
 
 			this.localStream = await navigator.mediaDevices.getUserMedia({
@@ -198,49 +200,7 @@ export class WebRTCService {
 				video: false, // Только аудио для голосовых звонков
 			})
 
-			// Apply audio processing for Discord-like quality
-			try {
-				this.audioProcessor = new AudioProcessor({
-					noiseSuppression: 2, // Moderate noise suppression for clear, natural audio
-					echoCancellation: true,
-					autoGainControl: true,
-					highPassFilter: 80, // Remove low-frequency rumble while preserving voice warmth
-					lowPassFilter: 12000, // Preserve voice clarity and natural sound
-					gain: 2.0, // Higher gain for clearer, louder audio
-					smoothing: true,
-				})
-
-				// Process the audio stream
-				const processedStream = await this.audioProcessor.initialize(
-					this.localStream,
-				)
-
-				// Replace local stream with processed version
-				this.localStream = processedStream
-
-				// Stop original tracks to avoid duplicates
-				const originalTracks = this.localStream.getTracks()
-				originalTracks.forEach(track => {
-					if (track.kind === 'audio') {
-						// Keep the processed track, stop original
-						if (!processedStream.getAudioTracks().includes(track)) {
-							track.stop()
-						}
-					}
-				})
-
-				console.log(
-					'[WebRTC] Audio processing enabled with Discord-like quality',
-				)
-			} catch (error) {
-				console.warn(
-					'[WebRTC] Audio processor initialization failed, using native processing:',
-					error,
-				)
-				// Continue with native stream if processor fails
-			}
-
-			// Set constraints on the audio track for maximum quality
+			// Re-apply constraints on the captured audio track.
 			const audioTrack = this.localStream.getAudioTracks()[0]
 			if (audioTrack) {
 				try {
@@ -254,6 +214,7 @@ export class WebRTCService {
 				this.onLocalStream(this.localStream)
 			}
 
+			console.log('[WebRTC] Native audio capture enabled')
 			return this.localStream
 		} catch (error) {
 			console.error('Error accessing microphone:', error)
@@ -277,10 +238,12 @@ export class WebRTCService {
 			throw new Error('Демонстрация экрана недоступна на этом устройстве')
 		}
 
-		// Full HD 60fps constraints for smooth screen sharing
+		// Full HD 60fps constraints for smooth, Discord-like screen sharing.
+		// We request 60fps and high resolution; the browser will fall back
+		// gracefully if the display/capture source cannot provide it.
 		const videoConstraints: MediaTrackConstraints = {
-			width: { ideal: 1920, max: 1920 },
-			height: { ideal: 1080, max: 1080 },
+			width: { ideal: 1920, max: 2560 },
+			height: { ideal: 1080, max: 1440 },
 			frameRate: { ideal: 60, max: 60 },
 			cursor: 'always',
 			displaySurface: 'monitor',
@@ -297,16 +260,15 @@ export class WebRTCService {
 
 			const track = stream.getVideoTracks()[0]
 			if (track) {
-				// Force Full HD 60fps constraints
+				// Try to lock the best available resolution and framerate.
 				try {
 					await track.applyConstraints({
-						width: 1920,
-						height: 1080,
-						frameRate: { exact: 60, ideal: 60 },
+						width: { ideal: 1920 },
+						height: { ideal: 1080 },
+						frameRate: { ideal: 60 },
 						advanced: [
 							{ width: 1920, height: 1080, frameRate: 60 },
-							{ width: 1920, height: 1080, frameRate: 59.94 },
-							{ width: 1920, height: 1080, frameRate: 50 },
+							{ width: 1920, height: 1080, frameRate: 30 },
 							{ width: 1600, height: 900, frameRate: 60 },
 							{ width: 1280, height: 720, frameRate: 60 },
 						],
@@ -340,8 +302,47 @@ export class WebRTCService {
 		}
 	}
 
-	private isSocketKey(key: string) {
-		return /^[A-Za-z0-9_-]{16,30}$/.test(key)
+	private isSocketKey(key: string): boolean {
+		if (!key) return false
+		if (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(key)) {
+			return false
+		}
+		if (key.length < 10) {
+			return false
+		}
+		return /^[A-Za-z0-9_-]{10,45}$/.test(key)
+	}
+
+	private async applyBitrateConstraints(
+		sender: RTCRtpSender,
+		track: MediaStreamTrack,
+	): Promise<void> {
+		try {
+			const params = sender.getParameters()
+			if (!params.encodings || params.encodings.length === 0) {
+				params.encodings = [{}]
+			}
+			if (track.kind === 'video') {
+				if (this.isSharingScreen && this.screenStream?.getVideoTracks()[0] === track) {
+					// Discord-like screen share: high resolution needs high bitrate.
+					params.encodings[0].maxBitrate = 8_000_000
+					params.encodings[0].degradationPreference = 'maintain-framerate'
+					console.log('[WebRTC] Applied screen share bitrate limit: 8 Mbps')
+				} else {
+					// 720p/1080p camera quality.
+					params.encodings[0].maxBitrate = 2_500_000
+					params.encodings[0].degradationPreference = 'balanced'
+					console.log('[WebRTC] Applied camera bitrate limit: 2.5 Mbps')
+				}
+			} else if (track.kind === 'audio') {
+				// Discord-like voice quality (~128 kbps Opus).
+				params.encodings[0].maxBitrate = 128_000
+				console.log('[WebRTC] Applied audio bitrate limit: 128 kbps')
+			}
+			await sender.setParameters(params)
+		} catch (e) {
+			console.warn('[WebRTC] Failed to apply bitrate constraints:', e)
+		}
 	}
 
 	async startScreenShare(): Promise<void> {
@@ -362,7 +363,7 @@ export class WebRTCService {
 			}
 
 			// Replace/add video track with screen share
-			const videoSender = pc.getSenders().find(s => s.track?.kind === 'video')
+			let videoSender = pc.getSenders().find(s => s.track?.kind === 'video')
 			if (videoSender) {
 				try {
 					await videoSender.replaceTrack(videoTrack)
@@ -372,11 +373,14 @@ export class WebRTCService {
 				}
 			} else {
 				try {
-					pc.addTrack(videoTrack, stream)
+					videoSender = pc.addTrack(videoTrack, stream)
 					console.log(`[WebRTC] Added screen share video track for ${socketId}`)
 				} catch (e) {
 					console.error(`[WebRTC] Failed to add video track for ${socketId}:`, e)
 				}
+			}
+			if (videoSender) {
+				void this.applyBitrateConstraints(videoSender, videoTrack)
 			}
 
 			// Keep microphone audio - do NOT replace with system audio
@@ -576,7 +580,7 @@ export class WebRTCService {
 				continue
 			}
 
-			const sender = pc.getSenders().find(s => s.track?.kind === 'video')
+			let sender = pc.getSenders().find(s => s.track?.kind === 'video')
 			if (sender) {
 				try {
 					await sender.replaceTrack(track)
@@ -586,11 +590,14 @@ export class WebRTCService {
 				}
 			} else {
 				try {
-					pc.addTrack(track, stream)
+					sender = pc.addTrack(track, stream)
 					console.log(`[WebRTC] Added camera video track for ${socketId}`)
 				} catch (e) {
 					console.error(`[WebRTC] Failed to add video track for ${socketId}:`, e)
 				}
+			}
+			if (sender) {
+				void this.applyBitrateConstraints(sender, track)
 			}
 
 			tasks.push(
@@ -743,7 +750,7 @@ export class WebRTCService {
 		// Обработка ICE кандидатов
 		pc.onicecandidate = event => {
 			if (event.candidate) {
-				const isLikelySocketId = /^[A-Za-z0-9_-]{16,30}$/.test(targetSocketId)
+				const isLikelySocketId = this.isSocketKey(targetSocketId)
 				if (isLikelySocketId) {
 					this.socket.emit('ice_candidate', {
 						target_socket_id: targetSocketId,
@@ -958,7 +965,8 @@ export class WebRTCService {
 		// Add local AUDIO stream tracks (microphone)
 		if (this.localStream) {
 			this.localStream.getTracks().forEach(track => {
-				pc.addTrack(track, this.localStream!)
+				const sender = pc.addTrack(track, this.localStream!)
+				void this.applyBitrateConstraints(sender, track)
 			})
 			console.log(`[WebRTC] Added local audio track to new PC for ${targetSocketId}`)
 		}
@@ -967,7 +975,8 @@ export class WebRTCService {
 		if (this.videoStream) {
 			const videoTrack = this.videoStream.getVideoTracks()[0]
 			if (videoTrack) {
-				pc.addTrack(videoTrack, this.videoStream)
+				const sender = pc.addTrack(videoTrack, this.videoStream)
+				void this.applyBitrateConstraints(sender, videoTrack)
 				console.log(`[WebRTC] Added camera video track to new PC for ${targetSocketId}`)
 			}
 		}
@@ -1100,7 +1109,10 @@ export class WebRTCService {
 
 			const payload = {
 				target_user_id: targetUserId,
-				offer: offer,
+				offer: {
+					sdp: offer.sdp,
+					type: offer.type,
+				},
 			}
 
 			console.log(
@@ -1199,7 +1211,10 @@ export class WebRTCService {
 			// Send the answer back to the peer
 			this.socket.emit('answer', {
 				target_socket_id: socketId,
-				answer,
+				answer: {
+					sdp: answer.sdp,
+					type: answer.type,
+				},
 			})
 		} catch (e: any) {
 			if (e.message?.includes('wrong state') || e.message?.includes('stable')) {
@@ -1228,13 +1243,18 @@ export class WebRTCService {
 			await pc.setLocalDescription(answer)
 			console.log('Answer created and set as local description')
 
-			// Отправляем сигнал о принятии звонка (confirmation)
-			this.socket.emit('call_answer', { caller_socket_id: callerSocketId })
+			const serializedAnswer = {
+				sdp: answer.sdp,
+				type: answer.type,
+			}
 
-			// Отправляем SDP answer
+			// Отправляем сигнал о принятии звонка + SDP в одном событии (для мобильного клиента)
+			this.socket.emit('call_answer', { caller_socket_id: callerSocketId, answer: serializedAnswer })
+
+			// Также отправляем SDP answer через стандартный 'answer' event (для веб клиентов)
 			const answerPayload = {
 				target_socket_id: callerSocketId,
-				answer: answer,
+				answer: serializedAnswer,
 			}
 
 			console.log(
@@ -1729,55 +1749,61 @@ export class WebRTCService {
 			iceTransportPolicy: 'relay',
 		})
 
-		const iceTimeout = setTimeout(() => {
-			testPc.close()
-		}, 3000)
-
 		return new Promise((resolve) => {
+			let resolved = false
+			let relayGathered = false
+
 			const cleanup = () => {
-				clearTimeout(iceTimeout)
+				resolved = true
+				testPc.onicecandidate = null
 				testPc.close()
 			}
 
-			testPc.oniceconnectionstatechange = () => {
-				const state = testPc.iceConnectionState
-
-				if (state === 'connected' || state === 'completed') {
-					cleanup()
-					console.log('[WebRTC] Внешний TURN доступен')
-					resolve()
-				} else if (state === 'failed' || state === 'closed') {
-					cleanup()
-					console.warn(
-						`[WebRTC] Внешний TURN недоступен, переключение на internal (${this.internalTurnHostResolved})`,
-					)
-					this.useInternalTurnOnly = true
-					
-					// Recreate all peer connections with internal TURN
-					const oldConnections = Array.from(this.peerConnections.entries())
-					oldConnections.forEach(([socketId, oldPc]) => {
-						oldPc.close()
-						this.peerConnections.delete(socketId)
-						this.createPeerConnection(socketId)
-					})
-					
-					resolve()
+			testPc.onicecandidate = event => {
+				if (resolved) return
+				if (event.candidate) {
+					console.log('[WebRTC] TURN candidate gathered:', event.candidate.candidate)
+					if (event.candidate.candidate.includes('typ relay')) {
+						relayGathered = true
+						cleanup()
+						console.log('[WebRTC] Внешний TURN доступен (получен relay-кандидат)')
+						resolve()
+					}
+				} else {
+					// End of candidate gathering
+					if (!relayGathered && !resolved) {
+						cleanup()
+						console.warn(
+							`[WebRTC] Внешний TURN недоступен (нет relay-кандидатов), переключение на internal (${this.internalTurnHostResolved})`,
+						)
+						this.useInternalTurnOnly = true
+						resolve()
+					}
 				}
 			}
 
-			// Add dummy track to trigger ICE
-			testPc.addTransceiver('audio')
+			// Add dummy track and create offer to trigger ICE candidate gathering
+			try {
+				testPc.addTransceiver('audio')
+				testPc.createOffer()
+					.then(offer => testPc.setLocalDescription(offer))
+					.catch(err => {
+						console.error('[WebRTC] Error during TURN test offer:', err)
+					})
+			} catch (e) {
+				console.error('[WebRTC] Error starting ICE test:', e)
+			}
 
-			// If no response after timeout, assume failed
+			// If no relay candidate after 3 seconds, fallback to internal TURN
 			setTimeout(() => {
-				if (testPc.iceConnectionState === 'new' || testPc.iceConnectionState === 'checking') {
+				if (!resolved) {
 					cleanup()
 					console.warn(
-						`[WebRTC] Таймаут TURN, переключение на internal (${this.internalTurnHostResolved})`,
+						`[WebRTC] Таймаут TURN (3с), переключение на internal (${this.internalTurnHostResolved})`,
 					)
 					this.useInternalTurnOnly = true
+					resolve()
 				}
-				resolve()
 			}, 3000)
 		})
 	}
@@ -1857,12 +1883,6 @@ export class WebRTCService {
 		this.iceDisconnectTimeouts.forEach(timeout => clearTimeout(timeout))
 		this.iceDisconnectTimeouts.clear()
 
-		// Cleanup audio processor
-		if (this.audioProcessor) {
-			this.audioProcessor.cleanup()
-			this.audioProcessor = null
-		}
-
 		if (this.localStream) {
 			this.localStream.getTracks().forEach(track => track.stop())
 			this.localStream = null
@@ -1875,48 +1895,34 @@ export class WebRTCService {
 		}
 	}
 
-	// Audio Processing Controls
-	setNoiseSuppression(level: number) {
-		if (this.audioProcessor) {
-			this.audioProcessor.setNoiseSuppression(level)
-			console.log(`[WebRTC] Noise suppression set to ${level}`)
-		}
+	// Audio Processing Controls (kept for API compatibility, now no-ops because
+	// we rely on the browser's native processing for the cleanest Discord-like
+	// audio and to avoid choppy output from a custom Web Audio chain).
+	setNoiseSuppression(_level: number) {
+		console.log('[WebRTC] Native noise suppression is used; setNoiseSuppression is a no-op')
 	}
 
-	setGain(db: number) {
-		if (this.audioProcessor) {
-			this.audioProcessor.setGain(db)
-			console.log(`[WebRTC] Gain set to ${db}dB`)
-		}
+	setGain(_db: number) {
+		console.log('[WebRTC] Native gain control is used; setGain is a no-op')
 	}
 
-	setEchoCancellation(enabled: boolean) {
-		if (this.audioProcessor) {
-			this.audioProcessor.setEchoCancellation(enabled)
-			console.log(`[WebRTC] Echo cancellation ${enabled ? 'enabled' : 'disabled'}`)
-		}
+	setEchoCancellation(_enabled: boolean) {
+		console.log('[WebRTC] Native echo cancellation is used; setEchoCancellation is a no-op')
 	}
 
-	setAutoGainControl(enabled: boolean) {
-		if (this.audioProcessor) {
-			this.audioProcessor.setAutoGainControl(enabled)
-			console.log(`[WebRTC] Auto gain control ${enabled ? 'enabled' : 'disabled'}`)
-		}
+	setAutoGainControl(_enabled: boolean) {
+		console.log('[WebRTC] Native AGC is used; setAutoGainControl is a no-op')
 	}
 
 	async suspendAudioProcessing() {
-		if (this.audioProcessor) {
-			await this.audioProcessor.suspend()
-		}
+		// no-op
 	}
 
 	async resumeAudioProcessing() {
-		if (this.audioProcessor) {
-			await this.audioProcessor.resume()
-		}
+		// no-op
 	}
 
-	getAudioProcessor(): AudioProcessor | null {
-		return this.audioProcessor
+	getAudioProcessor(): null {
+		return null
 	}
 }

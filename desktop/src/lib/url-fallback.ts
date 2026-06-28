@@ -1,7 +1,5 @@
 
 
-
-
 interface UrlConfig {
 	primary: string;
 	fallback: string;

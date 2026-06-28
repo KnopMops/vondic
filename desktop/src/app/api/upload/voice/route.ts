@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAccessToken } from '@/lib/auth.utils'
+import { getBackendUrl } from '@/lib/server-urls'
 
 export async function POST(request: NextRequest) {
 	try {
-		const accessToken = await getAccessToken()
+		const accessToken = await getAccessToken(request)
 
 		if (!accessToken) {
 			return NextResponse.json(
@@ -15,12 +16,12 @@ export async function POST(request: NextRequest) {
 		const body = await request.json()
 
 		const response = await fetch(
-			`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'}/api/v1/upload/voice`,
+			`${getBackendUrl()}/api/v1/upload/voice`,
 			{
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
-					'Authorization': `Bearer ${accessToken}`,
+					Authorization: `Bearer ${accessToken}`,
 				},
 				body: JSON.stringify(body),
 			}

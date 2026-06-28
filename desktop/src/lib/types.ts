@@ -15,10 +15,15 @@ export interface User {
 		type?: 'image' | 'video'
 		created_at?: string
 		text?: string
-		allow_non_friends?: boolean
-		excluded_user_ids?: string[]
+		hidden_from?: string[]
 		reactions?: { user_id: string; emoji: string; created_at?: string }[]
 	}[]
+	privacy_settings?: {
+		show_email?: boolean
+		show_online_status?: boolean
+		show_last_seen?: boolean
+		allow_friend_requests?: boolean
+	}
 	description?: string
 	birth_date?: string
 	socket_id?: string | null
@@ -43,12 +48,6 @@ export interface User {
 	video_watch_later?: string[]
 	video_history?: { video_id: string; last_watched_at?: string; position?: number }[]
 	pinned_chats?: string[] 
-	unread_count?: number
-	last_message_text?: string
-	last_message_raw?: string
-	last_message_sender_id?: string
-	last_message_target_id?: string
-	last_message_at?: string
 }
 
 export interface GiftItem {
@@ -117,9 +116,16 @@ export interface Message {
 	channel_id?: string
 	group_id?: string
 	reply_to?: string
-	type?: 'text' | 'voice' | 'image' | 'file'
+	type?: 'text' | 'voice' | 'image' | 'file' | 'game'
+	game?: {
+		id: string
+		title?: string
+		embed_url: string
+		download_url?: string
+	}
 	attachments?: Attachment[] | string
 	is_deleted?: boolean
+	is_edited?: boolean
 	sender_username?: string
 	sender_avatar?: string | null
 	forwarded_from?: {
@@ -132,6 +138,7 @@ export interface Message {
 			text: string
 			callback_data?: string
 			url?: string
+			modal?: string
 		}>>
 	}
 }

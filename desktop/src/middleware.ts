@@ -10,9 +10,22 @@ export default async function middleware(req: NextRequest) {
 
 
 	if (
-		pathname.startsWith('/_next') ||
 		pathname.startsWith('/api') ||
 		pathname.startsWith('/static') ||
+		pathname.startsWith('/uploads')
+	) {
+		const requestHeaders = new Headers(req.headers)
+		const secret = process.env.VONDIC_PROXY_SECRET || 'vondic-dev-proxy-secret'
+		requestHeaders.set('x-vondic-proxy-secret', secret)
+		return NextResponse.next({
+			request: {
+				headers: requestHeaders,
+			},
+		})
+	}
+
+	if (
+		pathname.startsWith('/_next') ||
 		pathname.includes('.')
 	) {
 		return NextResponse.next()

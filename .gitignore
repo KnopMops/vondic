@@ -98,3 +98,5 @@ android/
 ios/
 
 fcm-service-account.json
+
+.env.desktop

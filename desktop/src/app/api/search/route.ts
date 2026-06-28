@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAccessToken } from "@/lib/auth.utils";
+import { withVondicProxyHeaders } from "@/lib/proxy-headers";
 import { getBackendUrl } from "@/lib/server-urls";
 
 export async function POST(req: NextRequest) {
@@ -16,9 +17,9 @@ export async function POST(req: NextRequest) {
 
     const response = await fetch(`${backendUrl}/api/v1/search`, {
       method: "POST",
-      headers: {
+      headers: withVondicProxyHeaders({
         "Content-Type": "application/json",
-      },
+      }),
       body: JSON.stringify(payload),
     });
 
@@ -40,10 +41,10 @@ export async function POST(req: NextRequest) {
             // Fetch all users to enrich data
             const usersResponse = await fetch(`${backendUrl}/api/v1/users/`, {
                 method: 'GET',
-                headers: {
+                headers: withVondicProxyHeaders({
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${token}`,
-                },
+                }),
             });
 
             let usersMap: Record<string, any> = {};

@@ -8,7 +8,7 @@ export async function GET(
 
 	try {
 		const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
-		const res = await fetch(`${backendUrl}/api/auth/verify-email/${token}`, {
+		const res = await fetch(`${backendUrl}/api/v1/auth/verify-email/${token}`, {
 			method: 'GET',
 			headers: {
 				'Content-Type': 'application/json',
