@@ -1,10 +1,10 @@
 'use client'
 
 import AppLoader from '@/components/ui/AppLoader'
-import Header from '@/components/social/Header'
-import Sidebar from '@/components/social/Sidebar'
+import FeedPageShell from '@/components/social/FeedPageShell'
 import UserProfile from '@/components/social/UserProfile'
 import { useAuth } from '@/lib/AuthContext'
+import { useSocket } from '@/lib/SocketContext'
 import { User } from '@/lib/types'
 import { useParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
@@ -13,6 +13,7 @@ import Link from 'next/link'
 export default function ProfileIdPage() {
 	const { id } = useParams()
 	const { user: currentUser, logout, isLoading: isAuthLoading } = useAuth()
+	const { socket } = useSocket()
 	const [profileUser, setProfileUser] = useState<User | null>(null)
 	const [isLoading, setIsLoading] = useState(true)
 	const [error, setError] = useState('')
@@ -45,56 +46,84 @@ export default function ProfileIdPage() {
 		fetchProfile()
 	}, [id, currentUser, isAuthLoading])
 
+	useEffect(() => {
+		if (!socket || !profileUser) return
+
+		const handleStatusChange = (data: { user_id: string; status: string; last_seen?: string }) => {
+			if (String(data.user_id) !== String(profileUser.id)) return
+			setProfileUser(prev => prev ? {
+				...prev,
+				status: data.status,
+				...(data.last_seen ? { last_seen: data.last_seen } : {}),
+			} : prev)
+		}
+
+		const handleOnlineUsers = (ids: string[]) => {
+			const isOnline = ids.some(uid => String(uid) === String(profileUser.id))
+			setProfileUser(prev => prev ? { ...prev, status: isOnline ? 'online' : 'offline' } : prev)
+		}
+
+		socket.on('user_status_changed', handleStatusChange)
+		socket.on('user_status_change', handleStatusChange)
+		socket.on('online_users', handleOnlineUsers)
+		socket.on('user_connected', (data: { user_id: string }) => {
+			if (String(data.user_id) !== String(profileUser.id)) return
+			setProfileUser(prev => prev ? { ...prev, status: 'online' } : prev)
+		})
+		socket.on('user_disconnected', (data: { user_id: string; last_seen?: string }) => {
+			if (String(data.user_id) !== String(profileUser.id)) return
+			setProfileUser(prev => prev ? {
+				...prev,
+				status: 'offline',
+				...(data.last_seen ? { last_seen: data.last_seen } : {}),
+			} : prev)
+		})
+
+		if (socket.connected) {
+			socket.emit('get_online_users')
+		} else {
+			socket.once('connect', () => socket.emit('get_online_users'))
+		}
+
+		return () => {
+			socket.off('user_status_changed', handleStatusChange)
+			socket.off('user_status_change', handleStatusChange)
+			socket.off('online_users', handleOnlineUsers)
+			socket.off('user_connected')
+			socket.off('user_disconnected')
+		}
+	}, [socket, profileUser?.id])
+
 	if (isLoading || isAuthLoading) {
 		return <AppLoader fullScreen size='lg' />
 	}
 
 	if (error || !profileUser) {
 		return (
-			<div className='min-h-screen bg-black text-white pb-20 md:pb-0'>
-				<Header email={currentUser?.email} onLogout={logout} />
-				<div className='mx-auto flex max-w-7xl'>
-					<Sidebar />
-					<main className='flex-1 p-4 sm:p-6 lg:p-8 flex justify-center items-center'>
-						<div className='text-center'>
-							<h2 className='mb-4 text-2xl font-bold'>
-								Пользователь не найден
-							</h2>
-							<Link
-								href='/feed'
-								className='text-indigo-400 hover:text-indigo-300'
-							>
-								Вернуться в ленту
-							</Link>
-						</div>
-					</main>
+			<FeedPageShell email={currentUser?.email} onLogout={logout}>
+				<div className='flex justify-center items-center py-20'>
+					<div className='text-center'>
+						<h2 className='mb-4 text-2xl font-bold'>
+							Пользователь не найден
+						</h2>
+						<Link
+							href='/feed'
+							className='text-indigo-400 hover:text-indigo-300'
+						>
+							Вернуться в ленту
+						</Link>
+					</div>
 				</div>
-			</div>
+			</FeedPageShell>
 		)
 	}
 
 	return (
-		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white overflow-x-hidden relative'>
-			
-			<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
-				<div className='absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-indigo-900/20 blur-[120px]' />
-				<div className='absolute top-[40%] -right-[10%] w-[40%] h-[60%] rounded-full bg-purple-900/20 blur-[120px]' />
-				<div className='absolute bottom-[10%] left-[20%] w-[30%] h-[30%] rounded-full bg-emerald-900/10 blur-[100px]' />
-			</div>
-
-			<div className='relative z-20'>
-				<Header email={currentUser?.email} onLogout={logout} />
-			</div>
-
-			<div className='relative z-10 mx-auto flex max-w-7xl pt-20'>
-				<Sidebar />
-				<main className='flex-1 p-4 sm:p-6 lg:p-8'>
-					<UserProfile
-						user={profileUser}
-						currentUser={currentUser as unknown as User}
-					/>
-				</main>
-			</div>
-		</div>
+		<FeedPageShell email={currentUser?.email} onLogout={logout}>
+			<UserProfile
+				user={profileUser}
+				currentUser={currentUser as unknown as User}
+			/>
+		</FeedPageShell>
 	)
 }

@@ -1,8 +1,7 @@
 'use client'
 
-import Header from '@/components/social/Header'
+import FeedPageShell from '@/components/social/FeedPageShell'
 import PostDetailsModal from '@/components/social/PostDetailsModal'
-import Sidebar from '@/components/social/Sidebar'
 import { useAuth } from '@/lib/AuthContext'
 import {
 	DEFAULT_APP_DOWNLOADS,
@@ -924,21 +923,8 @@ export default function AdminSupportPage() {
 	}, [user, roleAllowed, router])
 
 	return (
-		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white overflow-x-hidden relative'>
-			<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
-				<div className='absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-indigo-900/20 blur-[120px]' />
-				<div className='absolute top-[40%] -right-[10%] w-[40%] h-[60%] rounded-full bg-purple-900/20 blur-[120px]' />
-				<div className='absolute bottom-[10%] left-[20%] w-[30%] h-[30%] rounded-full bg-emerald-900/10 blur-[100px]' />
-			</div>
-
-			<div className='relative z-20'>
-				<Header email={user?.email || ''} onLogout={logout} />
-			</div>
-
-			<div className='relative z-10 mx-auto flex max-w-7xl pt-20'>
-				<Sidebar />
-				<main className='flex-1 px-4 sm:px-6 lg:px-8 pb-20'>
-					<div className='mx-auto max-w-5xl space-y-6'>
+		<FeedPageShell email={user?.email || ''} onLogout={logout}>
+			<div className='mx-auto max-w-5xl space-y-6'>
 						<div className='rounded-2xl bg-white/5 border border-white/10 p-6'>
 							<div className='flex items-center justify-between mb-3'>
 								<div className='flex items-center gap-2'>
@@ -1795,8 +1781,6 @@ export default function AdminSupportPage() {
 							</div>
 						)}
 					</div>
-				</main>
-			</div>
 			{chatOpen && (
 				<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm'>
 					<div className='w-full max-w-2xl rounded-2xl border border-white/10 bg-white/5 p-4'>
@@ -1952,6 +1936,6 @@ export default function AdminSupportPage() {
 					</div>
 				</div>
 			)}
-		</div>
+		</FeedPageShell>
 	)
 }

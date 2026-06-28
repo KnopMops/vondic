@@ -41,30 +41,65 @@
 		'Segoe UI', Roboto, Arial, 'Noto Sans', 'Liberation Sans', sans-serif;
 
 	/* palette tokens — Vondic dark theme */
-	--app-bg: #1a2232;
-	--app-fg: #e7eaf0;
-	--app-surface: #ffffff;
-	--app-border: #2a3a4e;
-	--app-muted: #8896a8;
-	--app-accent: #2dd4a8; /* emerald-teal */
-	--app-accent-2: #22b893; /* secondary teal */
+	--app-bg: #0f0e1b;
+	--app-fg: #f3f2f8;
+	--app-surface: #151326;
+	--app-border: rgba(139, 92, 246, 0.12);
+	--app-muted: #8b89a8;
+	--app-accent: #8b5cf6; /* violet */
+	--app-accent-2: #a78bfa; /* secondary violet */
 
 	/* rgb triplets for alpha mixing */
-	--app-bg-rgb: 26 34 50;
-	--app-fg-rgb: 231 234 240;
-	--app-surface-rgb: 255 255 255;
-	--app-accent-rgb: 45 212 168;
+	--app-bg-rgb: 15 14 27;
+	--app-fg-rgb: 243 242 248;
+	--app-surface-rgb: 21 19 38;
+	--app-accent-rgb: 139 92 246;
 
 	/* messenger */
 	--chat-bubble-own: linear-gradient(
 		145deg,
-		rgb(45 212 168 / 0.50),
-		rgb(45 212 168 / 0.30)
+		rgb(139 92 246 / 0.50),
+		rgb(139 92 246 / 0.30)
 	);
-	--chat-bubble-other: rgb(26 34 50 / 0.72);
+	--chat-bubble-other: rgb(21 19 38 / 0.72);
 	--chat-bubble-border: rgb(255 255 255 / 0.06);
-	--chat-composer-bg: rgb(26 34 50 / 0.40);
+	--chat-composer-bg: rgb(21 19 38 / 0.40);
 }
+
+:root {
+	--app-glass-bg: rgb(var(--app-surface-rgb) / 0.55);
+	--app-glass-border: rgb(var(--app-accent-rgb) / 0.12);
+	--app-glass-blur: 16px;
+	--app-glow: rgb(var(--app-accent-rgb) / 0.15);
+}
+::selection { background: rgb(var(--app-accent-rgb) / 0.35); color: var(--app-fg); }
+:root[data-color-scheme='purple'] { --app-accent:#8b5cf6; --app-accent-2:#a78bfa; --app-accent-rgb:139 92 246; --app-bg:#0f0e1b; --app-surface:#151326; --app-bg-rgb:15 14 27; --app-surface-rgb:21 19 38; }
+:root[data-color-scheme='blue']    { --app-accent:#3b82f6; --app-accent-2:#60a5fa; --app-accent-rgb:59 130 246; --app-bg:#0a0f1a; --app-surface:#111827; --app-bg-rgb:10 15 26; --app-surface-rgb:17 24 39; }
+:root[data-color-scheme='dark-blue']{ --app-accent:#2563eb; --app-accent-2:#3b82f6; --app-accent-rgb:37 99 235; --app-bg:#050a14; --app-surface:#0c1526; --app-bg-rgb:5 10 20; --app-surface-rgb:12 21 38; }
+:root[data-color-scheme='red']     { --app-accent:#ef4444; --app-accent-2:#f87171; --app-accent-rgb:239 68 68; --app-bg:#140a0c; --app-surface:#1f1114; --app-bg-rgb:20 10 12; --app-surface-rgb:31 17 20; }
+.glass-panel {
+	background: var(--app-glass-bg);
+	border: 1px solid var(--app-glass-border);
+	backdrop-filter: blur(var(--app-glass-blur));
+	-webkit-backdrop-filter: blur(var(--app-glass-blur));
+	border-radius: 1.25rem;
+	box-shadow: 0 4px 32px rgb(0 0 0 / 0.2);
+}
+.glass-sidebar {
+	background: rgb(var(--app-surface-rgb) / 0.60);
+	border-right: 1px solid var(--app-glass-border);
+	backdrop-filter: blur(20px);
+}
+.glass-header {
+	background: rgb(var(--app-bg-rgb) / 0.80);
+	border-bottom: 1px solid var(--app-glass-border);
+	backdrop-filter: blur(20px);
+}
+.btn-accent { background: var(--app-accent); color:#fff; border-radius:.75rem; font-weight:600; }
+.btn-accent:hover { background: var(--app-accent-2); }
+.text-accent { color: var(--app-accent-2); }
+.feed-bg-glow::before { content:''; position:fixed; left:-10%; top:-20%; width:50%; height:50%; border-radius:50%; filter:blur(120px); background:var(--app-glow); pointer-events:none; z-index:0; }
+.feed-bg-glow::after  { content:''; position:fixed; right:-10%; top:40%; width:40%; height:60%; border-radius:50%; filter:blur(120px); background:rgb(var(--app-accent-rgb)/0.08); pointer-events:none; z-index:0; }
 
 :root[data-theme='light'] {
 	--background: #ffffff;
@@ -81,16 +116,16 @@
 }
 
 :root[data-theme='dark'] {
-	--background: #1a2232;
-	--foreground: #e7eaf0;
-	--app-bg: #1a2232;
-	--app-fg: #e7eaf0;
-	--app-surface: #ffffff;
-	--app-border: #2a3a4e;
-	--app-muted: #8896a8;
-	--app-bg-rgb: 26 34 50;
-	--app-fg-rgb: 231 234 240;
-	--app-surface-rgb: 255 255 255;
+	--background: #0f0e1b;
+	--foreground: #f3f2f8;
+	--app-bg: #0f0e1b;
+	--app-fg: #f3f2f8;
+	--app-surface: #151326;
+	--app-border: rgba(139, 92, 246, 0.12);
+	--app-muted: #8b89a8;
+	--app-bg-rgb: 15 14 27;
+	--app-fg-rgb: 243 242 248;
+	--app-surface-rgb: 21 19 38;
 	color-scheme: dark;
 }
 
@@ -159,7 +194,7 @@
 }
 
 ::selection {
-	background: rgb(45 212 168 / 0.35);
+	background: rgb(139 92 246 / 0.35);
 	color: var(--app-fg);
 }
 
@@ -198,8 +233,8 @@
 
 @media (prefers-color-scheme: dark) {
 	:root {
-		--background: #1a2232;
-		--foreground: #e7eaf0;
+		--background: #0f0e1b;
+		--foreground: #f3f2f8;
 	}
 }
 

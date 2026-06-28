@@ -47,7 +47,9 @@ export default function Header({ email, onLogout }: Props) {
 	const [isSearching, setIsSearching] = useState(false)
 	const [showResults, setShowResults] = useState(false)
 	const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
+	const [isSearchExpanded, setIsSearchExpanded] = useState(false)
 	const searchRef = useRef<HTMLDivElement>(null)
+	const inputRef = useRef<HTMLInputElement>(null)
 
 	useEffect(() => {
 		const handleClickOutside = (event: MouseEvent) => {
@@ -56,11 +58,20 @@ export default function Header({ email, onLogout }: Props) {
 				!searchRef.current.contains(event.target as Node)
 			) {
 				setShowResults(false)
+				if (!searchQuery.trim()) {
+					setIsSearchExpanded(false)
+				}
 			}
 		}
 		document.addEventListener('mousedown', handleClickOutside)
 		return () => document.removeEventListener('mousedown', handleClickOutside)
-	}, [])
+	}, [searchQuery])
+
+	useEffect(() => {
+		if (isSearchExpanded && inputRef.current) {
+			inputRef.current.focus()
+		}
+	}, [isSearchExpanded])
 
 	useEffect(() => {
 		if (isDropdownOpen) {
@@ -100,7 +111,7 @@ export default function Header({ email, onLogout }: Props) {
 	}
 
 	return (
-		<header className='fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-gray-950 md:bg-gray-950/80 backdrop-blur-xl'>
+		<header className='fixed top-0 left-0 right-0 z-50 glass-header'>
 			<div className='mx-auto flex max-w-7xl items-center justify-between px-4 py-3'>
 				<div className='flex items-center gap-3'>
 					<button
@@ -110,38 +121,64 @@ export default function Header({ email, onLogout }: Props) {
 					>
 						<Menu className='h-6 w-6' />
 					</button>
-					<Link href='/feed' aria-label='Перейти в ленту'>
+					<Link href='/feed' className='flex items-center gap-2 group' aria-label='Перейти в ленту'>
 						<BrandLogo size={28} />
+						<span className='text-lg font-bold text-gray-100 tracking-wide font-sans group-hover:text-violet-400 transition-colors'>
+							Вондик
+						</span>
 					</Link>
 				</div>
 
 				<div className='flex flex-1 justify-center px-4'>
 					<div
-						className='relative w-full max-w-md hidden sm:block'
+						className='relative hidden sm:block'
 						ref={searchRef}
 					>
-						<div className='relative'>
-							<input
-								type='text'
-								placeholder='@ - поиск пользователя, # - поиск поста'
-								value={searchQuery}
-								onChange={e => handleSearch(e.target.value)}
-								onFocus={() => searchQuery && setShowResults(true)}
-								className='w-full rounded-xl bg-black/20 px-4 py-2 text-sm text-gray-200 placeholder-gray-500 border border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-all'
-							/>
-							<div className='absolute right-3 top-1/2 -translate-y-1/2'>
-								<Search className='h-4 w-4 text-gray-500' />
+						<div className='flex items-center justify-center'>
+							<div
+								className={`flex items-center rounded-2xl glass-panel transition-all duration-300 overflow-hidden ${
+									isSearchExpanded ? 'w-64 md:w-80 px-3 py-1.5' : 'w-10 h-10 justify-center cursor-pointer hover:bg-white/5'
+								}`}
+								onClick={() => {
+									if (!isSearchExpanded) setIsSearchExpanded(true)
+								}}
+							>
+								{isSearchExpanded ? (
+									<>
+										<input
+											ref={inputRef}
+											type='text'
+											placeholder='@пользователь, #пост...'
+											value={searchQuery}
+											onChange={e => handleSearch(e.target.value)}
+											onFocus={() => searchQuery && setShowResults(true)}
+											className='w-full bg-transparent text-sm text-gray-200 placeholder-gray-500 focus:outline-none'
+										/>
+										<button
+											onClick={(e) => {
+												e.stopPropagation()
+												setSearchQuery('')
+												setSearchResults(null)
+												setShowResults(false)
+												setIsSearchExpanded(false)
+											}}
+											className='p-1 text-gray-500 hover:text-white transition-colors ml-1'
+										>
+											<CloseIcon className='h-3.5 w-3.5' />
+										</button>
+									</>
+								) : (
+									<Search className='h-5 w-5 text-gray-400' />
+								)}
 							</div>
 						</div>
 
-						
-						{showResults && searchResults && (
-							<div className='absolute mt-2 w-full rounded-xl bg-black/40 backdrop-blur-xl p-2 shadow-2xl ring-1 ring-white/10 z-50 max-h-96 overflow-y-auto custom-scrollbar'>
+						{showResults && searchResults && isSearchExpanded && (
+							<div className='absolute mt-2 left-1/2 -translate-x-1/2 w-80 rounded-xl bg-gray-900 border border-white/10 p-2 shadow-2xl z-50 max-h-96 overflow-y-auto custom-scrollbar'>
 								{isSearching ? (
 									<div className='p-4 text-center text-gray-400'>Поиск...</div>
 								) : (
 									<>
-										
 										{searchResults.type === 'users' && (
 											<div className='space-y-1'>
 												{searchResults.results.length === 0 ? (
@@ -182,7 +219,6 @@ export default function Header({ email, onLogout }: Props) {
 											</div>
 										)}
 
-										
 										{searchResults.type === 'posts' && (
 											<div className='space-y-1'>
 												{searchResults.results.length === 0 ? (

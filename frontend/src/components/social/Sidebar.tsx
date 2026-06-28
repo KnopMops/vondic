@@ -53,8 +53,8 @@ export default function Sidebar() {
 
 	return (
 		<>
-			<aside
-				className={`fixed top-20 left-0 hidden lg:flex h-auto max-h-[calc(100vh-5rem)] flex-col rounded-r-xl border-r border-white/10 bg-gray-950 py-4 transition-all duration-300 z-40 ${
+		<aside
+				className={`fixed top-20 left-0 hidden lg:flex h-auto max-h-[calc(100vh-5rem)] flex-col glass-sidebar rounded-r-2xl py-4 transition-all duration-300 z-40 ${
 					isExpanded ? 'w-44' : 'w-16'
 				}`}
 			>
@@ -63,7 +63,7 @@ export default function Sidebar() {
 						{isExpanded && (
 							<button
 								onClick={toggleSidebar}
-								className='rounded-full p-1 text-gray-400 hover:bg-gray-800/50 hover:text-white transition-colors'
+								className='rounded-full p-1 text-gray-400 hover:bg-white/5 hover:text-white transition-colors'
 								aria-label='Свернуть меню'
 							>
 								<ChevronLeft className='h-4 w-4' />
@@ -82,7 +82,7 @@ export default function Sidebar() {
 						</button>
 					)}
 
-					<nav className='flex w-full flex-col gap-2'>
+					<nav className='flex w-full flex-col gap-1.5'>
 						{items.map(i => {
 							const Icon = (i as any).icon
 							const isActive =
@@ -96,7 +96,9 @@ export default function Sidebar() {
 											i.href === '/feed/friends' ||
 											i.href === '/feed/communities' ||
 											i.href === '/feed/settings')))
-							const activeClass = isActive ? 'bg-white/15 text-white' : ''
+						const activeClass = isActive
+								? 'bg-[rgb(var(--app-accent-rgb)/0.2)] text-white border-[rgb(var(--app-accent-rgb)/0.3)] shadow-[0_0_12px_rgb(var(--app-accent-rgb)/0.15)]'
+								: 'border-transparent text-gray-400 hover:bg-white/5 hover:text-white'
 							const content = (
 								<>
 									<span className='text-xl drop-shadow-lg'>
@@ -110,7 +112,7 @@ export default function Sidebar() {
 								</>
 							)
 
-							const className = `flex items-center gap-4 rounded-xl px-2 py-2.5 text-gray-300 hover:bg-white/10 hover:text-white transition-all ${activeClass} ${
+							const className = `flex items-center gap-4 rounded-xl px-3 py-2 border transition-all ${activeClass} ${
 								!isExpanded ? 'justify-center' : ''
 							}`
 

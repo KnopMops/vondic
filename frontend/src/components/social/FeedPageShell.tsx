@@ -2,6 +2,7 @@
 
 import Header from './Header'
 import Sidebar from './Sidebar'
+import RightPanel from './RightPanel'
 
 type Props = {
 	children: React.ReactNode
@@ -11,7 +12,7 @@ type Props = {
 	withTopPadding?: boolean
 }
 
-/** Общая оболочка ленты: как на главной /feed (чёрный фон + градиенты). */
+/** Общая оболочка ленты с фиксированным Sidebar, Header и RightPanel */
 export default function FeedPageShell({
 	children,
 	email,
@@ -19,22 +20,23 @@ export default function FeedPageShell({
 	withTopPadding = true,
 }: Props) {
 	return (
-		<div className='relative min-h-screen overflow-x-hidden bg-black pb-20 text-white selection:bg-indigo-500 selection:text-white md:pb-0'>
-			<div className='pointer-events-none fixed inset-0 z-0 overflow-hidden'>
-				<div className='absolute -left-[10%] -top-[20%] h-[50%] w-[50%] rounded-full bg-indigo-900/20 blur-[120px]' />
-				<div className='absolute -right-[10%] top-[40%] h-[60%] w-[40%] rounded-full bg-purple-900/20 blur-[120px]' />
-				<div className='absolute bottom-[10%] left-[20%] h-[30%] w-[30%] rounded-full bg-emerald-900/10 blur-[100px]' />
-			</div>
+		<div className='relative min-h-screen bg-[var(--app-bg)] text-[var(--app-fg)] selection:bg-[var(--app-accent)]'>
+			<div className='feed-bg-glow' />
 
-			<div className='relative z-20'>
-				<Header email={email} onLogout={onLogout} />
+			<div className='relative z-30'>
+				<Header email={email || ''} onLogout={onLogout || (() => {})} />
 			</div>
 
 			<div
 				className={`relative z-10 mx-auto flex max-w-7xl ${withTopPadding ? 'pt-20' : ''}`}
 			>
 				<Sidebar />
-				{children}
+				<main className='flex-1 px-4 sm:px-6 lg:pl-20 lg:pr-80 lg:pt-6 min-w-0 min-h-[calc(100vh-5rem)]'>
+					{children}
+				</main>
+				<div className='hidden lg:block fixed top-20 right-0 h-auto max-h-[calc(100vh-5rem)] w-80 overflow-y-auto p-6 z-20 custom-scrollbar'>
+					<RightPanel />
+				</div>
 			</div>
 		</div>
 	)

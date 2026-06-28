@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { LuLifeBuoy as LifeBuoy, LuX as X } from 'react-icons/lu'
 import { usePathname, useRouter } from 'next/navigation'
+import { useAuth } from '@/lib/AuthContext'
 
 const SUPPORT_QUESTIONS = [
 	'Как сменить пароль?',
@@ -20,19 +21,9 @@ export default function SupportWidget() {
 	const [loading, setLoading] = useState(false)
 	const pathname = usePathname()
 	const router = useRouter()
+	const { user } = useAuth()
 
 	if (pathname?.startsWith('/feed/messages')) return null
-
-	const getAuthToken = () => {
-		try {
-			const raw = localStorage.getItem('user')
-			if (raw) {
-				const user = JSON.parse(raw)
-				return user?.access_token
-			}
-		} catch {}
-		return null
-	}
 
 	const handleSubmit = async () => {
 		const q = question === 'Другое' ? customQuestion.trim() : question
@@ -40,38 +31,35 @@ export default function SupportWidget() {
 
 		setLoading(true)
 		try {
-			const authToken = getAuthToken()
+			const res = await fetch('/api/support/chat/send', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ message: q, new_chat: true }),
+			})
 
-			if (authToken) {
-				const res = await fetch('/api/support/chat/send', {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-						'Authorization': `Bearer ${authToken}`,
-					},
-					body: JSON.stringify({ message: q, new_chat: true }),
-				})
-				const data = await res.json()
-				if (data.ok || data.escalation_id) {
-					setIsOpen(false)
-					setQuestion('')
-					setCustomQuestion('')
-					router.push(`/feed/messages?support_id=${data.escalation_id}`)
-				}
-			} else {
-				const res = await fetch('/api/support/anon/create', {
+			if (res.status === 401 && !user) {
+				const anonRes = await fetch('/api/support/anon/create', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({ question: q }),
 				})
-				const data = await res.json()
-				if (data.ok && data.anon_token) {
-					localStorage.setItem('anon_support_token', data.anon_token)
+				const anonData = await anonRes.json()
+				if (anonData.ok && anonData.anon_token) {
+					localStorage.setItem('anon_support_token', anonData.anon_token)
 					setIsOpen(false)
 					setQuestion('')
 					setCustomQuestion('')
-					router.push(`/feed/messages/anon/${data.escalation_id}`)
+					router.push(`/feed/messages/anon/${anonData.escalation_id}`)
 				}
+				return
+			}
+
+			const data = await res.json()
+			if (data.ok && data.escalation_id) {
+				setIsOpen(false)
+				setQuestion('')
+				setCustomQuestion('')
+				router.push(`/feed/messages?support_id=${data.escalation_id}`)
 			}
 		} catch (e) {
 			console.error('Support error:', e)

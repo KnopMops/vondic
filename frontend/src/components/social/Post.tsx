@@ -433,7 +433,7 @@ export default function Post({
 	}
 
 	return (
-		<article className='rounded-xl bg-gray-900/40 backdrop-blur-md border border-gray-800/50 p-4 shadow-sm relative group'>
+		<article className='glass-panel p-4 relative group'>
 			<div className='flex items-start gap-3'>
 				<Link href={`/feed/profile/${author_id}`}>
 					{author_avatar ? (

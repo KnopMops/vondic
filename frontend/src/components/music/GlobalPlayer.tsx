@@ -150,8 +150,11 @@ export default function GlobalPlayer() {
     return null
   }
 
-  // If on music page, don't show mini player (the music page has its own player)
   if (isOnMusicPage) {
+    return null
+  }
+
+  if (!pathname?.startsWith('/feed/music')) {
     return null
   }
 

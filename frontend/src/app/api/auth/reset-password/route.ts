@@ -5,10 +5,21 @@ export async function POST(request: NextRequest) {
 	try {
 		const body = await request.json()
 		const backendUrl = getBackendUrl()
+
+		const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+			|| request.headers.get('x-real-ip')
+			|| request.headers.get('x-forwarded-for')
+		const extraHeaders: Record<string, string> = {}
+		if (clientIp) {
+			extraHeaders['X-Forwarded-For'] = clientIp
+			extraHeaders['X-Real-IP'] = clientIp
+		}
+
 		const res = await fetch(`${backendUrl}/api/v1/auth/reset-password`, {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
+				...extraHeaders,
 			},
 			body: JSON.stringify(body),
 		})

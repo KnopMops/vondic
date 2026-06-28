@@ -1,10 +1,9 @@
 'use client'
 
-import Header from '@/components/social/Header'
+import FeedPageShell from '@/components/social/FeedPageShell'
 import DeveloperSettings from '@/components/settings/DeveloperSettings'
 import MailApiSettings from '@/components/settings/MailApiSettings'
 import PasswordInput from '@/components/ui/PasswordInput'
-import Sidebar from '@/components/social/Sidebar'
 import { useAuth } from '@/lib/AuthContext'
 import { setUser } from '@/lib/features/authSlice'
 import { useAppDispatch } from '@/lib/hooks'
@@ -14,36 +13,7 @@ import Link from 'next/link'
 import { FiBell, FiCode, FiLock, FiMail, FiMonitor, FiMessageCircle, FiMusic, FiPhoneCall, FiSettings, FiShield, FiVolume2 } from 'react-icons/fi'
 import { HiOutlineColorSwatch } from 'react-icons/hi'
 import { useEffect, useState } from 'react'
-
-type AppPalette = {
-	bg: string
-	fg: string
-	surface: string
-	border: string
-	muted: string
-	accent: string
-	accent2: string
-}
-
-const DEFAULT_PALETTE_DARK: AppPalette = {
-	bg: '#0b1220',
-	fg: '#e7eaf0',
-	surface: '#ffffff',
-	border: '#334155',
-	muted: '#94a3b8',
-	accent: '#6366f1',
-	accent2: '#a855f7',
-}
-
-const DEFAULT_PALETTE_LIGHT: AppPalette = {
-	bg: '#f8fafc',
-	fg: '#0f172a',
-	surface: '#ffffff',
-	border: '#e2e8f0',
-	muted: '#475569',
-	accent: '#6366f1',
-	accent2: '#a855f7',
-}
+import { COLOR_SCHEMES, saveColorScheme, initColorScheme, type ColorSchemeId } from '@/lib/theme/colorSchemes'
 
 const CHAT_THEMES = [
 	{ id: 'default', name: 'Стандартный' },
@@ -54,35 +24,6 @@ const CHAT_THEMES = [
 ] as const
 
 const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n))
-
-const hexToRgbTriplet = (hex: string): string | null => {
-	const raw = hex.trim().replace(/^#/, '')
-	if (!/^[0-9a-fA-F]{6}$/.test(raw)) return null
-	const r = Number.parseInt(raw.slice(0, 2), 16)
-	const g = Number.parseInt(raw.slice(2, 4), 16)
-	const b = Number.parseInt(raw.slice(4, 6), 16)
-	return `${r} ${g} ${b}`
-}
-
-const applyPalette = (palette: AppPalette) => {
-	const root = document.documentElement
-	root.style.setProperty('--app-bg', palette.bg)
-	root.style.setProperty('--app-fg', palette.fg)
-	root.style.setProperty('--app-surface', palette.surface)
-	root.style.setProperty('--app-border', palette.border)
-	root.style.setProperty('--app-muted', palette.muted)
-	root.style.setProperty('--app-accent', palette.accent)
-	root.style.setProperty('--app-accent-2', palette.accent2)
-
-	const bgRgb = hexToRgbTriplet(palette.bg)
-	const fgRgb = hexToRgbTriplet(palette.fg)
-	const surfaceRgb = hexToRgbTriplet(palette.surface)
-	const accentRgb = hexToRgbTriplet(palette.accent)
-	if (bgRgb) root.style.setProperty('--app-bg-rgb', bgRgb)
-	if (fgRgb) root.style.setProperty('--app-fg-rgb', fgRgb)
-	if (surfaceRgb) root.style.setProperty('--app-surface-rgb', surfaceRgb)
-	if (accentRgb) root.style.setProperty('--app-accent-rgb', accentRgb)
-}
 
 type SessionItem = {
 	session_id: string
@@ -116,7 +57,7 @@ export default function SettingsPage() {
 	const [fontFamily, setFontFamily] = useState<string>(
 		"var(--font-geist-sans), system-ui, -apple-system, 'Segoe UI', Roboto, Arial, 'Noto Sans', 'Liberation Sans', sans-serif",
 	)
-	const [palette, setPalette] = useState<AppPalette>(DEFAULT_PALETTE_DARK)
+	const [colorSchemeId, setColorSchemeId] = useState<ColorSchemeId>('purple')
 	const [chatThemeId, setChatThemeId] = useState<string>('default')
 	const [messageThemeId, setMessageThemeId] = useState<string>('default')
 	const [chatBackgroundImage, setChatBackgroundImage] = useState<string>('')
@@ -213,13 +154,13 @@ export default function SettingsPage() {
 		} else {
 			applyTheme('system')
 		}
+		initColorScheme()
 	}, [])
 
 	useEffect(() => {
 		const savedFontSize = localStorage.getItem('app_font_size')
 		const savedBorderRadius = localStorage.getItem('app_border_radius')
 		const savedFontFamily = localStorage.getItem('app_font_family')
-		const savedPalette = localStorage.getItem('app_palette_v1')
 		const savedChatThemeId = localStorage.getItem('chat_theme')
 		const savedMessageThemeId = localStorage.getItem('message_theme')
 		const savedChatBgImage = localStorage.getItem('chat_background_image')
@@ -240,23 +181,8 @@ export default function SettingsPage() {
 			setFontFamily(savedFontFamily)
 			document.documentElement.style.setProperty('--app-font-family', savedFontFamily)
 		}
-		if (savedPalette) {
-			try {
-				const parsed = JSON.parse(savedPalette)
-				if (parsed && typeof parsed === 'object') {
-					const next: AppPalette = {
-						...DEFAULT_PALETTE_DARK,
-						...parsed,
-					}
-					setPalette(next)
-					applyPalette(next)
-				}
-			} catch {
-				// ignore
-			}
-		} else {
-			applyPalette(DEFAULT_PALETTE_DARK)
-		}
+		const savedColorScheme = localStorage.getItem('app_color_scheme')
+		if (savedColorScheme) setColorSchemeId(savedColorScheme)
 		if (savedChatThemeId) setChatThemeId(savedChatThemeId)
 		if (savedMessageThemeId) setMessageThemeId(savedMessageThemeId)
 		if (savedChatBgImage) setChatBackgroundImage(savedChatBgImage)
@@ -288,11 +214,6 @@ export default function SettingsPage() {
 		document.documentElement.style.setProperty('--app-font-family', fontFamily)
 		localStorage.setItem('app_font_family', fontFamily)
 	}, [fontFamily])
-
-	useEffect(() => {
-		applyPalette(palette)
-		localStorage.setItem('app_palette_v1', JSON.stringify(palette))
-	}, [palette])
 
 	useEffect(() => {
 		localStorage.setItem('chat_bg_opacity', String(chatBgOpacity))
@@ -592,7 +513,6 @@ export default function SettingsPage() {
 		].filter(Boolean)
 		return parts.length ? parts.join(' · ') : 'Устройство'
 	}
-
 	const formatBrowser = (value?: string) => {
 		if (!value) return '—'
 		if (value === 'unknown' || value === 'node') return ''
@@ -627,37 +547,87 @@ export default function SettingsPage() {
 		return value
 	}
 
+	if (!user) return null
+
 	return (
-		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white overflow-x-hidden relative pb-20 md:pb-0'>
-			<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
+		<FeedPageShell email={user.email} onLogout={logout}>
+			<div className='max-w-3xl mx-auto space-y-8'>
 				<motion.div
-					initial={{ opacity: 0.2, scale: 0.9 }}
-					animate={{ opacity: 0.4, scale: 1 }}
-					transition={{ duration: 1.2 }}
-					className='absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-indigo-900/20 blur-[120px]'
-				/>
-				<motion.div
-					initial={{ x: 0 }}
-					animate={{ x: [0, -20, 0] }}
-					transition={{ duration: 6, repeat: Infinity }}
-					className='absolute top-[40%] -right-[10%] w-[40%] h-[60%] rounded-full bg-purple-900/20 blur-[120px]'
-				/>
-				<motion.div
-					initial={{ y: 0 }}
-					animate={{ y: [0, 15, 0] }}
-					transition={{ duration: 8, repeat: Infinity }}
-					className='absolute bottom-[10%] left-[20%] w-[30%] h-[30%] rounded-full bg-emerald-900/10 blur-[100px]'
-				/>
-			</div>
+					initial={{ opacity: 0, y: 20 }}
+					animate={{ opacity: 1, y: 0 }}
+					transition={{ duration: 0.4 }}
+					className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
+				>
+					<motion.div
+						initial={{ opacity: 0 }}
+						animate={{ opacity: 1 }}
+						transition={{ duration: 0.8 }}
+						className='absolute -top-24 -right-24 w-64 h-64 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 rounded-full blur-3xl'
+					/>
+					<h1 className='text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400'>
+						Настройки
+					</h1>
+					<p className='text-sm text-gray-400 mt-2'>
+						Управляйте настройками вашего аккаунта.
+					</p>
+				</motion.div>
 
-			<div className='relative z-20'>
-				<Header email={user?.email} onLogout={logout} />
-			</div>
+				<motion.div
+					initial={{ opacity: 0, y: 20 }}
+					animate={{ opacity: 1, y: 0 }}
+					transition={{ duration: 0.4 }}
+					className='relative rounded-2xl bg-white/5 border border-white/10 p-2 overflow-hidden'
+				>
+					<div className='flex gap-1'>
+						<button
+							onClick={() => setActiveTab('system')}
+							className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+								activeTab === 'system'
+									? 'bg-indigo-500/20 text-white'
+									: 'text-gray-400 hover:text-white hover:bg-white/5'
+							}`}
+						>
+							<FiSettings className='w-4 h-4' />
+							Системные
+						</button>
+						<button
+							onClick={() => setActiveTab('mail')}
+							className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+								activeTab === 'mail'
+									? 'bg-indigo-500/20 text-white'
+									: 'text-gray-400 hover:text-white hover:bg-white/5'
+							}`}
+						>
+							<FiMail className='w-4 h-4' />
+							Почта
+						</button>
+						<button
+							onClick={() => setActiveTab('interface')}
+							className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+								activeTab === 'interface'
+									? 'bg-indigo-500/20 text-white'
+									: 'text-gray-400 hover:text-white hover:bg-white/5'
+							}`}
+						>
+							<FiMonitor className='w-4 h-4' />
+							Интерфейс
+						</button>
+						<button
+							onClick={() => setActiveTab('sounds')}
+							className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+								activeTab === 'sounds'
+									? 'bg-indigo-500/20 text-white'
+									: 'text-gray-400 hover:text-white hover:bg-white/5'
+							}`}
+						>
+							<FiMusic className='w-4 h-4' />
+							Звуки
+						</button>
+					</div>
+				</motion.div>
 
-			<div className='relative z-10 mx-auto flex max-w-7xl pt-20'>
-				<Sidebar />
-				<main className='flex-1 px-4 sm:px-6 lg:px-8 pb-20'>
-					<div className='max-w-3xl mx-auto space-y-8'>
+				{activeTab === 'system' && (
+					<>
 						<motion.div
 							initial={{ opacity: 0, y: 20 }}
 							animate={{ opacity: 1, y: 0 }}
@@ -665,149 +635,73 @@ export default function SettingsPage() {
 							className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
 						>
 							<motion.div
-								initial={{ opacity: 0 }}
-								animate={{ opacity: 1 }}
-								transition={{ duration: 0.8 }}
-								className='absolute -top-24 -right-24 w-64 h-64 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 rounded-full blur-3xl'
+								initial={{ rotate: 0 }}
+								animate={{ rotate: [0, 2, -2, 0] }}
+								transition={{ duration: 8, repeat: Infinity }}
+								className='absolute -top-20 -right-16 w-52 h-52 bg-gradient-to-br from-emerald-500/10 to-teal-500/10 rounded-full blur-3xl'
 							/>
-							<h1 className='text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400'>
-								Настройки
-							</h1>
-							<p className='text-sm text-gray-400 mt-2'>
-								Управляйте настройками вашего аккаунта.
-							</p>
+							<div className='flex items-center gap-3 mb-4'>
+								<FiCode className='w-5 h-5 text-emerald-400' />
+								<h2 className='text-xl font-semibold'>Разработчик</h2>
+							</div>
+							<div className='space-y-4'>
+								<div className='flex items-center justify-between'>
+									<div>
+										<p className='text-sm font-medium text-white'>
+											Я разработчик
+										</p>
+										<p className='text-xs text-gray-400'>
+											Доступ к публичной API и ключам
+										</p>
+									</div>
+									<button
+										onClick={toggleDeveloper}
+										className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${developerEnabled ? 'bg-emerald-500/60' : 'bg-white/10'}`}
+									>
+										<span
+											className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${developerEnabled ? 'translate-x-6' : 'translate-x-1'}`}
+										/>
+									</button>
+								</div>
+								{developerEnabled && (
+									<div className='space-y-4'>
+										<div className='flex flex-wrap gap-2'>
+											<button
+												onClick={generateApiKey}
+												disabled={apiKeyLoading}
+												className='rounded-lg bg-white/10 border border-white/20 px-4 py-2 text-sm text-white hover:bg-white/20 transition disabled:opacity-60'
+											>
+												{apiKeyLoading
+													? 'Генерация...'
+													: 'Сгенерировать API ключ'}
+											</button>
+											<button
+												onClick={() => setIsOauthModalOpen(true)}
+												className='rounded-lg bg-indigo-500/20 border border-indigo-500/30 px-4 py-2 text-sm text-indigo-300 hover:bg-indigo-500/30 transition'
+											>
+												OAuth приложения
+											</button>
+										</div>
+										<div className='rounded-lg border border-white/10 bg-black/30 p-3 text-sm text-gray-300 break-all font-mono'>
+											{apiKey || 'Ключ появится здесь после генерации'}
+										</div>
+									</div>
+								)}
+							</div>
 						</motion.div>
 
 						<motion.div
 							initial={{ opacity: 0, y: 20 }}
 							animate={{ opacity: 1, y: 0 }}
 							transition={{ duration: 0.4 }}
-							className='relative rounded-2xl bg-white/5 border border-white/10 p-2 overflow-hidden'
+							className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
 						>
-							<div className='flex gap-1'>
-								<button
-									onClick={() => setActiveTab('system')}
-									className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-										activeTab === 'system'
-											? 'bg-indigo-500/20 text-white'
-											: 'text-gray-400 hover:text-white hover:bg-white/5'
-									}`}
-								>
-									<FiSettings className='w-4 h-4' />
-									Системные
-								</button>
-								{user?.premium && (
-									<button
-										onClick={() => setActiveTab('mail')}
-										className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-											activeTab === 'mail'
-												? 'bg-indigo-500/20 text-white'
-												: 'text-gray-400 hover:text-white hover:bg-white/5'
-										}`}
-									>
-										<FiMail className='w-4 h-4' />
-										Почта
-									</button>
-								)}
-								<button
-									onClick={() => setActiveTab('interface')}
-									className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-										activeTab === 'interface'
-											? 'bg-indigo-500/20 text-white'
-											: 'text-gray-400 hover:text-white hover:bg-white/5'
-									}`}
-								>
-									<FiMonitor className='w-4 h-4' />
-									Интерфейс
-								</button>
-								<button
-									onClick={() => setActiveTab('sounds')}
-									className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-										activeTab === 'sounds'
-											? 'bg-indigo-500/20 text-white'
-											: 'text-gray-400 hover:text-white hover:bg-white/5'
-									}`}
-								>
-									<FiMusic className='w-4 h-4' />
-									Звуки
-								</button>
-							</div>
-						</motion.div>
-
-						{activeTab === 'system' && (
-							<>
-								<motion.div
-									initial={{ opacity: 0, y: 20 }}
-									animate={{ opacity: 1, y: 0 }}
-									transition={{ duration: 0.4 }}
-									className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
-								>
-									<motion.div
-										initial={{ rotate: 0 }}
-										animate={{ rotate: [0, 2, -2, 0] }}
-										transition={{ duration: 8, repeat: Infinity }}
-										className='absolute -top-20 -right-16 w-52 h-52 bg-gradient-to-br from-emerald-500/10 to-teal-500/10 rounded-full blur-3xl'
-									/>
-									<div className='flex items-center gap-3 mb-4'>
-										<FiCode className='w-5 h-5 text-emerald-400' />
-										<h2 className='text-xl font-semibold'>Разработчик</h2>
-									</div>
-									<div className='space-y-4'>
-										<div className='flex items-center justify-between'>
-											<div>
-												<p className='text-sm font-medium text-white'>
-													Я разработчик
-												</p>
-												<p className='text-xs text-gray-400'>
-													Доступ к публичной API и ключам
-												</p>
-											</div>
-											<button
-												onClick={toggleDeveloper}
-												className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${developerEnabled ? 'bg-emerald-500/60' : 'bg-white/10'}`}
-											>
-												<span
-													className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${developerEnabled ? 'translate-x-6' : 'translate-x-1'}`}
-												/>
-											</button>
-										</div>
-										{developerEnabled && (
-											<div className='space-y-2'>
-												<button
-													onClick={generateApiKey}
-													disabled={apiKeyLoading}
-													className='rounded-lg bg-white/10 border border-white/20 px-4 py-2 text-sm text-white hover:bg-white/20 transition disabled:opacity-60'
-												>
-													{apiKeyLoading
-														? 'Генерация...'
-														: 'Сгенерировать API ключ'}
-												</button>
-												<div className='rounded-lg border border-white/10 bg-black/30 p-3 text-sm text-gray-300 break-all'>
-													{apiKey || 'Ключ появится здесь после генерации'}
-												</div>
-												<button
-													onClick={() => setIsOauthModalOpen(true)}
-													className='rounded-lg bg-indigo-500/20 border border-indigo-400/30 px-4 py-2 text-sm text-indigo-200 hover:bg-indigo-500/30 transition'
-												>
-													OAuth приложения и настройки
-												</button>
-											</div>
-										)}
-									</div>
-								</motion.div>
-
-								<motion.div
-									initial={{ opacity: 0, y: 20 }}
-									animate={{ opacity: 1, y: 0 }}
-									transition={{ duration: 0.4 }}
-									className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
-								>
-									<motion.div
-										initial={{ opacity: 0.3 }}
-										animate={{ opacity: [0.3, 0.6, 0.3] }}
-										transition={{ duration: 5, repeat: Infinity }}
-										className='absolute -bottom-24 -left-24 w-64 h-64 bg-gradient-to-tr from-emerald-500/10 to-teal-500/10 rounded-full blur-3xl'
-									/>
+							<motion.div
+								initial={{ opacity: 0.3 }}
+								animate={{ opacity: [0.3, 0.6, 0.3] }}
+								transition={{ duration: 5, repeat: Infinity }}
+								className='absolute -bottom-24 -left-24 w-64 h-64 bg-gradient-to-tr from-emerald-500/10 to-teal-500/10 rounded-full blur-3xl'
+							/>
 									<div className='flex items-center gap-3 mb-4'>
 										<FiShield className='w-5 h-5 text-indigo-400' />
 										<h2 className='text-xl font-semibold'>Безопасность</h2>
@@ -1181,85 +1075,31 @@ export default function SettingsPage() {
 										transition={{ duration: 7, repeat: Infinity }}
 										className='absolute -top-24 -right-24 w-64 h-64 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 rounded-full blur-3xl'
 									/>
-									<div className='flex items-center justify-between gap-3 mb-4'>
-										<div className='flex items-center gap-3'>
-											<HiOutlineColorSwatch className='w-5 h-5 text-indigo-300' />
-											<h2 className='text-xl font-semibold'>Палитра (полная)</h2>
-										</div>
-										<div className='flex items-center gap-2'>
-											<button
-												onClick={() =>
-													setPalette(
-														theme === 'light'
-															? DEFAULT_PALETTE_LIGHT
-															: DEFAULT_PALETTE_DARK,
-													)
-												}
-												className='rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-gray-200 hover:bg-white/10 transition'
-											>
-												Сбросить
-											</button>
-											<button
-												onClick={() =>
-													setPalette({
-														bg: '#000000',
-														fg: '#f8fafc',
-														surface: '#ffffff',
-														border: '#1f2937',
-														muted: '#94a3b8',
-														accent: '#22c55e',
-														accent2: '#06b6d4',
-													})
-												}
-												className='rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200 hover:bg-emerald-500/20 transition'
-											>
-												AMOLED
-											</button>
-										</div>
+									<div className='flex items-center gap-3 mb-4'>
+										<HiOutlineColorSwatch className='w-5 h-5 text-indigo-300' />
+										<h2 className='text-xl font-semibold'>Цветовая схема</h2>
 									</div>
 
-									<div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
-										{(
-											[
-												{ key: 'bg', label: 'Фон приложения' },
-												{ key: 'fg', label: 'Текст' },
-												{ key: 'surface', label: 'Поверхности' },
-												{ key: 'border', label: 'Границы' },
-												{ key: 'muted', label: 'Вторичный текст' },
-												{ key: 'accent', label: 'Акцент' },
-												{ key: 'accent2', label: 'Акцент 2' },
-											] as const
-										).map(item => (
-											<div
-												key={item.key}
-												className='rounded-xl border border-white/10 bg-black/20 p-4'
+									<div className='grid grid-cols-2 sm:grid-cols-4 gap-3'>
+										{COLOR_SCHEMES.map(s => (
+											<button
+												key={s.id}
+												onClick={() => {
+													setColorSchemeId(s.id)
+													saveColorScheme(s.id)
+												}}
+												className={`rounded-2xl p-4 border-2 transition-all ${
+													colorSchemeId === s.id
+														? 'border-[var(--app-accent)] ring-2 ring-[var(--app-accent)]/30'
+														: 'border-white/10 hover:border-white/20'
+												}`}
+												style={{ background: s.palette.bg }}
 											>
-												<div className='flex items-center justify-between gap-3'>
-													<div className='space-y-1'>
-														<p className='text-sm text-white'>{item.label}</p>
-														<p className='text-[11px] text-gray-400'>
-															{(palette as any)[item.key]}
-														</p>
-													</div>
-													<input
-														type='color'
-														value={(palette as any)[item.key]}
-														onChange={e =>
-															setPalette(prev => ({
-																...prev,
-																[item.key]: e.target.value,
-															}))
-														}
-														className='h-10 w-12 rounded-md border border-white/10 bg-black/30 p-1'
-													/>
-												</div>
-											</div>
+												<div className='w-6 h-6 rounded-full mb-2 mx-auto' style={{ background: s.palette.accent }} />
+												<p className='text-sm text-white text-center'>{s.name}</p>
+											</button>
 										))}
 									</div>
-
-									<p className='mt-4 text-xs text-gray-400'>
-										Изменения применяются сразу и сохраняются на устройстве.
-									</p>
 								</motion.div>
 
 								<motion.div
@@ -1712,9 +1552,7 @@ export default function SettingsPage() {
 								</div>
 							</div>
 						</motion.div>
-					</div>
-				</main>
 			</div>
-		</div>
+		</FeedPageShell>
 	)
 }

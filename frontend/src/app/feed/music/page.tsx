@@ -1,7 +1,7 @@
 'use client'
 
 import AppLoader from '@/components/ui/AppLoader'
-import Header from '@/components/social/Header'
+import FeedPageShell from '@/components/social/FeedPageShell'
 import { useAuth } from '@/lib/AuthContext'
 import { useToast } from '@/lib/ToastContext'
 import { audioManager } from '@/lib/services/musicPlayer'
@@ -87,7 +87,7 @@ export default function MusicPage() {
 	const [processingBorrowId, setProcessingBorrowId] = useState<string | null>(null)
 	const [searchQuery, setSearchQuery] = useState('')
 
-	const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
+	const backendUrl = ''
 
 	useEffect(() => {
 		const savedPinned = localStorage.getItem('vmusic_pinned_playlists')
@@ -515,17 +515,8 @@ export default function MusicPage() {
 	if (!isInitialized || isAuthLoading || !user) return <AppLoader fullScreen size='lg' />
 
 	return (
-		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white overflow-x-hidden relative pb-20 md:pb-0'>
-			<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
-				<div className='absolute -top-[30%] -left-[15%] w-[60%] h-[60%] rounded-full bg-emerald-600/8 blur-[150px]' />
-				<div className='absolute bottom-[10%] left-[30%] w-[40%] h-[40%] rounded-full bg-indigo-600/8 blur-[130px]' />
-			</div>
-
-			<div className='relative z-40'>
-				<Header email={user.email} onLogout={() => router.push('/')} />
-			</div>
-
-			<div className='relative z-10 mx-auto flex max-w-[1600px] pt-20 px-4 gap-4 h-[calc(100vh-80px)]'>
+		<FeedPageShell email={user.email} onLogout={() => router.push('/')}>
+			<div className='flex gap-4 h-[calc(100vh-140px)]'>
 				<aside className='hidden md:flex flex-col w-72 flex-shrink-0 bg-gray-900/40 backdrop-blur-md rounded-2xl border border-white/[0.06] overflow-hidden'>
 					<div className='p-4 space-y-4'>
 						<div className='flex items-center justify-between'>
@@ -767,7 +758,7 @@ export default function MusicPage() {
 						</div>
 					</div>
 				</div>
-			)}
-		</div>
+		)}
+	</FeedPageShell>
 	)
 }

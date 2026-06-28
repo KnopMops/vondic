@@ -128,16 +128,16 @@ export default function Composer({ onCreate, mode = 'feed' }: Props) {
 
 	return (
 		<div
-			className={`relative rounded-xl bg-gray-900/40 backdrop-blur-md border p-4 shadow-sm transition-all ${
+			className={`glass-panel p-4 transition-all ${
 				dragOver
-					? 'border-indigo-500/60 ring-2 ring-indigo-500/30 bg-indigo-950/30'
-					: 'border-gray-800/50'
+					? 'ring-2 ring-[var(--app-accent)]'
+					: ''
 			}`}
 			{...dropHandlers}
 		>
 			{dragOver && (
-				<div className='pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-indigo-500/10 backdrop-blur-[1px]'>
-					<p className='text-sm font-medium text-indigo-300'>
+				<div className='pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-[rgb(var(--app-accent-rgb)/0.1)] backdrop-blur-[1px]'>
+					<p className='text-sm font-medium text-[var(--app-accent-2)]'>
 						Отпустите файлы для прикрепления
 					</p>
 				</div>
@@ -155,7 +155,7 @@ export default function Composer({ onCreate, mode = 'feed' }: Props) {
 				value={text}
 				onChange={e => setText(e.target.value)}
 				placeholder={isBlogPost ? 'Пост для блога разработчика...' : 'Что у вас нового?'}
-				className='w-full rounded-xl border border-gray-700/50 bg-gray-800/50 px-4 py-3 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all'
+				className='w-full rounded-2xl border border-[var(--app-glass-border)] bg-[rgb(var(--app-surface-rgb)/0.4)] px-4 py-3 text-sm text-[var(--app-fg)] placeholder-[var(--app-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--app-accent)]/50 transition-all'
 			/>
 
 			{isBlogPost && (
@@ -192,7 +192,7 @@ export default function Composer({ onCreate, mode = 'feed' }: Props) {
 					onClick={submit}
 					type='button'
 					disabled={isUploading}
-					className='rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-500/20 disabled:opacity-60 disabled:cursor-not-allowed'
+					className='btn-accent px-4 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed'
 				>
 					{isUploading ? 'Загрузка...' : 'Опубликовать'}
 				</button>
@@ -201,7 +201,7 @@ export default function Composer({ onCreate, mode = 'feed' }: Props) {
 					onClick={handlePickFiles}
 					type='button'
 					disabled={isUploading}
-					className='rounded-lg bg-gray-800/50 px-4 py-2 text-sm text-gray-400 hover:bg-gray-800 hover:text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed'
+					className='rounded-lg border border-[var(--app-glass-border)] bg-[rgb(var(--app-surface-rgb)/0.3)] px-4 py-2 text-sm text-[var(--app-muted)] hover:text-[var(--app-fg)] hover:bg-[rgb(var(--app-surface-rgb)/0.5)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed'
 				>
 					Прикрепить
 				</button>

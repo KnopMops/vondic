@@ -30,6 +30,14 @@ async function proxyV1(
 			if (ct) headers['Content-Type'] = ct
 		}
 
+		const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+			|| request.headers.get('x-real-ip')
+			|| request.headers.get('x-forwarded-for')
+		if (clientIp) {
+			headers['X-Forwarded-For'] = clientIp
+			headers['X-Real-IP'] = clientIp
+		}
+
 		const response = await fetch(targetUrl.toString(), {
 			method,
 			headers: withVondicProxyHeaders(headers) as Record<string, string>,

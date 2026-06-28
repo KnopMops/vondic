@@ -1,7 +1,6 @@
 'use client'
 
-import Header from '@/components/social/Header'
-import Sidebar from '@/components/social/Sidebar'
+import FeedPageShell from '@/components/social/FeedPageShell'
 import { useAuth } from '@/lib/AuthContext'
 import { User } from '@/lib/types'
 import { userShowsEmail } from '@/lib/userPrivacy'
@@ -254,133 +253,118 @@ export default function FriendsPage() {
 	}
 
 	return (
-		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white overflow-x-hidden relative'>
-			<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
-				<div className='absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-indigo-900/20 blur-[120px]' />
-				<div className='absolute top-[40%] -right-[10%] w-[40%] h-[60%] rounded-full bg-purple-900/20 blur-[120px]' />
-				<div className='absolute bottom-[10%] left-[20%] w-[30%] h-[30%] rounded-full bg-emerald-900/10 blur-[100px]' />
-			</div>
+		<FeedPageShell email={user.email} onLogout={logout}>
+			<div className='max-w-3xl mx-auto space-y-8'>
+				<div className='flex items-center justify-between'>
+					<h1 className='text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400'>
+						Друзья
+					</h1>
 
-			<div className='relative z-20'>
-				<Header email={user.email} onLogout={logout} />
-			</div>
+					<div className='relative'>
+						<Search className='absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500' />
+						<input
+							type='text'
+							placeholder='Найти людей...'
+							value={searchQuery}
+							onChange={e => setSearchQuery(e.target.value)}
+							onKeyDown={e => e.key === 'Enter' && handleSearch()}
+							className='bg-white/5 border border-white/10 rounded-full py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 w-64 transition-all'
+						/>
+					</div>
+				</div>
 
-			<div className='relative z-10 mx-auto flex max-w-7xl pt-20'>
-				<Sidebar />
-				<main className='flex-1 px-4 sm:px-6 lg:px-8 pb-20'>
-					<div className='max-w-3xl mx-auto space-y-8'>
-						<div className='flex items-center justify-between'>
-							<h1 className='text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400'>
-								Друзья
-							</h1>
-
-							<div className='relative'>
-								<Search className='absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500' />
-								<input
-									type='text'
-									placeholder='Найти людей...'
-									value={searchQuery}
-									onChange={e => setSearchQuery(e.target.value)}
-									onKeyDown={e => e.key === 'Enter' && handleSearch()}
-									className='bg-white/5 border border-white/10 rounded-full py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 w-64 transition-all'
-								/>
-							</div>
-						</div>
-
-						
-						<div className='flex p-1 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm'>
-							{[
-								{ id: 'friends', label: 'Мои друзья', count: friends.length },
-								{ id: 'requests', label: 'Заявки', count: requests.length },
-								{ id: 'following', label: 'Подписки', count: following.length },
-								{
-									id: 'followers',
-									label: 'Подписчики',
-									count: followers.length,
-								},
-							].map(tab => (
-								<button
-									key={tab.id}
-									onClick={() => setActiveTab(tab.id as any)}
-									className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium transition-all ${
+				
+				<div className='flex p-1 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm'>
+					{[
+						{ id: 'friends', label: 'Мои друзья', count: friends.length },
+						{ id: 'requests', label: 'Заявки', count: requests.length },
+						{ id: 'following', label: 'Подписки', count: following.length },
+						{
+							id: 'followers',
+							label: 'Подписчики',
+							count: followers.length,
+						},
+					].map(tab => (
+						<button
+							key={tab.id}
+							onClick={() => setActiveTab(tab.id as any)}
+							className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium transition-all ${
+								activeTab === tab.id
+									? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/25'
+									: 'text-gray-400 hover:text-white hover:bg-white/5'
+							}`}
+						>
+							{tab.label}
+							{tab.count > 0 && (
+								<span
+									className={`text-xs px-2 py-0.5 rounded-full ${
 										activeTab === tab.id
-											? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/25'
-											: 'text-gray-400 hover:text-white hover:bg-white/5'
+											? 'bg-white/20 text-white'
+											: 'bg-white/10 text-gray-400'
 									}`}
 								>
-									{tab.label}
-									{tab.count > 0 && (
-										<span
-											className={`text-xs px-2 py-0.5 rounded-full ${
-												activeTab === tab.id
-													? 'bg-white/20 text-white'
-													: 'bg-white/10 text-gray-400'
-											}`}
-										>
-											{tab.count}
-										</span>
-									)}
-								</button>
+									{tab.count}
+								</span>
+							)}
+						</button>
+					))}
+				</div>
+
+				
+				<div className='min-h-[400px]'>
+					{activeTab === 'friends' &&
+						renderUserList(friends, 'У вас пока нет друзей')}
+					{activeTab === 'requests' &&
+						renderUserList(requests, 'Нет входящих заявок', true)}
+					{activeTab === 'following' &&
+						renderUserList(following, 'Вы ни на кого не подписаны')}
+					{activeTab === 'followers' &&
+						renderUserList(followers, 'У вас нет подписчиков')}
+				</div>
+
+				
+				{searchResults.length > 0 && (
+					<motion.div
+						initial={{ opacity: 0, y: 20 }}
+						animate={{ opacity: 1, y: 0 }}
+						className='mt-12 pt-8 border-t border-white/10'
+					>
+						<h2 className='text-xl font-bold mb-6 text-white'>
+							Результаты поиска
+						</h2>
+						<div className='grid grid-cols-1 gap-4'>
+							{searchResults.map(u => (
+								<div
+									key={u.id}
+									className='flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all'
+								>
+									<div className='flex items-center gap-4'>
+										<img
+											src={getAvatarUrl(u.avatar_url)}
+											alt={u.username}
+											className='h-12 w-12 rounded-full'
+										/>
+										<div>
+											<div className='font-semibold text-white'>
+												{u.username}
+												{u.premium && (
+													<span className='ml-1 text-amber-400'>★</span>
+												)}
+											</div>
+										</div>
+									</div>
+									<button
+										onClick={() => handleAddFriend(u.id)}
+										className='p-2 rounded-xl bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 transition-all'
+									>
+										<UserPlus className='w-5 h-5' />
+									</button>
+								</div>
 							))}
 						</div>
-
-						
-						<div className='min-h-[400px]'>
-							{activeTab === 'friends' &&
-								renderUserList(friends, 'У вас пока нет друзей')}
-							{activeTab === 'requests' &&
-								renderUserList(requests, 'Нет входящих заявок', true)}
-							{activeTab === 'following' &&
-								renderUserList(following, 'Вы ни на кого не подписаны')}
-							{activeTab === 'followers' &&
-								renderUserList(followers, 'У вас нет подписчиков')}
-						</div>
-
-						
-						{searchResults.length > 0 && (
-							<motion.div
-								initial={{ opacity: 0, y: 20 }}
-								animate={{ opacity: 1, y: 0 }}
-								className='mt-12 pt-8 border-t border-white/10'
-							>
-								<h2 className='text-xl font-bold mb-6 text-white'>
-									Результаты поиска
-								</h2>
-								<div className='grid grid-cols-1 gap-4'>
-									{searchResults.map(u => (
-										<div
-											key={u.id}
-											className='flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all'
-										>
-											<div className='flex items-center gap-4'>
-												<img
-													src={getAvatarUrl(u.avatar_url)}
-													alt={u.username}
-													className='h-12 w-12 rounded-full'
-												/>
-												<div>
-													<div className='font-semibold text-white'>
-														{u.username}
-														{u.premium && (
-															<span className='ml-1 text-amber-400'>★</span>
-														)}
-													</div>
-												</div>
-											</div>
-											<button
-												onClick={() => handleAddFriend(u.id)}
-												className='p-2 rounded-xl bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 transition-all'
-											>
-												<UserPlus className='w-5 h-5' />
-											</button>
-										</div>
-									))}
-								</div>
-							</motion.div>
-						)}
-					</div>
-				</main>
+					</motion.div>
+				)}
 			</div>
-		</div>
+		</FeedPageShell>
 	)
 }

@@ -4,7 +4,7 @@ import { useAuth } from '@/lib/AuthContext'
 import { setUser } from '@/lib/features/authSlice'
 import { useAppDispatch } from '@/lib/hooks'
 import { User } from '@/lib/types'
-import { getAttachmentUrl, getAvatarUrl } from '@/lib/utils'
+import { getAttachmentUrl, getAvatarUrl, formatMskDateTime } from '@/lib/utils'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
 	LuBan as Ban,
@@ -1195,6 +1195,20 @@ export default function UserProfile({ user, currentUser }: Props) {
 									<span className='ml-2 text-amber-400'>★</span>
 								)}
 							</h1>
+							{(isMe || privacySettings.show_online_status) && (
+								<div className='flex items-center gap-2 mt-1'>
+									<span className={`w-2.5 h-2.5 rounded-full ${user.status?.toLowerCase() === 'online' ? 'bg-green-500' : 'bg-gray-500'}`} />
+									<span className='text-xs text-gray-400'>
+										{user.status?.toLowerCase() === 'online'
+											? 'В сети'
+											: user.last_seen
+												? (isMe || privacySettings.show_last_seen)
+													? `Был(а) ${formatMskDateTime(user.last_seen)}`
+													: 'Не в сети'
+												: 'Не в сети'}
+									</span>
+								</div>
+							)}
 							{(isMe && privacySettings.show_email) ||
 							(!isMe && user.privacy_settings?.show_email === true && user.email) ? (
 								<p className='text-sm text-gray-400'>{user.email}</p>
