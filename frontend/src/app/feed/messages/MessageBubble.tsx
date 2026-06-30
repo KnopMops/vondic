@@ -654,7 +654,7 @@ const MessageBubble = memo(
 							<span
 								className={`absolute bottom-0.5 right-0 text-[11px] leading-none tabular-nums select-none ${
 									msg.isOwn
-										? 'text-[color:var(--app-fg)]/55'
+										? 'text-white/60'
 										: 'text-[color:var(--app-muted)]'
 								}`}
 							>
@@ -919,7 +919,7 @@ const MessageBubble = memo(
 						<div
 							className={`text-[11px] mt-2 flex items-center gap-1 justify-end ${
 								msg.isOwn
-									? 'text-[color:var(--app-fg)]/55'
+									? 'text-white/60'
 									: 'text-[color:var(--app-muted)]'
 							}`}
 						>

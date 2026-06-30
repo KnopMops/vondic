@@ -124,6 +124,7 @@ def create_app(config_class=Config):
     db.init_app(app)
     migrate.init_app(app, db)
     ma.init_app(app)
+
     cache.init_app(app)
 
     mail.init_app(app)
@@ -140,6 +141,17 @@ def create_app(config_class=Config):
             db.create_all()
             db.session.rollback()
             print("[DB] Таблицы проверены/созданы.")
+
+            try:
+                with db.engine.connect() as conn:
+                    conn.execute(db.text(
+                        "ALTER TABLE users ADD COLUMN IF NOT EXISTS bonus_balance FLOAT NOT NULL DEFAULT 0.0"
+                    ))
+                    conn.commit()
+                print("[DB] bonus_balance column ensured.")
+            except Exception as e:
+                print(f"[DB] bonus_balance column check failed (may already exist): {e}")
+                db.session.rollback()
 
             try:
                 from app.models.gift_catalog import GiftCatalog

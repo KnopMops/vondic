@@ -1,0 +1,7 @@
+flask>=3.0
+flask-socketio>=5.3
+flask-cors>=4.0
+eventlet>=0.35
+prometheus-client>=0.20
+python-dotenv>=1.0
+requests>=2.31

@@ -4,7 +4,7 @@ import secrets
 from datetime import datetime
 
 from app.core.config import Config
-from app.core.extensions import db
+from app.core.extensions import cache, db
 from app.models.block import Block
 from app.models.channel import Channel
 from app.models.comment import Comment
@@ -33,6 +33,7 @@ class UserService:
         return User.query.all()
 
     @staticmethod
+    @cache.memoize(timeout=30)
     def get_user_by_id(user_id):
         return User.query.get(user_id)
 
@@ -479,6 +480,9 @@ class UserService:
             for channel in channels:
                 channel.participants = []
                 db.session.delete(channel)
+
+            from app.models.user_session import UserSession
+            UserSession.query.filter_by(user_id=user_id).delete(synchronize_session=False)
 
             db.session.delete(user)
             db.session.commit()

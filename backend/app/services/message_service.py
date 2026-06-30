@@ -1,7 +1,7 @@
 import html
 from datetime import datetime
 
-from app.core.extensions import db
+from app.core.extensions import cache, db
 from app.models.group import Group
 from app.models.message import Message
 from app.models.user import User
@@ -134,6 +134,13 @@ class MessageService:
         try:
             db.session.add(new_message)
             db.session.commit()
+
+            try:
+                cache.delete_memoized(MessageService.get_recent_contacts, user_id)
+                if target_id:
+                    cache.delete_memoized(MessageService.get_recent_contacts, target_id)
+            except Exception:
+                pass
 
             from app.services.ollama_service import AI_USERNAME, OllamaService
 
@@ -332,6 +339,7 @@ class MessageService:
         return False
 
     @staticmethod
+    @cache.memoize(timeout=15)
     def get_recent_contacts(user_id, limit=30):
         try:
             uid = str(user_id)

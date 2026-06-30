@@ -11,6 +11,7 @@ import {
 	persistKeyLocally,
 	restoreKeyFromServer,
 } from '@/lib/e2eKeySync'
+import { isEncProxyEnabled, getEncProxyClient } from '@/lib/encproxy'
 import type { Socket } from 'socket.io-client'
 
 const pairs = new Map<string, CryptoKeyPair>()
@@ -109,12 +110,24 @@ export async function applyE2eKeyExchange(
 
 	if (data.type !== 'answer' && socket) {
 		const myPublic = await crypto.subtle.exportKey('raw', pair.publicKey)
-		socket.emit('e2e_key_exchange', {
-			target_user_id: peerId,
-			public_key: base64FromBytes(new Uint8Array(myPublic)),
-			key_id: keyId,
-			type: 'answer',
-		})
+		if (isEncProxyEnabled()) {
+			const client = getEncProxyClient()
+			if (client.isConnected) {
+				client.emit('encproxy_key_exchange', {
+					target_user_id: peerId,
+					public_key: base64FromBytes(new Uint8Array(myPublic)),
+					key_id: keyId,
+					type: 'answer',
+				})
+			}
+		} else {
+			socket.emit('e2e_key_exchange', {
+				target_user_id: peerId,
+				public_key: base64FromBytes(new Uint8Array(myPublic)),
+				key_id: keyId,
+				type: 'answer',
+			})
+		}
 	}
 
 	const peerRaw = bytesFromBase64(data.public_key)
@@ -160,7 +173,7 @@ export async function requestE2eKeyExchange(
 	currentUserId: string,
 	peerId: string,
 ): Promise<void> {
-	if (!socket || !currentUserId || !peerId) return
+	if (!currentUserId || !peerId) return
 	if (typeof crypto === 'undefined' || !crypto.subtle) return
 
 	const keyId = normalizeE2eKeyId(
@@ -176,10 +189,22 @@ export async function requestE2eKeyExchange(
 		pairs.set(keyId, pair)
 	}
 	const publicKeyRaw = await crypto.subtle.exportKey('raw', pair.publicKey)
-	socket.emit('e2e_key_exchange', {
+	const payload = {
 		target_user_id: peerId,
 		public_key: base64FromBytes(new Uint8Array(publicKeyRaw)),
 		key_id: keyId,
 		type: 'offer',
-	})
+	}
+
+	if (isEncProxyEnabled()) {
+		const client = getEncProxyClient()
+		if (client.isConnected) {
+			client.emit('encproxy_key_exchange', payload)
+			return
+		}
+	}
+
+	if (socket) {
+		socket.emit('e2e_key_exchange', payload)
+	}
 }

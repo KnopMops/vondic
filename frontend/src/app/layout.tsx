@@ -2,6 +2,7 @@ import { GlobalCallUI, WebRTCProvider } from '@/components/calls'
 import DesktopReleaseBanner from '@/components/DesktopReleaseBanner'
 import GlobalPlayer from '@/components/music/GlobalPlayer'
 import NotificationBell from '@/components/notifications/NotificationBell'
+import ErrorBoundary from '@/components/ErrorBoundary'
 import SupportWidget from '@/components/support/SupportWidget'
 import ThemeInit from '@/components/ThemeInit'
 import { UrlFallbackProvider } from '@/components/UrlFallbackProvider'
@@ -63,8 +64,12 @@ export default function RootLayout({
 												{children}
 											<GlobalCallUI />
 											<GlobalPlayer />
-											<NotificationBell />
-											<SupportWidget />
+											<ErrorBoundary>
+												<NotificationBell />
+											</ErrorBoundary>
+											<ErrorBoundary>
+												<SupportWidget />
+											</ErrorBoundary>
 											</WebRTCProvider>
 										</ToastProvider>
 									</SocketProvider>

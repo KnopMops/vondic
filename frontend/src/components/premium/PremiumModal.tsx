@@ -187,7 +187,7 @@ export default function PremiumModal({ isOpen, onClose }: Props) {
 									<p className='text-xs text-gray-400 mt-0.5'>
 										Баланс:{' '}
 										<span className='text-amber-300 font-semibold'>
-											{user?.balance ?? 0}
+											{(user?.balance ?? 0) + ((user as any)?.bonus_balance ?? 0)}
 										</span>{' '}
 										коинов
 									</p>

@@ -1,5 +1,6 @@
 'use client'
 
+import { useAppSelector } from '@/lib/hooks'
 import { useSocket } from '@/lib/SocketContext'
 import { useNotificationStore } from '@/lib/stores/notificationStore'
 import { useToast } from '@/lib/ToastContext'
@@ -14,24 +15,14 @@ export const NotificationBell: React.FC = () => {
 		useNotificationStore()
 	const { socket } = useSocket()
 	const { showToast } = useToast()
+	const { user } = useAppSelector(state => state.auth)
+	const isAdmin = user?.role === 'Admin'
 	const [polling, setPolling] = useState(false)
 	const escSeenRef = React.useRef<Set<string>>(new Set())
 	const userCacheRef = React.useRef<Map<string, string>>(new Map())
 	const audioRef = React.useRef<HTMLAudioElement | null>(null)
 	const [open, setOpen] = useState(false)
 	const pathname = usePathname()
-	
-	
-	const [isAdmin, setIsAdmin] = useState(false)
-	useEffect(() => {
-		const userData = localStorage.getItem('user_data')
-		if (userData) {
-			try {
-				const user = JSON.parse(userData)
-				setIsAdmin(user?.role === 'Admin' || user?.role === 'admin')
-			} catch {}
-		}
-	}, [])
 
 	useEffect(() => {
 		const audioUrl = '/static/message.mp3'

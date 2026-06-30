@@ -264,7 +264,8 @@ PREMIUM_DURATION_DAYS = 30
 def buy_premium_coins(current_user):
     """Оплата Premium внутриигровыми коинами (магазин)."""
     price = PREMIUM_COIN_PRICE
-    if (current_user.balance or 0) < price:
+    spendable = (current_user.balance or 0) + (getattr(current_user, 'bonus_balance', 0) or 0)
+    if spendable < price:
         return jsonify({"error": "Недостаточно коинов"}), 400
     try:
         now = datetime.utcnow()
@@ -276,7 +277,14 @@ def buy_premium_coins(current_user):
         ):
             base = current_user.premium_expired_at
         new_expiry = base + timedelta(days=PREMIUM_DURATION_DAYS)
-        current_user.balance = (current_user.balance or 0) - price
+        remaining = price
+        bal = current_user.balance or 0
+        if bal >= remaining:
+            current_user.balance = bal - remaining
+        else:
+            remaining -= bal
+            current_user.balance = 0
+            current_user.bonus_balance = (getattr(current_user, 'bonus_balance', 0) or 0) - remaining
         current_user.premium = 1
         if not current_user.premium_started_at:
             current_user.premium_started_at = now
@@ -433,10 +441,18 @@ def purchase_gift(current_user):
     if already_owned:
         return jsonify({"error": "У вас уже есть этот подарок"}), 400
     total = price * quantity
-    if (current_user.balance or 0) < total:
+    spendable = (current_user.balance or 0) + (getattr(current_user, 'bonus_balance', 0) or 0)
+    if spendable < total:
         return jsonify({"error": "Недостаточно средств"}), 400
     try:
-        current_user.balance = (current_user.balance or 0) - total
+        remaining = total
+        bal = current_user.balance or 0
+        if bal >= remaining:
+            current_user.balance = bal - remaining
+        else:
+            remaining -= bal
+            current_user.balance = 0
+            current_user.bonus_balance = (getattr(current_user, 'bonus_balance', 0) or 0) - remaining
         gifts = list(existing_gifts)
         gifts.append(
             {
@@ -476,10 +492,18 @@ def purchase_storage(current_user):
     if quantity < 1:
         return jsonify({"error": "Неверные параметры"}), 400
     total_price = STORAGE_TB_PRICE * quantity
-    if (current_user.balance or 0) < total_price:
+    spendable = (current_user.balance or 0) + (getattr(current_user, 'bonus_balance', 0) or 0)
+    if spendable < total_price:
         return jsonify({"error": "Недостаточно средств"}), 400
     try:
-        current_user.balance = (current_user.balance or 0) - total_price
+        remaining = total_price
+        bal = current_user.balance or 0
+        if bal >= remaining:
+            current_user.balance = bal - remaining
+        else:
+            remaining -= bal
+            current_user.balance = 0
+            current_user.bonus_balance = (getattr(current_user, 'bonus_balance', 0) or 0) - remaining
         current_user.storage_bonus = (current_user.storage_bonus or 0) + (
             STORAGE_TB_BYTES * quantity
         )

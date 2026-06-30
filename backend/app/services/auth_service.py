@@ -118,7 +118,7 @@ class AuthService:
         ).first():
             return (None, "Username already taken")
         try:
-            new_user = User(email=email, username=username, is_verified=0)
+            new_user = User(email=email, username=username, is_verified=0, balance=0.0, bonus_balance=100.0)
             new_user.set_password(password)
 
             from flask import request
@@ -129,8 +129,10 @@ class AuthService:
                 else:
                     new_user.registration_ip = request.remote_addr or ""
 
-            raw_access, raw_refresh = AuthService._issue_tokens(new_user, device_type, device_name, ip_address)
             db.session.add(new_user)
+            db.session.flush()
+
+            raw_access, raw_refresh = AuthService._issue_tokens(new_user, device_type, device_name, ip_address)
             db.session.commit()
 
             try:

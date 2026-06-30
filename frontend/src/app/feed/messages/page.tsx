@@ -20,7 +20,7 @@ import {
 	type ChatFolder,
 	type ChatRef
 } from '@/lib/chatFolders'
-import { buildChatListItems } from '@/lib/chatMessageLayout'
+import { buildChatListItems, getMessageTimestamp, formatChatDateLabel, isSameMessageCluster, type MessageGroupPosition } from '@/lib/chatMessageLayout'
 import {
 	canPinChats,
 	sortChatsWithPinned,
@@ -38,6 +38,7 @@ import {
 	resetE2eRestoreCache,
 	restoreKeyFromServer,
 } from '@/lib/e2eKeySync'
+import { getEncProxyClient, isEncProxyEnabled, getEncProxyUrl } from '@/lib/encproxy'
 import { useChannels } from '@/lib/hooks/useChannels'
 import { decryptDmPreviewText, tryDecryptE2EPreviewWithKeyIds, useChat } from '@/lib/hooks/useChat'
 import { useCommunities } from '@/lib/hooks/useCommunities'
@@ -76,6 +77,7 @@ import { getAttachmentUrl, getAvatarUrl, parseAsUtc } from '@/lib/utils'
 import { AnimatePresence, motion } from 'framer-motion'
 import Link from 'next/link'
 import {
+	Fragment,
 	useCallback,
 	useEffect,
 	useLayoutEffect,
@@ -2298,6 +2300,24 @@ export default function MessengerPage() {
 				String(selectedChannel.owner_id) === String(user.id)
 	const accessToken = (user as any)?.access_token as string | undefined
 	const [secretChatEnabled, setSecretChatEnabled] = useState(false)
+	const [isEncProxyActive, setIsEncProxyActive] = useState(false)
+
+	useEffect(() => {
+		setIsEncProxyActive(isEncProxyEnabled())
+		const client = getEncProxyClient()
+		const unsub = client.on('statusChange', (s) => {
+			setIsEncProxyActive(s === 'connected')
+		})
+		const encProxyUrl = getEncProxyUrl()
+		if (encProxyUrl && user?.id && accessToken) {
+			client.connect({
+				serverUrl: encProxyUrl,
+				accessToken,
+				userId: String(user.id),
+			})
+		}
+		return unsub
+	}, [user?.id, accessToken])
 
 	useEffect(() => {
 		if (!selectedFriend?.id || isAiChat || isBotChat || !accessToken) {
@@ -3170,6 +3190,40 @@ export default function MessengerPage() {
 		socket.on('message_sent', handleSentRealtime)
 		socket.on('e2e_key_exchange', handleKeyExchange)
 		window.addEventListener('e2e-keys-updated', handleKeysUpdated)
+
+		if (isEncProxyEnabled()) {
+			const encProxyClient = getEncProxyClient()
+			const unsubMsg = encProxyClient.on('message', (msg) => {
+				const syntheticPayload = {
+					id: `encproxy_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+					sender_id: msg.from_user_id,
+					content: msg.encrypted_content,
+					attachments: msg.encrypted_attachments || '',
+					target_id: myId,
+					timestamp: msg.timestamp || Date.now(),
+					type: msg.message_type || 'text',
+					reply_to: msg.reply_to || null,
+				}
+				handleReceiveRealtime(syntheticPayload)
+			})
+			const unsubKey = encProxyClient.on('keyExchange', (data) => {
+				handleKeyExchange({
+					from_user_id: data.from_user_id,
+					public_key: data.public_key,
+					key_id: data.key_id,
+					type: data.type,
+				})
+			})
+			return () => {
+				socket.off('receive_message', handleReceiveRealtime)
+				socket.off('message_sent', handleSentRealtime)
+				socket.off('e2e_key_exchange', handleKeyExchange)
+				window.removeEventListener('e2e-keys-updated', handleKeysUpdated)
+				unsubMsg()
+				unsubKey()
+			}
+		}
+
 		return () => {
 			socket.off('receive_message', handleReceiveRealtime)
 			socket.off('message_sent', handleSentRealtime)
@@ -5237,7 +5291,16 @@ export default function MessengerPage() {
 		})
 	}
 
-	const chatListItems = buildChatListItems(messagesToDisplay)
+	const sortedMessagesForList = [...messagesToDisplay].sort((a, b) => {
+		const ta = new Date(
+			(a as any).timestamp || (a as any).created_at || 0,
+		).getTime()
+		const tb = new Date(
+			(b as any).timestamp || (b as any).created_at || 0,
+		).getTime()
+		return ta - tb
+	})
+	const chatListItems = buildChatListItems(sortedMessagesForList)
 
 	// Check if all selected messages are owned by current user
 	const allSelectedMessagesAreOwn =
@@ -6547,6 +6610,14 @@ export default function MessengerPage() {
 																	🔐
 																</span>
 															)}
+															{isEncProxyActive && (
+																<span
+																	className='text-[10px] px-1.5 py-0.5 rounded-md bg-violet-500/15 text-violet-400 font-medium'
+																	title='Использует EncProxy'
+																>
+																	Использует EncProxy
+																</span>
+															)}
 															{selectedFriend.premium && (
 																<span className='ml-1 text-amber-400'>★</span>
 															)}
@@ -7521,20 +7592,22 @@ export default function MessengerPage() {
 										</div>
 									)}
 
-								{chatListItems.map((item, index) => {
-									if (item.type === 'date') {
-										return (
-											<ChatDateSeparator
-												key={item.key}
-												label={item.label}
-											/>
-										)
-									}
+								{sortedMessagesForList.map((msg, index) => {
+									const prevMsg = sortedMessagesForList[index - 1]
+									const nextMsg = sortedMessagesForList[index + 1]
+									const groupPosition = ((): MessageGroupPosition => {
+										const a = prevMsg && !isSameMessageCluster(prevMsg, msg)
+										const b = nextMsg && !isSameMessageCluster(msg, nextMsg)
+										if (!prevMsg && !nextMsg) return 'single'
+										if (!prevMsg && nextMsg) return b ? 'single' : 'first'
+										if (prevMsg && !nextMsg) return a ? 'single' : 'last'
+										if (a && b) return 'single'
+										if (a) return 'first'
+										if (b) return 'last'
+										return 'middle'
+									})()
 
-									const msg = item.msg
-									const lastMessageIndex = chatListItems.findLastIndex(
-										i => i.type === 'message',
-									)
+									const lastMessageIndex = sortedMessagesForList.length - 1
 									const isLastMessageItem = index === lastMessageIndex
 									const replyMessage = replyMap[msg.id]
 									const replyPreview = replyMessage
@@ -7543,53 +7616,113 @@ export default function MessengerPage() {
 												text: getMessagePreview(replyMessage),
 											}
 										: undefined
-									return (
-										<div
-											key={item.key}
-											ref={el => {
-												messageRefs.current[msg.id] = el
-												if (isLastMessageItem) messagesEndRef.current = el
-											}}
-											className='w-full px-0.5'
-										>
-											<MessageBubble
-												msg={msg}
-												theme={messageTheme}
-												groupPosition={item.groupPosition}
-												sender={
-													msg.group_id || selectedGroup?.id
-														? groupParticipants[msg.sender_id]
-														: msg.channel_id || isStandaloneChannel
-															? channelParticipants[msg.sender_id]
-															: undefined
+
+									let showDateDivider = false
+									let dateDividerText = ''
+									const ts = getMessageTimestamp(msg)
+									if (ts) {
+										const currentMsgDate = new Date(ts)
+										if (!isNaN(currentMsgDate.getTime())) {
+											if (index === 0) {
+												showDateDivider = true
+											} else if (prevMsg) {
+												const prevTs = getMessageTimestamp(prevMsg)
+												if (prevTs) {
+													const prevMsgDate = new Date(prevTs)
+													if (
+														!isNaN(prevMsgDate.getTime()) &&
+														(currentMsgDate.getDate() !== prevMsgDate.getDate() ||
+															currentMsgDate.getMonth() !== prevMsgDate.getMonth() ||
+															currentMsgDate.getFullYear() !== prevMsgDate.getFullYear())
+													) {
+														showDateDivider = true
+													}
 												}
-												isPinned={pinnedMessageIds.includes(msg.id)}
-												replyPreview={replyPreview}
-												reactions={getReactionsForMessage(msg.id)}
-												onReply={handleReplyMessage}
-												onPin={handlePinMessage}
-												onDelete={handleDeleteMessage}
-												onEdit={handleEditMessage}
-												onReact={handleReactMessage}
-												onForward={handleForwardMessage}
-												isSelectionMode={isSelectionMode}
-												isSelected={selectedMessageIds.has(msg.id)}
-												onToggleSelect={handleToggleMessageSelection}
-												isDeleting={deletingMessageIds.has(msg.id) || deletingAiBotMessageIds.has(msg.id)}
-												currentUserId={user?.id}
-												botAccessToken={accessToken}
-												onBotOutboxItems={appendBotOutboxItems}
-												onBotModal={handleBotModal}
-											onBotGamePlay={game => setActiveBotGame(game)}
-											onSenderClick={(senderId) => {
-												const friend = friends?.find((f: any) => String(f.id) === String(senderId))
-												const groupUser = groupParticipants[senderId]
-												const channelUser = channelParticipants[senderId]
-												const target = friend || groupUser || channelUser
-												if (target) { setSelectedUserForModal(target); setIsUserProfileModalOpen(true) }
-											}}
-										/>
-										</div>
+											}
+										}
+									}
+
+									if (showDateDivider && ts) {
+										const d = new Date(ts)
+										if (!isNaN(d.getTime())) {
+											const now = new Date()
+											const isToday =
+												d.getDate() === now.getDate() &&
+												d.getMonth() === now.getMonth() &&
+												d.getFullYear() === now.getFullYear()
+											const yesterday = new Date(now)
+											yesterday.setDate(yesterday.getDate() - 1)
+											const isYesterday =
+												d.getDate() === yesterday.getDate() &&
+												d.getMonth() === yesterday.getMonth() &&
+												d.getFullYear() === yesterday.getFullYear()
+											if (isToday) {
+												dateDividerText = 'Сегодня'
+											} else if (isYesterday) {
+												dateDividerText = 'Вчера'
+											} else {
+												dateDividerText = d.toLocaleDateString('ru-RU', {
+													day: 'numeric',
+													month: 'long',
+													...(d.getFullYear() !== now.getFullYear()
+														? { year: 'numeric' as const }
+														: {}),
+												})
+											}
+										}
+									}
+
+									return (
+										<Fragment key={msg.id || `msg-${index}`}>
+											{showDateDivider && (
+												<ChatDateSeparator label={dateDividerText} />
+											)}
+											<div
+												ref={el => {
+													messageRefs.current[msg.id] = el
+													if (isLastMessageItem) messagesEndRef.current = el
+												}}
+												className='w-full px-0.5'
+											>
+												<MessageBubble
+													msg={msg}
+													theme={messageTheme}
+													groupPosition={groupPosition}
+													sender={
+														msg.group_id || selectedGroup?.id
+															? groupParticipants[msg.sender_id]
+															: msg.channel_id || isStandaloneChannel
+																? channelParticipants[msg.sender_id]
+																: undefined
+													}
+													isPinned={pinnedMessageIds.includes(msg.id)}
+													replyPreview={replyPreview}
+													reactions={getReactionsForMessage(msg.id)}
+													onReply={handleReplyMessage}
+													onPin={handlePinMessage}
+													onDelete={handleDeleteMessage}
+													onEdit={handleEditMessage}
+													onReact={handleReactMessage}
+													onForward={handleForwardMessage}
+													isSelectionMode={isSelectionMode}
+													isSelected={selectedMessageIds.has(msg.id)}
+													onToggleSelect={handleToggleMessageSelection}
+													isDeleting={deletingMessageIds.has(msg.id) || deletingAiBotMessageIds.has(msg.id)}
+													currentUserId={user?.id}
+													botAccessToken={accessToken}
+													onBotOutboxItems={appendBotOutboxItems}
+													onBotModal={handleBotModal}
+												onBotGamePlay={game => setActiveBotGame(game)}
+												onSenderClick={(senderId) => {
+													const friend = friends?.find((f: any) => String(f.id) === String(senderId))
+													const groupUser = groupParticipants[senderId]
+													const channelUser = channelParticipants[senderId]
+													const target = friend || groupUser || channelUser
+													if (target) { setSelectedUserForModal(target); setIsUserProfileModalOpen(true) }
+												}}
+											/>
+											</div>
+										</Fragment>
 									)
 								})}
 

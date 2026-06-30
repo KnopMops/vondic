@@ -103,7 +103,7 @@ export default function ShopSuccessPage() {
 							</div>
 
 							<div className='mt-4 text-sm text-gray-500 dark:text-gray-400'>
-								Ваш текущий баланс: {user?.balance ?? 0} coins
+								Ваш текущий баланс: {(user?.balance ?? 0) + ((user as any)?.bonus_balance ?? 0)} coins
 							</div>
 						</div>
 					</div>

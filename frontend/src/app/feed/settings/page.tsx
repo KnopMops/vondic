@@ -14,6 +14,7 @@ import { FiBell, FiCode, FiLock, FiMail, FiMonitor, FiMessageCircle, FiMusic, Fi
 import { HiOutlineColorSwatch } from 'react-icons/hi'
 import { useEffect, useState } from 'react'
 import { COLOR_SCHEMES, saveColorScheme, initColorScheme, type ColorSchemeId } from '@/lib/theme/colorSchemes'
+import { getEncProxyUrl, setEncProxyUrl as saveEncProxyUrl, isEncProxyEnabled, getEncProxyClient, type EncProxyStatus } from '@/lib/encproxy'
 
 const CHAT_THEMES = [
 	{ id: 'default', name: 'Стандартный' },
@@ -82,6 +83,9 @@ export default function SettingsPage() {
 	const [ringtoneVolume, setRingtoneVolume] = useState<number>(70)
 	const [messageVolume, setMessageVolume] = useState<number>(50)
 	const [isOauthModalOpen, setIsOauthModalOpen] = useState(false)
+	const [encProxyUrl, setEncProxyUrlState] = useState('')
+	const [encProxyStatus, setEncProxyStatusState] = useState<EncProxyStatus>('disconnected')
+	const [encProxyConnected, setEncProxyConnected] = useState(false)
 
 	const dispatch = useAppDispatch()
 
@@ -233,6 +237,51 @@ export default function SettingsPage() {
 	}, [theme])
 
 	const isYandexAccount = !!user?.email?.endsWith('@yandex.ru')
+
+	useEffect(() => {
+		const saved = getEncProxyUrl()
+		if (saved) setEncProxyUrlState(saved)
+		const client = getEncProxyClient()
+		setEncProxyConnected(client.isConnected)
+		const unsub = client.on('statusChange', (s) => {
+			setEncProxyStatusState(s)
+			setEncProxyConnected(s === 'connected')
+		})
+		return unsub
+	}, [])
+
+	const toggleEncProxy = () => {
+		const current = getEncProxyUrl()
+		if (current) {
+			saveEncProxyUrl(null)
+			setEncProxyUrlState('')
+			setEncProxyConnected(false)
+			const client = getEncProxyClient()
+			client.disconnect()
+			showToast('EncProxy отключён', 'success')
+		} else {
+			const url = encProxyUrl.trim()
+			if (!url) {
+				showToast('Введите URL EncProxy сервера', 'error')
+				return
+			}
+			saveEncProxyUrl(url)
+			showToast('EncProxy подключён', 'success')
+		}
+	}
+
+	const connectEncProxy = () => {
+		const url = encProxyUrl.trim()
+		if (!url) {
+			showToast('Введите URL EncProxy сервера', 'error')
+			return
+		}
+		saveEncProxyUrl(url)
+		const client = getEncProxyClient()
+		const token = localStorage.getItem('access_token') || ''
+		client.connect({ serverUrl: url, accessToken: token, userId: String(user?.id || '') })
+		showToast('Подключение к EncProxy...', 'success')
+	}
 
 	const toggleTwoFA = async () => {
 		if (isYandexAccount) {
@@ -700,32 +749,113 @@ export default function SettingsPage() {
 								initial={{ opacity: 0.3 }}
 								animate={{ opacity: [0.3, 0.6, 0.3] }}
 								transition={{ duration: 5, repeat: Infinity }}
+								className='absolute -bottom-24 -left-24 w-64 h-64 bg-gradient-to-tr from-violet-500/10 to-purple-500/10 rounded-full blur-3xl'
+							/>
+							<div className='flex items-center gap-3 mb-4'>
+								<FiLock className='w-5 h-5 text-violet-400' />
+								<h2 className='text-xl font-semibold'>EncProxy</h2>
+								{encProxyConnected && (
+									<span className='rounded-full bg-emerald-500/20 px-2 py-0.5 text-[11px] text-emerald-300 border border-emerald-500/30'>
+										Использует EncProxy
+									</span>
+								)}
+							</div>
+							<p className='text-xs text-gray-400 mb-4'>
+								Сервер шифрования для end-to-end зашифрованных сообщений. Ключи хранятся только на ваших устройствах.
+							</p>
+							<div className='space-y-3'>
+								<div className='flex items-center justify-between'>
+									<div>
+										<p className='text-sm font-medium text-white'>
+											EncProxy
+										</p>
+										<p className='text-xs text-gray-400'>
+											{encProxyConnected
+												? 'Подключён к серверу шифрования'
+												: getEncProxyUrl()
+													? 'URL сохранён (отключён)'
+													: 'Не настроен'}
+										</p>
+									</div>
+									<button
+										onClick={toggleEncProxy}
+										className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${encProxyConnected ? 'bg-emerald-500/60' : getEncProxyUrl() ? 'bg-violet-500/40' : 'bg-white/10'}`}
+									>
+										<span
+											className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${encProxyConnected ? 'translate-x-6' : getEncProxyUrl() ? 'translate-x-6' : 'translate-x-1'}`}
+										/>
+									</button>
+								</div>
+								<div className='space-y-2'>
+									<p className='text-sm text-white'>EncProxy URL</p>
+									<div className='flex gap-2'>
+										<input
+											value={encProxyUrl}
+											onChange={e => setEncProxyUrlState(e.target.value)}
+											placeholder='wss://encproxy.example.com'
+											className='flex-1 rounded-lg border border-white/10 bg-black/30 p-2 text-sm text-white placeholder:text-gray-500 font-mono'
+										/>
+										<button
+											onClick={connectEncProxy}
+											disabled={!encProxyUrl.trim()}
+											className='rounded-lg bg-violet-500/20 border border-violet-500/30 px-4 py-2 text-sm text-violet-300 hover:bg-violet-500/30 transition disabled:opacity-40'
+										>
+											Подключить
+										</button>
+									</div>
+								</div>
+								{encProxyConnected && (
+									<div className='rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3'>
+										<div className='flex items-center gap-2'>
+											<div className='w-2 h-2 rounded-full bg-emerald-400 animate-pulse' />
+											<span className='text-sm text-emerald-300'>
+												Использует EncProxy
+											</span>
+										</div>
+										<p className='text-xs text-gray-400 mt-1'>
+											Сообщения шифруются на клиенте и передаются через EncProxy
+										</p>
+									</div>
+								)}
+							</div>
+						</motion.div>
+
+						<motion.div
+							initial={{ opacity: 0, y: 20 }}
+							animate={{ opacity: 1, y: 0 }}
+							transition={{ duration: 0.4 }}
+							className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
+						>
+							<motion.div
+								initial={{ opacity: 0.3 }}
+								animate={{ opacity: [0.3, 0.6, 0.3] }}
+								transition={{ duration: 5, repeat: Infinity }}
 								className='absolute -bottom-24 -left-24 w-64 h-64 bg-gradient-to-tr from-emerald-500/10 to-teal-500/10 rounded-full blur-3xl'
 							/>
-									<div className='flex items-center gap-3 mb-4'>
-										<FiShield className='w-5 h-5 text-indigo-400' />
-										<h2 className='text-xl font-semibold'>Безопасность</h2>
+							<div className='flex items-center gap-3 mb-4'>
+								<FiShield className='w-5 h-5 text-indigo-400' />
+								<h2 className='text-xl font-semibold'>Безопасность</h2>
+							</div>
+							<div className='space-y-4'>
+								<div className='flex items-center justify-between'>
+									<div>
+										<p className='text-sm font-medium text-white'>
+											Двухфакторная аутентификация
+										</p>
+										<p className='text-xs text-gray-400'>
+											Дополнительная защита аккаунта
+										</p>
 									</div>
-									<div className='space-y-4'>
-										<div className='flex items-center justify-between'>
-											<div>
-												<p className='text-sm font-medium text-white'>
-													Двухфакторная аутентификация
-												</p>
-												<p className='text-xs text-gray-400'>
-													Дополнительная защита аккаунта
-												</p>
-											</div>
-											<button
-												onClick={toggleTwoFA}
-												disabled={isYandexAccount}
-												className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${twoFAEnabled ? 'bg-emerald-500/60' : 'bg-white/10'} ${isYandexAccount ? 'opacity-50 cursor-not-allowed' : ''}`}
-											>
-												<span
-													className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${twoFAEnabled ? 'translate-x-7' : 'translate-x-1'}`}
-												/>
-											</button>
-										</div>
+									<button
+										onClick={toggleTwoFA}
+										disabled={isYandexAccount}
+										className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${twoFAEnabled ? 'bg-emerald-500/60' : 'bg-white/10'} ${isYandexAccount ? 'opacity-50 cursor-not-allowed' : ''}`}
+									>
+										<span
+											className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${twoFAEnabled ? 'translate-x-7' : 'translate-x-1'}`}
+										/>
+									</button>
+								</div>
 										{twoFAEnabled && (
 											<div className='mt-2 rounded-xl border border-white/10 bg-white/5 p-4'>
 												{isYandexAccount && (

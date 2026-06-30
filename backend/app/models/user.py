@@ -28,6 +28,7 @@ class User(db.Model):
     status = db.Column(TEXT, default="offline")
     last_seen = db.Column(TIMESTAMP, default=None)
     balance = db.Column(Float, default=0.0)
+    bonus_balance = db.Column(Float, default=0.0)
     premium = db.Column(INTEGER, default=0)
     premium_started_at = db.Column(TIMESTAMP, default=None)
     premium_expired_at = db.Column(TIMESTAMP, default=None)
@@ -98,6 +99,7 @@ class User(db.Model):
             "role": self.role,
             "status": self.status,
             "balance": self.balance,
+            "bonus_balance": getattr(self, 'bonus_balance', 0.0) or 0.0,
             "gifts": self.gifts or [],
             "premium": bool(self.premium),
             "premium_started_at": self.premium_started_at.isoformat()

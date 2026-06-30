@@ -511,11 +511,10 @@ export default function ShopPage() {
 								<div className='flex-1'>
 									<div className='text-sm text-gray-400'>Ваш баланс</div>
 									<div className='text-lg font-semibold'>
-										{typeof balanceOverride === 'number'
+										{(typeof balanceOverride === 'number'
 											? balanceOverride
-											: typeof user?.balance === 'number'
-												? user.balance
-												: 0}{' '}
+											: (typeof user?.balance === 'number' ? user.balance : 0)) +
+											((user as any)?.bonus_balance ?? 0)}{' '}
 										Вондик Coins
 									</div>
 								</div>

@@ -16,6 +16,7 @@ import {
 	resetServerKeyRestoreResults,
 } from '@/lib/e2eKeySync'
 import { e2ePairs } from '@/lib/e2eGlobalExchange'
+import { getEncProxyClient, isEncProxyEnabled } from '@/lib/encproxy'
 
 const hasCryptoSubtle = () =>
 	typeof crypto !== 'undefined' && typeof crypto.subtle !== 'undefined'
@@ -1515,6 +1516,21 @@ export const useChat = (
 					normalizedAttachments.length > 0
 						? mtEncrypt(JSON.stringify(normalizedAttachments), key)
 						: undefined
+
+				if (isEncProxyEnabled()) {
+					const encProxyClient = getEncProxyClient()
+					if (encProxyClient.isConnected) {
+						encProxyClient.sendEncrypted(
+							targetUserId,
+							encryptedContent,
+							encryptedAttachments || '',
+							type,
+							replyToId ? { reply_to: replyToId } : undefined,
+						)
+						return
+					}
+				}
+
 				const messagePayload: any = {
 					content: encryptedContent,
 					type: type,
