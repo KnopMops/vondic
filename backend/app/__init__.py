@@ -366,101 +366,17 @@ def create_app(config_class=Config):
         return response
 
     from flask import send_from_directory, request, jsonify, Response
-    import requests as http_requests
-
-    STATIC_NGINX_URL = os.getenv('STATIC_NGINX_URL', 'http://static-nginx:80')
-
-    def _proxy_upstream(
-        upstream_url: str,
-        *,
-        fallback_folder: str,
-        fallback_name: str,
-        as_attachment: bool = False,
-        download_name: str | None = None,
-    ):
-        try:
-            if request.query_string:
-                qs = request.query_string.decode('utf-8')
-                sep = '&' if '?' in upstream_url else '?'
-                upstream_url = f"{upstream_url}{sep}{qs}"
-
-            resp = http_requests.request(
-                method=request.method,
-                url=upstream_url,
-                headers={
-                    key: value for key,
-                    value in request.headers if key.lower() != 'host'},
-                data=request.get_data(),
-                cookies=request.cookies,
-                allow_redirects=False,
-                timeout=30)
-
-            excluded_headers = {
-                'content-encoding',
-                'content-length',
-                'transfer-encoding',
-                'connection'}
-            headers = [
-                (name, value)
-                for name, value in resp.raw.headers.items()
-                if name.lower() not in excluded_headers
-            ]
-            if as_attachment and download_name:
-                headers.append(
-                    (
-                        'Content-Disposition',
-                        f'attachment; filename="{download_name}"',
-                    )
-                )
-            return Response(resp.content, resp.status_code, headers)
-        except http_requests.exceptions.ConnectionError:
-            return send_from_directory(
-                fallback_folder,
-                fallback_name,
-                as_attachment=as_attachment,
-                download_name=download_name,
-            )
-        except http_requests.exceptions.Timeout:
-            return api_error("STATIC_TIMEOUT", 504)
-        except Exception as e:
-            print(f"Error proxying to static nginx: {e}")
-            return send_from_directory(
-                fallback_folder,
-                fallback_name,
-                as_attachment=as_attachment,
-                download_name=download_name,
-            )
 
     @app.route('/static/<path:filename>')
     def serve_static(filename):
-        if filename.startswith('uploads/'):
-            static_url = f"{STATIC_NGINX_URL}/{filename}"
-        else:
-            static_url = f"{STATIC_NGINX_URL}/static/{filename}"
         static_folder = os.path.join(os.path.dirname(__file__), 'static')
-        return _proxy_upstream(
-            static_url,
-            fallback_folder=static_folder,
-            fallback_name=filename,
-        )
+        return send_from_directory(static_folder, filename)
 
     @app.route('/uploads/<path:filename>')
     def serve_uploads(filename):
-        as_attachment = (
-            request.args.get('download') in ('1', 'true', 'yes')
-            or request.headers.get('X-Download') == '1'
-        )
-        download_name = request.args.get(
-            'filename') or filename.rsplit('/', 1)[-1]
-        uploads_url = f"{STATIC_NGINX_URL}/uploads/{filename}"
-        uploads_folder = os.getenv('UPLOADS_DIR', '/app/uploads')
-        return _proxy_upstream(
-            uploads_url,
-            fallback_folder=uploads_folder,
-            fallback_name=filename,
-            as_attachment=as_attachment,
-            download_name=download_name if as_attachment else None,
-        )
+        from flask import redirect
+        s3_public_url = os.getenv("S3_PUBLIC_URL", "https://s3.vondic.ru")
+        return redirect(f"{s3_public_url}/uploads/{filename}", code=301)
 
     @app.route("/metrics")
     def metrics():

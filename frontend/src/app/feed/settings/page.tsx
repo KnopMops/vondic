@@ -1137,7 +1137,7 @@ export default function SettingsPage() {
 											<FiMail className='h-7 w-7 text-indigo-400' />
 										</div>
 										<h2 className='text-lg font-semibold mb-2'>
-											Mail API доступно только с Vondic Premium
+											Mail API доступно только с Вондик Premium
 										</h2>
 										<p className='text-sm text-gray-400 mb-5'>
 											Оформите подписку, чтобы настраивать права доступа к почтовому API.

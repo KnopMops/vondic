@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Logo from '@/components/Logo'
 import { useEffect, useState } from 'react'
 import {
 	FiArrowLeft as ArrowLeft,
@@ -36,11 +37,9 @@ export default function DesktopDownloadPage() {
 
 			<nav className='relative z-10 mx-auto max-w-3xl px-6 py-5 flex items-center justify-between'>
 				<Link href='/' className='flex items-center gap-2.5'>
-					<div className='w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20'>
-						<span className='text-white font-bold text-sm'>V</span>
-					</div>
+					<Logo />
 					<span className='text-lg font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent'>
-						Vondic
+						Вондик
 					</span>
 				</Link>
 				<div className='flex items-center gap-3'>
@@ -81,7 +80,7 @@ export default function DesktopDownloadPage() {
 							</span>
 						</div>
 
-						<h1 className='mt-6 text-2xl md:text-3xl font-bold'>Vondic Desktop</h1>
+						<h1 className='mt-6 text-2xl md:text-3xl font-bold'>Вондик Desktop</h1>
 						<p className='mt-3 text-gray-400 leading-relaxed'>
 							Нативное приложение для компьютера. Скачивание зависит от платформы —
 							настройки обновляются администратором.

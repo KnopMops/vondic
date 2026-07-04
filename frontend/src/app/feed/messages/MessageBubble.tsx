@@ -646,6 +646,7 @@ const MessageBubble = memo(
 								/>
 							)}
 						</>
+<<<<<<< Updated upstream
 					) : (
 						<div className='relative min-w-[52px] pr-14 pb-0.5'>
 							<div className='space-y-1.5'>
@@ -670,6 +671,8 @@ const MessageBubble = memo(
 									<span className='inline-flex align-middle ml-1'>
 										{msg.is_read ? (
 											<CheckCheck className='h-3.5 w-3.5 text-indigo-300/80' />
+=======
+>>>>>>> Stashed changes
 					) : storyReplyData ? (
 						<div className='space-y-2'>
 							<div className='relative w-[80px] h-[80px] rounded-xl overflow-hidden bg-black/30 border border-white/10'>
@@ -700,13 +703,37 @@ const MessageBubble = memo(
 									</div>
 								</div>
 							)}
-						</div>
-					) : (
+							<div
+								className={`text-[11px] mt-1 flex items-center gap-1 justify-end ${
+									msg.isOwn
+										? 'text-white/60'
+										: 'text-[color:var(--app-muted)]'
+								}`}
+							>
+								{formatMskTime(
+									(msg as Message & { created_at?: string }).timestamp ||
+										(msg as Message & { created_at?: string }).created_at ||
+										'',
+								)}
+								{msg.is_edited && (
+									<span className='ml-1 text-[10px] opacity-60'>ред.</span>
+								)}
+								{msg.isOwn && (
+									<span className='inline-flex align-middle ml-1'>
+										{msg.is_read ? (
+											<CheckCheck className='h-3.5 w-3.5 text-indigo-300/80' />
+										) : (
 											<Check className='h-3.5 w-3.5 text-[color:var(--app-fg)]/45' />
 										)}
 									</span>
 								)}
-							</span>
+							</div>
+						</div>
+					) : (
+						<div className='relative min-w-[52px]'>
+							<div className='space-y-1.5'>
+								{renderFormattedContent(displayContent)}
+							</div>
 						</div>
 					)}
 					{attachments.length > 0 && (
@@ -910,6 +937,7 @@ const MessageBubble = memo(
 							))}
 						</div>
 					)}
+<<<<<<< Updated upstream
 					{(msg.type === 'voice' ||
 						msg.type === 'video_note' ||
 						stickerPayload ||
@@ -942,6 +970,33 @@ const MessageBubble = memo(
 							)}
 						</div>
 					)}
+=======
+					<div
+						className={`text-[11px] mt-1 flex items-center gap-1 justify-end ${
+							msg.isOwn
+								? 'text-white/60'
+								: 'text-[color:var(--app-muted)]'
+						}`}
+					>
+						{formatMskTime(
+							(msg as Message & { created_at?: string }).timestamp ||
+								(msg as Message & { created_at?: string }).created_at ||
+								'',
+						)}
+						{msg.is_edited && (
+							<span className='ml-1 text-[10px] opacity-60'>ред.</span>
+						)}
+						{msg.isOwn && (
+							<span className='inline-flex'>
+								{msg.is_read ? (
+									<CheckCheck className='h-3.5 w-3.5 text-indigo-300/80' />
+								) : (
+									<Check className='h-3.5 w-3.5 text-[color:var(--app-fg)]/45' />
+								)}
+							</span>
+						)}
+					</div>
+>>>>>>> Stashed changes
 				</div>
 			</motion.div>
 		)

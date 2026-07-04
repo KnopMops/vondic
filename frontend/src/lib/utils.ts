@@ -14,8 +14,12 @@ export const formatBytes = (bytes: number, decimals = 2) => {
 
 export const getAttachmentUrl = (url: string | undefined | null) => {
 	if (!url) return ''
-	if (url.startsWith('http')) return url
-	// Same-origin paths (/uploads, /static) — nginx on vondic.ru отдаёт с backend/static-nginx
+	if (url.startsWith('/uploads/')) {
+		return `https://s3.vondic.ru${url}`
+	}
+	if (url.startsWith('http')) {
+		return url.replace(/https?:\/\/[^/]+\/uploads\//, 'https://s3.vondic.ru/uploads/')
+	}
 	return url.startsWith('/') ? url : `/${url}`
 }
 

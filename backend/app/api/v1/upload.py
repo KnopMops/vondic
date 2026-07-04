@@ -4,8 +4,10 @@ import io
 import logging
 import os
 import time
+import uuid
 
-import requests as http_requests
+import boto3
+from botocore.config import Config
 
 logger = logging.getLogger(__name__)
 from app.utils.decorators import token_required
@@ -22,9 +24,23 @@ LIMIT_PREMIUM = 100 * 1024 * 1024
 THROTTLE_SPEED_BPS = 1_750_000
 
 
-STATIC_UPLOAD_URL = os.getenv(
-    "STATIC_UPLOAD_URL",
-    "http://static-nginx:80/api/upload")
+def _get_s3_client():
+    return boto3.client(
+        "s3",
+        endpoint_url=os.getenv("S3_ENDPOINT", "http://minio:9000"),
+        aws_access_key_id=os.getenv("S3_ACCESS_KEY", "vondic"),
+        aws_secret_access_key=os.getenv("S3_SECRET_KEY", "Dim4566212Len"),
+        region_name=os.getenv("S3_REGION", "us-east-1"),
+        config=Config(signature_version="s3v4"),
+    )
+
+
+def _get_s3_bucket():
+    return os.getenv("S3_BUCKET", "uploads")
+
+
+def _get_s3_public_url():
+    return os.getenv("S3_PUBLIC_URL", "https://s3.vondic.ru")
 
 
 def _get_extension(filename: str) -> str | None:
@@ -38,7 +54,6 @@ def _decode_base64(data: str, max_size: int = None) -> bytes:
         raise ValueError("Invalid base64 payload")
     if "," in data and data.strip().lower().startswith("data:"):
         data = data.split(",", 1)[1]
-    # Strip any whitespace/newlines that React Native may add
     data = data.strip().replace("\n", "").replace("\r", "").replace(" ", "")
     try:
         decoded = base64.b64decode(data, validate=False)
@@ -51,28 +66,23 @@ def _decode_base64(data: str, max_size: int = None) -> bytes:
 
 
 def _save_upload(file_bytes: bytes, ext: str, subdir: str) -> str:
-    """Upload file to static-nginx upload service."""
-    filename = f"file.{ext}"
+    """Upload file to S3."""
+    filename = f"{uuid.uuid4()}.{ext}"
+    key = f"{subdir}/{filename}"
 
     try:
-        files = {
-            "file": (
-                filename,
-                io.BytesIO(file_bytes),
-                "application/octet-stream")}
-        data = {"filename": filename}
-
-        resp = http_requests.post(
-            f"{STATIC_UPLOAD_URL}/{subdir}",
-            files=files,
-            data=data,
-            timeout=30
+        s3 = _get_s3_client()
+        bucket = _get_s3_bucket()
+        s3.put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=file_bytes,
+            ContentType="application/octet-stream",
         )
-        resp.raise_for_status()
-        result = resp.json()
-        return result["url"]
-    except http_requests.exceptions.RequestException as e:
-        raise RuntimeError(f"Failed to upload file to static service: {e}")
+        public_url = _get_s3_public_url()
+        return f"{public_url}/uploads/{key}"
+    except Exception as e:
+        raise RuntimeError(f"Failed to upload file to S3: {e}")
 
 
 @upload_bp.route("/voice", methods=["POST"])

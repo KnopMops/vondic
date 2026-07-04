@@ -164,7 +164,15 @@ class AuthService:
         if "." in token:
             lookup, _, _sec = token.partition(".")
             if lookup and _sec and "." not in _sec:
-                session = UserSession.query.filter_by(access_token_lookup=lookup).first()
+                try:
+                    session = UserSession.query.filter_by(access_token_lookup=lookup).first()
+                except Exception:
+                    db.session.rollback()
+                    try:
+                        session = UserSession.query.filter_by(access_token_lookup=lookup).first()
+                    except Exception:
+                        db.session.rollback()
+                        session = None
                 if session and session.access_token_hash and check_password_hash(session.access_token_hash, token):
                     if session.is_expired():
                         db.session.delete(session)
@@ -173,10 +181,21 @@ class AuthService:
                     session.last_active = datetime.utcnow()
                     if session.expires_at and session.device_type == "web":
                         session.expires_at = datetime.utcnow() + UserSession.WEB_SESSION_TTL
-                    db.session.commit()
-                    user = User.query.get(session.user_id)
+                    try:
+                        db.session.commit()
+                    except Exception:
+                        db.session.rollback()
+                    try:
+                        user = User.query.get(session.user_id)
+                    except Exception:
+                        db.session.rollback()
+                        user = None
                 if not user:
-                    cand = User.query.filter_by(access_token_lookup=lookup).first()
+                    try:
+                        cand = User.query.filter_by(access_token_lookup=lookup).first()
+                    except Exception:
+                        db.session.rollback()
+                        cand = None
                     if (
                         cand
                         and cand.access_token
@@ -186,9 +205,17 @@ class AuthService:
         if not user:
             token_hash = AuthService._hash_token(token)
             if token_hash:
-                user = User.query.filter_by(access_token=token_hash).first()
+                try:
+                    user = User.query.filter_by(access_token=token_hash).first()
+                except Exception:
+                    db.session.rollback()
+                    user = None
         if not user:
-            legacy = User.query.filter_by(access_token=token).first()
+            try:
+                legacy = User.query.filter_by(access_token=token).first()
+            except Exception:
+                db.session.rollback()
+                legacy = None
             if legacy:
                 try:
                     legacy.access_token = generate_password_hash(token)

@@ -8,6 +8,10 @@ const FEED_ROUTE = '/feed'
 export async function proxy(req: NextRequest) {
 	const { pathname } = req.nextUrl
 
+	if (pathname.startsWith('/video')) {
+		return new NextResponse('Not Found', { status: 404 })
+	}
+
 	if (
 		pathname.startsWith('/_next') ||
 		pathname.startsWith('/api') ||

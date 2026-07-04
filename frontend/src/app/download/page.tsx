@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import Logo from '@/components/Logo'
 import {
 	FiGithub as Github,
 	FiMonitor as Monitor,
@@ -16,11 +17,9 @@ export default function DownloadPage() {
 
 			<nav className='relative z-10 mx-auto max-w-5xl px-6 py-5 flex items-center justify-between'>
 				<Link href='/' className='flex items-center gap-2.5 group'>
-					<div className='w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20'>
-						<span className='text-white font-bold text-sm'>V</span>
-					</div>
+					<Logo />
 					<span className='text-lg font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent'>
-						Vondic
+						Вондик
 					</span>
 				</Link>
 				<div className='flex items-center gap-3'>

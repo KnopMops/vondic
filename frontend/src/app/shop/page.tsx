@@ -542,7 +542,7 @@ export default function ShopPage() {
 									</div>
 									<div className='flex-1'>
 										<div className='text-lg font-semibold text-white'>
-											Vondic Premium
+											Вондик Premium
 										</div>
 										<p className='mt-1 text-sm text-gray-400'>
 											Подписка на 30 дней за{' '}

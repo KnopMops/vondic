@@ -158,6 +158,13 @@ export default function Home() {
 								У меня есть аккаунт
 							</Link>
 						)}
+
+						<Link
+							href='/about'
+							className='w-full sm:w-auto px-8 py-4 text-lg font-semibold text-white transition-all bg-gray-800/50 backdrop-blur-sm rounded-full hover:bg-gray-800 border border-gray-700 hover:border-gray-600 flex items-center justify-center'
+						>
+							О нас
+						</Link>
 					</div>
 
 					<div className='flex flex-col sm:flex-row items-center justify-center gap-3 pt-6'>

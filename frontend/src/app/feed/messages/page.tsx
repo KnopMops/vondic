@@ -320,6 +320,50 @@ const getLastMessageTime = (friendId: string, messages: Message[]): string => {
 	}
 }
 
+const getGroupLastMessageTime = (groupId: string, messages: Message[]): string => {
+	const groupMessages = (messages || []).filter(
+		m => m && m.group_id === groupId,
+	)
+	if (groupMessages.length === 0) return ''
+	const sorted = [...groupMessages].sort((a, b) => {
+		const ta = new Date(a.timestamp || 0).getTime()
+		const tb = new Date(b.timestamp || 0).getTime()
+		return ta - tb
+	})
+	const last = sorted[sorted.length - 1]
+	if (!last?.timestamp) return ''
+	try {
+		return new Date(last.timestamp).toLocaleTimeString('ru-RU', {
+			hour: '2-digit',
+			minute: '2-digit',
+		})
+	} catch {
+		return ''
+	}
+}
+
+const getChannelLastMessageTime = (channelId: string, messages: Message[]): string => {
+	const channelMessages = (messages || []).filter(
+		m => m && m.channel_id === channelId,
+	)
+	if (channelMessages.length === 0) return ''
+	const sorted = [...channelMessages].sort((a, b) => {
+		const ta = new Date(a.timestamp || 0).getTime()
+		const tb = new Date(b.timestamp || 0).getTime()
+		return ta - tb
+	})
+	const last = sorted[sorted.length - 1]
+	if (!last?.timestamp) return ''
+	try {
+		return new Date(last.timestamp).toLocaleTimeString('ru-RU', {
+			hour: '2-digit',
+			minute: '2-digit',
+		})
+	} catch {
+		return ''
+	}
+}
+
 // --- Icons (react-icons) ---
 const ArrowLeftIcon = ArrowLeft
 const SendIcon = Send
@@ -5361,7 +5405,7 @@ export default function MessengerPage() {
 							</Link>
 							<h2 className='text-xl font-bold tracking-tight text-[var(--app-fg)] flex items-center gap-2'>
 								<span className='bg-gradient-to-r from-[#2dd4a8] to-[#22b893] bg-clip-text text-transparent transition-all duration-500'>
-									Vondic
+									Вондик
 								</span>
 							</h2>
 						</div>
@@ -5848,17 +5892,24 @@ export default function MessengerPage() {
 														>
 															{group.name}
 														</span>
-														<button
-															type='button'
-															onClick={e => {
-																e.stopPropagation()
-																initiateGroupCall(group.id)
-															}}
-															className='p-1.5 rounded-full text-emerald-400 hover:text-white hover:bg-emerald-500/20 transition-colors'
-															title='Голосовой звонок в группе'
-														>
-															<PhoneIcon className='w-4 h-4' />
-														</button>
+														<div className='flex items-center gap-1.5 shrink-0'>
+															{getGroupLastMessageTime(group.id, messages) && (
+																<span className='text-[10px] text-gray-500'>
+																	{getGroupLastMessageTime(group.id, messages)}
+																</span>
+															)}
+															<button
+																type='button'
+																onClick={e => {
+																	e.stopPropagation()
+																	initiateGroupCall(group.id)
+																}}
+																className='p-1.5 rounded-full text-emerald-400 hover:text-white hover:bg-emerald-500/20 transition-colors'
+																title='Голосовой звонок в группе'
+															>
+																<PhoneIcon className='w-4 h-4' />
+															</button>
+														</div>
 													</div>
 												</div>
 											</div>
@@ -5991,15 +6042,22 @@ export default function MessengerPage() {
 																	</div>
 																)}
 																<div className='flex flex-col flex-1 min-w-0'>
-																	<span
-																		className={`font-semibold truncate transition-colors duration-300 ${
-																			selectedChannel?.id === channel.id
-																				? currentBackground.accentColor
-																				: 'text-gray-200 group-hover:text-white'
-																		}`}
-																	>
-																		{channel.name}
-																	</span>
+																	<div className='flex justify-between items-center gap-2'>
+																		<span
+																			className={`font-semibold truncate transition-colors duration-300 ${
+																				selectedChannel?.id === channel.id
+																					? currentBackground.accentColor
+																					: 'text-gray-200 group-hover:text-white'
+																			}`}
+																		>
+																			{channel.name}
+																		</span>
+																		{getChannelLastMessageTime(channel.id, messages) && (
+																			<span className='text-[10px] text-gray-500 shrink-0'>
+																				{getChannelLastMessageTime(channel.id, messages)}
+																			</span>
+																		)}
+																	</div>
 																	<span className='text-xs text-gray-500 truncate'>
 																		Публичный канал
 																	</span>
@@ -6199,6 +6257,11 @@ export default function MessengerPage() {
 																<span className='font-semibold truncate text-gray-200 group-hover:text-white transition-colors'>
 																	{ch.name}
 																</span>
+																{getChannelLastMessageTime(ch.id, messages) && (
+																	<span className='text-[10px] text-gray-500 shrink-0 ml-2'>
+																		{getChannelLastMessageTime(ch.id, messages)}
+																	</span>
+																)}
 															</div>
 															<span className='text-xs text-gray-500 truncate group-hover:text-gray-400 transition-colors'>
 																Текстовый
@@ -8096,7 +8159,7 @@ export default function MessengerPage() {
 							<div className='text-center space-y-2 max-w-sm z-10'>
 								<h3 className='text-2xl font-bold text-[var(--app-fg)]'>
 									<span className='bg-gradient-to-r from-[#2dd4a8] to-[#22b893] bg-clip-text text-transparent'>
-										Vondic
+										Вондик
 									</span>{' '}
 									Мессенджер
 								</h3>

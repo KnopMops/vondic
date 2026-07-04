@@ -28,3 +28,4 @@ user-agents
 pika
 uvicorn
 prometheus-client
+boto3
