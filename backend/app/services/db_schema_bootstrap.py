@@ -57,6 +57,12 @@ def ensure_users_extended_columns(engine) -> None:
             run("ALTER TABLE users ADD COLUMN IF NOT EXISTS registration_ip TEXT")
         if "is_blocked_system" not in names:
             run("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_blocked_system INTEGER DEFAULT 0")
+        if "yandex_id" not in names:
+            run("ALTER TABLE users ADD COLUMN IF NOT EXISTS yandex_id TEXT")
+        if "yandex_token" not in names:
+            run("ALTER TABLE users ADD COLUMN IF NOT EXISTS yandex_token TEXT")
+        if "storage_rules" not in names:
+            run("ALTER TABLE users ADD COLUMN IF NOT EXISTS storage_rules JSONB")
         run(
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_users_access_token_lookup "
             "ON users (access_token_lookup) "

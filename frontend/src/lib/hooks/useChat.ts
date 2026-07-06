@@ -995,6 +995,7 @@ export const useChat = (
 								type: msg.type || 'text',
 								pinned_by: msg.pinned_by,
 								attachments: msg.is_deleted ? undefined : msg.attachments,
+								forwarded_from: msg.forwarded_from || undefined,
 							}))
 						: []
 					hydrateKeysFromLocalStorage()

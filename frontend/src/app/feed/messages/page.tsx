@@ -658,8 +658,7 @@ const BACKGROUNDS = [
 	{
 		id: 'blue',
 		name: 'Синий',
-		class:
-			'bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-blue-800/30 via-[#1a2232] to-[#1a2232]',
+		class: 'bg-gradient-to-br from-blue-900 via-[#1a2232] to-[#1a2232]',
 		preview: 'bg-gradient-to-tr from-blue-600 to-[#1a2232]',
 		accentColor: 'text-blue-400',
 		buttonBg: 'bg-blue-600',
@@ -672,8 +671,7 @@ const BACKGROUNDS = [
 	{
 		id: 'purple',
 		name: 'Фиолетовый',
-		class:
-			'bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-purple-800/30 via-[#1a2232] to-[#1a2232]',
+		class: 'bg-gradient-to-br from-purple-900 via-[#1a2232] to-[#1a2232]',
 		preview: 'bg-gradient-to-tr from-purple-600 to-[#1a2232]',
 		accentColor: 'text-purple-400',
 		buttonBg: 'bg-purple-600',
@@ -686,8 +684,7 @@ const BACKGROUNDS = [
 	{
 		id: 'emerald',
 		name: 'Изумрудный',
-		class:
-			'bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-emerald-800/30 via-[#1a2232] to-[#1a2232]',
+		class: 'bg-gradient-to-br from-emerald-900 via-[#1a2232] to-[#1a2232]',
 		preview: 'bg-gradient-to-tr from-emerald-600 to-[#1a2232]',
 		accentColor: 'text-[#2dd4a8]',
 		buttonBg: 'bg-[#2dd4a8]',
@@ -700,8 +697,7 @@ const BACKGROUNDS = [
 	{
 		id: 'rose',
 		name: 'Розовый',
-		class:
-			'bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-rose-800/30 via-[#1a2232] to-[#1a2232]',
+		class: 'bg-gradient-to-br from-rose-900 via-[#1a2232] to-[#1a2232]',
 		preview: 'bg-gradient-to-tr from-rose-600 to-[#1a2232]',
 		accentColor: 'text-rose-400',
 		buttonBg: 'bg-rose-600',
@@ -4541,10 +4537,6 @@ export default function MessengerPage() {
 	}
 
 	const handleToggleMessageSelection = (msg: Message) => {
-		if (!msg.isOwn) {
-			showToast('Можно выбрать только свои сообщения', 'error')
-			return
-		}
 		setSelectedMessageIds(prev => {
 			const next = new Set(prev)
 			if (next.has(msg.id)) {
@@ -4561,9 +4553,9 @@ export default function MessengerPage() {
 	}
 
 	const handleSelectAllMessages = () => {
-		const ownMessageIds = messagesToDisplay.filter(m => m.isOwn).map(m => m.id)
-		setSelectedMessageIds(new Set(ownMessageIds))
-		if (ownMessageIds.length > 0) {
+		const allMessageIds = messagesToDisplay.map(m => m.id)
+		setSelectedMessageIds(new Set(allMessageIds))
+		if (allMessageIds.length > 0) {
 			setIsSelectionMode(true)
 		}
 	}
@@ -4831,6 +4823,15 @@ export default function MessengerPage() {
 		if (isSharedPostPayload(forwardMessage.content)) {
 			payload.content = forwardMessage.content
 		}
+		// Add forwarded_from info with original sender
+		const originalSenderName = forwardMessage.sender_username || forwardMessage.sender_id
+		const currentChatName = selectedFriend?.username || selectedGroup?.name || selectedChannel?.name || 'чат'
+		payload.forwarded_from = {
+			sender_id: forwardMessage.sender_id,
+			sender_name: originalSenderName,
+			sender_avatar: forwardMessage.sender_avatar || null,
+			chat_name: currentChatName,
+		}
 		if (target.kind === 'user') payload.target_user_id = target.id
 		if (target.kind === 'group') payload.group_id = target.id
 		if (target.kind === 'channel' || target.kind === 'community')
@@ -4872,14 +4873,14 @@ export default function MessengerPage() {
 			if (isSharedPostPayload(msg.content)) {
 				payload.content = msg.content
 			}
-			// Add forwarded_from information
-			if (user && msg.sender_id !== user.id) {
-				payload.forwarded_from = {
-					sender_id: msg.sender_id,
-					sender_name:
-						user.username || user.email?.split('@')[0] || 'Пользователь',
-					sender_avatar: user.avatar_url,
-				}
+			// Add forwarded_from info with original sender
+			const fwdSenderName = msg.sender_username || msg.sender_id
+			const fwdChatName = selectedFriend?.username || selectedGroup?.name || selectedChannel?.name || 'чат'
+			payload.forwarded_from = {
+				sender_id: msg.sender_id,
+				sender_name: fwdSenderName,
+				sender_avatar: msg.sender_avatar || null,
+				chat_name: fwdChatName,
 			}
 			if (target.kind === 'user') payload.target_user_id = target.id
 			if (target.kind === 'group') payload.group_id = target.id
@@ -5347,9 +5348,7 @@ export default function MessengerPage() {
 	const chatListItems = buildChatListItems(sortedMessagesForList)
 
 	// Check if all selected messages are owned by current user
-	const allSelectedMessagesAreOwn =
-		selectedMessageIds.size === 0 ||
-		messagesToDisplay.every(msg => !selectedMessageIds.has(msg.id) || msg.isOwn)
+	const allSelectedMessagesAreOwn = true
 
 	const pinnedMessage = pinnedMessageId
 		? messages.find(m => m.id === pinnedMessageId)
@@ -6659,9 +6658,12 @@ export default function MessengerPage() {
 														)}
 													</div>
 													<button
-														onClick={() => setIsSettingsOpen(true)}
+														onClick={() => {
+															setSelectedUserForModal(selectedFriend)
+															setIsUserProfileModalOpen(true)
+														}}
 														className='flex flex-col text-left hover:bg-white/5 rounded-lg p-2 -ml-2 transition-colors'
-														title='Настройки чата'
+														title='Профиль'
 													>
 														<span className='font-bold text-[var(--app-fg)] text-base leading-tight flex items-center gap-2'>
 															{selectedFriend.username}
@@ -6923,13 +6925,7 @@ export default function MessengerPage() {
 													<XIcon className='w-5 h-5' />
 												</button>
 											)}
-											<button
-												onClick={() => setIsSettingsOpen(true)}
-												className='p-2 rounded-full transition-colors text-gray-400 hover:text-white hover:bg-gray-800'
-												title='Настройки чата'
-											>
-												<MoreVerticalIcon className='w-5 h-5' />
-											</button>
+
 										</div>
 									</>
 								)}

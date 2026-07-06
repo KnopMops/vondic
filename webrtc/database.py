@@ -84,6 +84,7 @@ class Message(Base):
     pinned_by: Mapped[str | None] = mapped_column(String, nullable=True)
     reactions: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_edited: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    forwarded_from_id: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class Video(Base):
@@ -314,6 +315,27 @@ class UserRepository:
     def _model_to_dict(model):
         return {column.name: getattr(model, column.name)
                 for column in model.__table__.columns}
+
+    def _resolve_forwarded_from(self, msg: dict) -> dict:
+        """Resolve forwarded_from_id (which stores sender_id) into full forwarded_from object."""
+        fwd_id = msg.get("forwarded_from_id")
+        if not fwd_id:
+            return msg
+        logger.info(f"[RESOLVE_FWD] msg_id={msg.get('id')}, fwd_id={fwd_id}")
+        try:
+            with self._session() as session:
+                sender = session.query(User).get(fwd_id)
+                msg["forwarded_from"] = {
+                    "sender_id": fwd_id,
+                    "sender_name": sender.username if sender else "Пользователь",
+                    "sender_avatar": sender.avatar_url if sender else None,
+                }
+                logger.info(f"[RESOLVE_FWD] sender_name={sender.username if sender else None}, chat_name added")
+        except Exception as e:
+            logger.error(f"Error resolving forwarded_from: {e}")
+            import traceback
+            traceback.print_exc()
+        return msg
 
     def _derive_mtproto_key_iv(self, key_value):
         if isinstance(key_value, str):
@@ -660,6 +682,7 @@ class UserRepository:
                     channel_id=str(channel_id) if channel_id else None,
                     group_id=str(group_id) if group_id else None,
                     reply_to_id=str(reply_to) if reply_to else None,
+                    forwarded_from_id=str(msg_data.get("forwarded_from_id")) if msg_data.get("forwarded_from_id") else None,
                     content=encrypted_content,
                     attachments=encrypted_attachments,
                     type=msg_type,
@@ -1117,6 +1140,7 @@ class UserRepository:
                             msg["attachments"] = None
                         logger.error(
                             f"Ошибка дешифровки вложений {msg['id']}: {e}")
+                msg = self._resolve_forwarded_from(msg)
                 messages.append(msg)
             return messages
         except Exception as err:
@@ -1225,6 +1249,7 @@ class UserRepository:
                             msg["attachments"] = None
                         logger.error(
                             f"Ошибка дешифровки вложений {msg['id']}: {e}")
+                msg = self._resolve_forwarded_from(msg)
                 messages.append(msg)
             return messages
         except Exception as err:

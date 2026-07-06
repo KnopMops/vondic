@@ -21,8 +21,7 @@ export default function ProfileModal({ userId, onClose, onOpenSettings, onDelete
 	const router = useRouter()
 	const [profile, setProfile] = useState<any>(null)
 	const [loading, setLoading] = useState(true)
-	const [isFollowing, setIsFollowing] = useState(false)
-	const [notificationsEnabled, setNotificationsEnabled] = useState(true)
+		const [notificationsEnabled, setNotificationsEnabled] = useState(true)
 
 	useEffect(() => {
 		fetchProfile()
@@ -40,18 +39,6 @@ export default function ProfileModal({ userId, onClose, onOpenSettings, onDelete
 			}
 		} catch {}
 		setLoading(false)
-	}
-
-	const handleFollow = async () => {
-		try {
-			const endpoint = isFollowing ? '/api/friends/remove' : '/api/friends/add'
-			const res = await fetch(endpoint, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ user_id: userId }),
-			})
-			if (res.ok) setIsFollowing(!isFollowing)
-		} catch {}
 	}
 
 	return (
@@ -129,21 +116,7 @@ export default function ProfileModal({ userId, onClose, onOpenSettings, onDelete
 									</div>
 								</button>
 
-								<button
-									onClick={handleFollow}
-									className='w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-[var(--app-fg)] hover:bg-white/5 transition-colors'
-								>
-									<div className='w-8 h-8 rounded-full bg-[var(--app-accent)]/15 flex items-center justify-center shrink-0'>
-										{isFollowing
-											? <Unfollow className='h-4 w-4 text-[var(--app-accent)]' />
-											: <Follow className='h-4 w-4 text-[var(--app-accent)]' />}
-									</div>
-									<div className='text-left'>
-										{isFollowing ? 'Отписаться' : 'Подписаться'}
-									</div>
-								</button>
-
-								<button
+<button
 									onClick={() => { onClose(); onOpenSettings?.() }}
 									className='w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-[var(--app-fg)] hover:bg-white/5 transition-colors'
 								>
@@ -166,19 +139,7 @@ export default function ProfileModal({ userId, onClose, onOpenSettings, onDelete
 								)}
 							</div>
 
-							<div className='px-4 py-2'>
-								<div className='border-t border-white/5 pt-2'>
-									<button
-										onClick={() => { onClose(); onDeleteHistory?.() }}
-										className='w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-red-400 hover:bg-red-500/10 transition-colors'
-									>
-										<div className='w-8 h-8 rounded-full bg-red-500/15 flex items-center justify-center shrink-0'>
-											<Trash className='h-4 w-4 text-red-400' />
-										</div>
-										<div className='text-left'>Удалить историю</div>
-									</button>
-								</div>
-							</div>
+
 						</>
 					) : (
 						<div className='p-8 text-center text-[var(--app-muted)] text-sm'>Профиль не найден</div>

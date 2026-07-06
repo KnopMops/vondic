@@ -382,6 +382,8 @@ class AuthService:
 
             user = User(email=email, username=username, is_verified=1)
             user.set_password(secrets.token_hex(16))
+            user.yandex_id = str(yandex_id)
+            user.yandex_token = access_token_yandex
             raw_access, raw_refresh = AuthService._issue_tokens(user, device_type, device_name, ip_address)
             user.avatar_url = avatar_url
             db.session.add(user)
@@ -389,6 +391,10 @@ class AuthService:
             if user.is_blocked:
                 return None, "User is blocked"
             raw_access, raw_refresh = AuthService._issue_tokens(user, device_type, device_name, ip_address)
+            if yandex_id and not user.yandex_id:
+                user.yandex_id = str(yandex_id)
+            if access_token_yandex:
+                user.yandex_token = access_token_yandex
 
         try:
             db.session.commit()

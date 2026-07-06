@@ -66,6 +66,9 @@ class User(db.Model):
     reset_verify_expires = db.Column(TIMESTAMP, default=None)
     e2e_backup_salt = db.Column(TEXT, default=None)
     e2e_wrapped_device_secret = db.Column(TEXT, default=None)
+    yandex_id = db.Column(TEXT, default=None)
+    yandex_token = db.Column(TEXT, default=None)
+    storage_rules = db.Column(JSON, default=None)
     video_likes = db.Column(TEXT, default=None)
     video_watch_later = db.Column(TEXT, default=None)
     video_history = db.Column(TEXT, default=None)
@@ -77,7 +80,7 @@ class User(db.Model):
 
     @property
     def disk_limit(self):
-        base = 2 * 1024 * 1024 * 1024 if self.premium else 1 * 1024 * 1024 * 1024
+        base = 512 * 1024 * 1024
         return base + (self.storage_bonus or 0)
 
     def set_password(self, password):
@@ -124,6 +127,8 @@ class User(db.Model):
             "two_factor_method": self.two_factor_method,
             "login_alert_enabled": bool(self.login_alert_enabled),
             "is_developer": bool(self.is_developer),
+            "yandex_id": self.yandex_id,
+            "yandex_disk_connected": bool(self.yandex_token),
             "privacy_settings": self.privacy_settings or {"show_email": False},
             "last_seen": (
                 f"{self.last_seen.isoformat()}Z"

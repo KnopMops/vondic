@@ -201,9 +201,7 @@ export default function Sidebar() {
 												width: `${Math.min(
 													((user.disk_usage || 0) /
 														(user.disk_limit ||
-															(user.premium
-																? 2 * 1024 * 1024 * 1024
-																: 1 * 1024 * 1024 * 1024))) *
+															512 * 1024 * 1024)) *
 														100,
 													100,
 												)}%`,
@@ -211,7 +209,7 @@ export default function Sidebar() {
 										/>
 									</div>
 									<p className='text-[10px] text-gray-500 leading-tight'>
-										{user.premium ? 'Лимит 2 ГБ' : 'Лимит 1 ГБ'}
+										Лимит {formatBytes(user.disk_limit || 512 * 1024 * 1024)}
 									</p>
 								</div>
 							</button>

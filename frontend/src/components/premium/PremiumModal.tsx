@@ -226,7 +226,7 @@ export default function PremiumModal({ isOpen, onClose }: Props) {
 									<ul className='space-y-2 text-sm text-gray-300'>
 										<li className='flex items-center gap-2'>
 											<Sparkles className='w-4 h-4 text-amber-400 shrink-0' />
-											2 ГБ хранилища и файлы до 100 МБ
+											512 МБ хранилища и файлы до 100 МБ
 										</li>
 										<li className='flex items-center gap-2'>
 											<Sparkles className='w-4 h-4 text-amber-400 shrink-0' />

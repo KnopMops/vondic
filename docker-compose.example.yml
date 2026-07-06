@@ -99,36 +99,39 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      static-nginx:
+      minio:
         condition: service_started
     ports:
       - "5050:5050"
-    volumes:
-      - uploads_data:/app/uploads
     environment:
-      - UPLOADS_DIR=/app/uploads
+      - S3_ENDPOINT=http://minio:9000
+      - S3_ACCESS_KEY=...
+      - S3_SECRET_KEY=...
+      - S3_BUCKET=uploads
+      - S3_REGION=us-east-1
+      - S3_PUBLIC_URL=https://s3.vondic.ru
+      - MAIL_CREDENTIALS_KEY=...
     networks:
       - app-network
     restart: unless-stopped
 
-  static-nginx:
-    build:
-      context: ./nginx-static
-    container_name: static-nginx
-    ports:
-      - "8080:80"
+  minio:
+    image: quay.io/minio/minio:latest
+    container_name: minio
+    restart: unless-stopped
     volumes:
-      - uploads_data:/data/uploads
-      - ./backend/app/static:/data/static:ro
+      - minio_data:/data
+    environment:
+      MINIO_ROOT_USER: ...
+      MINIO_ROOT_PASSWORD: ...
+    command: server --console-address ":9001" /data
+    expose:
+      - "9000"
+      - "9001"
+    ports:
+      - "9001:9001"
     networks:
       - app-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 5s
 
   # videochecker:  # temporarily disabled to save disk space (~8 GB of analysis packages)
   #   build:
@@ -149,6 +152,24 @@ services:
   #   networks:
   #     - app-network
   #   restart: unless-stopped
+
+  gamescanner:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.gamescanner
+    container_name: gamescanner
+    env_file:
+      - ./backend/.env.backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      pgbouncer:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: unless-stopped
 
   webrtc:
     build:
@@ -202,18 +223,19 @@ services:
       - app-network
     restart: unless-stopped
 
-  nginx:
+  angie:
     build: ./nginx
-    container_name: nginx
+    container_name: angie
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./nginx/ssl:/etc/angie/ssl:ro
     depends_on:
       - backend
       - webrtc
       - frontend
+      - minio
     networks:
       - app-network
     restart: unless-stopped
@@ -243,11 +265,36 @@ services:
     networks:
       - app-network
 
+  backup:
+    image: postgres:15
+    container_name: vondic-backup
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ...
+    volumes:
+      - ${HOME}/backups:/backups
+    entrypoint: >
+      sh -c "while true; do
+        DATE=$$(date +%Y-%m-%d_%H-%M-%S);
+        echo \"[$$DATE] Starting backup...\";
+        pg_dump -h postgres -U vondic -d vondic --no-owner --no-acl | gzip > /backups/vondic_$$DATE.sql.gz;
+        SIZE=$$(du -h /backups/vondic_$$DATE.sql.gz | cut -f1);
+        echo \"[$$DATE] Backup completed: vondic_$$DATE.sql.gz ($$SIZE)\";
+        find /backups -name 'vondic_*.sql.gz' -mtime +7 -delete 2>/dev/null;
+        echo \"[$$DATE] Old backups (>7 days) cleaned\";
+        sleep 86400;
+      done"
+    networks:
+      - app-network
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:
   rabbitmq_data:
-  uploads_data:
+  minio_data:
 
 networks:
   app-network:

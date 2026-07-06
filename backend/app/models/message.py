@@ -51,6 +51,30 @@ class Message(db.Model):
             lazy=True,
             cascade="all, delete-orphan"))
 
+    def _get_forwarded_from(self) -> dict | None:
+        if not self.forwarded_from_id:
+            return None
+        from app.models.message import Message
+        orig = Message.query.get(self.forwarded_from_id)
+        if not orig:
+            return None
+        sender = orig.sender
+        chat_name = None
+        if orig.group_id:
+            from app.models.group import Group
+            group = Group.query.get(orig.group_id)
+            chat_name = group.name if group else None
+        elif orig.channel_id:
+            from app.models.channel import Channel
+            channel = Channel.query.get(orig.channel_id)
+            chat_name = channel.name if channel else None
+        return {
+            "sender_id": orig.sender_id,
+            "sender_name": sender.username if sender else "Пользователь",
+            "sender_avatar": sender.avatar_url if sender else None,
+            "chat_name": chat_name,
+        }
+
     def to_dict(self):
         return {
             "id": self.id,
@@ -78,7 +102,7 @@ class Message(db.Model):
             "reactions": self.reactions or [],
             "read_by": self.read_by or [],
             "reply_to_id": self.reply_to_id,
-            "forwarded_from_id": self.forwarded_from_id,
+            "forwarded_from": self._get_forwarded_from(),
             "is_deleted": getattr(
                     self,
                     'is_deleted',

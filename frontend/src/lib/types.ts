@@ -41,6 +41,8 @@ export interface User {
 	is_blocked?: boolean
 	blocked_by_admin?: string | null
 	is_developer?: boolean
+	yandex_id?: string | null
+	yandex_disk_connected?: boolean
 	video_channel_id?: string | null
 	video_subscribers?: number
 	video_count?: number
@@ -132,6 +134,7 @@ export interface Message {
 		sender_id: string
 		sender_name: string
 		sender_avatar?: string | null
+		chat_name?: string
 	}
 	reply_markup?: {
 		inline_keyboard: Array<Array<{

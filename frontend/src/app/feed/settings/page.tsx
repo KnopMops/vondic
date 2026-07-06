@@ -10,7 +10,7 @@ import { useAppDispatch } from '@/lib/hooks'
 import { useToast } from '@/lib/ToastContext'
 import { AnimatePresence, motion } from 'framer-motion'
 import Link from 'next/link'
-import { FiBell, FiCode, FiLock, FiMail, FiMonitor, FiMessageCircle, FiMusic, FiPhoneCall, FiSettings, FiShield, FiVolume2 } from 'react-icons/fi'
+import { FiBell, FiCode, FiLock, FiMail, FiMonitor, FiMessageCircle, FiMusic, FiPhoneCall, FiSettings, FiShield, FiVolume2, FiX } from 'react-icons/fi'
 import { HiOutlineColorSwatch } from 'react-icons/hi'
 import { useEffect, useState } from 'react'
 import { COLOR_SCHEMES, saveColorScheme, initColorScheme, type ColorSchemeId } from '@/lib/theme/colorSchemes'
@@ -77,6 +77,17 @@ export default function SettingsPage() {
 	const [newPassword, setNewPassword] = useState('')
 	const [confirmPassword, setConfirmPassword] = useState('')
 	const [changePasswordLoading, setChangePasswordLoading] = useState(false)
+	const [isLinkingYandex, setIsLinkingYandex] = useState(false)
+	const [isUnlinkingYandex, setIsUnlinkingYandex] = useState(false)
+	const [yandexLinked, setYandexLinked] = useState(!!user?.yandex_id)
+	const [yandexDiskConnected, setYandexDiskConnected] = useState(!!user?.yandex_disk_connected)
+
+	useEffect(() => {
+		if (user) {
+			setYandexLinked(!!user.yandex_id)
+			setYandexDiskConnected(!!user.yandex_disk_connected)
+		}
+	}, [user?.yandex_id, user?.yandex_disk_connected])
 	const [activeTab, setActiveTab] = useState<
 		'system' | 'mail' | 'interface' | 'sounds'
 	>('system')
@@ -546,6 +557,109 @@ export default function SettingsPage() {
 		} finally {
 			setChangePasswordLoading(false)
 		}
+	}
+
+	const handleLinkYandex = async () => {
+		setIsLinkingYandex(true)
+		try {
+			const res = await fetch('/api/auth/yandex/link')
+			const data = await res.json().catch(() => ({}))
+			if (!res.ok || !data.auth_url) {
+				throw new Error(data.error || 'Не удалось получить ссылку')
+			}
+			window.location.href = data.auth_url
+		} catch (e: any) {
+			showToast(e.message || 'Ошибка привязки', 'error')
+			setIsLinkingYandex(false)
+		}
+	}
+
+	const handleUnlinkYandex = async () => {
+		if (!confirm('Отвязать Yandex аккаунт?')) return
+		setIsUnlinkingYandex(true)
+		try {
+			const res = await fetch('/api/auth/yandex/unlink', { method: 'DELETE' })
+			const data = await res.json().catch(() => ({}))
+			if (!res.ok) {
+				throw new Error(data.error || 'Не удалось отвязать')
+			}
+			setYandexLinked(false)
+			showToast('Yandex аккаунт отвязан', 'success')
+		} catch (e: any) {
+			showToast(e.message || 'Ошибка отвязки', 'error')
+		} finally {
+			setIsUnlinkingYandex(false)
+		}
+	}
+
+	type StorageRule = {
+		type: 'size' | 'extension' | 'category'
+		operator: string
+		value: number | string | string[]
+		target: 's3' | 'yandex_disk'
+	}
+
+	type StorageRules = {
+		enabled: boolean
+		rules: StorageRule[]
+		default_target: 's3' | 'yandex_disk'
+	}
+
+	const [storageRules, setStorageRules] = useState<StorageRules>({
+		enabled: false,
+		rules: [],
+		default_target: 's3',
+	})
+	const [storageRulesLoading, setStorageRulesLoading] = useState(false)
+
+	useEffect(() => {
+		if (user?.yandex_id) {
+			fetch('/api/v1/users/storage-rules')
+				.then(r => r.json())
+				.then(data => {
+					if (data.rules) setStorageRules(data.rules)
+				})
+				.catch(() => {})
+		}
+	}, [user?.yandex_id])
+
+	const handleSaveStorageRules = async () => {
+		setStorageRulesLoading(true)
+		try {
+			const res = await fetch('/api/v1/users/storage-rules', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ rules: storageRules }),
+			})
+			const data = await res.json().catch(() => ({}))
+			if (!res.ok) throw new Error(data.error || 'Ошибка сохранения')
+			showToast('Правила хранилища сохранены', 'success')
+		} catch (e: any) {
+			showToast(e.message || 'Ошибка', 'error')
+		} finally {
+			setStorageRulesLoading(false)
+		}
+	}
+
+	const addStorageRule = () => {
+		setStorageRules(prev => ({
+			...prev,
+			rules: [...prev.rules, { type: 'size', operator: 'gt', value: 1048576, target: 'yandex_disk' }],
+		}))
+	}
+
+	const removeStorageRule = (index: number) => {
+		setStorageRules(prev => ({
+			...prev,
+			rules: prev.rules.filter((_, i) => i !== index),
+		}))
+	}
+
+	const updateStorageRule = (index: number, field: string, value: any) => {
+		setStorageRules(prev => ({
+			...prev,
+			rules: prev.rules.map((r, i) => i === index ? { ...r, [field]: value } : r),
+		}))
 	}
 
 	const formatDateTime = (value?: string) => {
@@ -1057,62 +1171,328 @@ export default function SettingsPage() {
 									</div>
 								</motion.div>
 
+							<motion.div
+								initial={{ opacity: 0, y: 20 }}
+								animate={{ opacity: 1, y: 0 }}
+								transition={{ duration: 0.4 }}
+								className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
+							>
 								<motion.div
+									initial={{ opacity: 0 }}
+									animate={{ opacity: 1 }}
+									transition={{ duration: 0.8 }}
+									className='absolute -bottom-24 -left-24 w-64 h-64 bg-gradient-to-tr from-amber-500/10 to-orange-500/10 rounded-full blur-3xl'
+								/>
+								<div className='flex items-center gap-3 mb-4'>
+									<FiLock className='w-5 h-5 text-amber-400' />
+									<h2 className='text-xl font-semibold'>Пароль</h2>
+								</div>
+								<div className='space-y-4'>
+									{isYandexAccount ? (
+										<p className='text-sm text-gray-400'>
+											Смена пароля недоступна для аккаунтов Yandex
+										</p>
+									) : !changePasswordOpen ? (
+										<button
+											onClick={() => setChangePasswordOpen(true)}
+											className='rounded-lg bg-white/10 border border-white/20 px-4 py-2 text-sm text-white hover:bg-white/20 transition'
+										>
+											Сменить пароль
+										</button>
+									) : (
+										<div className='space-y-3'>
+											<p className='text-sm text-gray-400'>
+												Отправим ссылку для смены пароля на {user?.email}
+											</p>
+											<div className='flex gap-3'>
+												<button
+													onClick={handleChangePassword}
+													disabled={changePasswordLoading}
+													className='rounded-lg bg-amber-500/20 border border-amber-500/40 px-4 py-2 text-sm text-white hover:bg-amber-500/30 transition disabled:opacity-60'
+												>
+													{changePasswordLoading ? 'Отправка...' : 'Отправить ссылку'}
+												</button>
+												<button
+													onClick={() => setChangePasswordOpen(false)}
+													className='rounded-lg bg-white/5 border border-white/10 px-4 py-2 text-sm text-gray-300 hover:bg-white/10 transition'
+												>
+													Отмена
+												</button>
+											</div>
+										</div>
+									)}
+								</div>
+							</motion.div>
+
+							<motion.div
 									initial={{ opacity: 0, y: 20 }}
 									animate={{ opacity: 1, y: 0 }}
 									transition={{ duration: 0.4 }}
 									className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
 								>
 									<motion.div
-										initial={{ opacity: 0.3 }}
-										animate={{ opacity: [0.3, 0.6, 0.3] }}
-										transition={{ duration: 5, repeat: Infinity }}
-										className='absolute -bottom-24 -left-24 w-64 h-64 bg-gradient-to-tr from-amber-500/10 to-orange-500/10 rounded-full blur-3xl'
+										initial={{ opacity: 0 }}
+										animate={{ opacity: 1 }}
+										transition={{ duration: 0.8 }}
+										className='absolute -bottom-24 -right-16 w-52 h-52 bg-gradient-to-br from-red-500/10 to-orange-500/10 rounded-full blur-3xl'
 									/>
 									<div className='flex items-center gap-3 mb-4'>
-										<FiLock className='w-5 h-5 text-amber-400' />
-										<h2 className='text-xl font-semibold'>Пароль</h2>
+										<svg className='w-5 h-5 text-red-400' viewBox='0 0 24 24' fill='currentColor'>
+											<path d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15l-5-5 1.41-1.41L11 14.17l7.59-7.59L20 8l-9 9z' />
+										</svg>
+										<h2 className='text-xl font-semibold'>Yandex</h2>
 									</div>
-									<div className='space-y-4'>
-										{isYandexAccount ? (
-											<p className='text-sm text-gray-400'>
-												Смена пароля недоступна для аккаунтов Yandex
-											</p>
-										) : !changePasswordOpen ? (
+									<div className='space-y-3'>
+									<p className='text-sm text-gray-400'>
+										{yandexLinked
+											? yandexDiskConnected
+												? 'Yandex привязан. Яндекс Диск подключён — файлы загружаются напрямую.'
+												: 'Yandex аккаунт привязан. Подключите Яндекс Диск для облачного хранилища.'
+											: 'Привяжите Yandex аккаунт для входа через OAuth и интеграции с Яндекс Диском.'}
+									</p>
+									<div className='flex gap-2'>
+										{yandexLinked && !yandexDiskConnected && (
 											<button
-												onClick={() => setChangePasswordOpen(true)}
-												className='rounded-lg bg-white/10 border border-white/20 px-4 py-2 text-sm text-white hover:bg-white/20 transition'
+												onClick={handleLinkYandex}
+												disabled={isLinkingYandex}
+												className='rounded-lg bg-emerald-500/20 border border-emerald-500/40 px-4 py-2 text-sm text-white hover:bg-emerald-500/30 transition disabled:opacity-60'
 											>
-												Сменить пароль
+												{isLinkingYandex ? 'Подключение...' : 'Подключить Яндекс Диск'}
+											</button>
+										)}
+										{yandexLinked ? (
+											<button
+												onClick={handleUnlinkYandex}
+												disabled={isUnlinkingYandex}
+												className='rounded-lg bg-red-500/20 border border-red-500/40 px-4 py-2 text-sm text-white hover:bg-red-500/30 transition disabled:opacity-60'
+											>
+												{isUnlinkingYandex ? 'Отвязка...' : yandexDiskConnected ? 'Отвязать Яндекс Диск' : 'Отвязать Yandex'}
 											</button>
 										) : (
-											<div className='space-y-3'>
-												<p className='text-sm text-gray-400'>
-													Отправим ссылку для смены пароля на {user?.email}
-												</p>
-												<div className='flex gap-3'>
-													<button
-														onClick={handleChangePassword}
-														disabled={changePasswordLoading}
-														className='rounded-lg bg-amber-500/20 border border-amber-500/40 px-4 py-2 text-sm text-white hover:bg-amber-500/30 transition disabled:opacity-60'
-													>
-														{changePasswordLoading ? 'Отправка...' : 'Отправить ссылку'}
-													</button>
-													<button
-														onClick={() => setChangePasswordOpen(false)}
-														className='rounded-lg bg-white/5 border border-white/10 px-4 py-2 text-sm text-gray-300 hover:bg-white/10 transition'
-													>
-														Отмена
-													</button>
-												</div>
-											</div>
+											<button
+												onClick={handleLinkYandex}
+												disabled={isLinkingYandex}
+												className='rounded-lg bg-red-500/20 border border-red-500/40 px-4 py-2 text-sm text-white hover:bg-red-500/30 transition disabled:opacity-60'
+											>
+												{isLinkingYandex ? 'Перенаправление...' : 'Привязать Yandex'}
+											</button>
 										)}
 									</div>
-								</motion.div>
-							</>
-						)}
+								</div>
+							</motion.div>
 
-						{activeTab === 'mail' && (
+							{yandexLinked && (
+						<motion.div
+							initial={{ opacity: 0, y: 20 }}
+							animate={{ opacity: 1, y: 0 }}
+							transition={{ duration: 0.4 }}
+							className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
+						>
+							<div className='flex items-center justify-between mb-4'>
+								<div className='flex items-center gap-3'>
+									<FiSettings className='w-5 h-5 text-emerald-400' />
+									<h2 className='text-xl font-semibold'>Правила хранилища</h2>
+								</div>
+								<label className='relative inline-flex items-center cursor-pointer'>
+									<input
+										type='checkbox'
+										checked={storageRules.enabled}
+										onChange={e => setStorageRules(prev => ({ ...prev, enabled: e.target.checked }))}
+										className='sr-only peer'
+									/>
+									<div className='w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[""] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500/60' />
+								</label>
+							</div>
+
+							<p className='text-sm text-gray-400 mb-4'>
+								Настройте правила автоматической маршрутизации файлов между S3 Vondic и Яндекс Диском.
+							</p>
+
+							{storageRules.enabled && (
+								<div className='space-y-3'>
+									{storageRules.rules.map((rule, i) => (
+										<div key={i} className='rounded-xl bg-black/20 border border-white/5 p-3 space-y-2'>
+											<div className='flex flex-wrap items-center gap-2'>
+												<select
+													value={rule.type}
+													onChange={e => {
+														const t = e.target.value
+														updateStorageRule(i, 'type', t)
+														if (t === 'size') {
+															updateStorageRule(i, 'operator', 'gt')
+															updateStorageRule(i, 'value', 1048576)
+														} else if (t === 'category') {
+															updateStorageRule(i, 'operator', 'in')
+															updateStorageRule(i, 'value', 'image')
+														} else {
+															updateStorageRule(i, 'operator', 'in')
+															updateStorageRule(i, 'value', [])
+														}
+													}}
+													className='rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-gray-200'
+												>
+													<option value='size'>📦 Размер файла</option>
+													<option value='extension'>📄 Расширение</option>
+													<option value='category'>📂 Категория</option>
+												</select>
+
+												{rule.type === 'size' && (
+													<>
+														<select
+															value={rule.operator}
+															onChange={e => updateStorageRule(i, 'operator', e.target.value)}
+															className='rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-gray-200'
+														>
+															<option value='gt'>больше</option>
+															<option value='gte'>больше или равно</option>
+															<option value='lt'>меньше</option>
+															<option value='lte'>меньше или равно</option>
+														</select>
+														<select
+															value={typeof rule.value === 'number' ? rule.value : 1048576}
+															onChange={e => updateStorageRule(i, 'value', parseInt(e.target.value))}
+															className='rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-gray-200'
+														>
+															<option value={1024}>1 КБ</option>
+															<option value={10240}>10 КБ</option>
+															<option value={102400}>100 КБ</option>
+															<option value={524288}>512 КБ</option>
+															<option value={1048576}>1 МБ</option>
+															<option value={5242880}>5 МБ</option>
+															<option value={10485760}>10 МБ</option>
+															<option value={52428800}>50 МБ</option>
+															<option value={104857600}>100 МБ</option>
+															<option value={524288000}>500 МБ</option>
+															<option value={1073741824}>1 ГБ</option>
+														</select>
+													</>
+												)}
+
+												{rule.type === 'category' && (
+													<>
+														<select
+															value={rule.operator}
+															onChange={e => updateStorageRule(i, 'operator', e.target.value)}
+															className='rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-gray-200'
+														>
+															<option value='in'>входит в</option>
+															<option value='not_in'>не входит в</option>
+														</select>
+														<select
+															value={typeof rule.value === 'string' ? rule.value : 'image'}
+															onChange={e => updateStorageRule(i, 'value', e.target.value)}
+															className='rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-gray-200'
+														>
+															<option value='image'>🖼 Картинки (jpg, png, gif, webp, svg)</option>
+															<option value='video'>🎬 Видео (mp4, mov, webm, mkv, avi)</option>
+															<option value='audio'>🎵 Аудио (mp3, wav, ogg, flac, m4a)</option>
+															<option value='document'>📄 Документы (pdf, doc, txt, xls, ppt)</option>
+															<option value='archive'>📦 Архивы (zip, rar, 7z, tar, gz)</option>
+														</select>
+													</>
+												)}
+
+												{rule.type === 'extension' && (
+													<>
+														<select
+															value={rule.operator}
+															onChange={e => updateStorageRule(i, 'operator', e.target.value)}
+															className='rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-gray-200'
+														>
+															<option value='in'>в списке</option>
+															<option value='not_in'>не в списке</option>
+														</select>
+														<div className='flex flex-wrap gap-1'>
+															{['jpg','png','gif','webp','svg','mp4','mov','webm','mkv','avi','mp3','wav','ogg','m4a','pdf','doc','docx','txt','zip','rar','7z'].map(ext => {
+																const selected = Array.isArray(rule.value) && rule.value.includes(ext)
+																return (
+																	<button
+																		key={ext}
+																		type='button'
+																		onClick={() => {
+																			const current = Array.isArray(rule.value) ? [...rule.value] : []
+																			updateStorageRule(i, 'value',
+																				selected ? current.filter(e => e !== ext) : [...current, ext]
+																			)
+																		}}
+																		className={`px-1.5 py-0.5 rounded text-[10px] border transition ${
+																			selected
+																				? 'bg-emerald-500/30 border-emerald-500/50 text-emerald-300'
+																				: 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
+																		}`}
+																	>
+																		.{ext}
+																	</button>
+																)
+															})}
+														</div>
+													</>
+												)}
+											</div>
+
+											<div className='flex items-center gap-2'>
+												<span className='text-xs text-gray-500'>Отправить в:</span>
+												<select
+													value={rule.target}
+													onChange={e => updateStorageRule(i, 'target', e.target.value as 's3' | 'yandex_disk')}
+													className='rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-gray-200'
+												>
+													<option value='s3'>☁️ S3 Vondic</option>
+													<option value='yandex_disk'>💾 Яндекс Диск</option>
+												</select>
+
+												<button
+													onClick={() => removeStorageRule(i)}
+													className='ml-auto p-1.5 rounded-lg text-red-400 hover:bg-red-500/20 transition'
+													type='button'
+												>
+													<FiX className='w-4 h-4' />
+												</button>
+											</div>
+										</div>
+									))}
+
+									<div className='flex items-center gap-3 flex-wrap'>
+										<button
+											onClick={addStorageRule}
+											type='button'
+											className='rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 text-xs text-gray-300 hover:bg-white/10 transition'
+										>
+											+ Добавить правило
+										</button>
+
+										<div className='flex items-center gap-2'>
+											<span className='text-xs text-gray-500'>По умолчанию:</span>
+											<select
+												value={storageRules.default_target}
+												onChange={e => setStorageRules(prev => ({ ...prev, default_target: e.target.value as 's3' | 'yandex_disk' }))}
+												className='rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-gray-200'
+											>
+												<option value='s3'>☁️ S3 Vondic</option>
+												<option value='yandex_disk'>💾 Яндекс Диск</option>
+											</select>
+										</div>
+
+										<button
+											onClick={handleSaveStorageRules}
+											disabled={storageRulesLoading}
+											className='ml-auto rounded-lg bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-60 transition'
+										>
+											{storageRulesLoading ? 'Сохранение...' : 'Сохранить'}
+										</button>
+									</div>
+
+									<div className='text-[10px] text-gray-500 space-y-1 mt-2'>
+										<p>Правиларабатывают сверху вниз. Первое совпадение определяет хранилище.</p>
+									</div>
+								</div>
+							)}
+						</motion.div>
+					)}
+					</>
+				)}
+
+				{activeTab === 'mail' && (
 							<motion.div
 								initial={{ opacity: 0, y: 20 }}
 								animate={{ opacity: 1, y: 0 }}

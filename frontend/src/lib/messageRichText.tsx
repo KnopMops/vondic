@@ -3,6 +3,8 @@
 import Link from 'next/link'
 import React from 'react'
 import { isVondicInviteUrl } from './inviteLinks'
+import VideoPlayer from '@/components/social/VideoPlayer'
+
 
 const ENTITY_RE = new RegExp(
 	[
@@ -26,6 +28,20 @@ export function richLinkClass(isOwn?: boolean, isInvite?: boolean): string {
 		: 'text-[#6ab2f2] hover:underline cursor-pointer break-all'
 }
 
+const VIDEO_EXTS = new Set(['mp4', 'mov', 'webm', 'm4v', 'avi', 'mkv'])
+const AUDIO_EXTS = new Set(['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac'])
+
+function getFileExt(url: string): string {
+	const clean = url.split('?')[0].split('#')[0]
+	const dot = clean.lastIndexOf('.')
+	return dot >= 0 ? clean.slice(dot + 1).toLowerCase() : ''
+}
+
+function isMediaUrl(url: string): boolean {
+	const ext = getFileExt(url)
+	return VIDEO_EXTS.has(ext) || AUDIO_EXTS.has(ext)
+}
+
 function renderEntity(
 	entity: string,
 	key: string,
@@ -33,6 +49,23 @@ function renderEntity(
 ): React.ReactNode {
 	if (/^https?:\/\//i.test(entity) || /^www\./i.test(entity)) {
 		const href = entity.startsWith('www.') ? `https://${entity}` : entity
+		const ext = getFileExt(href)
+
+		if (VIDEO_EXTS.has(ext)) {
+			return (
+				<div key={key} className='my-1 max-w-[320px]'>
+					<VideoPlayer src={href} />
+				</div>
+			)
+		}
+		if (AUDIO_EXTS.has(ext)) {
+			return (
+				<div key={key} className='my-1 max-w-[320px]'>
+					<audio controls src={href} className='w-full h-8' />
+				</div>
+			)
+		}
+
 		const invite = isVondicInviteUrl(href)
 		return (
 			<a

@@ -1,6 +1,7 @@
 'use client'
 
 import { getAttachmentUrl } from '@/lib/utils'
+import { useAuth } from '@/lib/AuthContext'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -33,6 +34,7 @@ type Props = {
 }
 
 export default function MemoryModal({ isOpen, onClose }: Props) {
+	const { user } = useAuth()
 	const [files, setFiles] = useState<FileItem[]>([])
 	const [isLoading, setIsLoading] = useState(false)
 	const [currentPage, setCurrentPage] = useState(1)
@@ -200,6 +202,10 @@ export default function MemoryModal({ isOpen, onClose }: Props) {
 				throw new Error(data?.error || data?.details || 'Ошибка загрузки файла')
 			}
 			// refresh current page (newest will appear on page 1)
+			// Update disk_usage from response
+			if (data.disk_usage !== undefined && user) {
+				user.disk_usage = data.disk_usage
+			}
 			setCurrentPage(1)
 			await fetchFiles(1)
 		} catch (e: any) {
@@ -208,6 +214,10 @@ export default function MemoryModal({ isOpen, onClose }: Props) {
 			setIsUploading(false)
 			if (uploadInputRef.current) uploadInputRef.current.value = ''
 		}
+	}
+
+	const removeFile = (fileId: string) => {
+		setFiles(prev => prev.filter(f => f.id !== fileId))
 	}
 
 	const sortedFiles = useMemo(() => {
@@ -373,6 +383,7 @@ export default function MemoryModal({ isOpen, onClose }: Props) {
 														src={getAttachmentUrl(file.url)}
 														alt={file.name}
 														className='w-full h-full object-cover group-hover:scale-110 transition-transform duration-500'
+														onError={() => removeFile(file.id)}
 													/>
 												) : isVideo(file.name) ? (
 													<video
@@ -380,6 +391,7 @@ export default function MemoryModal({ isOpen, onClose }: Props) {
 														preload='metadata'
 														src={getAttachmentUrl(file.url)}
 														className='w-full h-full object-cover group-hover:scale-110 transition-transform duration-500'
+														onError={() => removeFile(file.id)}
 													/>
 												) : isAudio(file.name) ? (
 													<>
@@ -391,6 +403,7 @@ export default function MemoryModal({ isOpen, onClose }: Props) {
 															preload='none'
 															src={getAttachmentUrl(file.url)}
 															className='w-full h-8'
+															onError={() => removeFile(file.id)}
 														/>
 													</>
 												) : (

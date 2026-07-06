@@ -6,6 +6,7 @@ from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from app.core.config import Config
 from app.core.extensions import cache, db
+from app.models.user import User
 from app.schemas.user_schema import user_schema
 from app.services.auth_service import AuthService
 from app.services.user_service import UserService
@@ -1048,3 +1049,103 @@ def qr_scan(current_user):
         timeout=_QR_SESSION_TTL,
     )
     return jsonify({"ok": True})
+
+
+@auth_bp.route("/yandex/link", methods=["GET"])
+@token_required
+def yandex_link(current_user):
+    state = f"link:{current_user.id}"
+    client_id = Config.YANDEX_CLIENT_ID
+    redirect_uri = Config.YANDEX_LINK_REDIRECT_URI or Config.YANDEX_REDIRECT_URI
+    if not client_id or not redirect_uri:
+        return jsonify({"error": "Yandex OAuth не настроен"}), 500
+
+    params = {
+        "response_type": "code",
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "force_confirm": "yes",
+        "state": state,
+    }
+    auth_url = f"https://oauth.yandex.ru/authorize?{urlencode(params)}"
+    return jsonify({"auth_url": auth_url}), 200
+
+
+@auth_bp.route("/yandex/link-callback", methods=["GET"])
+@token_required
+def yandex_link_callback(current_user):
+    code = request.args.get("code")
+    state = request.args.get("state", "")
+
+    if not code:
+        return jsonify({"error": "Не所提供之 код"}), 400
+
+    if not state.startswith("link:"):
+        return jsonify({"error": "Неверный state"}), 400
+
+    state_user_id = state.split(":", 1)[1]
+    if state_user_id != current_user.id:
+        return jsonify({"error": "Неверный пользователь"}), 403
+
+
+    client_id = Config.YANDEX_CLIENT_ID
+    client_secret = Config.YANDEX_CLIENT_SECRET
+    redirect_uri = Config.YANDEX_LINK_REDIRECT_URI or Config.YANDEX_REDIRECT_URI
+
+    token_url = "https://oauth.yandex.ru/token"
+    data = {
+        "grant_type": "authorization_code",
+        "code": code,
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "redirect_uri": redirect_uri,
+    }
+
+    try:
+        response = requests.post(token_url, data=data)
+        response.raise_for_status()
+        token_data = response.json()
+        access_token_yandex = token_data.get("access_token")
+    except Exception as e:
+        return jsonify({"error": f"Failed to get token: {str(e)}"}), 500
+
+    info_url = "https://login.yandex.ru/info"
+    headers = {"Authorization": f"OAuth {access_token_yandex}"}
+
+    try:
+        info_response = requests.get(info_url, headers=headers)
+        info_response.raise_for_status()
+        user_info = info_response.json()
+    except Exception as e:
+        return jsonify({"error": f"Failed to get user info: {str(e)}"}), 500
+
+    new_yandex_id = str(user_info.get("id"))
+
+    existing = User.query.filter(
+        User.yandex_id == new_yandex_id,
+        User.id != current_user.id,
+    ).first()
+    if existing:
+        return jsonify({"error": "Этот Yandex аккаунт уже привязан к другому пользователю"}), 400
+
+    current_user.yandex_id = new_yandex_id
+    current_user.yandex_token = access_token_yandex
+    db.session.commit()
+
+    return jsonify({"ok": True, "yandex_id": new_yandex_id, "yandex_disk_connected": True}), 200
+
+
+@auth_bp.route("/yandex/unlink", methods=["DELETE"])
+@token_required
+def yandex_unlink(current_user):
+    if not current_user.yandex_id:
+        return jsonify({"error": "Yandex аккаунт не привязан"}), 400
+
+    if current_user.email and current_user.email.endswith("@yandex.ru"):
+        return jsonify({"error": "Невозможно отвязать Yandex от аккаунта, созданного через Yandex OAuth"}), 400
+
+    current_user.yandex_id = None
+    current_user.yandex_token = None
+    db.session.commit()
+
+    return jsonify({"ok": True}), 200

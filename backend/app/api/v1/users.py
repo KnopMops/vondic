@@ -679,6 +679,43 @@ def update_me(current_user):
         return jsonify({"error": str(e)}), 500
 
 
+@users_bp.route("/storage-rules", methods=["GET"])
+@token_required
+def get_storage_rules(current_user):
+    return jsonify({
+        "rules": current_user.storage_rules or {"enabled": False, "rules": [], "default_target": "s3"},
+        "yandex_disk_available": bool(current_user.yandex_token),
+    }), 200
+
+
+@users_bp.route("/storage-rules", methods=["PUT"])
+@token_required
+def update_storage_rules(current_user):
+    data = request.get_json() or {}
+    rules = data.get("rules")
+
+    if not isinstance(rules, dict):
+        return jsonify({"error": "rules must be an object"}), 400
+
+    if rules.get("enabled") and not current_user.yandex_token:
+        return jsonify({"error": "Yandex Disk не подключён"}), 400
+
+    for rule in rules.get("rules", []):
+        if not isinstance(rule, dict):
+            return jsonify({"error": "Each rule must be an object"}), 400
+        if rule.get("type") not in ("size", "extension", "category"):
+            return jsonify({"error": f"Invalid rule type: {rule.get('type')}"}), 400
+        if rule.get("operator") not in ("gt", "gte", "lt", "lte", "eq", "in", "not_in"):
+            return jsonify({"error": f"Invalid operator: {rule.get('operator')}"}), 400
+        if rule.get("target") not in ("s3", "yandex_disk"):
+            return jsonify({"error": f"Invalid target: {rule.get('target')}"}), 400
+
+    current_user.storage_rules = rules
+    db.session.commit()
+
+    return jsonify({"ok": True, "rules": rules}), 200
+
+
 @users_bp.route("/admin/search", methods=["GET"])
 @token_required
 def admin_search_users(current_user):
