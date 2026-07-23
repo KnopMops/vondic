@@ -16,6 +16,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import BrandLogo from './BrandLogo'
+import PostDetailsModal from './PostDetailsModal'
 import { sidebarItems } from './sidebar.items'
 import { LuSearch as Search, LuMenu as Menu, LuX as CloseIcon } from 'react-icons/lu'
 
@@ -48,6 +49,7 @@ export default function Header({ email, onLogout }: Props) {
 	const [showResults, setShowResults] = useState(false)
 	const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
 	const [isSearchExpanded, setIsSearchExpanded] = useState(false)
+	const [selectedPost, setSelectedPost] = useState<any | null>(null)
 	const searchRef = useRef<HTMLDivElement>(null)
 	const inputRef = useRef<HTMLInputElement>(null)
 
@@ -111,6 +113,7 @@ export default function Header({ email, onLogout }: Props) {
 	}
 
 	return (
+	<>
 		<header className='fixed top-0 left-0 right-0 z-50 glass-header'>
 			<div className='mx-auto flex max-w-7xl items-center justify-between px-4 py-3'>
 				<div className='flex items-center gap-3'>
@@ -229,6 +232,7 @@ export default function Header({ email, onLogout }: Props) {
 													searchResults.results.map((post: any) => (
 														<div
 															key={post.id}
+															onClick={() => { setSelectedPost(post); setShowResults(false) }}
 															className='flex items-start gap-3 rounded-lg p-3 hover:bg-white/5 cursor-pointer transition-colors'
 														>
 															<img
@@ -548,14 +552,14 @@ export default function Header({ email, onLogout }: Props) {
 										<div className='p-4 text-center text-gray-500'>Посты не найдены</div>
 									) : (
 										searchResults.results.map((post: any) => (
-											<Link
+											<div
 												key={post.id}
-												href={`/feed?post=${post.id}`}
-												className='flex items-start gap-3 rounded-lg p-3 hover:bg-white/5 transition-colors'
 												onClick={() => {
+													setSelectedPost(post)
 													setIsMobileSearchOpen(false)
 													setShowResults(false)
 												}}
+												className='flex items-start gap-3 rounded-lg p-3 hover:bg-white/5 cursor-pointer transition-colors'
 											>
 												<img
 													src={getAvatarUrl(post.author?.avatar_url)}
@@ -573,7 +577,7 @@ export default function Header({ email, onLogout }: Props) {
 													</div>
 													<div className='text-sm text-gray-400 truncate mt-0.5'>{post.content}</div>
 												</div>
-											</Link>
+											</div>
 										))
 									)}
 								</div>
@@ -651,5 +655,13 @@ export default function Header({ email, onLogout }: Props) {
 			</div>
 		)}
 	</header>
+	{selectedPost && (
+		<PostDetailsModal
+			post={selectedPost}
+			isOpen={!!selectedPost}
+			onClose={() => setSelectedPost(null)}
+		/>
+	)}
+	</>
 	)
 }

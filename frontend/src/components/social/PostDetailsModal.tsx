@@ -53,18 +53,14 @@ export default function PostDetailsModal(props: Props) {
 	useEffect(() => {
 		if (!isOpen) return
 
-		if (!('postId' in props) && props.post) {
-			setPost(props.post)
-			setLoading(false)
-			setError('')
-			return
-		}
+		const id = postId || props.post?.id
+		if (!id) return
 
 		const fetchPost = async () => {
 			setLoading(true)
 			setError('')
 			try {
-				const res = await fetch(`/api/posts/${postId}`)
+				const res = await fetch(`/api/posts/${id}`)
 				if (!res.ok) throw new Error('Failed to fetch post')
 				const data = await res.json()
 				setPost(data)
@@ -76,9 +72,7 @@ export default function PostDetailsModal(props: Props) {
 			}
 		}
 
-		if (postId) {
-			fetchPost()
-		}
+		fetchPost()
 	}, [postId, isOpen, props])
 
 	if (!isOpen || !mounted) return null

@@ -7,6 +7,7 @@ export interface OAuthClient {
   default_scopes?: string[]
   redirect_uris: string[]
   is_active: boolean
+  verified?: boolean
   created_at: string
   client_secret?: string // Only returned on creation
 }
@@ -94,6 +95,7 @@ export async function updateOAuthClient(
     logo_url?: string
     default_scopes?: string[]
     redirect_uris?: string[]
+    verified?: boolean
   },
   token: string
 ): Promise<OAuthClient> {

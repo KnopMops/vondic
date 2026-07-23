@@ -93,7 +93,7 @@ export default function PremiumModal({ isOpen, onClose }: Props) {
 		setNote(null)
 		try {
 			const token = await getToken()
-			const res = await fetch(`${backendUrl}/api/v1/users/buy-premium-coins`, {
+			const res = await fetch(`${backendUrl}/api/v1/users/buy-premium`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -120,7 +120,7 @@ export default function PremiumModal({ isOpen, onClose }: Props) {
 		setError(null)
 		try {
 			const token = await getToken()
-			const res = await fetch(`${backendUrl}/api/v1/users/gift-premium-coins`, {
+			const res = await fetch(`${backendUrl}/api/v1/users/gift-premium`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -189,7 +189,7 @@ export default function PremiumModal({ isOpen, onClose }: Props) {
 										<span className='text-amber-300 font-semibold'>
 											{(user?.balance ?? 0) + ((user as any)?.bonus_balance ?? 0)}
 										</span>{' '}
-										коинов
+										₽
 									</p>
 								</div>
 							</div>
@@ -242,7 +242,7 @@ export default function PremiumModal({ isOpen, onClose }: Props) {
 										<span className='text-amber-300 font-semibold'>
 											{PREMIUM_PRICE}
 										</span>{' '}
-										коинов
+										₽
 									</p>
 									<button
 										type='button'
@@ -254,10 +254,10 @@ export default function PremiumModal({ isOpen, onClose }: Props) {
 											? 'Оформление…'
 											: user?.premium
 												? 'Premium уже активен'
-												: `Купить за ${PREMIUM_PRICE} коинов`}
+												: `Купить за ${PREMIUM_PRICE}₽`}
 									</button>
 									<p className='text-center text-xs text-gray-500'>
-										Подарки и передача коинов — в{' '}
+										Подарки и переводы — в{' '}
 										<a href='/shop' className='text-indigo-400 hover:underline'>
 											магазине
 										</a>
@@ -309,7 +309,7 @@ export default function PremiumModal({ isOpen, onClose }: Props) {
 									>
 										{loading
 											? 'Отправка…'
-											: `Подарить Premium (${PREMIUM_PRICE} коинов)`}
+											: `Подарить Premium (${PREMIUM_PRICE}₽)`}
 									</button>
 								</>
 							)}

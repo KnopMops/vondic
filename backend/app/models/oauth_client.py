@@ -20,6 +20,7 @@ class OAuthClient(db.Model):
     description = db.Column(TEXT, default=None)
     redirect_uris = db.Column(TEXT, nullable=False)
     is_active = db.Column(INTEGER, default=1)
+    verified = db.Column(INTEGER, default=0)
     created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
     updated_at = db.Column(
         TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -101,5 +102,6 @@ class OAuthClient(db.Model):
             "redirect_uris": self.redirect_uris.split(",") if self.redirect_uris else [],
             "is_active": bool(
                 self.is_active),
+            "verified": bool(self.verified),
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

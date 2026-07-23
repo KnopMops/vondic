@@ -25,6 +25,8 @@ async function proxyOAuth(req: NextRequest, pathSegments: string[] | undefined) 
 	const upstreamPath = sub ? `/oauth/${sub}` : '/oauth'
 	const url = `${backend}${upstreamPath}${req.nextUrl.search}`
 
+	console.log(`[oauth proxy] ${req.method} ${url}`)
+
 	const forwardHeaders = new Headers()
 	const passRequest = ['cookie', 'authorization', 'content-type', 'accept', 'accept-language']
 	for (const name of passRequest) {
@@ -37,16 +39,30 @@ async function proxyOAuth(req: NextRequest, pathSegments: string[] | undefined) 
 		body = await req.arrayBuffer()
 	}
 
-	let upstream: Response
-	try {
-		upstream = await fetch(url, {
-			method: req.method,
-			headers: forwardHeaders,
-			body,
-			redirect: 'manual',
-		})
-	} catch (e) {
-		console.error('[oauth proxy] upstream fetch failed:', e)
+	let upstream: Response | undefined
+	const maxRetries = 2
+	for (let attempt = 0; attempt <= maxRetries; attempt++) {
+		try {
+			upstream = await fetch(url, {
+				method: req.method,
+				headers: forwardHeaders,
+				body,
+				redirect: 'manual',
+				signal: AbortSignal.timeout(30000),
+			})
+			console.log(`[oauth proxy] upstream responded: ${upstream.status}`)
+			break
+		} catch (e) {
+			console.error(`[oauth proxy] attempt ${attempt + 1} failed:`, e)
+			if (attempt < maxRetries) {
+				await new Promise(r => setTimeout(r, 2000))
+				continue
+			}
+			return NextResponse.json({ error: 'Upstream unavailable' }, { status: 502 })
+		}
+	}
+
+	if (!upstream) {
 		return NextResponse.json({ error: 'Upstream unavailable' }, { status: 502 })
 	}
 

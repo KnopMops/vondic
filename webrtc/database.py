@@ -5,7 +5,7 @@ import logging
 import os
 import uuid
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -34,6 +34,22 @@ class User(Base):
     last_seen: Mapped[datetime | None] = mapped_column(nullable=True)
     is_blocked: Mapped[int | None] = mapped_column(Integer, nullable=True)
     role: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+class UserSession(Base):
+    __tablename__ = "user_sessions"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    device_type: Mapped[str] = mapped_column(String, nullable=False)
+    access_token_lookup: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    access_token_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    refresh_token_lookup: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    refresh_token_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    last_active: Mapped[datetime | None] = mapped_column(nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class Device(Base):
@@ -445,8 +461,7 @@ class UserRepository:
         return hashlib.sha256(str(token).encode("utf-8")).hexdigest()
 
     def fetch_user_by_token(self, token):
-        """Согласовано с backend AuthService.get_user_by_token: lookup + password hash,
-        затем SHA256 в колонке, затем legacy plaintext."""
+        """Check UserSession first (multi-device), then fall back to User model."""
         try:
             token = (token or "").strip()
             if not token:
@@ -454,7 +469,36 @@ class UserRepository:
             token_hash = self._hash_token(token)
             with self._session() as session:
                 row = None
+                # 1. Try UserSession (multi-device support)
                 if "." in token:
+                    lookup, _, sec = token.partition(".")
+                    if lookup and sec and "." not in sec:
+                        try:
+                            sess = session.query(UserSession).filter(
+                                UserSession.access_token_lookup == lookup
+                            ).first()
+                            if (
+                                sess
+                                and sess.access_token_hash
+                                and check_password_hash(sess.access_token_hash, token)
+                            ):
+                                now = datetime.now(timezone.utc)
+                                if sess.expires_at and sess.expires_at.replace(tzinfo=timezone.utc) < now:
+                                    session.delete(sess)
+                                    session.commit()
+                                else:
+                                    sess.last_active = datetime.now(timezone.utc)
+                                    try:
+                                        session.commit()
+                                    except Exception:
+                                        session.rollback()
+                                    user = session.query(User).get(sess.user_id)
+                                    if user:
+                                        row = user
+                        except Exception:
+                            session.rollback()
+                # 2. Fallback to User model (legacy)
+                if not row and "." in token:
                     lookup, _, sec = token.partition(".")
                     if lookup and sec and "." not in sec:
                         cand = (
@@ -950,7 +994,11 @@ class UserRepository:
             for row in rows:
                 msg = self._model_to_dict(row)
                 if "created_at" in msg:
-                    msg["timestamp"] = msg.pop("created_at")
+                    ca = msg.pop("created_at")
+                    if ca is not None:
+                        msg["timestamp"] = ca.isoformat() + "Z" if not ca.tzinfo else ca.isoformat()
+                    else:
+                        msg["timestamp"] = None
                 try:
                     msg["content"] = self._decrypt_payload(msg["content"])
                 except Exception as e:
@@ -1104,7 +1152,11 @@ class UserRepository:
             for row in rows:
                 msg = self._model_to_dict(row)
                 if "created_at" in msg:
-                    msg["timestamp"] = msg.pop("created_at")
+                    ca = msg.pop("created_at")
+                    if ca is not None:
+                        msg["timestamp"] = ca.isoformat() + "Z" if not ca.tzinfo else ca.isoformat()
+                    else:
+                        msg["timestamp"] = None
                 try:
                     msg["content"] = self._decrypt_payload(msg["content"])
                 except Exception as e:
@@ -1213,7 +1265,11 @@ class UserRepository:
             for row in rows:
                 msg = self._model_to_dict(row)
                 if "created_at" in msg:
-                    msg["timestamp"] = msg.pop("created_at")
+                    ca = msg.pop("created_at")
+                    if ca is not None:
+                        msg["timestamp"] = ca.isoformat() + "Z" if not ca.tzinfo else ca.isoformat()
+                    else:
+                        msg["timestamp"] = None
                 try:
                     msg["content"] = self._decrypt_payload(msg["content"])
                 except Exception as e:

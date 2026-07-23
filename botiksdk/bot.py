@@ -3,6 +3,7 @@ import asyncio
 from typing import Any, Dict, List, Optional
 
 from botiksdk.client import PublicAPIClient
+from botiksdk.bot_methods import BotMethodsMixin
 
 
 class InlineKeyboardBuilder:
@@ -75,7 +76,7 @@ def upload_game_button(text: str = "Загрузить игру") -> InlineKeybo
     return InlineKeyboardButton(text, modal="upload_game")
 
 
-class Bot:
+class Bot(BotMethodsMixin):
     def __init__(
         self,
         bot_id: Optional[str] = None,
@@ -88,6 +89,9 @@ class Bot:
         self.token = token
         self.api_key = api_key
         self.public = PublicAPIClient(base_url=base_url)
+        self._client = self.public
+        self._client._last_bot_id = bot_id
+        self._client._last_bot_token = token
 
     def set_token(self, token: str):
         self.token = token

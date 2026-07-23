@@ -60,10 +60,6 @@ class AuthService:
         raw_access = f"{secrets.token_hex(16)}.{secrets.token_urlsafe(40)}"
         raw_refresh = f"{secrets.token_hex(16)}.{secrets.token_urlsafe(40)}"
         AuthService._create_session(user, raw_access, raw_refresh, device_type, device_name, ip_address)
-        user.access_token_lookup = raw_access.split(".", 1)[0]
-        user.refresh_token_lookup = raw_refresh.split(".", 1)[0]
-        user.access_token = generate_password_hash(raw_access)
-        user.refresh_token = generate_password_hash(raw_refresh)
         return raw_access, raw_refresh
 
     @staticmethod
@@ -118,7 +114,7 @@ class AuthService:
         ).first():
             return (None, "Username already taken")
         try:
-            new_user = User(email=email, username=username, is_verified=0, balance=0.0, bonus_balance=100.0)
+            new_user = User(email=email, username=username, is_verified=0, balance=0.0, bonus_balance=50.0)
             new_user.set_password(password)
 
             from flask import request

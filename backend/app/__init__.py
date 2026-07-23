@@ -125,6 +125,10 @@ def create_app(config_class=Config):
     migrate.init_app(app, db)
     ma.init_app(app)
 
+    @app.teardown_appcontext
+    def shutdown_session(exception=None):
+        db.session.remove()
+
     cache.init_app(app)
 
     mail.init_app(app)
@@ -134,6 +138,10 @@ def create_app(config_class=Config):
         importlib.import_module("app.api.oauth")
     except Exception as e:
         print(f"[DB] Предупреждение: не удалось загрузить модели OAuth: {e}")
+    try:
+        importlib.import_module("app.models.bot_user_permission")
+    except Exception as e:
+        print(f"[DB] Предупреждение: не удалось загрузить модель bot_user_permission: {e}")
 
     with app.app_context():
         if not os.environ.get("SKIP_DB_BOOTSTRAP"):
@@ -153,33 +161,13 @@ def create_app(config_class=Config):
                 print(f"[DB] bonus_balance column check failed (may already exist): {e}")
                 db.session.rollback()
 
-            try:
-                from app.models.gift_catalog import GiftCatalog
-
-                if GiftCatalog.query.count() == 0:
-                    seed_items = [
-                        ("newyear_fireworks", "Новогодний салют", 99, "Flame", "Праздничное настроение на Новый год"),
-                        ("valentine_heart", "Валентинка", 39, "Heart", "Для Дня святого Валентина"),
-                        ("womens_day_bouquet", "Букет к 8 Марта", 149, "Flower", "Милый букет для прекрасных дам"),
-                        ("birthday_cake", "День рождения", 299, "Cake", "Поздравляем с днем рождения!"),
-                        ("premium_crown", "Премиум корона", 999, "Crown", "Самая престижная награда"),
-                    ]
-                    for item in seed_items:
-                        db.session.add(
-                            GiftCatalog(
-                                id=item[0],
-                                name=item[1],
-                                coin_price=item[2],
-                                icon=item[3],
-                                description=item[4],
-                                image_url=None,
-                                total_supply=None,
-                                minted_count=0,
-                            )
-                        )
-                    db.session.commit()
-            except Exception:
-                db.session.rollback()
+            # Gift catalog seeding disabled
+            # try:
+            #     from app.models.gift_catalog import GiftCatalog
+            #     if GiftCatalog.query.count() == 0:
+            #         seed_items = [...]
+            # except Exception:
+            #     db.session.rollback()
 
             try:
                 from app.services.ollama_service import OllamaService
@@ -198,6 +186,7 @@ def create_app(config_class=Config):
                 ensure_user_conversations_table,
                 ensure_user_conversations_secret_column,
                 ensure_users_extended_columns,
+                ensure_oauth_clients_verified_column,
             )
 
             ensure_users_extended_columns(db.engine)
@@ -208,8 +197,9 @@ def create_app(config_class=Config):
             ensure_bots_owner_id_column(db.engine)
             ensure_user_conversations_table(db.engine)
             ensure_user_conversations_secret_column(db.engine)
+            ensure_oauth_clients_verified_column(db.engine)
             print(
-                "[DB] Дополнительные колонки users/posts/chat/bots/conversations проверены.")
+                "[DB] Дополнительные колонки users/posts/chat/bots/conversations/oauth проверены.")
         except Exception as e:
             print(f"[DB] ensure_users_extended_columns: {e}")
 
@@ -248,6 +238,12 @@ def create_app(config_class=Config):
     from app.api.v1.upload import upload_bp
     from app.api.v1.files import files_bp
     from app.api.v1.mail import mail_bp
+    from app.api.v1.chat_folders import chat_folders_bp
+    from app.api.v1.scheduled_messages import scheduled_bp
+    from app.api.v1.stickers import stickers_bp
+    from app.api.v1.polls import polls_bp
+    from app.api.v1.group_roles import group_roles_bp
+    from app.api.v1.audit_log import audit_log_bp
 
     app.register_blueprint(public_account_bp)
     app.register_blueprint(public_bots_bp)
@@ -286,6 +282,52 @@ def create_app(config_class=Config):
     app.register_blueprint(upload_bp)
     app.register_blueprint(files_bp)
     app.register_blueprint(mail_bp)
+    app.register_blueprint(chat_folders_bp)
+    app.register_blueprint(scheduled_bp)
+    app.register_blueprint(stickers_bp)
+    app.register_blueprint(polls_bp)
+    app.register_blueprint(group_roles_bp)
+    app.register_blueprint(audit_log_bp)
+
+    # ── V2 API Blueprints ──────────────────────────────────────
+    try:
+        from app.api.v2 import v2_public_bp, v2_bp
+        from app.api.v2.batch import v2_batch_bp
+        from app.api.v2.analytics import v2_analytics_bp
+        from app.api.v2.webhooks import v2_webhooks_bp
+        from app.api.v2.marketplace import v2_marketplace_bp
+        from app.api.v2.proxy import v2_proxy_bp
+        from app.middleware.rate_limit_v2 import rate_limit_headers, add_rate_limit_headers
+
+        app.register_blueprint(v2_public_bp)
+        app.register_blueprint(v2_bp)
+        app.register_blueprint(v2_batch_bp)
+        app.register_blueprint(v2_analytics_bp)
+        app.register_blueprint(v2_webhooks_bp)
+        app.register_blueprint(v2_marketplace_bp)
+
+        # v2 proxy — catch-all, must be registered LAST
+        v2_proxy_bp.name = "v2_public_proxy"
+        v2_proxy_bp.url_prefix = "/api/public/v2"
+        app.register_blueprint(v2_proxy_bp)
+
+        # Rate limit middleware for v2
+        @app.before_request
+        def v2_rate_limit():
+            if request.path.startswith("/api/v2/") or request.path.startswith("/api/public/v2/"):
+                return rate_limit_headers()
+
+        @app.after_request
+        def v2_rate_limit_headers(response):
+            if request.path.startswith("/api/v2/") or request.path.startswith("/api/public/v2/"):
+                return add_rate_limit_headers(response)
+            return response
+
+        logger.info("V2 API blueprints registered")
+    except Exception as e:
+        print(f"[V2] Warning: Failed to register V2 blueprints: {e}")
+
+    # v1/v2 API — обе версии работают. v2 для ботов, v1 для сервиса.
 
     swagger_config = {
         "headers": [],

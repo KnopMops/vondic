@@ -1486,6 +1486,7 @@ export const useChat = (
 			type: 'text' | 'voice' = 'text',
 			attachments?: any[],
 			replyToId?: string,
+			disappearAfter?: number | null,
 		) => {
 			if (
 				!socket ||
@@ -1541,6 +1542,9 @@ export const useChat = (
 				if (replyToId) {
 					messagePayload.reply_to = replyToId
 				}
+				if (disappearAfter && disappearAfter > 0) {
+					messagePayload.disappear_after = disappearAfter
+				}
 				console.log('Emitting E2E send_message:', messagePayload)
 				socket.emit('send_message', messagePayload)
 				return
@@ -1553,6 +1557,9 @@ export const useChat = (
 			}
 			if (replyToId) {
 				messagePayload.reply_to = replyToId
+			}
+			if (disappearAfter && disappearAfter > 0) {
+				messagePayload.disappear_after = disappearAfter
 			}
 
 			if (channelId) {

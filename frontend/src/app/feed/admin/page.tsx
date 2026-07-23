@@ -58,6 +58,9 @@ export default function AdminSupportPage() {
 	const [postDetailsOpen, setPostDetailsOpen] = useState(false)
 	const [postDetailsId, setPostDetailsId] = useState<string | null>(null)
 	const [violationOpen, setViolationOpen] = useState(false)
+	const [oauthSearch, setOauthSearch] = useState('')
+	const [oauthResults, setOauthResults] = useState<any[]>([])
+	const [oauthLoading, setOauthLoading] = useState(false)
 	const [violationAction, setViolationAction] = useState<
 		'request_removal' | 'force_remove'
 	>('request_removal')
@@ -780,7 +783,7 @@ export default function AdminSupportPage() {
 				},
 				body: JSON.stringify({
 					name,
-					coin_price: price,
+					price: price,
 					icon: newGiftIcon,
 					description: newGiftDesc.trim() || undefined,
 					image_url: newGiftImageUrl || undefined,
@@ -877,6 +880,58 @@ export default function AdminSupportPage() {
 			setUserSearchResults(data.users || [])
 		} catch {}
 		setUserSearchLoading(false)
+	}
+
+	const searchOauthApps = async (q: string) => {
+		setOauthSearch(q)
+		if (q.length < 1) {
+			setOauthResults([])
+			return
+		}
+		setOauthLoading(true)
+		try {
+			const meRes = await fetch('/api/auth/me')
+			const meData = await meRes.json()
+			const token = meData?.user?.access_token || meData?.access_token
+			if (!token) return
+			const res = await fetch('/api/oauth/clients', {
+				headers: { Authorization: `Bearer ${token}` },
+			})
+			const data = await res.json()
+			const all = data.clients || data || []
+			const filtered = all.filter((c: any) =>
+				(c.name || '').toLowerCase().includes(q.toLowerCase()) ||
+				(c.client_id || '').toLowerCase().includes(q.toLowerCase()),
+			)
+			setOauthResults(filtered)
+		} catch {}
+		setOauthLoading(false)
+	}
+
+	const toggleOauthVerified = async (clientId: string, current: boolean) => {
+		try {
+			const meRes = await fetch('/api/auth/me')
+			const meData = await meRes.json()
+			const token = meData?.user?.access_token || meData?.access_token
+			if (!token) return
+			const res = await fetch(`/api/oauth/clients/${clientId}`, {
+				method: 'PUT',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`,
+				},
+				body: JSON.stringify({ verified: !current }),
+			})
+			if (!res.ok) {
+				const err = await res.json().catch(() => ({}))
+				alert(err.error || 'Ошибка')
+				return
+			}
+			const updated = await res.json()
+			setOauthResults(prev =>
+				prev.map(c => (c.client_id === clientId ? { ...c, verified: updated.client?.verified ?? !current } : c)),
+			)
+		} catch {}
 	}
 
 	const generateResetLink = async (userId: string) => {
@@ -1572,7 +1627,7 @@ export default function AdminSupportPage() {
 												</div>
 												<div>
 													<label className='block text-xs font-medium text-gray-300'>
-														Цена (коины)
+														Цена (₽)
 													</label>
 													<input
 														type='number'
@@ -1685,7 +1740,7 @@ export default function AdminSupportPage() {
 																		{g.name}
 																	</div>
 																	<div className='text-xs text-gray-400'>
-																		{g.coinPrice} коинов · {g.icon}
+																		{g.price}₽ · {g.icon}
 																	</div>
 																</div>
 																<button
@@ -1936,6 +1991,50 @@ export default function AdminSupportPage() {
 					</div>
 				</div>
 			)}
+
+					{user?.role === 'Admin' && (
+						<div className='rounded-2xl bg-white/5 border border-white/10 p-6'>
+							<h2 className='text-lg font-bold text-white mb-4'>Верификация OAuth-приложений</h2>
+							<input
+								type='text'
+								value={oauthSearch}
+								onChange={e => searchOauthApps(e.target.value)}
+								placeholder='Поиск по названию или client_id...'
+								className='w-full rounded-xl bg-black/30 border border-white/10 px-4 py-2.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 mb-4'
+							/>
+							{oauthLoading && <div className='text-sm text-gray-400'>Поиск...</div>}
+							{oauthResults.length > 0 && (
+								<div className='space-y-2'>
+									{oauthResults.map((c: any) => (
+										<div key={c.client_id} className='flex items-center justify-between rounded-lg bg-white/5 p-3'>
+											<div className='flex-1 min-w-0'>
+												<div className='flex items-center gap-2'>
+													<span className='text-sm font-medium text-white truncate'>{c.name || 'Без названия'}</span>
+													{c.verified && (
+														<span className='text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'>✓ Проверено</span>
+													)}
+												</div>
+												<div className='text-xs text-gray-500 truncate mt-0.5'>{c.client_id}</div>
+											</div>
+											<button
+												onClick={() => toggleOauthVerified(c.client_id, c.verified)}
+												className={`ml-3 shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+													c.verified
+														? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30'
+														: 'bg-white/10 text-gray-300 border border-white/10 hover:bg-white/20'
+												}`}
+											>
+												{c.verified ? '✓ Верифицировано' : 'Верифицировать'}
+											</button>
+										</div>
+									))}
+								</div>
+							)}
+							{oauthSearch.length >= 1 && !oauthLoading && oauthResults.length === 0 && (
+								<div className='text-sm text-gray-500'>Ничего не найдено</div>
+							)}
+						</div>
+					)}
 		</FeedPageShell>
 	)
 }

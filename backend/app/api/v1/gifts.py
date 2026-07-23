@@ -12,7 +12,7 @@ gifts_bp = Blueprint("gifts", __name__, url_prefix="/api/v1/gifts")
 @gifts_bp.route("/", methods=["GET"])
 def list_gifts():
     try:
-        gifts = GiftCatalog.query.order_by(GiftCatalog.coin_price.asc()).all()
+        gifts = GiftCatalog.query.order_by(GiftCatalog.price.asc()).all()
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     return jsonify([g.to_dict() for g in gifts])
@@ -37,7 +37,7 @@ def create_gift(current_user):
         return jsonify({"error": "Forbidden"}), 403
     data = request.get_json() or {}
     name = (data.get("name") or "").strip()
-    coin_price = data.get("coin_price")
+    price_val = data.get("price")
     icon = (data.get("icon") or "").strip() or None
     description = (data.get("description") or "").strip() or None
     image_url = (data.get("image_url") or "").strip() or None
@@ -45,9 +45,9 @@ def create_gift(current_user):
     if not name:
         return jsonify({"error": "name is required"}), 400
     try:
-        price_int = int(coin_price) if coin_price is not None else 0
+        price_int = int(price_val) if price_val is not None else 0
     except Exception:
-        return jsonify({"error": "coin_price must be integer"}), 400
+        return jsonify({"error": "price must be integer"}), 400
     try:
         supply_value = (
             int(total_supply)
@@ -64,7 +64,7 @@ def create_gift(current_user):
     gift = GiftCatalog(
         id=gid,
         name=name,
-        coin_price=price_int,
+        price=price_int,
         icon=icon,
         description=description,
         image_url=image_url,
@@ -95,11 +95,11 @@ def update_gift(current_user):
         name = (data.get("name") or "").strip()
         if name:
             gift.name = name
-    if "coin_price" in data:
+    if "price" in data:
         try:
-            gift.coin_price = int(data.get("coin_price"))
+            gift.price = int(data.get("price"))
         except Exception:
-            return jsonify({"error": "coin_price must be integer"}), 400
+            return jsonify({"error": "price must be integer"}), 400
     if "icon" in data:
         icon = (data.get("icon") or "").strip() or None
         gift.icon = icon

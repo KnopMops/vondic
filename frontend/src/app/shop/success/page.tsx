@@ -27,7 +27,7 @@ export default function ShopSuccessPage() {
 			try {
 				const backendUrl =
 					process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'
-				const res = await fetch(`${backendUrl}/api/v1/payments/confirm-coins`, {
+				const res = await fetch(`${backendUrl}/api/v1/payments/confirm-topup`, {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({ session_id: sessionId }),
@@ -71,7 +71,7 @@ export default function ShopSuccessPage() {
 										Оплата прошла успешно
 									</h1>
 									<p className='mt-2 text-gray-600 dark:text-gray-300'>
-										Спасибо за покупку Вондик Coins. Монеты зачисляются
+										Спасибо за покупку. Рубли зачислятся
 										автоматически после подтверждения оплаты.
 									</p>
 									{confirming && (
@@ -103,7 +103,7 @@ export default function ShopSuccessPage() {
 							</div>
 
 							<div className='mt-4 text-sm text-gray-500 dark:text-gray-400'>
-								Ваш текущий баланс: {(user?.balance ?? 0) + ((user as any)?.bonus_balance ?? 0)} coins
+								Ваш текущий баланс: {(user?.balance ?? 0) + ((user as any)?.bonus_balance ?? 0)} ₽
 							</div>
 						</div>
 					</div>

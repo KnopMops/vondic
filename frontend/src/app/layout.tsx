@@ -16,6 +16,8 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import '../styles/calls.css'
 import './globals.css'
 import StoreProvider from './StoreProvider'
+import PushRegistrar from '@/components/PushRegistrar'
+import IosPushBanner from '@/components/IosPushBanner'
 
 const geistSans = Geist({
 	variable: '--font-geist-sans',
@@ -57,6 +59,8 @@ export default function RootLayout({
 					<StoreProvider>
 						<ReactQueryProvider>
 							<AuthProvider>
+								<PushRegistrar />
+								<IosPushBanner />
 								<SocialCommunitiesProvider>
 									<SocketProvider>
 										<ToastProvider>

@@ -8,7 +8,7 @@ class GiftCatalog(db.Model):
 
     id = db.Column(TEXT, primary_key=True)
     name = db.Column(TEXT, nullable=False)
-    coin_price = db.Column(INTEGER, nullable=False, default=0)
+    price = db.Column(INTEGER, nullable=False, default=0)
     icon = db.Column(TEXT, nullable=True)
     description = db.Column(TEXT, nullable=True)
     image_url = db.Column(TEXT, nullable=True)
@@ -19,7 +19,7 @@ class GiftCatalog(db.Model):
         return {
             "id": self.id,
             "name": self.name,
-            "coinPrice": self.coin_price,
+            "price": self.price,
             "icon": self.icon,
             "desc": self.description,
             "imageUrl": self.image_url,

@@ -156,14 +156,54 @@ export function renderRichTextBlock(
 	isOwn?: boolean,
 ): React.ReactNode {
 	const lines = text.split('\n')
+
+	// Group lines into segments: blockquotes and regular lines
+	type Segment =
+		| { type: 'quote'; lines: string[] }
+		| { type: 'text'; line: string }
+	const segments: Segment[] = []
+	for (const line of lines) {
+		if (line.startsWith('> ')) {
+			const last = segments[segments.length - 1]
+			if (last && last.type === 'quote') {
+				last.lines.push(line.slice(2))
+			} else {
+				segments.push({ type: 'quote', lines: [line.slice(2)] })
+			}
+		} else {
+			segments.push({ type: 'text', line })
+		}
+	}
+
+	let lineIdx = 0
 	return (
 		<div key={keyPrefix} className='break-words leading-relaxed'>
-			{lines.map((line, index) => (
-				<span key={`${keyPrefix}-line-${index}`}>
-					{renderRichInline(line, `${keyPrefix}-inline-${index}`, isOwn)}
-					{index < lines.length - 1 ? <br /> : null}
-				</span>
-			))}
+			{segments.map((seg, index) => {
+				if (seg.type === 'quote') {
+					const startIdx = lineIdx
+					lineIdx += seg.lines.length
+					return (
+						<div
+							key={`${keyPrefix}-quote-${index}`}
+							className='my-1 border-l-2 border-indigo-500/60 bg-indigo-500/5 pl-3 pr-1 py-1 italic text-indigo-200/70 rounded-r-lg'
+						>
+							{seg.lines.map((line, i) => (
+								<span key={`${keyPrefix}-ql-${startIdx}-${i}`}>
+									{renderRichInline(line, `${keyPrefix}-qinline-${startIdx}-${i}`, isOwn)}
+									{i < seg.lines.length - 1 ? <br /> : null}
+								</span>
+							))}
+						</div>
+					)
+				}
+				const idx = lineIdx++
+				return (
+					<span key={`${keyPrefix}-line-${idx}`}>
+						{renderRichInline(seg.line, `${keyPrefix}-inline-${idx}`, isOwn)}
+						{index < segments.length - 1 ? <br /> : null}
+					</span>
+				)
+			})}
 		</div>
 	)
 }

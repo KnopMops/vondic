@@ -28,6 +28,9 @@ class Message(db.Model):
     read_by = db.Column(JSON, nullable=True)
     reply_to_id = db.Column(TEXT, nullable=True)
     forwarded_from_id = db.Column(TEXT, nullable=True)
+    thread_id = db.Column(TEXT, nullable=True)
+    disappear_after = db.Column(db.Integer, nullable=True)
+    disappear_at = db.Column(TIMESTAMP, nullable=True)
 
     created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
     updated_at = db.Column(

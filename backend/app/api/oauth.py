@@ -616,7 +616,9 @@ def authorize():
                     {logo_html}
                     <div>
                         <div class="label">Название приложения</div>
-                        <div class="value" style="font-size:16px;font-weight:700;">{app_name}</div>
+                        <div class="value" style="font-size:16px;font-weight:700;">{app_name}
+                            {'<span style="display:inline-flex;align-items:center;gap:4px;margin-left:8px;padding:2px 8px;border-radius:6px;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);color:#6ee7b7;font-size:11px;font-weight:600;">✓ Верифицировано администратором</span>' if getattr(client, 'verified', 0) else ''}
+                        </div>
                     </div>
                 </div>
                 <div class="box">
@@ -900,6 +902,7 @@ def update_oauth_client(current_user, client_id):
     logo_url = data.get("logo_url")
     default_scopes = data.get("default_scopes")
     redirect_uris = data.get("redirect_uris")
+    verified = data.get("verified")
 
     if name:
         client.name = name
@@ -928,6 +931,12 @@ def update_oauth_client(current_user, client_id):
         if not cleaned:
             return jsonify({"error": "redirect_uris_required"}), 400
         client.redirect_uris = ",".join(cleaned)
+
+    if verified is not None:
+        role = str(getattr(current_user, "role", "")).lower()
+        if role not in ("admin",):
+            return jsonify({"error": "admin_only"}), 403
+        client.verified = 1 if verified else 0
 
     db.session.commit()
     return jsonify(client.to_dict()), 200

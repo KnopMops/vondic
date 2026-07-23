@@ -1,5 +1,6 @@
 'use client'
 
+import PollCard from '@/components/chat/PollCard'
 import AudioPlayer from '@/components/social/AudioPlayer'
 import PostDetailsModal from '@/components/social/PostDetailsModal'
 import VideoPlayer from '@/components/social/VideoPlayer'
@@ -12,13 +13,18 @@ import {
 } from '@/lib/inviteLinks'
 import { renderRichFormattedContent } from '@/lib/messageRichText'
 import { formatMskTime, getAttachmentUrl, getAvatarUrl } from '@/lib/utils'
-import { motion } from 'framer-motion'
 import { memo, useEffect, useRef, useState } from 'react'
+import { motion } from 'framer-motion'
 import {
 	LuCheck as Check,
 	LuCheckCheck as CheckCheck,
 	LuMic as Mic,
 	LuRepeat2 as Repeat2,
+	LuTimer as TimerIcon,
+	LuMapPin,
+	LuUser,
+	LuChartNoAxesColumn,
+	LuMusic,
 } from 'react-icons/lu'
 import { FiMoreHorizontal as MoreHorizontal } from 'react-icons/fi'
 
@@ -30,7 +36,9 @@ interface Message {
 	isOwn: boolean
 	is_read?: boolean
 	is_edited?: boolean
-	type?: 'text' | 'voice' | 'video_note'
+	type?: 'text' | 'voice' | 'video_note' | 'poll' | 'image' | 'file' | 'game' | 'call_invite'
+		| 'photo' | 'video' | 'document' | 'audio' | 'sticker' | 'location' | 'venue'
+		| 'contact' | 'dice'
 	channel_id?: string
 	group_id?: string
 	reply_to?: string
@@ -42,6 +50,7 @@ interface Message {
 		sender_id: string
 		sender_name: string
 		sender_avatar?: string | null
+		chat_name?: string
 	}
 	reply_markup?: {
 		inline_keyboard: Array<Array<{
@@ -50,6 +59,29 @@ interface Message {
 			url?: string
 		}>>
 	}
+	disappear_after?: number | null
+	disappear_at?: string | null
+	game?: {
+		id: string
+		title?: string
+		embed_url: string
+		download_url?: string
+	}
+	target_id?: string
+	// Bot outbox content types (from send_bot_message)
+	bot_photo?: any
+	bot_video?: any
+	bot_document?: any
+	bot_audio?: any
+	bot_voice?: any
+	bot_video_note?: any
+	bot_sticker?: any
+	bot_location?: any
+	bot_venue?: any
+	bot_contact?: any
+	bot_poll?: any
+	bot_dice?: any
+	bot_caption?: string
 }
 
 const getBubbleRadius = (
@@ -147,6 +179,23 @@ const MessageBubble = memo(
 		const [isEditing, setIsEditing] = useState(false)
 		const [editValue, setEditValue] = useState(msg.content)
 		const menuRef = useRef<HTMLDivElement | null>(null)
+		const [hasDisappeared, setHasDisappeared] = useState(false)
+
+		useEffect(() => {
+			if (!msg.disappear_at) {
+				setHasDisappeared(false)
+				return
+			}
+			const check = () => {
+				const diff = new Date(msg.disappear_at!).getTime() - Date.now()
+				if (diff <= 0) {
+					setHasDisappeared(true)
+				}
+			}
+			check()
+			const id = setInterval(check, 1000)
+			return () => clearInterval(id)
+		}, [msg.disappear_at])
 
 		useEffect(() => {
 			setEditValue(msg.content)
@@ -228,6 +277,26 @@ const MessageBubble = memo(
 		const stickerPayload = msg.is_deleted ? null : getStickerPayload(msg.content)
 		const invitePayload = msg.is_deleted ? null : getInvitePayload(msg.content)
 
+		const getPollPayload = (content: string) => {
+			try {
+				if (
+					!content ||
+					typeof content !== 'string' ||
+					!content.trim().startsWith('{')
+				)
+					return null
+				const data = JSON.parse(content)
+				if (data && data.type === 'poll' && typeof data.poll_id === 'string') {
+					return data as { type: 'poll'; poll_id: string }
+				}
+			} catch {
+				return null
+			}
+			return null
+		}
+
+		const pollPayload = msg.is_deleted ? null : getPollPayload(msg.content)
+
 		const storyReplyMatch = !msg.is_deleted && msg.content
 			? msg.content.match(/__STORY_REPLY__(\{.*?\})__/)
 			: null
@@ -259,9 +328,11 @@ const MessageBubble = memo(
 					})()
 		const displayContent = msg.is_deleted
 			? 'Сообщение удалено'
-			: typeof msg.content === 'string' && msg.content.startsWith('e2e:')
-				? '🔒 Зашифрованное сообщение'
-				: (msg.content || '').replace(/\n*\s*__STORY_REPLY__\{.*?\}__\s*/g, '').trim()
+			: hasDisappeared
+				? 'Сообщение исчезло'
+				: typeof msg.content === 'string' && msg.content.startsWith('e2e:')
+					? '🔒 Зашифрованное сообщение'
+					: (msg.content || '').replace(/\n*\s*__STORY_REPLY__\{.*?\}__\s*/g, '').trim()
 		const reactionEntries = reactions ? Object.entries(reactions) : []
 		const attachments = Array.isArray(msg.attachments) ? msg.attachments : []
 		const isGroupChat = !!(msg.group_id || msg.channel_id)
@@ -308,7 +379,7 @@ const MessageBubble = memo(
 		const ownBubbleClass = theme?.ownMessageBg || 'chat-bubble-own'
 
 		return (
-			<motion.div
+			<div
 				initial={{ opacity: 0, y: 5 }}
 				animate={{ opacity: 1, y: 0 }}
 				transition={{ duration: 0.18, ease: 'easeOut' }}
@@ -336,7 +407,7 @@ const MessageBubble = memo(
 					className={`relative max-w-[min(72%,480px)] px-4 py-2.5 text-[15px] leading-relaxed transition-colors duration-300 ${bubbleRadius} ${
 						msg.isOwn ? ownBubbleClass : 'chat-bubble-other'
 					} ${
-						isSelectionMode && msg.isOwn
+						isSelectionMode
 							? isSelected
 								? 'ring-2 ring-emerald-400'
 								: 'opacity-60'
@@ -349,7 +420,7 @@ const MessageBubble = memo(
 							msg.isOwn ? 'left-2' : 'right-2'
 						} flex items-center gap-1 z-20`}
 					>
-						{isSelectionMode && msg.isOwn && (
+						{isSelectionMode && (
 							<button
 								onClick={e => {
 									e.stopPropagation()
@@ -492,10 +563,22 @@ const MessageBubble = memo(
 						<div className='mb-2 flex items-center gap-2 rounded-xl border border-indigo-500/20 bg-indigo-500/10 px-3 py-2 text-xs'>
 							<Repeat2 className='w-3.5 h-3.5 text-indigo-400 flex-shrink-0' />
 							<span className='text-indigo-300/90 truncate'>
-								Переслано от{' '}
-								<span className='font-semibold text-gray-200'>
+								{'Переслано от '}
+								<a
+									href={`/feed/profile/${msg.forwarded_from.sender_id}`}
+									onClick={e => e.stopPropagation()}
+									className='font-semibold text-gray-200 hover:text-indigo-300 hover:underline cursor-pointer'
+								>
 									{msg.forwarded_from.sender_name}
-								</span>
+								</a>
+								{msg.forwarded_from.chat_name && (
+									<span className='text-gray-400'>
+										{' в '}
+										<span className='font-medium text-gray-300'>
+											{msg.forwarded_from.chat_name}
+										</span>
+									</span>
+								)}
 							</span>
 						</div>
 					)}
@@ -602,6 +685,8 @@ const MessageBubble = memo(
 							alt='sticker'
 							className='w-full max-w-[240px] rounded-lg object-contain'
 						/>
+					) : pollPayload ? (
+						<PollCard pollId={pollPayload.poll_id} currentUserId={currentUserId} />
 					) : sharedPost ? (
 						<>
 							<div
@@ -646,33 +731,6 @@ const MessageBubble = memo(
 								/>
 							)}
 						</>
-<<<<<<< Updated upstream
-					) : (
-						<div className='relative min-w-[52px] pr-14 pb-0.5'>
-							<div className='space-y-1.5'>
-								{renderFormattedContent(displayContent)}
-							</div>
-							<span
-								className={`absolute bottom-0.5 right-0 text-[11px] leading-none tabular-nums select-none ${
-									msg.isOwn
-										? 'text-white/60'
-										: 'text-[color:var(--app-muted)]'
-								}`}
-							>
-								{formatMskTime(
-									(msg as Message & { created_at?: string }).timestamp ||
-										(msg as Message & { created_at?: string }).created_at ||
-										'',
-								)}
-								{msg.is_edited && (
-									<span className='ml-1 text-[10px] opacity-60'>ред.</span>
-								)}
-								{msg.isOwn && (
-									<span className='inline-flex align-middle ml-1'>
-										{msg.is_read ? (
-											<CheckCheck className='h-3.5 w-3.5 text-indigo-300/80' />
-=======
->>>>>>> Stashed changes
 					) : storyReplyData ? (
 						<div className='space-y-2'>
 							<div className='relative w-[80px] h-[80px] rounded-xl overflow-hidden bg-black/30 border border-white/10'>
@@ -729,6 +787,169 @@ const MessageBubble = memo(
 								)}
 							</div>
 						</div>
+					) : msg.bot_photo ? (
+						<div className='space-y-2'>
+							{(() => {
+								const photos = Array.isArray(msg.bot_photo) ? msg.bot_photo : [msg.bot_photo]
+								return photos.map((p: any, i: number) => {
+									const url = typeof p === 'string' ? p : (p?.url || p?.file_id || '')
+									return url ? (
+										<img key={i} src={getAttachmentUrl(url)} alt='photo' className='max-w-full rounded-lg object-cover max-h-[400px]' />
+									) : null
+								})
+							})()}
+							{msg.bot_caption && (
+								<div className='text-sm'>{renderFormattedContent(msg.bot_caption)}</div>
+							)}
+						</div>
+					) : msg.bot_video ? (
+						<div className='space-y-2'>
+							{(() => {
+								const v = msg.bot_video
+								const url = typeof v === 'string' ? v : (v?.url || v?.file_id || '')
+								return url ? <VideoPlayer src={url} /> : null
+							})()}
+							{msg.bot_caption && (
+								<div className='text-sm'>{renderFormattedContent(msg.bot_caption)}</div>
+							)}
+						</div>
+					) : msg.bot_document ? (
+						<div className='space-y-2'>
+							{(() => {
+								const doc = msg.bot_document
+								const url = doc?.url || doc?.file_id || ''
+								const name = doc?.file_name || 'Документ'
+								const mime = doc?.mime_type || ''
+								const isImage = mime.startsWith('image/') || /\.(png|jpg|jpeg|gif|webp|bmp|svg)$/i.test(name)
+								const isVideo = mime.startsWith('video/') || /\.(mp4|mov|webm|m4v|avi|mkv)$/i.test(name)
+								const isAudio = mime.startsWith('audio/') || /\.(mp3|wav|ogg|m4a)$/i.test(name)
+								if (isImage && url) return <img src={getAttachmentUrl(url)} alt={name} className='max-w-full rounded-lg object-cover max-h-[400px]' />
+								if (isVideo && url) return <VideoPlayer src={url} />
+								if (isAudio && url) return <AudioPlayer src={url} />
+								return url ? (
+									<a href={getAttachmentUrl(url)} target='_blank' rel='noreferrer'
+										className='flex items-center justify-between rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-gray-200 hover:bg-black/30 transition-colors'>
+										<span className='truncate'>{name}</span>
+										<span className='ml-3 text-xs text-gray-400'>{mime.split('/').pop()?.toUpperCase() || 'FILE'}</span>
+									</a>
+								) : null
+							})()}
+							{msg.bot_caption && (
+								<div className='text-sm'>{renderFormattedContent(msg.bot_caption)}</div>
+							)}
+						</div>
+					) : msg.bot_audio ? (
+						<div className='min-w-[240px] py-1'>
+							<div className='flex items-center gap-2 mb-2'>
+								<LuMusic className='w-4 h-4 text-purple-400' />
+								<span className='text-xs text-purple-400'>
+									{msg.bot_audio?.title || msg.bot_audio?.performer || 'Аудио'}
+								</span>
+							</div>
+							<audio controls src={getAttachmentUrl(msg.bot_audio?.url || msg.bot_audio?.file_id || '')} className='w-full h-8' />
+						</div>
+					) : msg.bot_voice ? (
+						<div className='min-w-[240px] py-1'>
+							<div className='flex items-center gap-2 mb-2'>
+								<Mic className='w-4 h-4 text-blue-400' />
+								<span className='text-xs text-blue-400'>
+									Голосовое сообщение
+									{msg.bot_voice?.duration ? ` (${msg.bot_voice.duration}с)` : ''}
+								</span>
+							</div>
+							<audio controls src={getAttachmentUrl(msg.bot_voice?.url || msg.bot_voice?.file_id || '')} className='w-full h-8' />
+						</div>
+					) : msg.bot_video_note ? (
+						<div className='py-1'>
+							<div style={{ width: 200, height: 200, borderRadius: '50%', overflow: 'hidden', position: 'relative', border: '3px solid rgba(99,102,241,0.6)', boxShadow: '0 0 0 1px rgba(99,102,241,0.25)' }}>
+								<video src={getAttachmentUrl(msg.bot_video_note?.url || msg.bot_video_note?.file_id || '')}
+									style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+									controls preload='metadata' playsInline />
+							</div>
+						</div>
+					) : msg.bot_sticker ? (
+						<div>
+							{(() => {
+								const s = msg.bot_sticker
+								const url = s?.url || s?.file_id || ''
+								return url ? (
+									<img src={getAttachmentUrl(url)} alt={s?.emoji || 'sticker'} className='max-w-[200px] max-h-[200px] object-contain' />
+								) : (
+									<span className='text-4xl'>{s?.emoji || '🏷️'}</span>
+								)
+							})()}
+						</div>
+					) : msg.bot_location ? (
+						<div className='py-1'>
+							<div className='flex items-center gap-2 mb-1'>
+								<LuMapPin className='w-4 h-4 text-red-400' />
+								<span className='text-sm text-red-400 font-medium'>Местоположение</span>
+							</div>
+							<a href={`https://maps.google.com/?q=${msg.bot_location.latitude},${msg.bot_location.longitude}`}
+								target='_blank' rel='noreferrer'
+								className='text-xs text-indigo-300 hover:text-indigo-200 underline'>
+								{msg.bot_location.latitude.toFixed(6)}, {msg.bot_location.longitude.toFixed(6)}
+							</a>
+						</div>
+					) : msg.bot_venue ? (
+						<div className='py-1'>
+							<div className='flex items-center gap-2 mb-1'>
+								<LuMapPin className='w-4 h-4 text-orange-400' />
+								<span className='text-sm text-orange-400 font-medium'>{msg.bot_venue.title}</span>
+							</div>
+							{msg.bot_venue.address && (
+								<p className='text-xs text-gray-400'>{msg.bot_venue.address}</p>
+							)}
+						</div>
+					) : msg.bot_contact ? (
+						<div className='py-1'>
+							<div className='flex items-center gap-2 mb-1'>
+								<LuUser className='w-4 h-4 text-green-400' />
+								<span className='text-sm text-green-400 font-medium'>
+									{msg.bot_contact.first_name}{msg.bot_contact.last_name ? ` ${msg.bot_contact.last_name}` : ''}
+								</span>
+							</div>
+							{msg.bot_contact.phone_number && (
+								<p className='text-xs text-gray-400'>📞 {msg.bot_contact.phone_number}</p>
+							)}
+							{msg.bot_contact.user_id && (
+								<a href={`/feed/profile/${msg.bot_contact.user_id}`} className='text-xs text-indigo-300 hover:underline'>
+									Открыть профиль
+								</a>
+							)}
+						</div>
+					) : msg.bot_poll ? (
+						<div className='py-1'>
+							<div className='flex items-center gap-2 mb-2'>
+								<LuChartNoAxesColumn className='w-4 h-4 text-yellow-400' />
+								<span className='text-sm text-yellow-400 font-medium'>Опрос</span>
+							</div>
+							<p className='text-sm font-medium text-white mb-2'>{msg.bot_poll.question}</p>
+							<div className='space-y-1.5'>
+								{(msg.bot_poll.options || []).map((opt: any, i: number) => {
+									const total = msg.bot_poll.total_voter_count || 1
+									const pct = Math.round(((opt.voter_count || 0) / total) * 100)
+									return (
+										<div key={i} className='relative rounded-lg overflow-hidden bg-black/20 border border-white/10'>
+											<div className='absolute inset-0 bg-indigo-500/20' style={{ width: `${pct}%` }} />
+											<div className='relative flex items-center justify-between px-3 py-1.5'>
+												<span className='text-xs text-white/90'>{opt.text}</span>
+												<span className='text-xs text-gray-400'>{pct}%</span>
+											</div>
+										</div>
+									)
+								})}
+							</div>
+							<p className='text-[10px] text-gray-500 mt-1.5'>
+								{msg.bot_poll.total_voter_count || 0} голосов
+								{msg.bot_poll.is_anonymous ? ' · Анонимный' : ''}
+							</p>
+						</div>
+					) : msg.bot_dice ? (
+						<div className='py-1 text-center'>
+							<span className='text-4xl'>{msg.bot_dice.emoji || '🎲'}</span>
+							<div className='text-xs text-gray-400 mt-1'>Выпало: {msg.bot_dice.value}</div>
+						</div>
 					) : (
 						<div className='relative min-w-[52px]'>
 							<div className='space-y-1.5'>
@@ -736,7 +957,7 @@ const MessageBubble = memo(
 							</div>
 						</div>
 					)}
-					{attachments.length > 0 && (
+					{attachments.length > 0 && msg.type !== 'video_note' && (
 						<div className='mt-2 space-y-2'>
 							{attachments.map(a => {
 								const ext = (a.ext || '').toLowerCase()
@@ -918,7 +1139,7 @@ const MessageBubble = memo(
 							))}
 						</div>
 					)}
-					
+
 					{reactionEntries.length > 0 && (
 						<div className='mt-2 flex flex-wrap gap-1'>
 							{reactionEntries.map(([emoji, info]) => (
@@ -937,40 +1158,6 @@ const MessageBubble = memo(
 							))}
 						</div>
 					)}
-<<<<<<< Updated upstream
-					{(msg.type === 'voice' ||
-						msg.type === 'video_note' ||
-						stickerPayload ||
-						sharedPost ||
-						attachments.length > 0 ||
-						isEditing) && (
-						<div
-							className={`text-[11px] mt-2 flex items-center gap-1 justify-end ${
-								msg.isOwn
-									? 'text-white/60'
-									: 'text-[color:var(--app-muted)]'
-							}`}
-						>
-							{formatMskTime(
-								(msg as Message & { created_at?: string }).timestamp ||
-									(msg as Message & { created_at?: string }).created_at ||
-									'',
-							)}
-							{msg.is_edited && (
-								<span className='ml-1 text-[10px] opacity-60'>ред.</span>
-							)}
-							{msg.isOwn && (
-								<span className='inline-flex'>
-									{msg.is_read ? (
-										<CheckCheck className='h-3.5 w-3.5 text-indigo-300/80' />
-									) : (
-										<Check className='h-3.5 w-3.5 text-[color:var(--app-fg)]/45' />
-									)}
-								</span>
-							)}
-						</div>
-					)}
-=======
 					<div
 						className={`text-[11px] mt-1 flex items-center gap-1 justify-end ${
 							msg.isOwn
@@ -986,6 +1173,21 @@ const MessageBubble = memo(
 						{msg.is_edited && (
 							<span className='ml-1 text-[10px] opacity-60'>ред.</span>
 						)}
+						{msg.disappear_at && !hasDisappeared && !msg.is_deleted && (
+							<span className='ml-1 inline-flex items-center gap-0.5 text-[10px] text-amber-400/80'>
+								<TimerIcon className='h-3 w-3' />
+								{(() => {
+									const remaining = Math.max(0, new Date(msg.disappear_at).getTime() - Date.now())
+									if (remaining <= 0) return null
+									const mins = Math.floor(remaining / 60000)
+									const hrs = Math.floor(mins / 60)
+									const days = Math.floor(hrs / 24)
+									if (days > 0) return `${days}д`
+									if (hrs > 0) return `${hrs}ч`
+									return `${mins}м`
+								})()}
+							</span>
+						)}
 						{msg.isOwn && (
 							<span className='inline-flex'>
 								{msg.is_read ? (
@@ -996,9 +1198,8 @@ const MessageBubble = memo(
 							</span>
 						)}
 					</div>
->>>>>>> Stashed changes
 				</div>
-			</motion.div>
+			</div>
 		)
 	},
 )

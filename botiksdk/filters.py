@@ -210,3 +210,20 @@ class FieldAccessor:
 
 
 F = FieldAccessor()
+
+
+class RequireScopes(BaseFilter):
+    """Filter that checks user has granted required permission scopes to the bot."""
+
+    def __init__(self, *scopes: str):
+        self.scopes = list(scopes)
+
+    def __call__(self, message) -> bool:
+        granted = getattr(message, "_bot_scopes", None)
+        if granted is None:
+            return False
+        granted_set = set(granted.split(",")) if isinstance(granted, str) else set(granted)
+        return all(s in granted_set for s in self.scopes)
+
+    def __repr__(self):
+        return f"RequireScopes({', '.join(self.scopes)})"

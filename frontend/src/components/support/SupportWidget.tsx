@@ -120,10 +120,10 @@ export default function SupportWidget() {
 								</div>
 							</div>
 
-							{(question === 'Другое' || !question) && (
+							{question === 'Другое' && (
 								<div>
 									<label className='text-sm font-medium text-gray-300 mb-2 block'>
-										{question === 'Другое' ? 'Опишите вашу проблему' : 'Или опишите проблему'}
+										Опишите вашу проблему
 									</label>
 									<textarea
 										value={customQuestion}

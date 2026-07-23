@@ -252,21 +252,22 @@ GIFT_PRICING = {
     "partner_badge": 1999,
     "gold_star": 1999,
 }
-STORAGE_TB_PRICE = 6500
+STORAGE_TB_PRICE = 499
 STORAGE_TB_BYTES = 1024 * 1024 * 1024 * 1024
 
-PREMIUM_COIN_PRICE = 50
+PREMIUM_PRICE_RUB = 50
 PREMIUM_DURATION_DAYS = 30
 
 
+@users_bp.route("/buy-premium", methods=["POST"])
 @users_bp.route("/buy-premium-coins", methods=["POST"])
 @token_required
-def buy_premium_coins(current_user):
-    """Оплата Premium внутриигровыми коинами (магазин)."""
-    price = PREMIUM_COIN_PRICE
+def buy_premium(current_user):
+    """Оплата Premium балансом в рублях."""
+    price = PREMIUM_PRICE_RUB
     spendable = (current_user.balance or 0) + (getattr(current_user, 'bonus_balance', 0) or 0)
     if spendable < price:
-        return jsonify({"error": "Недостаточно коинов"}), 400
+        return jsonify({"error": "Недостаточно средств"}), 400
     try:
         now = datetime.utcnow()
         base = now
@@ -303,19 +304,20 @@ def buy_premium_coins(current_user):
         return jsonify({"error": str(e)}), 500
 
 
+@users_bp.route("/gift-premium", methods=["POST"])
 @users_bp.route("/gift-premium-coins", methods=["POST"])
 @token_required
-def gift_premium_coins(current_user):
-    """Подарить Vondic Premium (30 дней) за коины любому пользователю по ID."""
+def gift_premium(current_user):
+    """Подарить Vondic Premium (30 дней) за рубли любому пользователю по ID."""
     data = request.get_json() or {}
     target_user_id = data.get("target_user_id")
     if not target_user_id:
         return jsonify({"error": "Требуется target_user_id"}), 400
     if str(target_user_id) == str(current_user.id):
         return jsonify({"error": "Нельзя подарить Premium самому себе"}), 400
-    price = PREMIUM_COIN_PRICE
+    price = PREMIUM_PRICE_RUB
     if (current_user.balance or 0) < price:
-        return jsonify({"error": "Недостаточно коинов"}), 400
+        return jsonify({"error": "Недостаточно средств"}), 400
     recipient = User.query.get(target_user_id)
     if not recipient:
         return jsonify({"error": "Получатель не найден"}), 404
@@ -359,26 +361,27 @@ def gift_premium_coins(current_user):
         return jsonify({"error": str(e)}), 500
 
 
+@users_bp.route("/transfer-balance", methods=["POST"])
 @users_bp.route("/gift-coins", methods=["POST"])
 @token_required
-def gift_coins(current_user):
-    """Подарить Вондик Coins другому пользователю."""
+def transfer_balance(current_user):
+    """Перевести рубли другому пользователю."""
     data = request.get_json() or {}
     target_user_id = data.get("target_user_id")
     try:
         amount = int(data.get("amount") or 0)
     except (TypeError, ValueError):
-        return jsonify({"error": "Неверное количество коинов"}), 400
+        return jsonify({"error": "Неверная сумма"}), 400
     if not target_user_id:
         return jsonify({"error": "Требуется target_user_id"}), 400
     if str(target_user_id) == str(current_user.id):
-        return jsonify({"error": "Нельзя подарить коины самому себе"}), 400
+        return jsonify({"error": "Нельзя перевести самому себе"}), 400
     if amount < 1:
-        return jsonify({"error": "Минимум 1 коин"}), 400
+        return jsonify({"error": "Минимум 1₽"}), 400
     if amount > 10000:
-        return jsonify({"error": "Максимум 10000 коинов за раз"}), 400
+        return jsonify({"error": "Максимум 10000₽ за раз"}), 400
     if (current_user.balance or 0) < amount:
-        return jsonify({"error": "Недостаточно коинов"}), 400
+        return jsonify({"error": "Недостаточно средств"}), 400
     recipient = User.query.get(target_user_id)
     if not recipient:
         return jsonify({"error": "Получатель не найден"}), 404
@@ -426,7 +429,7 @@ def purchase_gift(current_user):
 
     catalog_item = GiftCatalog.query.get(gift_id)
     if catalog_item is not None:
-        price = catalog_item.coin_price
+        price = catalog_item.price
         if catalog_item.total_supply is not None:
             if (catalog_item.minted_count or 0) + \
                     quantity > catalog_item.total_supply:
@@ -541,7 +544,7 @@ def send_gift(current_user):
 
     catalog_item = GiftCatalog.query.get(gift_id)
     if catalog_item is not None:
-        price = catalog_item.coin_price
+        price = catalog_item.price
         if catalog_item.total_supply is not None:
             if (catalog_item.minted_count or 0) + \
                     quantity > catalog_item.total_supply:
@@ -781,3 +784,75 @@ def admin_generate_reset_link(current_user):
         "email": user.email,
     })
 
+
+@users_bp.route("/internal/push-subscribe", methods=["POST"])
+def push_subscribe():
+    """Store PWA push subscription (Web Push for iOS PWA)."""
+    data = request.get_json() or {}
+    user_id = data.get("user_id")
+    endpoint = data.get("endpoint")
+    p256dh = data.get("p256dh", "")
+    auth = data.get("auth", "")
+    platform = data.get("platform", "web")
+
+    if not user_id or not endpoint:
+        return jsonify({"error": "user_id and endpoint required"}), 400
+
+    try:
+        from sqlalchemy import text
+        db.session.execute(text(
+            "INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, platform) "
+            "VALUES (:uid, :ep, :p256, :auth, :plat) "
+            "ON CONFLICT (user_id, endpoint) DO UPDATE SET p256dh = :p256, auth = :auth, platform = :plat"
+        ), {"uid": user_id, "ep": endpoint, "p256": p256dh, "auth": auth, "plat": platform})
+        db.session.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
+@users_bp.route("/internal/push-unsubscribe", methods=["POST"])
+def push_unsubscribe():
+    """Remove PWA push subscription."""
+    data = request.get_json() or {}
+    user_id = data.get("user_id")
+    endpoint = data.get("endpoint")
+
+    if not user_id or not endpoint:
+        return jsonify({"error": "user_id and endpoint required"}), 400
+
+    try:
+        from sqlalchemy import text
+        db.session.execute(text(
+            "DELETE FROM push_subscriptions WHERE user_id = :uid AND endpoint = :ep"
+        ), {"uid": user_id, "ep": endpoint})
+        db.session.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
+
+@users_bp.route("/avatars", methods=["GET"])
+def get_avatars():
+    """Get avatar URLs for a list of user IDs."""
+    ids_str = request.args.get("ids", "")
+    if not ids_str:
+        return jsonify({})
+    ids = [i.strip() for i in ids_str.split(",") if i.strip()]
+    if not ids:
+        return jsonify({})
+    try:
+        from sqlalchemy import text
+        rows = db.session.execute(
+            text("SELECT id, username, avatar_url FROM users WHERE id IN :ids"),
+            {"ids": tuple(ids)}
+        ).fetchall()
+        return jsonify({
+            row[0]: {"username": row[1], "avatar_url": row[2]}
+            for row in rows
+        })
+    except Exception:
+        return jsonify({})

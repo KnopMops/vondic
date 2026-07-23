@@ -1,5 +1,6 @@
 'use client'
 
+import BotConsentModal from '@/components/bot/BotConsentModal'
 import BotGameUploadModal from '@/components/bots/BotGameUploadModal'
 import { ChatMenu } from '@/components/calls'
 import { ConnectingModal } from '@/components/calls/ConnectingModal'
@@ -16,10 +17,8 @@ import {
 	loadChatFolders,
 	matchesActiveFolder,
 	saveActiveFolderId,
-	saveChatFolders,
-	type ChatFolder,
-	type ChatRef
 } from '@/lib/chatFolders'
+import type { ChatFolder, ChatRef } from '@/lib/chatFolderTypes'
 import { buildChatListItems, getMessageTimestamp, formatChatDateLabel, isSameMessageCluster, type MessageGroupPosition } from '@/lib/chatMessageLayout'
 import {
 	canPinChats,
@@ -51,6 +50,7 @@ import {
 	parseInviteToken,
 	serverJoinUrl,
 } from '@/lib/inviteLinks'
+import { createScheduled, listScheduledForChat } from '@/lib/api/scheduledMessages'
 import {
 	createScheduledMessageId,
 	getDueScheduledMessages,
@@ -99,6 +99,7 @@ import {
 	LuMessageSquare as MessageSquare,
 	LuMic as Mic,
 	LuPaperclip as Paperclip,
+	LuChartBar as ChartBar,
 	LuPhone as Phone,
 	LuPlus as Plus,
 	LuScreenShare as ScreenShare,
@@ -118,12 +119,14 @@ import ChannelSettingsModal from './ChannelSettingsModal'
 import ChatDateSeparator from './ChatDateSeparator'
 import CommunitySettingsModal from './CommunitySettingsModal'
 import SmartChatInput from './components/SmartChatInput'
+import PollCreationModal from './components/PollCreationModal'
 import DeleteChatHistoryModal, {
 	type DeleteHistoryScope,
 } from './DeleteChatHistoryModal'
 import DiscoveryModal from './DiscoveryModal'
 import MessageBubble from './MessageBubble'
 import ScheduleMessageModal from './ScheduleMessageModal'
+import GroupInfoPanel from './GroupInfoPanel'
 import ProfileModal from '@/components/messenger/ProfileModal'
 
 const formatLastSeen = (
@@ -368,6 +371,7 @@ const getChannelLastMessageTime = (channelId: string, messages: Message[]): stri
 const ArrowLeftIcon = ArrowLeft
 const SendIcon = Send
 const PaperclipIcon = Paperclip
+const ChartBarIcon = ChartBar
 const SmileIcon = Smile
 const StickerIcon = Sticker
 const XIcon = X
@@ -1125,7 +1129,7 @@ export default function MessengerPage() {
 						? localStorage.getItem('access_token') || undefined
 						: undefined)
 				const res = await fetch(
-					`/api/v1/bots?bot_id=${selectedFriend.id}&chat_id=${user.id}&mode=outbox`,
+					`/api/v1/bots/${selectedFriend.id}/outbox?chat_id=${user.id}`,
 					token
 						? {
 								headers: {
@@ -1215,6 +1219,8 @@ export default function MessengerPage() {
 	const messagesEndRef = useRef<HTMLDivElement>(null)
 	const messageRefs = useRef<Record<string, HTMLDivElement | null>>({})
 	const containerRef = useRef<HTMLDivElement>(null)
+	const prevMessagesCountRef = useRef(0)
+	const wasNearBottomRef = useRef(true)
 	const forceScrollToBottomRef = useRef(false)
 	const scrollToBottomOnOpenRef = useRef(false)
 	const [showScrollToBottom, setShowScrollToBottom] = useState(false)
@@ -1408,6 +1414,9 @@ export default function MessengerPage() {
 			document.removeEventListener('mousedown', handleClickOutside)
 		}
 	}, [isPickerOpen])
+
+
+
 	const [isScreenViewerOpen, setIsScreenViewerOpen] = useState(false)
 	const [customStickers, setCustomStickers] = useState<
 		Array<{ id: string; url: string }>
@@ -1455,16 +1464,26 @@ export default function MessengerPage() {
 		return []
 	})
 	const [showArchivedChats, setShowArchivedChats] = useState(false)
-	const [chatFolders, setChatFolders] = useState<ChatFolder[]>(() =>
-		loadChatFolders(),
-	)
+	const [chatFolders, setChatFolders] = useState<ChatFolder[]>([])
 	const [activeFolderId, setActiveFolderId] = useState(() => loadActiveFolderId())
 	const [isFoldersManageOpen, setIsFoldersManageOpen] = useState(false)
 	const [newFolderName, setNewFolderName] = useState('')
+
+	useEffect(() => {
+		let cancelled = false
+		loadChatFolders().then(folders => {
+			if (!cancelled) setChatFolders(folders)
+		})
+		return () => { cancelled = true }
+	}, [])
+
 	const [scheduledMessages, setScheduledMessages] = useState<ScheduledMessage[]>(
 		() => loadScheduledMessages(),
 	)
+
+
 	const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false)
+	const [isPollModalOpen, setIsPollModalOpen] = useState(false)
 
 	// Save pinned chats to localStorage when changed
 	useEffect(() => {
@@ -1486,6 +1505,80 @@ export default function MessengerPage() {
 	const mediaRecorderRef = useRef<MediaRecorder | null>(null)
 	const chunksRef = useRef<Blob[]>([])
 	const timerRef = useRef<NodeJS.Timeout | null>(null)
+
+	// Disappearing messages state
+	const [disappearAfter, setDisappearAfter] = useState<number | null>(null)
+	const [isDisappearOpen, setIsDisappearOpen] = useState(false)
+	const disappearMenuRef = useRef<HTMLDivElement | null>(null)
+
+	// More menu (dropdown for attach, poll, schedule)
+	const [isMoreOpen, setIsMoreOpen] = useState(false)
+	const moreMenuRef = useRef<HTMLDivElement | null>(null)
+	const [activeReplyKeyboard, setActiveReplyKeyboard] = useState<any[] | null>(null)
+	const keyboardDismissedRef = useRef(false)
+
+	// Bot consent flow
+	const [showConsent, setShowConsent] = useState(false)
+	const [consentBot, setConsentBot] = useState<{ id: string; name: string; description?: string; avatar_url?: string } | null>(null)
+	const [consentScopes, setConsentScopes] = useState(['basic_profile', 'send_messages'])
+	const [consentChecked, setConsentChecked] = useState<Record<string, boolean>>({})
+
+	// Check consent when opening a bot chat
+	useEffect(() => {
+		if (!selectedFriend || selectedFriend.is_bot !== true || !user?.id) return
+		if (selectedFriend.id === botUser.id) return
+		if (consentChecked[selectedFriend.id]) return
+
+		const checkConsent = async () => {
+			try {
+				const token = localStorage.getItem('access_token')
+				const res = await fetch(
+					`/api/v1/bots/${selectedFriend.id}/permissions`,
+					{ headers: { Authorization: `Bearer ${token}` } },
+				)
+				if (res.ok) {
+					const data = await res.json()
+					setConsentChecked(prev => ({ ...prev, [selectedFriend.id!]: true }))
+					if (!data.granted) {
+						setConsentBot({
+							id: selectedFriend.id,
+							name: selectedFriend.username || selectedFriend.first_name || 'Bot',
+							description: selectedFriend.description || undefined,
+							avatar_url: selectedFriend.avatar_url || undefined,
+						})
+						setShowConsent(true)
+					}
+				}
+			} catch {}
+		}
+		checkConsent()
+	}, [selectedFriend?.id, user?.id])
+
+	useEffect(() => {
+		if (!isMoreOpen) return
+		const handleClickOutside = (event: MouseEvent) => {
+			if (moreMenuRef.current && !moreMenuRef.current.contains(event.target as Node)) {
+				setIsMoreOpen(false)
+			}
+		}
+		document.addEventListener('mousedown', handleClickOutside)
+		return () => document.removeEventListener('mousedown', handleClickOutside)
+	}, [isMoreOpen])
+
+	// Close disappear menu on outside click
+	useEffect(() => {
+		if (!isDisappearOpen) return
+		const handleClickOutside = (event: MouseEvent) => {
+			if (
+				disappearMenuRef.current &&
+				!disappearMenuRef.current.contains(event.target as Node)
+			) {
+				setIsDisappearOpen(false)
+			}
+		}
+		document.addEventListener('mousedown', handleClickOutside)
+		return () => document.removeEventListener('mousedown', handleClickOutside)
+	}, [isDisappearOpen])
 
 	// File Attachments State
 	const [files, setFiles] = useState<File[]>([])
@@ -1992,15 +2085,13 @@ export default function MessengerPage() {
 	}, [isStandaloneChannel, selectedChannel?.id, getChannelInfo])
 
 	useEffect(() => {
-		saveChatFolders(chatFolders)
-	}, [chatFolders])
-
-	useEffect(() => {
 		saveActiveFolderId(activeFolderId)
 	}, [activeFolderId])
 
 	useEffect(() => {
-		saveScheduledMessages(scheduledMessages)
+		// Don't save to localStorage - only use API for server-side persistence
+	// localStorage cleanup
+	saveScheduledMessages([])
 	}, [scheduledMessages])
 
 	const getCurrentChatTarget = useCallback((): ScheduledMessage['target'] | null => {
@@ -2016,6 +2107,28 @@ export default function MessengerPage() {
 		return null
 	}, [selectedFriend?.id, selectedGroup?.id, isStandaloneChannel, selectedChannel?.id])
 
+	// Load scheduled messages from API when chat changes
+	useEffect(() => {
+		const target = getCurrentChatTarget()
+		if (!target) return
+		let cancelled = false
+		listScheduledForChat(target).then(apiMsgs => {
+			if (!cancelled && apiMsgs.length > 0) {
+				setScheduledMessages(prev => {
+					const existingIds = new Set(prev.map(m => m.id))
+					const newMsgs = apiMsgs.filter(m => !existingIds.has(m.id)).map(m => ({
+						id: m.id,
+						scheduledAt: m.scheduled_at,
+						content: m.content,
+						target: { type: (m.target_user_id ? 'user' : m.channel_id ? 'channel' : 'group') as any, id: m.target_user_id || m.channel_id || m.group_id || '' },
+					}))
+					return [...prev, ...newMsgs]
+				})
+			}
+		})
+		return () => { cancelled = true }
+	}, [selectedFriend?.id, selectedGroup?.id, selectedChannel?.id, getCurrentChatTarget])
+
 	const pendingScheduledForChat = useMemo(() => {
 		const target = getCurrentChatTarget()
 		if (!target) return []
@@ -2023,10 +2136,11 @@ export default function MessengerPage() {
 	}, [scheduledMessages, getCurrentChatTarget])
 
 	const moveChatToFolder = useCallback(
-		(ref: ChatRef, folderId: string | null) => {
-			setChatFolders(prev => assignChatToFolder(prev, ref, folderId))
+		async (ref: ChatRef, folderId: string | null) => {
+			const updated = await assignChatToFolder(chatFolders, ref, folderId)
+			setChatFolders(updated)
 		},
-		[],
+		[chatFolders],
 	)
 
 	const openStandaloneChannel = useCallback(
@@ -2341,6 +2455,32 @@ export default function MessengerPage() {
 	const accessToken = (user as any)?.access_token as string | undefined
 	const [secretChatEnabled, setSecretChatEnabled] = useState(false)
 	const [isEncProxyActive, setIsEncProxyActive] = useState(false)
+
+	// Track reply keyboard from latest bot message
+	useEffect(() => {
+		if (!isBotChat || !botMessages.length) {
+			setActiveReplyKeyboard(null)
+			return
+		}
+		// Find the most recent user text message index
+		let lastUserMsgIdx = -1
+		for (let i = botMessages.length - 1; i >= 0; i--) {
+			if (botMessages[i].isOwn) {
+				lastUserMsgIdx = i
+				break
+			}
+		}
+		// Only show keyboard from bot messages AFTER the last user message
+		const startIdx = lastUserMsgIdx >= 0 ? lastUserMsgIdx + 1 : 0
+		for (let i = botMessages.length - 1; i >= startIdx; i--) {
+			const msg = botMessages[i]
+			if (msg.reply_markup?.is_keyboard && Array.isArray(msg.reply_markup.keyboard)) {
+				setActiveReplyKeyboard(msg.reply_markup.keyboard)
+				return
+			}
+		}
+		setActiveReplyKeyboard(null)
+	}, [botMessages, isBotChat])
 
 	useEffect(() => {
 		setIsEncProxyActive(isEncProxyEnabled())
@@ -3793,6 +3933,8 @@ export default function MessengerPage() {
 				botMessageIdsRef.current.add(dedupeKey)
 				const rawDate = item?.date ? Number(item.date) : NaN
 				const dateMs = Number.isFinite(rawDate) ? rawDate * 1000 : Date.now()
+				const mediaTypes = ['game', 'photo', 'video', 'document', 'audio', 'voice', 'video_note', 'sticker', 'location', 'venue', 'contact', 'poll', 'dice']
+				const msgType = item?.type || mediaTypes.find(t => item?.[t]) || 'text'
 				next.push({
 					id: dedupeKey,
 					sender_id: botId,
@@ -3800,9 +3942,23 @@ export default function MessengerPage() {
 					timestamp: new Date(dateMs).toISOString(),
 					isOwn: false,
 					is_read: true,
-					type: item?.game ? 'game' : (item?.type || 'text'),
+					type: msgType,
 					game: item?.game || undefined,
 					reply_markup: item?.reply_markup || undefined,
+					// Pass through all content types from bot outbox
+					bot_photo: item?.photo || undefined,
+					bot_video: item?.video || undefined,
+					bot_document: item?.document || undefined,
+					bot_audio: item?.audio || undefined,
+					bot_voice: item?.voice || undefined,
+					bot_video_note: item?.video_note || undefined,
+					bot_sticker: item?.sticker || undefined,
+					bot_location: item?.location || undefined,
+					bot_venue: item?.venue || undefined,
+					bot_contact: item?.contact || undefined,
+					bot_poll: item?.poll || undefined,
+					bot_dice: item?.dice || undefined,
+					bot_caption: item?.caption || undefined,
 				})
 				if (item?.text) texts.push(String(item.text))
 			}
@@ -3942,7 +4098,7 @@ export default function MessengerPage() {
 			} catch (error) {
 				try {
 					const outboxRes = await fetch(
-						`/api/v1/bots?bot_id=${targetBotId}&chat_id=${user.id}&mode=outbox`,
+						`/api/v1/bots/${targetBotId}/outbox?chat_id=${user.id}`,
 						{
 							headers: {
 								Authorization: `Bearer ${accessToken}`,
@@ -4126,11 +4282,48 @@ export default function MessengerPage() {
 			} else if (cmd === 'clear') {
 				setBotMessages([])
 			} else {
-				setBotMessages(prev => [
-					...prev,
-					nextMessage,
-					buildBotReply('Команда не найдена. Введите /help для списка.'),
-				])
+				// Unknown command — send to bot backend
+				try {
+					const requestBody = JSON.stringify({
+						wait_for_reply: 5,
+						message: {
+							text,
+							from_user: {
+								id: user.id,
+								username: user.username,
+								avatar_url: user.avatar_url,
+							},
+							chat: {
+								id: user.id,
+								type: 'private',
+								title: user.username,
+							},
+						},
+					})
+					const targetBotId = selectedFriend?.id
+					if (!targetBotId) {
+						setBotMessages(prev => [...prev, nextMessage, buildBotReply('Не удалось определить бота.')])
+					} else {
+						setBotMessages(prev => [...prev, nextMessage])
+						const token = accessToken || localStorage.getItem('access_token')
+						if (!token) {
+							setBotMessages(prev => [...prev, buildBotReply('Нужна авторизация.')])
+						} else {
+							const res = await fetch(`/api/v1/bots/${targetBotId}/updates/push`, {
+								method: 'POST',
+								headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+								body: requestBody,
+							})
+							const data = await res.json().catch(() => ({}))
+							const reply = data?.outbox?.[0]?.text || data?.items?.[0]?.text || data?.reply?.text
+							if (reply) {
+								setBotMessages(prev => [...prev, buildBotReply(reply)])
+							}
+						}
+					}
+				} catch {
+					setBotMessages(prev => [...prev, nextMessage, buildBotReply('Ошибка отправки команды боту.')])
+				}
 			}
 		} else {
 			setBotMessages(prev => [
@@ -4208,10 +4401,12 @@ export default function MessengerPage() {
 					'text',
 					attachments,
 					replyToMessage?.id,
+					disappearAfter,
 				)
 				setInput('')
 				setFiles([])
 				setReplyToMessage(null)
+				setDisappearAfter(null)
 			} catch (e) {
 				console.error('Message send failed', e)
 				showToast('Не удалось отправить сообщение', 'error')
@@ -4258,10 +4453,11 @@ export default function MessengerPage() {
 			}
 		}
 		forceScrollToBottomRef.current = true
-		sendChatMessage(stickerPayload, 'text', [], replyToMessage?.id)
+		sendChatMessage(stickerPayload, 'text', [], replyToMessage?.id, disappearAfter)
 		setInput('')
 		setReplyToMessage(null)
 		setIsPickerOpen(false)
+		setDisappearAfter(null)
 	}
 
 	const handleUploadSticker = () => {
@@ -4954,6 +5150,7 @@ export default function MessengerPage() {
 		const { scrollTop, scrollHeight } = e.currentTarget
 		const distanceFromBottom =
 			scrollHeight - (scrollTop + e.currentTarget.clientHeight)
+		wasNearBottomRef.current = distanceFromBottom < 250
 		setShowScrollToBottom(distanceFromBottom > 220)
 		requestAnimationFrame(() => resolvePinnedForScroll(scrollTop))
 		if (scrollTop < 30 && !isChatLoading && !isBotChat && messages.length > 0) {
@@ -4963,6 +5160,22 @@ export default function MessengerPage() {
 		}
 	}
 
+	// Auto-scroll for new real-time messages
+	useEffect(() => {
+		if (messages.length <= prevMessagesCountRef.current) return
+		prevMessagesCountRef.current = messages.length
+		if (!wasNearBottomRef.current) return
+		if (scrollToBottomOnOpenRef.current || forceScrollToBottomRef.current) return
+		// Double rAF: first to wait for DOM, second to wait for layout
+		requestAnimationFrame(() => {
+			requestAnimationFrame(() => {
+				if (containerRef.current) {
+					containerRef.current.scrollTop = containerRef.current.scrollHeight
+				}
+			})
+		})
+	}, [messages.length])
+
 	// Handle scroll position
 	useLayoutEffect(() => {
 		if (isChatSearchOpen && chatSearchQuery) return // Don't handle scroll for search results
@@ -4971,15 +5184,14 @@ export default function MessengerPage() {
 			scrollToBottomOnOpenRef.current = false
 			setIsRestoringScroll(false)
 			setShowScrollToBottom(false)
-			requestAnimationFrame(() => {
-				messagesEndRef.current?.scrollIntoView({
-					behavior: 'auto',
-					block: 'end',
-				})
-			})
+			wasNearBottomRef.current = true
+			if (containerRef.current) {
+				containerRef.current.scrollTop = containerRef.current.scrollHeight
+			}
 			if (containerRef.current) {
 				resolvePinnedForScroll(containerRef.current.scrollTop)
 			}
+			prevMessagesCountRef.current = messages.length
 			return
 		}
 
@@ -4987,15 +5199,14 @@ export default function MessengerPage() {
 			forceScrollToBottomRef.current = false
 			setIsRestoringScroll(false)
 			setShowScrollToBottom(false)
-			requestAnimationFrame(() => {
-				messagesEndRef.current?.scrollIntoView({
-					behavior: 'smooth',
-					block: 'end',
-				})
-			})
+			wasNearBottomRef.current = true
+			if (containerRef.current) {
+				containerRef.current.scrollTop = containerRef.current.scrollHeight
+			}
 			if (containerRef.current) {
 				resolvePinnedForScroll(containerRef.current.scrollTop)
 			}
+			prevMessagesCountRef.current = messages.length
 			return
 		}
 
@@ -5003,16 +5214,13 @@ export default function MessengerPage() {
 			const newScrollHeight = containerRef.current.scrollHeight
 			containerRef.current.scrollTop = newScrollHeight - prevScrollHeight
 			setIsRestoringScroll(false)
-		} else {
-			// Scroll to bottom for new messages or initial load
-			messagesEndRef.current?.scrollIntoView({
-				behavior: 'smooth',
-				block: 'end',
-			})
+		} else if (messages.length > prevMessagesCountRef.current && wasNearBottomRef.current && containerRef.current) {
+			containerRef.current.scrollTop = containerRef.current.scrollHeight
 		}
 		if (containerRef.current) {
 			resolvePinnedForScroll(containerRef.current.scrollTop)
 		}
+		prevMessagesCountRef.current = messages.length
 		setShowScrollToBottom(false)
 	}, [messages, isChatSearchOpen, chatSearchQuery])
 
@@ -5336,19 +5544,21 @@ export default function MessengerPage() {
 		})
 	}
 
-	const sortedMessagesForList = [...messagesToDisplay].sort((a, b) => {
-		const ta = new Date(
-			(a as any).timestamp || (a as any).created_at || 0,
-		).getTime()
-		const tb = new Date(
-			(b as any).timestamp || (b as any).created_at || 0,
-		).getTime()
-		return ta - tb
-	})
+	const sortedMessagesForList = useMemo(() => {
+		return [...messagesToDisplay].sort((a: any, b: any) => {
+			const ta = new Date(a.timestamp || a.created_at || 0).getTime()
+			const tb = new Date(b.timestamp || b.created_at || 0).getTime()
+			return ta - tb
+		})
+	}, [messagesToDisplay])
 	const chatListItems = buildChatListItems(sortedMessagesForList)
 
 	// Check if all selected messages are owned by current user
-	const allSelectedMessagesAreOwn = true
+	const allSelectedMessagesAreOwn = useMemo(() => {
+		if (selectedMessageIds.size === 0) return true
+		const selectedMsgs = messagesToDisplay.filter(m => selectedMessageIds.has(m.id))
+		return selectedMsgs.length > 0 && selectedMsgs.every(m => m.sender_id === user?.id)
+	}, [selectedMessageIds, messagesToDisplay, user?.id])
 
 	const pinnedMessage = pinnedMessageId
 		? messages.find(m => m.id === pinnedMessageId)
@@ -6762,7 +6972,10 @@ export default function MessengerPage() {
 												</>
 											) : selectedGroup ? (
 												<>
-													<div className='relative'>
+													<div
+														className='relative cursor-pointer hover:opacity-80 transition-opacity'
+														onClick={() => setIsGroupInfoOpen(prev => !prev)}
+													>
 														{selectedGroup.avatar_url ? (
 															<img
 																src={getAvatarUrl(selectedGroup.avatar_url)}
@@ -7057,18 +7270,11 @@ export default function MessengerPage() {
 												</svg>
 												Переслать
 											</button>
+											{allSelectedMessagesAreOwn && (
 											<button
 												onClick={handleDeleteSelectedMessages}
-												disabled={
-													selectedMessageIds.size === 0 ||
-													!allSelectedMessagesAreOwn
-												}
+												disabled={selectedMessageIds.size === 0}
 												className='flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed transition'
-												title={
-													!allSelectedMessagesAreOwn
-														? 'Нельзя удалить чужие сообщения'
-														: undefined
-												}
 											>
 												<svg
 													className='w-4 h-4'
@@ -7085,11 +7291,8 @@ export default function MessengerPage() {
 													<line x1='14' y1='11' x2='14' y2='17'></line>
 												</svg>
 												Удалить
-												{!allSelectedMessagesAreOwn &&
-												selectedMessageIds.size > 0
-													? ' (только свои)'
-													: ''}
 											</button>
+											)}
 										</div>
 									</div>
 								</div>
@@ -7817,6 +8020,64 @@ export default function MessengerPage() {
 								</button>
 							)}
 
+							{activeReplyKeyboard ? (
+								<div className='flex flex-wrap gap-2 px-1 pb-2'>
+									{activeReplyKeyboard.map((row: any[], rowIndex: number) => (
+										row.map((btn: any, btnIndex: number) => (
+											<button
+												key={`rk-${rowIndex}-${btnIndex}`}
+												onClick={() => {
+													setActiveReplyKeyboard(null)
+													const btnText = btn.text
+													setInput('')
+													const userMsg: Message = {
+														id: `kb-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
+														sender_id: user?.id || 'me',
+														content: btnText,
+														timestamp: new Date().toISOString(),
+														isOwn: true,
+														is_read: true,
+														type: 'text',
+													}
+													setBotMessages(prev => [...prev, userMsg])
+													forceScrollToBottomRef.current = true
+													try {
+														const token = localStorage.getItem('access_token')
+														const botId = selectedFriend?.id
+														if (!botId) return
+														fetch(`/api/public/v1/bots/${botId}/callback`, {
+															method: 'POST',
+															headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+															body: JSON.stringify({ user_id: user?.id || '', text: btnText }),
+														})
+													} catch (err) {
+														console.error('[ReplyKeyboard] Error:', err)
+													}
+												}}
+												className='bg-gray-700/60 hover:bg-gray-600/60 text-white font-medium py-2 px-4 rounded-lg transition-colors text-sm cursor-pointer border border-white/10'
+												type='button'
+											>
+												{btn.text}
+											</button>
+										))
+									))}
+								</div>
+							) : isBotChat ? (
+								<div className='px-1 pb-2'>
+									<button
+										onClick={async () => {
+											setInput('/kb')
+											await new Promise(r => setTimeout(r, 50))
+											handleSendMessage()
+										}}
+										className='text-xs text-gray-500 hover:text-indigo-400 transition-colors'
+										type='button'
+									>
+										Показать кнопки
+									</button>
+								</div>
+							) : null}
+
 							<div
 								className={`chat-composer-bar p-4 backdrop-blur-md relative transition-all ${
 									composerDragOver
@@ -7880,21 +8141,31 @@ export default function MessengerPage() {
 										</div>
 									) : (
 										<>
-											<button
-												onClick={handlePickFiles}
-												disabled={isBlockedChat || isBlockedUserChat || !canWriteToSelectedChannel || isUploading}
-												className={`p-2.5 text-gray-400 hover:bg-gray-700/50 rounded-full transition-all ${currentBackground.accentColor.replace('text-', 'hover:text-')}`}
-											>
-												<PaperclipIcon className='w-5 h-5' />
-											</button>
-											<input
-												ref={fileInputRef}
-												type='file'
-												accept='*/*'
-												multiple
-												onChange={handleFilesSelected}
-												className='hidden'
-											/>
+											<div ref={moreMenuRef} className="relative">
+												<button
+													onClick={() => setIsMoreOpen(!isMoreOpen)}
+													disabled={isBlockedChat || isBlockedUserChat || !canWriteToSelectedChannel || isUploading}
+													className={`p-2.5 rounded-full transition-all ${isMoreOpen ? 'bg-gray-700/50 text-white' : 'text-gray-400 hover:bg-gray-700/50'} ${currentBackground.accentColor.replace('text-', 'hover:text-')}`}
+													title="Ещё"
+												>
+													<svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+												</button>
+												{isMoreOpen && (
+													<div className="absolute bottom-full left-0 mb-2 w-52 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl overflow-hidden z-50">
+														<button onClick={() => { handlePickFiles(); setIsMoreOpen(false) } } className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-gray-200 hover:bg-white/5 transition-colors">
+															<PaperclipIcon className="w-4 h-4 text-gray-400" /> Прикрепить файл
+														</button>
+														<button onClick={() => { setIsPollModalOpen(true); setIsMoreOpen(false) } } className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-gray-200 hover:bg-white/5 transition-colors">
+															<ChartBarIcon className="w-4 h-4 text-gray-400" /> Опрос
+														</button>
+														<button onClick={() => { setIsScheduleModalOpen(true); setIsMoreOpen(false) } } className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-gray-200 hover:bg-white/5 transition-colors">
+															<Clock className="w-4 h-4 text-gray-400" /> Отложенная отправка
+														</button>
+													</div>
+												)}
+											</div>
+											<input ref={fileInputRef} type="file" accept="*/*" multiple onChange={handleFilesSelected} className="hidden" />
+
 
 											{files.length > 0 && (
 												<div className='absolute bottom-full left-0 right-0 mb-2 px-2'>
@@ -8065,7 +8336,6 @@ export default function MessengerPage() {
 													</div>
 												</div>
 											)}
-
 											<SmartChatInput
 												inputRef={messageInputRef}
 												value={input}
@@ -8106,21 +8376,6 @@ export default function MessengerPage() {
 
 											{input.trim() || files.length > 0 ? (
 												<>
-													{input.trim() && !isBotChat && !isAiChat && (
-														<button
-															type='button'
-															onClick={() => setIsScheduleModalOpen(true)}
-															disabled={
-																!canWriteToSelectedChannel ||
-																isBlockedChat ||
-																isBlockedUserChat
-															}
-															className='p-2.5 text-gray-400 hover:text-amber-300 hover:bg-gray-700/50 rounded-full transition-all disabled:opacity-50 disabled:cursor-not-allowed'
-															title='Отложенная отправка'
-														>
-															<Clock className='w-5 h-5' />
-														</button>
-													)}
 													<button
 														onClick={handleSendMessage}
 														disabled={
@@ -8167,7 +8422,15 @@ export default function MessengerPage() {
 					)}
 				</div>
 
-				{/* Правая панель скрыта — вместо неё модалка профиля */}
+				{/* Правая панель: инфо о группе */}
+				{isGroupInfoOpen && selectedGroup && (
+					<GroupInfoPanel
+						group={selectedGroup}
+						userId={user?.id || ''}
+						onClose={() => setIsGroupInfoOpen(false)}
+						onOpenSettings={() => { setIsGroupInfoOpen(false); setIsSettingsOpen(true) }}
+					/>
+				)}
 			</div>
 
 			{isForwardOpen && (forwardMessage || selectedMessageIds.size > 0) && (
@@ -8946,6 +9209,17 @@ export default function MessengerPage() {
 					const target = getCurrentChatTarget()
 					const content = input.trim()
 					if (!target || !content) return
+
+					const apiParams: Record<string, string> = {
+						content,
+						scheduled_at: scheduledAt,
+					}
+					if (target.type === 'user') apiParams.target_user_id = target.id
+					else if (target.type === 'channel') apiParams.channel_id = target.id
+					else if (target.type === 'group') apiParams.group_id = target.id
+
+					createScheduled(apiParams).catch(() => {})
+
 					setScheduledMessages(prev => [
 						...prev,
 						{
@@ -8959,7 +9233,27 @@ export default function MessengerPage() {
 					setInput('')
 					setReplyToMessage(null)
 					setIsScheduleModalOpen(false)
-					showToast('Сообщение запланировано', 'success')
+
+					const formattedDate = new Date(scheduledAt).toLocaleString('ru-RU', {
+						day: 'numeric',
+						month: 'short',
+						hour: '2-digit',
+						minute: '2-digit',
+					})
+					showToast(`Запланировано на ${formattedDate}`, 'success')
+				}}
+			/>
+
+			<PollCreationModal
+				isOpen={isPollModalOpen}
+				onClose={() => setIsPollModalOpen(false)}
+				onCreated={(pollId) => {
+					const payload = JSON.stringify({ type: 'poll', poll_id: pollId })
+					forceScrollToBottomRef.current = true
+					sendChatMessage(payload, 'text', [], replyToMessage?.id)
+					setReplyToMessage(null)
+					setIsPollModalOpen(false)
+					showToast('Опрос отправлен', 'success')
 				}}
 			/>
 
@@ -9048,6 +9342,24 @@ export default function MessengerPage() {
 				</div>
 			)}
 
+		{showConsent && consentBot && (
+			<BotConsentModal
+				botId={consentBot.id}
+				botName={consentBot.name}
+				botDescription={consentBot.description}
+				botAvatar={consentBot.avatar_url}
+				scopes={consentScopes}
+				onGranted={() => {
+					setShowConsent(false)
+					setConsentBot(null)
+					setInput('/start')
+				}}
+				onDenied={() => {
+					setShowConsent(false)
+					setConsentBot(null)
+				}}
+			/>
+		)}
 		</div>
 	)
 }

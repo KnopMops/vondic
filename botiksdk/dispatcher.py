@@ -79,10 +79,22 @@ class Dispatcher:
         self._error_handlers = []
         self._message_middlewares = []
         self._callback_middlewares = []
+        self._startup_handlers = []
+        self._shutdown_handlers = []
 
     def include_router(self, router: Router):
         self._routers.append(router)
         return self
+
+    def startup(self, func):
+        """Register a startup handler."""
+        self._startup_handlers.append(func)
+        return func
+
+    def shutdown(self, func):
+        """Register a shutdown handler."""
+        self._shutdown_handlers.append(func)
+        return func
 
     def message(
         self,
@@ -142,11 +154,13 @@ class Dispatcher:
             # Handle message
             message = update.message
             if message is not None:
+                ct = getattr(message, "content_type", "text")
                 logger.info(
-                    "botiksdk_update_received bot_id=%s update_id=%s text=%s",
+                    "botiksdk_update_received bot_id=%s update_id=%s type=%s text=%s",
                     getattr(bot, "bot_id", None),
                     update.update_id,
-                    message.text,
+                    ct,
+                    message.text or f"<{ct}>",
                 )
                 await self._dispatch_message(bot, message)
         except Exception as exc:
@@ -397,12 +411,34 @@ class Dispatcher:
         return True
 
     async def start_polling(self, *bots):
+        # Run startup handlers
+        for handler in self._startup_handlers:
+            try:
+                if asyncio.iscoroutinefunction(handler):
+                    await handler()
+                else:
+                    handler()
+            except Exception:
+                logger.exception("Startup handler error")
+
         tasks = []
         for bot in bots:
             tasks.append(asyncio.create_task(self._poll_bot(bot)))
         if not tasks:
             return
-        await asyncio.gather(*tasks)
+
+        try:
+            await asyncio.gather(*tasks)
+        finally:
+            # Run shutdown handlers
+            for handler in self._shutdown_handlers:
+                try:
+                    if asyncio.iscoroutinefunction(handler):
+                        await handler()
+                    else:
+                        handler()
+                except Exception:
+                    logger.exception("Shutdown handler error")
 
     async def start_webhook(self, *bots, **kwargs):
         raise NotImplementedError(
@@ -410,15 +446,20 @@ class Dispatcher:
 
     async def _poll_bot(self, bot):
         offset = 0
+        consecutive_errors = 0
         while True:
             try:
                 updates = await bot.get_updates(offset=offset, timeout=5, limit=100)
+                consecutive_errors = 0
             except Exception:
+                consecutive_errors += 1
+                backoff = min(consecutive_errors * 2, 10)
                 logger.exception(
-                    "botiksdk_poll_error bot_id=%s", getattr(
-                        bot, "bot_id", None)
+                    "botiksdk_poll_error bot_id=%s retry_in=%s",
+                    getattr(bot, "bot_id", None),
+                    backoff,
                 )
-                await asyncio.sleep(1)
+                await asyncio.sleep(backoff)
                 continue
             if not updates:
                 await asyncio.sleep(0.2)
@@ -432,3 +473,53 @@ class Dispatcher:
                     offset = max(offset, int(update.update_id))
                 except Exception:
                     offset = offset
+
+    async def run_websocket(self, bot):
+        """Run bot via WebSocket for real-time updates (v0.5)."""
+        from botiksdk.bot_ws import BotWebSocket
+
+        def on_update(data):
+            """Process update from WebSocket."""
+            loop = asyncio.new_event_loop()
+            try:
+                update = Update.from_dict(data)
+                if update:
+                    loop.run_until_complete(self.feed_update(bot, update))
+            finally:
+                loop.close()
+
+        def on_connect():
+            logger.info("botiksdk_ws_connected bot_id=%s", getattr(bot, "bot_id", None))
+
+        def on_disconnect():
+            logger.info("botiksdk_ws_disconnected bot_id=%s", getattr(bot, "bot_id", None))
+
+        ws_client = BotWebSocket(
+            bot_id=bot.bot_id,
+            token=bot.token,
+            base_url=bot.public.base_url,
+            on_update=on_update,
+            on_connect=on_connect,
+            on_disconnect=on_disconnect,
+        )
+
+        # Run startup hooks
+        for handler in self._startup_handlers:
+            if asyncio.iscoroutinefunction(handler):
+                await handler()
+            else:
+                handler()
+
+        ws_client.start()
+        logger.info("botiksdk_ws_started bot_id=%s", bot.bot_id)
+
+        try:
+            while True:
+                await asyncio.sleep(1)
+        except KeyboardInterrupt:
+            ws_client.stop()
+            for handler in self._shutdown_handlers:
+                if asyncio.iscoroutinefunction(handler):
+                    await handler()
+                else:
+                    handler()

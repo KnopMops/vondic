@@ -4,7 +4,7 @@ WORKDIR /app
 
 # Копируем общий файл зависимостей и устанавливаем их
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && pip install --no-cache-dir sqlalchemy==2.0.40
 
 # Копируем код бэкенда в подпапку /app/backend
 COPY backend/ /app/backend/
@@ -31,4 +31,4 @@ WORKDIR /app/backend
 EXPOSE 5050
 
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["python", "-m", "gunicorn", "-w", "4", "-b", "0.0.0.0:5050", "run:app"]
+CMD ["python", "-m", "gunicorn", "--preload", "-w", "4", "-b", "0.0.0.0:5050", "--max-requests", "1000", "--max-requests-jitter", "50", "--timeout", "120", "run:app"]

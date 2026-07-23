@@ -125,7 +125,6 @@ class MailboxService:
         )
         db.session.add(box)
         db.session.add(cred)
-        user.balance = int(user.balance or 0) + MAILBOX_SIGNUP_COINS
         try:
             db.session.commit()
         except Exception:

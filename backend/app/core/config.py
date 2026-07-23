@@ -73,7 +73,7 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {
         "pool_pre_ping": True,
-        "pool_recycle": 300,
+        "pool_recycle": 120,
         "pool_size": 5,
         "max_overflow": 10,
         "pool_timeout": 10,

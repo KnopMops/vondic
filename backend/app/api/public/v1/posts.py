@@ -15,7 +15,7 @@ def get_posts():
         offset = (page - 1) * limit
 
         posts = PostService.get_posts_paginated(page=page, per_page=limit)
-        total_count = PostService.get_all_posts().count()
+        total_count = len(PostService.get_all_posts())
 
         return jsonify({
             "posts": posts_schema.dump(posts),

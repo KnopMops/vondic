@@ -11,12 +11,6 @@ payments_bp = Blueprint("payments", __name__, url_prefix="/api/v1/payments")
 
 stripe.api_key = Config.STRIPE_SECRET_KEY
 
-COINS_PRICING = {
-    100: 1000,
-    500: 4500,
-    2000: 15000,
-}
-
 
 @payments_bp.route("/create-checkout-session", methods=["POST"])
 def create_checkout_session():
@@ -104,21 +98,22 @@ def create_payment_session():
         return jsonify({"error": str(e)}), 500
 
 
-@payments_bp.route("/create-coins-session", methods=["POST"])
-def create_coins_session():
+@payments_bp.route("/create-topup-session", methods=["POST"])
+def create_topup_session():
     data = request.get_json() or {}
     buyer_id = data.get("buyer_id")
-    coins = int(data.get("coins") or 0)
-    amount = COINS_PRICING.get(coins, 0)
-    currency = "rub"
+    amount_rub = int(data.get("amount") or 0)
     success_url = data.get(
         "success_url") or "http://localhost:3000/shop/success"
     cancel_url = data.get("cancel_url") or "http://localhost:3000/shop/cancel"
-    if not buyer_id or coins <= 0 or amount <= 0:
-        return jsonify({"error": "Неверные параметры"}), 400
+
+    if not buyer_id or amount_rub < 50 or amount_rub > 50000:
+        return jsonify({"error": "Сумма должна быть от 50 до 50000 ₽"}), 400
+
     user = User.query.get(buyer_id)
     if not user:
         return jsonify({"error": "Пользователь не найден"}), 404
+
     try:
         checkout_session = stripe.checkout.Session.create(
             client_reference_id=buyer_id,
@@ -126,9 +121,9 @@ def create_coins_session():
             line_items=[
                 {
                     "price_data": {
-                        "currency": currency,
-                        "unit_amount": amount,
-                        "product_data": {"name": f"Vondic Coins {coins}"},
+                        "currency": "rub",
+                        "unit_amount": amount_rub * 100,
+                        "product_data": {"name": f"Пополнение баланса — {amount_rub}₽"},
                     },
                     "quantity": 1,
                 }
@@ -136,7 +131,7 @@ def create_coins_session():
             mode="payment",
             success_url=success_url,
             cancel_url=cancel_url,
-            metadata={"type": "coins", "coins": str(coins)},
+            metadata={"type": "topup", "amount": str(amount_rub)},
         )
         return jsonify({"url": checkout_session.url})
     except stripe.error.StripeError as e:
@@ -145,8 +140,8 @@ def create_coins_session():
         return jsonify({"error": str(e)}), 500
 
 
-@payments_bp.route("/confirm-coins", methods=["POST"])
-def confirm_coins():
+@payments_bp.route("/confirm-topup", methods=["POST"])
+def confirm_topup():
     data = request.get_json() or {}
     session_id = data.get("session_id")
     if not session_id:
@@ -160,19 +155,19 @@ def confirm_coins():
             return jsonify({"error": "Платёж не завершён"}), 400
         buyer_id = session.get("client_reference_id")
         metadata = session.get("metadata") or {}
-        if metadata.get("type") != "coins":
+        if metadata.get("type") != "topup":
             return jsonify({"error": "Неверный тип сессии"}), 400
-        coins_str = metadata.get("coins") or "0"
+        amount_str = metadata.get("amount") or "0"
         try:
-            coins_val = int(coins_str)
+            amount_val = int(amount_str)
         except Exception:
-            coins_val = 0
-        if not buyer_id or coins_val <= 0:
+            amount_val = 0
+        if not buyer_id or amount_val <= 0:
             return jsonify({"error": "Неверные данные сессии"}), 400
         user = User.query.get(buyer_id)
         if not user:
             return jsonify({"error": "Пользователь не найден"}), 404
-        user.balance = (user.balance or 0) + coins_val
+        user.balance = (user.balance or 0) + amount_val
         db.session.commit()
         return jsonify({"success": True, "balance": user.balance})
     except Exception as e:
@@ -223,12 +218,12 @@ def handle_checkout_session(session):
         return
     metadata = session.get("metadata") or {}
     t = metadata.get("type")
-    if t == "coins":
-        coins_str = metadata.get("coins") or "0"
+    if t == "topup":
+        amount_str = metadata.get("amount") or "0"
         try:
-            coins_val = int(coins_str)
+            amount_val = int(amount_str)
         except Exception:
-            coins_val = 0
-        if coins_val > 0:
-            user.balance = (user.balance or 0) + coins_val
+            amount_val = 0
+        if amount_val > 0:
+            user.balance = (user.balance or 0) + amount_val
             db.session.commit()

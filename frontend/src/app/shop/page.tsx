@@ -42,6 +42,9 @@ export default function ShopPage() {
 	const [userSearchLoading, setUserSearchLoading] = useState(false)
 	const [giftComment, setGiftComment] = useState('')
 	const [showHowToModal, setShowHowToModal] = useState(false)
+	const [topupAmount, setTopupAmount] = useState('50')
+	const [topupLoading, setTopupLoading] = useState(false)
+	const [topupError, setTopupError] = useState<string | null>(null)
 	const [premiumGiftOpen, setPremiumGiftOpen] = useState(false)
 	const [premiumRecipientId, setPremiumRecipientId] = useState<string | null>(null)
 	const [premiumSearch, setPremiumSearch] = useState('')
@@ -301,7 +304,7 @@ export default function ShopPage() {
 			const meData = await meRes.json()
 			const token = meData?.user?.access_token || meData?.access_token
 			if (!token) throw new Error('Требуется авторизация')
-			const res = await fetch(`/api/v1/users/gift-premium-coins`, {
+			const res = await fetch(`/api/v1/users/gift-premium`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -374,7 +377,7 @@ export default function ShopPage() {
 		}
 		const amount = parseInt(coinAmount, 10)
 		if (!amount || amount < 1) {
-			setCoinTransferError('Укажите количество коинов')
+			setCoinTransferError('Укажите сумму')
 			return
 		}
 		setCoinTransferLoading(true)
@@ -386,7 +389,7 @@ export default function ShopPage() {
 			const meData = await meRes.json()
 			const token = meData?.user?.access_token || meData?.access_token
 			if (!token) throw new Error('Требуется авторизация')
-			const res = await fetch(`/api/v1/users/gift-coins`, {
+			const res = await fetch(`/api/v1/users/transfer-balance`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -400,10 +403,10 @@ export default function ShopPage() {
 			})
 			const data = await res.json().catch(() => ({}))
 			if (!res.ok) {
-				throw new Error(data.error || data.message || 'Не удалось отправить коины')
+				throw new Error(data.error || data.message || 'Не удалось перевести средства')
 			}
 			setBalanceOverride(typeof data.balance === 'number' ? data.balance : null)
-			setCoinTransferNote(`Передано ${amount} коинов`)
+			setCoinTransferNote(`Переведено ${amount}₽`)
 			setCoinRecipientId(null)
 			setCoinSearch('')
 			setCoinAmount('10')
@@ -426,7 +429,7 @@ export default function ShopPage() {
 			const meData = await meRes.json()
 			const token = meData?.user?.access_token || meData?.access_token
 			if (!token) throw new Error('Требуется авторизация')
-			const res = await fetch(`/api/v1/users/buy-premium-coins`, {
+			const res = await fetch(`/api/v1/users/buy-premium`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -444,6 +447,47 @@ export default function ShopPage() {
 			setPremiumNote(e.message || 'Ошибка')
 		} finally {
 			setPremiumLoading(false)
+		}
+	}
+
+	const handleTopup = async () => {
+		const amount = parseInt(topupAmount, 10)
+		if (!amount || amount < 50 || amount > 50000) {
+			setTopupError('Сумма должна быть от 50 до 50 000 ₽')
+			return
+		}
+		setTopupLoading(true)
+		setTopupError(null)
+		try {
+			const meRes = await fetch('/api/auth/me', { method: 'GET' })
+			if (!meRes.ok) throw new Error('Требуется авторизация')
+			const meData = await meRes.json()
+			const token = meData?.user?.access_token || meData?.access_token
+			if (!token) throw new Error('Требуется авторизация')
+			const res = await fetch('/api/v1/payments/create-topup-session', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`,
+				},
+				body: JSON.stringify({
+					buyer_id: user?.id,
+					amount,
+				}),
+			})
+			const data = await res.json().catch(() => ({}))
+			if (!res.ok) {
+				throw new Error(data.error || data.message || 'Не удалось создать сессию оплаты')
+			}
+			if (data.url) {
+				window.location.href = data.url
+			} else {
+				setTopupError('Сессия оплаты создана, но URL не получен')
+			}
+		} catch (e: any) {
+			setTopupError(e.message || 'Ошибка')
+		} finally {
+			setTopupLoading(false)
 		}
 	}
 
@@ -515,7 +559,7 @@ export default function ShopPage() {
 											? balanceOverride
 											: (typeof user?.balance === 'number' ? user.balance : 0)) +
 											((user as any)?.bonus_balance ?? 0)}{' '}
-										Вондик Coins
+										Баланс
 									</div>
 								</div>
 								<button
@@ -523,7 +567,7 @@ export default function ShopPage() {
 									className='flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/20 transition-colors'
 								>
 									<HelpCircle className='h-4 w-4' />
-									Как пополнить?
+									Пополнить
 								</button>
 							</div>
 						</div>
@@ -545,9 +589,7 @@ export default function ShopPage() {
 											Вондик Premium
 										</div>
 										<p className='mt-1 text-sm text-gray-400'>
-											Подписка на 30 дней за{' '}
-											<span className='font-semibold text-amber-200'>50</span> коинов
-											из баланса.
+											Подписка на 30 дней за 50₽ из баланса.
 										</p>
 										{premiumNote && (
 											<p
@@ -562,14 +604,14 @@ export default function ShopPage() {
 											onClick={buyPremiumWithCoins}
 											className='mt-4 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 px-5 py-2.5 text-sm font-semibold text-black disabled:opacity-50 hover:opacity-95 transition-opacity'
 										>
-											{premiumLoading ? 'Оформление…' : 'Купить за 50 коинов'}
+											{premiumLoading ? 'Оформление…' : 'Купить за 50₽'}
 										</button>
 										<button
 											type='button'
 											onClick={openPremiumGiftModal}
 											className='mt-3 block w-full rounded-xl border border-amber-400/50 px-5 py-2.5 text-sm font-semibold text-amber-100 hover:bg-amber-500/10 transition-colors'
 										>
-											Подарить Premium за 50 коинов (любому пользователю)
+											Подарить Premium за 50₽ (любому пользователю)
 										</button>
 									</div>
 								</div>
@@ -582,10 +624,10 @@ export default function ShopPage() {
 									</div>
 									<div className='flex-1'>
 										<div className='text-lg font-semibold text-white'>
-											Передать коины
+											Перевести
 										</div>
 										<p className='mt-1 text-sm text-gray-400'>
-											Отправьте коины любому пользователю по нику
+											Отправьте рубли любому пользователю по нику
 										</p>
 										<div className='mt-4 space-y-3'>
 											<input
@@ -629,7 +671,7 @@ export default function ShopPage() {
 												max={10000}
 												value={coinAmount}
 												onChange={e => setCoinAmount(e.target.value)}
-												placeholder='Количество коинов'
+												placeholder='Сумма (₽)'
 												className='w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-sm text-white placeholder:text-gray-500 focus:border-indigo-500 outline-none'
 											/>
 											{coinTransferError && (
@@ -644,7 +686,7 @@ export default function ShopPage() {
 												onClick={sendCoinTransfer}
 												className='rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50 hover:from-indigo-500 hover:to-purple-500 transition-all'
 											>
-												{coinTransferLoading ? 'Отправка…' : 'Передать коины'}
+												{coinTransferLoading ? 'Отправка…' : 'Перевести'}
 											</button>
 										</div>
 									</div>
@@ -709,7 +751,7 @@ export default function ShopPage() {
 												</span>
 												<div className='ml-auto flex flex-col items-end gap-0.5'>
 													<span className='text-xs text-gray-600 dark:text-gray-400'>
-														{g.coinPrice} коинов
+														{g.price}₽
 													</span>
 													{limitLabel && (
 														<span className='text-[10px] text-indigo-600 dark:text-indigo-300'>
@@ -742,7 +784,7 @@ export default function ShopPage() {
 										<div className='text-lg font-semibold'>Подарить Premium</div>
 									</div>
 									<p className='mt-2 text-sm text-gray-400'>
-										30 дней за 50 коинов. Найдите пользователя по нику или вставьте
+										30 дней за 50₽. Найдите пользователя по нику или вставьте
 										его ID.
 									</p>
 									<div className='mt-4'>
@@ -794,7 +836,7 @@ export default function ShopPage() {
 											onClick={sendPremiumGift}
 											className='flex-1 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 px-4 py-2 text-sm font-semibold text-black disabled:opacity-50'
 										>
-											{premiumGiftLoading ? 'Отправка…' : 'Подарить за 50 коинов'}
+											{premiumGiftLoading ? 'Отправка…' : 'Подарить за 50₽'}
 										</button>
 										<button
 											type='button'
@@ -843,7 +885,7 @@ export default function ShopPage() {
 										{selectedGift.desc}
 									</div>
 									<div className='mt-3 text-sm text-gray-600 dark:text-gray-400'>
-										Цена: {selectedGift.coinPrice} коинов
+										Цена: {selectedGift.price}₽
 									</div>
 										<div className='mt-4'>
 											<div className='flex items-center justify-between'>
@@ -1018,34 +1060,14 @@ export default function ShopPage() {
 										</div>
 									</div>
 									<div className='mt-4 space-y-3 text-sm text-gray-700 dark:text-gray-300'>
-										<p>
-											Для пополнения баланса вам нужно:
-										</p>
-										<ol className='list-decimal list-inside space-y-2'>
-											<li>
-												Зайдите во вкладку <strong>Мессенджер</strong>
-											</li>
-											<li>
-												Откройте чат с{' '}
-												<a
-													href='/feed/messages?bot_id=vondic_bot'
-													className='font-semibold text-indigo-500 hover:text-indigo-400 underline underline-offset-2'
-												>
-													Вондик BOT
-												</a>
-											</li>
-											<li>
-												Напишите ему команду <code className='rounded bg-gray-100 px-1.5 py-0.5 text-xs font-mono dark:bg-gray-700'>/start</code>
-											</li>
-										</ol>
-										<p className='text-xs text-gray-500 dark:text-gray-400'>
-											После этого бот поможет вам пополнить баланс удобным способом.
-										</p>
+										<p>Для пополнения баланса напишите боту <span className='font-semibold'>Вондик BOT</span> в Telegram и отправьте команду:</p>
+										<div className='rounded-xl bg-black/10 dark:bg-white/5 px-3 py-2 font-mono text-sm'>/start</div>
+										<p>Бот поможет вам пополнить баланс любым удобным способом.</p>
 									</div>
-									<div className='mt-6'>
+									<div className='mt-6 flex justify-end'>
 										<button
 											onClick={() => setShowHowToModal(false)}
-											className='w-full rounded-xl bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700'
+											className='rounded-xl border border-gray-300 px-4 py-2 text-gray-900 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-white/10'
 										>
 											Понятно
 										</button>

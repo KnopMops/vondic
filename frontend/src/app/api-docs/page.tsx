@@ -4,8 +4,8 @@ import { useState } from 'react'
 
 const ApiDocumentationPage = () => {
 	const [activeTab, setActiveTab] = useState('overview')
-	const [botikSdkVersion, setBotikSdkVersion] = useState<'0.2.0' | '0.1.1'>(
-		'0.2.0',
+	const [botikSdkVersion, setBotikSdkVersion] = useState<'0.5.0' | '0.4.2' | '0.4.0' | '0.3.1' | '0.2.0' | '0.1.1'>(
+		'0.5.0',
 	)
 
 	const tabs = [
@@ -31,45 +31,37 @@ const ApiDocumentationPage = () => {
 								API Социальной Сети Вондик
 							</h2>
 							<p className='mb-4 text-gray-300'>
-								Добро пожаловать в документацию по публичному API социальной
-								сети Вондик. Этот API позволяет разработчикам интегрироваться с
-								нашей платформой социальной сети и создавать приложения, которые
-								взаимодействуют с пользователями, постами, сообщениями и другими
-								социальными функциями.
+								Публичное API социальной сети Вондик. Интеграция с пользователями, постами,
+								сообщениями, ботами и другими социальными функциями.
 							</p>
+
 							<div className='bg-indigo-500/10 border-l-4 border-indigo-500 p-4 mb-4 backdrop-blur-sm border border-white/10 rounded-lg'>
 								<p className='font-semibold text-white'>Базовый URL:</p>
 								<code className='bg-gray-800/50 px-2 py-1 rounded text-indigo-300 border border-white/10'>
 									https://api.vondic.ru
 								</code>
 							</div>
+
 							<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
 								<div className='border rounded-lg p-4 backdrop-blur-sm border-white/10 bg-white/5'>
-									<h3 className='font-bold mb-2 text-white'>
-										Ограничения по запросам
-									</h3>
-									<p className='text-gray-300'>
-										Запросы ограничены 1000 в час на один API ключ
-									</p>
+									<h3 className='font-bold mb-2 text-white'>v1 API — для сервиса</h3>
+									<p className='text-gray-300 text-sm'>Основной API для фронтенда, мобильного приложения и всех внутренних сервисов.</p>
+									<p className='text-gray-400 text-xs mt-1'>URL: <code className='text-indigo-300'>/api/v1/</code> и <code className='text-indigo-300'>/api/public/v1/</code></p>
 								</div>
 								<div className='border rounded-lg p-4 backdrop-blur-sm border-white/10 bg-white/5'>
-									<h3 className='font-bold mb-2 text-white'>Версионирование</h3>
-									<p className='text-gray-300'>
-										Текущая версия: v1 (изменения будут обратно совместимыми)
-									</p>
+									<h3 className='font-bold mb-2 text-white'>v2 API — для ботов</h3>
+									<p className='text-gray-300 text-sm'>WebSocket, Batch, Analytics, Webhooks, Marketplace — для разработчиков ботов.</p>
+									<p className='text-gray-400 text-xs mt-1'>URL: <code className='text-indigo-300'>/api/v2/</code> и <code className='text-indigo-300'>/api/public/v2/</code></p>
 								</div>
 								<div className='border rounded-lg p-4 backdrop-blur-sm border-white/10 bg-white/5'>
-									<h3 className='font-bold mb-2 text-white'>Почта @vondic.ru</h3>
-									<p className='text-gray-300'>
-										Mail API для ящика и отправки — см. вкладку{' '}
-										<button
-											type='button'
-											onClick={() => setActiveTab('mail')}
-											className='text-indigo-400 hover:underline'
-										>
-											Почта
-										</button>
-									</p>
+									<h3 className='font-bold mb-2 text-white'>Rate Limits</h3>
+									<p className='text-gray-300 text-sm'>v2: Headers X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset</p>
+									<p className='text-gray-400 text-xs mt-1'>100 req/min (веб) · 1000 req/min (боты)</p>
+								</div>
+								<div className='border rounded-lg p-4 backdrop-blur-sm border-white/10 bg-white/5'>
+									<h3 className='font-bold mb-2 text-white'>BotikSDK</h3>
+									<p className='text-gray-300 text-sm'>Python SDK v0.5.0 — aiogram + WebSocket</p>
+									<p className='text-gray-400 text-xs mt-1'>pip install botiksdk==0.5.0</p>
 								</div>
 							</div>
 						</section>
@@ -122,7 +114,7 @@ const ApiDocumentationPage = () => {
 								</h3>
 								<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
 									{`curl -X GET \\
-  "https://api.vondic.ru/api/public/v1/users/me" \\
+  "https://api.vondic.ru/api/public/v2/users/me" \\
   -H "X-API-Key: YOUR_API_KEY" \\
   -H "Content-Type: application/json"`}
 								</pre>
@@ -1182,24 +1174,54 @@ if (window.opener && !window.opener.closed) {
 							<div className='mb-6'>
 								<div className='flex flex-wrap items-center gap-2'>
 									<button
-										onClick={() => setBotikSdkVersion('0.2.0')}
+										onClick={() => setBotikSdkVersion('0.5.0')}
 										className={`px-3 py-1.5 rounded-lg text-sm font-semibold border transition-colors ${
-											botikSdkVersion === '0.2.0'
+											botikSdkVersion === '0.5.0'
 												? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
 												: 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10'
 										}`}
 									>
-										v0.2.0 (текущая)
+										v0.5.0 (текущая)
 									</button>
 									<button
-										onClick={() => setBotikSdkVersion('0.1.1')}
+										onClick={() => setBotikSdkVersion('0.4.2')}
 										className={`px-3 py-1.5 rounded-lg text-sm font-semibold border transition-colors ${
-											botikSdkVersion === '0.1.1'
+											botikSdkVersion === '0.4.2'
 												? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
 												: 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10'
 										}`}
 									>
-										v0.1.1 (legacy)
+										v0.4.2
+									</button>
+									<button
+										onClick={() => setBotikSdkVersion('0.4.0')}
+										className={`px-3 py-1.5 rounded-lg text-sm font-semibold border transition-colors ${
+											botikSdkVersion === '0.4.0'
+												? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+												: 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10'
+										}`}
+									>
+										v0.4.0
+									</button>
+									<button
+										onClick={() => setBotikSdkVersion('0.3.1')}
+										className={`px-3 py-1.5 rounded-lg text-sm font-semibold border transition-colors ${
+											botikSdkVersion === '0.3.1'
+												? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+												: 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10'
+										}`}
+									>
+										v0.3.1
+									</button>
+									<button
+										onClick={() => setBotikSdkVersion('0.3.0')}
+										className={`px-3 py-1.5 rounded-lg text-sm font-semibold border transition-colors ${
+											botikSdkVersion === '0.3.0'
+												? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+												: 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10'
+										}`}
+									>
+										v0.3.0
 									</button>
 									<span className='text-xs text-gray-400 ml-1'>
 										Версию можно закрепить через <code>pip install botiksdk==X.Y.Z</code>
@@ -1207,7 +1229,1112 @@ if (window.opener && !window.opener.closed) {
 								</div>
 							</div>
 
-							{botikSdkVersion === '0.2.0' ? (
+							{botikSdkVersion === '0.5.0' ? (
+								<>
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>Установка</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>{`pip install botiksdk==0.5.0`}</pre>
+									</div>
+									<div className='mb-6'>
+										<div className='bg-indigo-500/10 border-l-4 border-indigo-500 p-4 rounded-lg backdrop-blur-sm border border-white/10'>
+											<p className='font-semibold text-white'>Что нового в v0.5.0</p>
+										</div>
+										<ul className='list-disc pl-5 space-y-2 text-gray-300 mt-3'>
+											<li><strong>WebSocket API</strong> — real-time обновления без polling</li>
+											<li><strong>BotWebSocket</strong> — клиент для WebSocket подключения</li>
+											<li><strong>dp.run_websocket()</strong> — запуск через WebSocket</li>
+											<li><strong>Auto-reconnect</strong> — автоматическое переподключение с backoff</li>
+											<li><strong>Всё из v0.4.2</strong> — 70+ методов, 15+ типов сообщений, consent, FSM</li>
+										</ul>
+									</div>
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>WebSocket (вместо polling)</h3>
+										<p className='text-gray-300 mb-3'>Бот получает обновления мгновенно через WebSocket вместо опроса каждые 2 секунды.</p>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200 text-sm'>
+											{`import os
+from botiksdk import Bot, Dispatcher
+
+bot = Bot(bot_id=os.getenv("BOT_ID"), token=os.getenv("BOT_TOKEN"))
+dp = Dispatcher()
+dp.include_bot(bot)
+
+# Вместо dp.run_polling() — используем WebSocket
+dp.run_websocket()  # Мгновенные обновления, без задержек`}</pre>
+									</div>
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>БотWebSocket напрямую</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200 text-sm'>
+											{`from botiksdk import BotWebSocket
+
+def on_update(data):
+    print(f"Получено: {data}")
+
+ws = BotWebSocket(
+    bot_id="your-bot-id",
+    token="your-token",
+    on_update=on_update,
+)
+ws.start()  # Фоновый поток
+# ws.stop()  # Остановить`}</pre>
+									</div>
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>Типы сообщений + file_url</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200 text-sm'>
+											{`@dp.message()
+async def handle(message: Message, bot: Bot):
+    if message.content_type == "voice":
+        url = message.voice.file_url  # S3 URL
+        await bot.send_message(str(message.chat.id), f"Голосовое: {url}")
+    elif message.content_type == "poll":
+        opts = ", ".join(o.text for o in message.poll.options)
+        await bot.send_message(str(message.chat.id), f"Опрос: {message.poll.question}\\n{opts}")
+    elif message.content_type == "photo":
+        await bot.send_message(str(message.chat.id), f"Фото: {message.file_url}")
+    else:
+        await bot.send_message(str(message.chat.id), f"Тип: {message.content_type}")`}</pre>
+									</div>
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>Фильтры</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200 text-sm'>
+											{`from botiksdk import Command, Text, Regex, F, RateLimit, RequireScopes
+
+@dp.message(Command("help"))        # /help
+@dp.message(Text(equals="Привет"))  # Точный текст
+@dp.message(Regex(r"^\\d+$"))       # Regex
+@dp.message(RateLimit(window_seconds=1.5))  # Anti-flood
+@dp.message(RequireScopes("admin"))  # Permission check`}</pre>
+									</div>
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>Consent permissions</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200 text-sm'>
+											{`@dp.message(Command("settings"), RequireScopes("basic_profile", "send_messages"))
+async def cmd_settings(message: Message, bot: Bot):
+    await bot.send_message(str(message.chat.id), "Настройки...")`}</pre>
+									</div>
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>FSM</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200 text-sm'>
+											{`from botiksdk import FSMContext
+
+@dp.message(Command("email"))
+async def email(message: Message, bot: Bot, state: FSMContext):
+    await bot.send_message(str(message.chat.id), "Введите email:")
+    await state.set_state("waiting_email")
+
+@dp.message(state="waiting_email")
+async def got_email(message: Message, bot: Bot, state: FSMContext):
+    await state.clear()
+    await bot.send_message(str(message.chat.id), f"Email: {message.text}")`}</pre>
+									</div>
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>Полный пример</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200 text-sm'>
+											{`# bot.py — BotikSDK v0.5.0 (WebSocket)
+import logging, os
+from botiksdk import Bot, Dispatcher, Message, Command, Text, RequireScopes
+from botiksdk import ReplyKeyboardBuilder, KeyboardButton, InlineKeyboardBuilder, InlineKeyboardButton
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
+logger = logging.getLogger(__name__)
+bot = Bot(bot_id=os.getenv("BOT_ID"), token=os.getenv("BOT_TOKEN"))
+dp = Dispatcher()
+dp.include_bot(bot)
+
+@dp.message(Command("start"))
+async def start(message: Message, bot: Bot):
+    kb = ReplyKeyboardBuilder()
+    kb.row(KeyboardButton("🎮 Игры"), KeyboardButton("💰 Баланс"))
+    kb.row(KeyboardButton("💳 Premium"), KeyboardButton("ℹ️ Помощь"))
+    await bot.send_message(str(message.chat.id), "👋 Привет!", reply_markup=kb.as_markup())
+
+@dp.message(Command("kb"))
+async def kb(message: Message, bot: Bot):
+    kb = ReplyKeyboardBuilder()
+    kb.row(KeyboardButton("🎮 Игры"), KeyboardButton("💰 Баланс"))
+    await bot.send_message(str(message.chat.id), "Меню:", reply_markup=kb.as_markup())
+
+@dp.message(Text("🎮 Игры"))
+async def games(message: Message, bot: Bot):
+    builder = InlineKeyboardBuilder()
+    builder.add(InlineKeyboardButton(text="Список игр", callback_data="games:list"))
+    await bot.send_message(str(message.chat.id), "Выберите:", reply_markup=builder.as_markup())
+
+@dp.message()
+async def handle_all(message: Message, bot: Bot):
+    ct = message.content_type
+    if ct == "voice":
+        await bot.send_message(str(message.chat.id), f"🎤 {message.voice.duration}с: {message.voice.file_url}")
+    elif ct == "video":
+        await bot.send_message(str(message.chat.id), f"🎬 {message.video.duration}с: {message.video.file_url}")
+    elif ct == "poll":
+        opts = ", ".join(o.text for o in message.poll.options)
+        await bot.send_message(str(message.chat.id), f"📊 {message.poll.question}\\n{opts}")
+    else:
+        await bot.send_message(str(message.chat.id), f"Получено: {ct}")
+
+@dp.errors()
+async def on_error(update, bot, error):
+    logger.error("Error: %s", error, exc_info=True)
+
+# Запуск через WebSocket (мгновенные обновления)
+dp.run_websocket()`}</pre>
+									</div>
+								</>
+							) : botikSdkVersion === '0.4.2' ? (
+								<>
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>Установка</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>{`pip install botiksdk==0.4.2`}</pre>
+									</div>
+									<div className='mb-6'>
+										<div className='bg-indigo-500/10 border-l-4 border-indigo-500 p-4 rounded-lg backdrop-blur-sm border border-white/10'>
+											<p className='font-semibold text-white'>Что нового</p>
+										</div>
+										<ul className='list-disc pl-5 space-y-2 text-gray-300 mt-3'>
+											<li><strong>15+ типов сообщений</strong> — text, photo, video, voice, poll, sticker, location, contact, dice и др.</li>
+											<li><strong>content_type</strong> — автоопределение типа</li>
+											<li><strong>file_url</strong> — S3 URL для скачивания медиа</li>
+											<li><strong>to_dict()</strong> — полная сериализация в JSON</li>
+											<li><strong>Push</strong> — прокидывает все типы контента</li>
+										</ul>
+									</div>
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>Типы сообщений</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200 text-sm'>
+											{`@dp.message()
+async def handle(message: Message, bot: Bot):
+    if message.content_type == "voice":
+        url = message.voice.file_url  # S3 URL
+        await bot.send_message(str(message.chat.id), f"Голосовое: {url}")
+    elif message.content_type == "video":
+        await bot.send_message(str(message.chat.id), f"Видео: {message.video.file_url}")
+    elif message.content_type == "poll":
+        opts = ", ".join(o.text for o in message.poll.options)
+        await bot.send_message(str(message.chat.id), f"Опрос: {message.poll.question}\\n{opts}")
+    elif message.content_type == "photo":
+        await bot.send_message(str(message.chat.id), f"Фото: {message.file_url}")
+    elif message.content_type == "location":
+        await bot.send_message(str(message.chat.id), f"📍 {message.location.latitude}, {message.location.longitude}")
+    elif message.content_type == "sticker":
+        await bot.send_message(str(message.chat.id), f"Стикер: {message.sticker.emoji}")
+    elif message.content_type == "contact":
+        await bot.send_message(str(message.chat.id), f"Контакт: {message.contact.first_name}")
+    elif message.content_type == "dice":
+        await bot.send_message(str(message.chat.id), f"Кубик: {message.dice.value}")
+    elif message.content_type == "document":
+        await bot.send_message(str(message.chat.id), f"📄 {message.document.file_name}: {message.document.file_url}")`}</pre>
+									</div>
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>Сериализация и File URL</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200 text-sm'>
+											{`# to_dict() — JSON-сериализация
+json_data = message.to_dict()
+# {"message_id":"123","content_type":"voice","voice":{"file_url":"https://s3.vondic.ru/..."}}
+
+# File URL для скачивания
+url = message.file_url        # S3 URL
+fid = message.media_file_id   # file_id`}
+										</pre>
+									</div>
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>Шаблон</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200 text-sm'>
+											{`import logging, os
+from botiksdk import Bot, Dispatcher, Message, Command, Text, RequireScopes
+from botiksdk import ReplyKeyboardBuilder, KeyboardButton, InlineKeyboardBuilder, InlineKeyboardButton
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
+logger = logging.getLogger(__name__)
+bot = Bot(bot_id=os.getenv("BOT_ID"), token=os.getenv("BOT_TOKEN"))
+dp = Dispatcher()
+dp.include_bot(bot)
+
+@dp.message(Command("start"))
+async def start(message: Message, bot: Bot):
+    kb = ReplyKeyboardBuilder()
+    kb.row(KeyboardButton("🎮 Игры"), KeyboardButton("💰 Баланс"))
+    await bot.send_message(str(message.chat.id), "👋 Привет!", reply_markup=kb.as_markup())
+
+@dp.message(Command("kb"))
+async def kb(message: Message, bot: Bot):
+    kb = ReplyKeyboardBuilder()
+    kb.row(KeyboardButton("🎮 Игры"), KeyboardButton("💰 Баланс"))
+    await bot.send_message(str(message.chat.id), "Меню:", reply_markup=kb.as_markup())
+
+@dp.message(Text("🎮 Игры"))
+async def games(message: Message, bot: Bot):
+    builder = InlineKeyboardBuilder()
+    builder.add(InlineKeyboardButton(text="Список игр", callback_data="games:list"))
+    await bot.send_message(str(message.chat.id), "Выберите:", reply_markup=builder.as_markup())
+
+@dp.message(RequireScopes("basic_profile"))
+async def auth_required(message: Message, bot: Bot):
+    await bot.send_message(str(message.chat.id), f"Тип: {message.content_type}")
+
+@dp.errors()
+async def on_error(update, bot, error):
+    logger.error("Error: %s", error, exc_info=True)
+
+dp.run_polling()`}
+										</pre>
+									</div>
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>Фильтры</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200 text-sm'>
+											{`from botiksdk import Command, Text, Regex, F, RateLimit, RequireScopes
+
+@dp.message(Command("help"))        # /help
+@dp.message(Text(equals="Привет"))  # Точный текст
+@dp.message(Regex(r"^\\d+$"))       # Regex
+@dp.message(RateLimit(window_seconds=1.5))  # Anti-flood
+@dp.message(RequireScopes("admin"))  # Permission`}
+										</pre>
+									</div>
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>FSM</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200 text-sm'>
+											{`from botiksdk import FSMContext
+
+@dp.message(Command("email"))
+async def email(message: Message, bot: Bot, state: FSMContext):
+    await bot.send_message(str(message.chat.id), "Введите email:")
+    await state.set_state("waiting_email")
+
+@dp.message(state="waiting_email")
+async def got_email(message: Message, bot: Bot, state: FSMContext):
+    await state.clear()
+    await bot.send_message(str(message.chat.id), f"Email: {message.text}")`}
+										</pre>
+									</div>
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>Error handlers</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200 text-sm'>
+											{`@dp.errors()
+async def on_error(update, bot, error):
+    logger.error("Error: %s", error, exc_info=True)`}
+										</pre>
+									</div>
+								</>
+							) : botikSdkVersion === '0.4.0' ? (
+								<>
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Установка
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`pip install botiksdk==0.4.0`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<div className='bg-indigo-500/10 border-l-4 border-indigo-500 p-4 rounded-lg backdrop-blur-sm border border-white/10'>
+											<p className='font-semibold text-white'>Что нового в v0.4.0</p>
+											<p className='text-gray-300 mt-1'>Масштабное обновление — 70+ методов API:</p>
+										</div>
+										<ul className='list-disc pl-5 space-y-2 text-gray-300 mt-3'>
+											<li><strong>InputMedia</strong> — альбомы фото/видео через send_media_group</li>
+											<li><strong>Локации и контакты</strong> — send_location, send_venue, send_contact</li>
+											<li><strong>Пакетные операции</strong> — delete_messages, forward_messages</li>
+											<li><strong>Управление чатом</strong> — get_chat, leave_chat, get_chat_member_count</li>
+											<li><strong>Инвайт-ссылки</strong> — create_chat_invite_link, revoke_chat_invite_link</li>
+											<li><strong>Inline queries</strong> — обработка inline-запросов</li>
+											<li><strong>Стикерпаки</strong> — get_sticker_set, set_sticker_set_title</li>
+											<li><strong>Webhook</strong> — set_webhook, delete_webhook, get_webhook_info</li>
+											<li><strong>Consent permissions</strong> — RequireScopes, check_permissions</li>
+											<li><strong>Chat actions</strong> — send_chat_action (typing, upload_photo...)</li>
+											<li><strong>FSM Redis</strong> — бэкенд состояний на Redis</li>
+											<li><strong>Middleware</strong> — pre/post обработка на уровне диспетчера</li>
+										</ul>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Шаблон для старта
+										</h3>
+										<p className='text-gray-400 text-sm mb-3'>Минимальный рабочий бот с командами /start, /kb, /help и логированием.</p>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200 text-sm leading-relaxed'>
+											{`# bot.py — Шаблон бота на BotikSDK v0.4.0
+# pip install botiksdk==0.4.0
+
+import logging
+import os
+from botiksdk import Bot, Dispatcher, Message, Command, Text
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
+logger = logging.getLogger(__name__)
+
+bot = Bot(bot_id=os.getenv("BOT_ID", "your-bot-id"))
+dp = Dispatcher()
+dp.include_bot(bot)
+
+@dp.message(Command("start"))
+async def cmd_start(message: Message, bot: Bot):
+    await bot.send_message(str(message.chat.id), "Привет! Я бот.")
+
+@dp.message(Command("kb"))
+async def cmd_kb(message: Message, bot: Bot):
+    await bot.send_message(str(message.chat.id), "Меню (скоро)")
+
+@dp.message(Command("help"))
+async def cmd_help(message: Message, bot: Bot):
+    await bot.send_message(str(message.chat.id), "Команды:\\n/start — старт\\n/kb — меню\\n/help — эта справка")
+
+if __name__ == "__main__":
+    logger.info("Бот запускается...")
+    dp.run_polling()`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Команда /kb
+										</h3>
+										<p className='text-gray-300 mb-3'>
+											Универсальная команда на уровне фреймворка. Если бот зарегистрировал обработчик <code>/kb</code> — вызывается он.
+											Если нет — фреймворк автоматически показывает reply-клавиатуру с дефолтными кнопками.
+										</p>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`@dp.message(Command("kb"))
+async def cmd_kb(message: Message, bot: Bot):
+    kb = ReplyKeyboardBuilder()
+    kb.row(KeyboardButton("🎮 Игры"), KeyboardButton("💰 Баланс"))
+    kb.row(KeyboardButton("💳 Premium"), KeyboardButton("ℹ️ Помощь"))
+    await bot.send_message(str(message.chat.id), "Меню:", reply_markup=kb.as_markup())`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Reply-клавиатура
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`from botiksdk import ReplyKeyboardBuilder, KeyboardButton, ReplyKeyboardRemove
+
+kb = ReplyKeyboardBuilder()
+kb.row(KeyboardButton("Помощь"), KeyboardButton("Настройки"))
+kb.row(KeyboardButton("📍 Локация", request_location=True))
+await message.answer("Выберите:", reply_markup=kb.as_markup())
+
+# Удалить клавиатуру
+await message.answer("Готово!", reply_markup=ReplyKeyboardRemove().as_markup())`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Inline-клавиатура
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`from botiksdk import InlineKeyboardBuilder, InlineKeyboardButton
+
+kb = InlineKeyboardBuilder()
+kb.add(InlineKeyboardButton(text="Нажми", callback_data="pressed"))
+kb.row(
+    InlineKeyboardButton(text="Google", url="https://google.com"),
+    InlineKeyboardButton(text="Яндекс", url="https://yandex.ru"),
+)
+await bot.send_message(chat_id, "Выбери:", reply_markup=kb.as_markup())`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											InputMedia (альбомы)
+										</h3>
+										<p className='text-gray-300 mb-3'>
+											Отправка нескольких фото/видео как альбома через <code>send_media_group</code>.
+										</p>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`from botiksdk import InputMediaPhoto, InputMediaVideo, InputFile
+
+media = [
+    InputMediaPhoto(InputFile(path="photo1.jpg"), caption="Фото 1"),
+    InputMediaPhoto(InputFile(path="photo2.jpg")),
+    InputMediaVideo(InputFile(path="video.mp4"), caption="Видео"),
+]
+await bot.send_media_group(chat_id, media)`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Локации и контакты
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`# Точка на карте
+await bot.send_location(chat_id, latitude=55.7558, longitude=37.6173)
+
+# Место (с названием и адресом)
+await bot.send_venue(chat_id, latitude=55.7558, longitude=37.6173,
+                     title="Красная площадь", address="Москва")
+
+# Контакт
+await bot.send_contact(chat_id, phone_number="+79001234567",
+                       first_name="Иван", last_name="Петров")`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Пакетные операции
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`# Удалить несколько сообщений
+await bot.delete_messages(chat_id, [msg1_id, msg2_id, msg3_id])
+
+# Переслать несколько сообщений
+await bot.forward_messages(
+    from_chat_id=chat_id,
+    to_chat_id=target_chat_id,
+    message_ids=[msg1_id, msg2_id],
+)`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Управление чатом
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`# Информация о чате
+chat = await bot.get_chat(chat_id)
+print(f"Название: {chat.title}, тип: {chat.type}")
+
+# Количество участников
+count = await bot.get_chat_member_count(chat_id)
+print(f"Участников: {count}")
+
+# Покинуть чат
+await bot.leave_chat(chat_id)`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Инвайт-ссылки
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`# Создать инвайт-ссылку
+link = await bot.create_chat_invite_link(
+    chat_id,
+    name="Приглашение для подписчиков",
+    member_limit=100,
+    creates_join_request=False,
+)
+print(f"Ссылка: {link.invite_link}")
+
+# Отозвать ссылку
+await bot.revoke_chat_invite_link(chat_id, link.invite_link)`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Consent permissions
+										</h3>
+										<p className='text-gray-300 mb-3'>
+											Фильтр <code>RequireScopes</code> проверяет, что пользователь выдал боту необходимые разрешения.
+										</p>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`from botiksdk import RequireScopes, check_permissions
+
+@dp.message(Command("analytics"), RequireScopes("analytics:read"))
+async def cmd_analytics(message: Message, bot: Bot):
+    await bot.send_message(str(message.chat.id), "Данные аналитики...")
+
+# Проверка прав вручную
+@dp.message(Command("settings"))
+async def cmd_settings(message: Message, bot: Bot):
+    ok = await check_permissions(message, scopes=["settings:write"])
+    if not ok:
+        await bot.send_message(str(message.chat.id), "Нет прав")
+        return
+    await bot.send_message(str(message.chat.id), "Настройки...")`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Фильтры
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`from botiksdk import Command, Text, Regex, F, RateLimit, RequireScopes
+
+@dp.message(Command("help"))
+async def cmd_help(message, bot, state): ...
+
+@dp.message(Text(equals="Привет"))
+async def exact_text(message, bot, state): ...
+
+@dp.message(Regex(r"^\\d+$"))
+async def only_numbers(message, bot, state): ...
+
+@dp.message(F.message.text.contains("купить"))
+async def buy_intent(message, bot, state): ...
+
+@dp.message(RateLimit(window_seconds=1.5, key="user"))
+async def antiflood(message, bot, state): ...
+
+@dp.message(RequireScopes("admin"))
+async def admin_only(message, bot, state): ...`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											FSM (управление состояниями)
+										</h3>
+										<p className='text-gray-300 mb-3'>
+											FSM Redis — бэкенд для хранения состояний диалога в Redis. Поддерживает <code>set_state</code>, <code>update_data</code>, <code>get_data</code>, <code>clear</code>.
+										</p>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`from botiksdk.fsm import FSMRedisStorage
+
+storage = FSMRedisStorage(host="localhost", port=6379, db=0)
+dp = Dispatcher(storage=storage)
+
+class States:
+    name = "name"
+    email = "email"
+
+@dp.message(Command("register"))
+async def register_start(message, bot, state):
+    await state.set_state(States.name)
+    await bot.send_message(str(message.chat.id), "Ваше имя?")
+
+@dp.message(state=States.name)
+async def register_name(message, bot, state):
+    await state.update_data(name=message.text)
+    await state.set_state(States.email)
+    await bot.send_message(str(message.chat.id), "Email?")
+
+@dp.message(state=States.email)
+async def register_email(message, bot, state):
+    data = await state.get_data()
+    await state.clear()
+    await bot.send_message(str(message.chat.id), f"Готово: {data['name']}, {message.text}")`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Startup/Shutdown
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`@dp.startup
+async def on_startup():
+    logger.info("Бот запущен!")
+
+@dp.shutdown
+async def on_shutdown():
+    logger.info("Бот остановлен!")`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Error handlers
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`@dp.errors()
+async def on_error(update, bot, error):
+    logger.error("Handler error: %s", error, exc_info=True)
+    if hasattr(update, "message") and update.message:
+        await bot.send_message(str(update.message.chat.id), "⚠️ Ошибка")`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Webhook
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`# Установить webhook
+await bot.set_webhook(
+    url="https://your-domain.com/webhook",
+    secret_token="your-secret",
+    allowed_updates=["message", "callback_query"],
+)
+
+# Проверить webhook
+info = await bot.get_webhook_info()
+print(f"URL: {info.url}, pending: {info.pending_update_count}")
+
+# Удалить webhook
+await bot.delete_webhook()`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Middleware
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`from botiksdk import BaseMiddleware
+
+class LoggingMiddleware(BaseMiddleware):
+    async def __call__(self, handler, event, data):
+        logger.info("Update: %s", event)
+        result = await handler(event, data)
+        logger.info("Handled: %s", event)
+        return result
+
+dp.message.middleware(LoggingMiddleware())`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Полный пример бота
+										</h3>
+										<p className='text-gray-400 text-sm mb-3'>Готовый бот с основными командами, клавиатурами, callback, фильтрами и error handler.</p>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200 text-sm leading-relaxed'>
+											{`# full_bot.py — Полный пример бота на BotikSDK v0.4.0
+# pip install botiksdk==0.4.0
+
+import logging
+import os
+from botiksdk import (
+    Bot, Dispatcher, Message, Command, Text, F,
+    ReplyKeyboardBuilder, KeyboardButton,
+    InlineKeyboardBuilder, InlineKeyboardButton,
+    RateLimit,
+)
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
+logger = logging.getLogger(__name__)
+
+bot = Bot(bot_id=os.getenv("BOT_ID", "your-bot-id"))
+dp = Dispatcher()
+dp.include_bot(bot)
+
+# ── Startup ──────────────────────────────────────
+
+@dp.startup
+async def on_startup():
+    logger.info("Бот запущен!")
+
+@dp.shutdown
+async def on_shutdown():
+    logger.info("Бот остановлен!")
+
+# ── Команды ──────────────────────────────────────
+
+@dp.message(Command("start"))
+async def cmd_start(message: Message, bot: Bot):
+    kb = InlineKeyboardBuilder()
+    kb.add(InlineKeyboardButton(text="Помощь", callback_data="help"))
+    await bot.send_message(str(message.chat.id), "Привет! Нажми кнопку:", reply_markup=kb.as_markup())
+
+@dp.message(Command("kb"))
+async def cmd_kb(message: Message, bot: Bot):
+    kb = ReplyKeyboardBuilder()
+    kb.row(KeyboardButton("🎮 Игры"), KeyboardButton("💰 Баланс"))
+    kb.row(KeyboardButton("ℹ️ Помощь"))
+    await bot.send_message(str(message.chat.id), "Меню:", reply_markup=kb.as_markup())
+
+@dp.message(Command("help"))
+async def cmd_help(message: Message, bot: Bot):
+    await bot.send_message(str(message.chat.id), "Команды:\\n/start — старт\\n/kb — меню\\n/help — справка")
+
+# ── Callback ─────────────────────────────────────
+
+@dp.callback_query(F.data == "help")
+async def on_help(callback, bot):
+    await bot.send_message(str(callback.message.chat.id), "Это помощь!")
+    await bot.answer_callback_query(callback.id)
+
+# ── Фильтры ─────────────────────────────────────
+
+@dp.message(Text(equals="🎮 Игры"))
+async def games(message: Message, bot: Bot):
+    await bot.send_message(str(message.chat.id), "Игры в разработке!")
+
+@dp.message(RateLimit(window_seconds=2, key="user"))
+async def antiflood(message: Message, bot: Bot):
+    await bot.send_message(str(message.chat.id), "Не спамьте!")
+
+# ── Error handler ────────────────────────────────
+
+@dp.errors()
+async def on_error(update, bot, error):
+    logger.error("Error: %s", error, exc_info=True)
+
+# ── Запуск ───────────────────────────────────────
+
+if __name__ == "__main__":
+    logger.info("Бот запускается...")
+    dp.run_polling()`}
+										</pre>
+									</div>
+								</>
+							) : botikSdkVersion === '0.3.1' ? (
+								<>
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Установка
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`pip install botiksdk==0.3.1`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<div className='bg-indigo-500/10 border-l-4 border-indigo-500 p-4 rounded-lg backdrop-blur-sm border border-white/10'>
+											<p className='font-semibold text-white'>Что нового в v0.3.1</p>
+											<p className='text-gray-300 mt-1'>Исправления стабильности и совместимости:</p>
+										</div>
+										<ul className='list-disc pl-5 space-y-2 text-gray-300 mt-3'>
+											<li><strong>Универсальная команда /kb</strong> — framework-level: если бот не имеет своего обработчика, показывает reply-клавиатуру по умолчанию</li>
+											<li><strong>Retry backoff</strong> — при ошибках polling бот использует exponential backoff (2→4→6→8→10 сек) вместо фиксированного 1 сек</li>
+											<li><strong>Исправлен error handler</strong> — сигнатура <code>@dp.errors()</code> теперь корректно передаёт <code>update</code>, <code>bot</code>, <code>error</code></li>
+											<li><strong>Reply keyboard работает через callback</strong> — нажатие кнопки отправляет текст как обычное сообщение боту</li>
+											<li><strong>Убраны dev-зависимости</strong> — build, twine не входят в runtime dependencies</li>
+										</ul>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Команда /kb
+										</h3>
+										<p className='text-gray-300 mb-3'>
+											Универсальная команда на уровне фреймворка. Если бот зарегистрировал обработчик <code>/kb</code> — вызывается он.
+											Если нет — фреймворк автоматически показывает reply-клавиатуру с дефолтными кнопками.
+										</p>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`@dp.message(Command("kb"))
+async def cmd_kb(message: Message, bot: Bot):
+    kb = ReplyKeyboardBuilder()
+    kb.row(KeyboardButton("🎮 Игры"), KeyboardButton("💰 Баланс"))
+    kb.row(KeyboardButton("💳 Premium"), KeyboardButton("ℹ️ Помощь"))
+    await bot.send_message(str(message.chat.id), "Меню:", reply_markup=kb.as_markup())`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Reply-клавиатура
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`from botiksdk import ReplyKeyboardBuilder, KeyboardButton, ReplyKeyboardRemove
+
+kb = ReplyKeyboardBuilder()
+kb.row(KeyboardButton('Помощь'), KeyboardButton('Настройки'))
+kb.row(KeyboardButton('📍 Локация', request_location=True))
+await message.answer('Выберите:', reply_markup=kb.as_markup())
+
+# Удалить клавиатуру
+await message.answer('Готово!', reply_markup=ReplyKeyboardRemove().as_markup())`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Шаблон для старта
+										</h3>
+										<p className='text-gray-400 text-sm mb-3'>Минимальный код — добавляй свои команды по мере необходимости.</p>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200 text-sm leading-relaxed'>
+											{`# bot.py — Шаблон бота на BotikSDK v0.3.1
+# pip install botiksdk==0.3.1
+
+import logging
+import os
+from botiksdk import Bot, Dispatcher, Message, Command, Text
+
+# Логирование — смотри что делает бот в консоли
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
+logger = logging.getLogger(__name__)
+
+# Создай файл .env.bot рядом с bot.py:
+#   BOT_ID=your-bot-id
+#   BOT_TOKEN=your-bot-token
+bot = Bot(bot_id=os.getenv("BOT_ID", "your-bot-id"))
+dp = Dispatcher()
+dp.include_bot(bot)
+
+# ── Команды ──────────────────────────────────────
+
+@dp.message(Command("start"))
+async def cmd_start(message: Message, bot: Bot):
+    await bot.send_message(str(message.chat.id), "Привет! Я бот.")
+
+@dp.message(Command("kb"))
+async def cmd_kb(message: Message, bot: Bot):
+    # Тут будет reply-клавиатура — добавишь позже
+    await bot.send_message(str(message.chat.id), "Меню (скоро)")
+
+@dp.message(Command("help"))
+async def cmd_help(message: Message, bot: Bot):
+    await bot.send_message(str(message.chat.id), "Команды:\\n/start — старт\\n/kb — меню\\n/help — эта справка")
+
+# ── Запуск ───────────────────────────────────────
+
+if __name__ == "__main__":
+    logger.info("Бот запускается...")
+    dp.run_polling()  # Бот опрашивает Vontic API и обрабатывает сообщения`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Файлы (InputFile)
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`from botiksdk import InputFile
+
+photo = InputFile(path='/path/to/photo.jpg')
+await bot.send_photo(chat_id, photo, caption='Фото')
+await bot.send_document(chat_id, InputFile(file_bytes=b'...', filename='doc.pdf'))`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Модерация
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`await bot.ban_chat_member(chat_id, user_id)
+await bot.restrict_chat_member(chat_id, user_id, permissions={'can_send_messages': False})
+await bot.pin_chat_message(chat_id, message_id)
+await bot.delete_message(chat_id, message_id)
+await bot.get_chat_member(chat_id, user_id)`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Опросы
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`poll = await bot.send_poll(chat_id, 'Вопрос?', ['Да', 'Нет'], is_anonymous=True)
+await bot.stop_poll(chat_id, poll.message_id)`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Callback actions
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`await bot.answer_callback_query(callback.id, text='Готово!', show_alert=True)
+await bot.edit_message_text('Новый текст', chat_id, message_id)
+await bot.edit_message_reply_markup(chat_id, message_id, reply_markup=new_kb)`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Bot commands
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`await bot.set_my_commands([
+    {'command': 'start', 'description': 'Начать'},
+    {'command': 'help', 'description': 'Помощь'},
+])`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Startup/Shutdown
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`@dp.startup
+async def on_startup():
+    print('Бот запущен!')
+
+@dp.shutdown
+async def on_shutdown():
+    print('Бот остановлен!')`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Error handlers
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`@dp.errors()
+async def on_error(update, bot, error):
+    logger.error("Handler error: %s", error, exc_info=True)
+    if hasattr(update, "message") and update.message:
+        await bot.send_message(str(update.message.chat.id), "⚠️ Ошибка")`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Интеграция с Vontic API
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`from botiksdk.client import PublicAPIClient
+
+client = PublicAPIClient(bot_id="your-bot-id", bot_token="your-token")
+# Все методы Bot используют client internally
+# send_action, get_updates, send_message — через Vontic API`}
+										</pre>
+									</div>
+								</>
+							) : botikSdkVersion === '0.3.0' ? (
+								<>
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Установка
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`pip install botiksdk==0.3.0`}
+										</pre>
+									</div>
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Что нового в v0.3.0
+										</h3>
+										<ul className='list-disc pl-5 space-y-2 text-gray-300'>
+											<li>Reply-клавиатура (ReplyKeyboardBuilder, KeyboardButton, ReplyKeyboardRemove)</li>
+											<li>Отправка файлов (InputFile, send_photo, send_document, send_voice, send_video)</li>
+											<li>Модерация (ban, kick, restrict, promote, delete_message, pin_chat_message)</li>
+											<li>Опросы (send_poll, stop_poll)</li>
+											<li>Stickers (send_sticker, get_sticker_set)</li>
+											<li>Callback actions (answer_callback_query, edit_message_text)</li>
+											<li>Bot commands (set_my_commands, get_my_commands)</li>
+											<li>Chat actions (send_chat_action — typing)</li>
+											<li>Startup/Shutdown хуки (@dp.startup / @dp.shutdown)</li>
+											<li>Error handlers (@dp.errors())</li>
+										</ul>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Reply-клавиатура
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`from botiksdk import ReplyKeyboardBuilder, KeyboardButton, ReplyKeyboardRemove
+
+kb = ReplyKeyboardBuilder()
+kb.row(KeyboardButton('Помощь'), KeyboardButton('Настройки'))
+kb.row(KeyboardButton('📍 Локация', request_location=True))
+await message.answer('Выберите:', reply_markup=kb.as_markup())
+
+# Удалить клавиатуру
+await message.answer('Готово!', reply_markup=ReplyKeyboardRemove().as_markup())`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Файлы (InputFile)
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`from botiksdk import InputFile
+
+photo = InputFile(path='/path/to/photo.jpg')
+await bot.send_photo(chat_id, photo, caption='Фото')
+await bot.send_document(chat_id, InputFile(file_bytes=b'...', filename='doc.pdf'))`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Модерация
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`await bot.ban_chat_member(chat_id, user_id)
+await bot.restrict_chat_member(chat_id, user_id, permissions={'can_send_messages': False})
+await bot.pin_chat_message(chat_id, message_id)
+await bot.delete_message(chat_id, message_id)
+await bot.get_chat_member(chat_id, user_id)`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Опросы
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`poll = await bot.send_poll(chat_id, 'Вопрос?', ['Да', 'Нет'], is_anonymous=True)
+await bot.stop_poll(chat_id, poll.message_id)`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Callback actions
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`await bot.answer_callback_query(callback.id, text='Готово!', show_alert=True)
+await bot.edit_message_text('Новый текст', chat_id, message_id)
+await bot.edit_message_reply_markup(chat_id, message_id, reply_markup=new_kb)`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Bot commands
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`await bot.set_my_commands([
+    {'command': 'start', 'description': 'Начать'},
+    {'command': 'help', 'description': 'Помощь'},
+])`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Startup/Shutdown
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`@dp.startup
+async def on_startup():
+    print('Бот запущен!')
+
+@dp.shutdown
+async def on_shutdown():
+    print('Бот остановлен!')`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Error handlers
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`@dp.errors()
+async def on_error(event, error):
+    logger.error('Handler error: %s', error)
+    await event.bot.send_message(event.message.chat.id, 'Ошибка')`}
+										</pre>
+									</div>
+
+									<div className='mb-6'>
+										<h3 className='text-xl font-semibold mb-2 text-white'>
+											Интеграция с Vontic API (остаётся из v0.2.0)
+										</h3>
+										<pre className='bg-gray-800/50 p-3 rounded overflow-x-auto border border-white/10 text-gray-200'>
+											{`import requests
+from botiksdk.client import PublicAPIClient
+
+# 1) exchange authorization code -> access_token
+token_resp = requests.post("https://vondic.ru/oauth/token", data={
+    "grant_type": "authorization_code",
+    "code": "AUTH_CODE",
+    "redirect_uri": "https://app.example.com/callback",
+    "client_id": "YOUR_CLIENT_ID",
+    "client_secret": "YOUR_CLIENT_SECRET",
+})
+access_token = token_resp.json()["access_token"]
+
+# 2) get api key by oauth token
+client = PublicAPIClient(base_url="https://vondic.ru")
+api_key = client.get_api_key(access_token=access_token)["api_key"]
+
+# 3) list bots / generate bot token
+bots = client.list_bots(api_key=api_key)
+print("bots:", bots)`}
+										</pre>
+									</div>
+								</>
+							) : botikSdkVersion === '0.2.0' ? (
 								<>
 									<div className='mb-6'>
 										<h3 className='text-xl font-semibold mb-2 text-white'>
@@ -1565,7 +2692,7 @@ print("bots:", bots)`}
 								Публичный API для ящика{' '}
 								<code className='text-indigo-300'>@vondic.ru</code>, привязанного
 								к аккаунту. Базовый путь:{' '}
-								<code className='text-indigo-300'>/api/public/v1/mail</code>
+								<code className='text-indigo-300'>/api/public/v2/mail</code>
 							</p>
 							<div className='bg-indigo-500/10 border-l-4 border-indigo-500 p-4 mb-6 rounded-lg border border-white/10'>
 								<p className='text-sm text-gray-300'>
@@ -1643,7 +2770,7 @@ print("bots:", bots)`}
 }`}
 									</pre>
 									<pre className='mt-3 bg-gray-900/50 p-3 rounded text-xs text-gray-200 overflow-x-auto border border-white/10'>
-										{`curl -X POST "https://api.vondic.ru/api/public/v1/mail/send" \\
+										{`curl -X POST "https://api.vondic.ru/api/public/v2/mail/send" \\
   -H "X-API-Key: YOUR_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"to":"user@example.com","subject":"Hi","body_text":"Hello"}'`}
@@ -1722,10 +2849,10 @@ print("bots:", bots)`}
 								</h3>
 								<p className='text-gray-300 text-sm'>
 									Для браузера:{' '}
-									<code className='text-indigo-300'>/api/v1/mail/*</code> с сессией
+									<code className='text-indigo-300'>/api/v2/mail/*</code> с сессией
 									(ящик, папки, отправка, корзина, настройка прав{' '}
 									<code className='text-indigo-300'>
-										PUT /api/v1/mail/api-permissions
+										PUT /api/v2/mail/api-permissions
 									</code>
 									).
 								</p>

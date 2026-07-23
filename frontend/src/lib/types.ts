@@ -118,7 +118,7 @@ export interface Message {
 	channel_id?: string
 	group_id?: string
 	reply_to?: string
-	type?: 'text' | 'voice' | 'image' | 'file' | 'game'
+	type?: 'text' | 'voice' | 'image' | 'file' | 'game' | 'poll'
 	game?: {
 		id: string
 		title?: string
@@ -144,4 +144,6 @@ export interface Message {
 			modal?: string
 		}>>
 	}
+	disappear_after?: number | null
+	disappear_at?: string | null
 }

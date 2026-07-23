@@ -271,3 +271,20 @@ def ensure_user_conversations_secret_column(engine) -> None:
             "ALTER TABLE user_conversations "
             "ADD COLUMN IF NOT EXISTS is_secret BOOLEAN NOT NULL DEFAULT 0"
         )
+
+
+def ensure_oauth_clients_verified_column(engine) -> None:
+    """Add verified column to oauth_clients table."""
+    insp = inspect(engine)
+    if not insp.has_table("oauth_clients"):
+        return
+
+    def run(sql: str) -> None:
+        with engine.begin() as conn:
+            conn.execute(text(sql))
+
+    dialect = engine.dialect.name
+    if dialect == "postgresql":
+        run("ALTER TABLE oauth_clients ADD COLUMN IF NOT EXISTS verified INTEGER DEFAULT 0")
+    else:
+        run("ALTER TABLE oauth_clients ADD COLUMN verified INTEGER DEFAULT 0")

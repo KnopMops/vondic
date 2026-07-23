@@ -1,12 +1,15 @@
 import logging
 import time
 
+import app.api.public.v1.bots as _pub_bots
+
 from app.api.public.v1.bots import (
-    OUTBOX_LOCK,
-    OUTBOX_QUEUES,
-    QUEUE_LOCK,
-    UPDATE_COUNTERS,
+    _redis_next_id,
+    _redis_push,
+    _redis_pop_matching,
+    _redis_counter_incr,
     UPDATE_QUEUES,
+    QUEUE_LOCK,
 )
 from app.schemas.bot_schema import bot_schema, bots_schema
 from app.services.bot_service import BotService
@@ -58,6 +61,9 @@ def create_bot(current_user):
 @bots_bp.route("/<bot_id>/updates/push", methods=["POST"])
 @token_required
 def push_bot_update(current_user, bot_id):
+    """Push an update to a bot. Accepts ALL message content types:
+    text, photo, video, document, audio, voice, video_note, sticker,
+    location, venue, contact, poll, dice, and callback_query."""
     bot = BotService.get_active_bot_by_id(bot_id)
     if not bot:
         logger.info("bot_updates_push_bot_not_found bot_id=%s", bot_id)
@@ -65,36 +71,77 @@ def push_bot_update(current_user, bot_id):
     data = request.get_json() or {}
     message = data.get("message") or {}
     text = (message.get("text") or "").strip()
-    if not text:
-        logger.info("bot_updates_push_missing_text bot_id=%s", bot_id)
-        return jsonify({"error": "message.text is required"}), 400
+
+    # Detect content type — accept any non-empty content
+    content_type = "text"
+    if message.get("photo"):
+        content_type = "photo"
+    elif message.get("video"):
+        content_type = "video"
+    elif message.get("document"):
+        content_type = "document"
+    elif message.get("audio"):
+        content_type = "audio"
+    elif message.get("voice"):
+        content_type = "voice"
+    elif message.get("video_note"):
+        content_type = "video_note"
+    elif message.get("sticker"):
+        content_type = "sticker"
+    elif message.get("location"):
+        content_type = "location"
+    elif message.get("venue"):
+        content_type = "venue"
+    elif message.get("contact"):
+        content_type = "contact"
+    elif message.get("poll"):
+        content_type = "poll"
+    elif message.get("dice"):
+        content_type = "dice"
+
+    if not text and content_type == "text":
+        logger.info("bot_updates_push_missing_content bot_id=%s", bot_id)
+        return jsonify({"error": "message content is required (text or other content type)"}), 400
+
     from_user = message.get("from_user") or {}
     chat = message.get("chat") or {}
     from_user_id = str(from_user.get("id") or current_user.id)
     chat_id = str(chat.get("id") or current_user.id)
-    with QUEUE_LOCK:
-        UPDATE_COUNTERS[bot_id] += 1
-        update_id = UPDATE_COUNTERS[bot_id]
-        update = {
-            "update_id": str(update_id),
-            "message": {
-                "message_id": str(update_id),
-                "text": text,
-                "from_user": {
-                    "id": from_user_id,
-                    "username": from_user.get("username") or current_user.username,
-                    "avatar_url": from_user.get("avatar_url")
-                    or current_user.avatar_url,
-                },
-                "chat": {
-                    "id": chat_id,
-                    "type": chat.get("type") or "private",
-                    "title": chat.get("title") or current_user.username,
-                },
-                "date": int(time.time()),
-            },
-        }
-        UPDATE_QUEUES[bot_id].append(update)
+    update_id = _redis_next_id()
+
+    # Build message with all content types
+    msg_payload = {
+        "message_id": str(update_id),
+        "text": text,
+        "from_user": {
+            "id": from_user_id,
+            "username": from_user.get("username") or current_user.username,
+            "avatar_url": from_user.get("avatar_url")
+            or current_user.avatar_url,
+        },
+        "chat": {
+            "id": chat_id,
+            "type": chat.get("type") or "private",
+            "title": chat.get("title") or current_user.username,
+        },
+        "date": int(time.time()),
+    }
+    # Forward all content types
+    for field in ("photo", "video", "document", "audio", "voice", "video_note",
+                  "sticker", "location", "venue", "contact", "poll", "dice", "caption"):
+        val = message.get(field)
+        if val is not None:
+            msg_payload[field] = val
+
+    update = {
+        "update_id": str(update_id),
+        "message": msg_payload,
+    }
+    # Forward callback_query if present
+    if data.get("callback_query"):
+        update["callback_query"] = data["callback_query"]
+
+    _redis_push(f"updates:{bot_id}", update)
     logger.info(
         "bot_updates_pushed bot_id=%s update_id=%s chat_id=%s from_user_id=%s",
         bot_id,
@@ -118,18 +165,10 @@ def push_bot_update(current_user, bot_id):
     start = time.time()
     chat_id = str(chat.get("id") or current_user.id)
     while True:
-        items = []
-        with OUTBOX_LOCK:
-            queue = OUTBOX_QUEUES[bot_id]
-            remaining = []
-            while queue:
-                item = queue.popleft()
-                if str(item.get("chat_id")) == chat_id:
-                    items.append(item)
-                else:
-                    remaining.append(item)
-            for item in remaining:
-                queue.append(item)
+        items = _redis_pop_matching(
+            f"outbox:{bot_id}",
+            lambda item: str(item.get("chat_id")) == str(chat_id),
+        )
         if items:
             logger.info(
                 "bot_updates_reply_delivered bot_id=%s update_id=%s count=%s",
@@ -159,18 +198,10 @@ def get_bot_outbox(current_user, bot_id):
         logger.info("bot_outbox_bot_not_found bot_id=%s", bot_id)
         return jsonify({"error": "Bot not found"}), 404
     chat_id = request.args.get("chat_id") or str(current_user.id)
-    items = []
-    with OUTBOX_LOCK:
-        queue = OUTBOX_QUEUES[bot_id]
-        remaining = []
-        while queue:
-            item = queue.popleft()
-            if str(item.get("chat_id")) == str(chat_id):
-                items.append(item)
-            else:
-                remaining.append(item)
-        for item in remaining:
-            queue.append(item)
+    items = _redis_pop_matching(
+        f"outbox:{bot_id}",
+        lambda item: str(item.get("chat_id")) == str(chat_id),
+    )
     logger.info(
         "bot_outbox_delivered bot_id=%s chat_id=%s count=%s",
         bot_id,
@@ -210,3 +241,49 @@ def verify_bot(current_user, bot_id):
             bot_id,
             str(e))
         return jsonify({"error": "Failed to update bot verification"}), 500
+
+
+# ── Bot permissions (internal API — user JWT auth) ───────────────────
+
+@bots_bp.route("/<bot_id>/permissions", methods=["GET"])
+@token_required
+def get_my_bot_permissions(current_user, bot_id):
+    """Get current user's permissions for a bot."""
+    try:
+        from app.services.bot_permission_service import BotPermissionService
+        scopes = BotPermissionService.get_user_scopes(bot_id, str(current_user.id))
+        return jsonify({
+            "granted": bool(scopes),
+            "scopes": scopes.split(",") if scopes else [],
+        }), 200
+    except Exception as e:
+        logger.exception("bot_permissions_get_error user=%s bot=%s error=%s", current_user.id, bot_id, e)
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@bots_bp.route("/<bot_id>/permissions/grant", methods=["POST"])
+@token_required
+def grant_bot_permissions(current_user, bot_id):
+    """Grant permissions to a bot for the current user."""
+    try:
+        data = request.get_json() or {}
+        scopes = data.get("scopes", "basic_profile,send_messages")
+        from app.services.bot_permission_service import BotPermissionService
+        perm = BotPermissionService.grant_scopes(bot_id, str(current_user.id), scopes)
+        return jsonify({"ok": True, "scopes": perm.scopes}), 200
+    except Exception as e:
+        logger.exception("bot_permissions_grant_error user=%s bot=%s error=%s", current_user.id, bot_id, e)
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@bots_bp.route("/<bot_id>/permissions", methods=["DELETE"])
+@token_required
+def revoke_bot_permissions(current_user, bot_id):
+    """Revoke all permissions for a bot."""
+    try:
+        from app.services.bot_permission_service import BotPermissionService
+        BotPermissionService.revoke_scopes(bot_id, str(current_user.id))
+        return jsonify({"ok": True}), 200
+    except Exception as e:
+        logger.exception("bot_permissions_revoke_error user=%s bot=%s error=%s", current_user.id, bot_id, e)
+        return jsonify({"error": "Internal server error"}), 500

@@ -6,7 +6,7 @@ COPY . .
 
 WORKDIR /app/frontend
 
-RUN npm i && npm run build
+RUN rm -rf .next && npm i && npm run build
 
 EXPOSE 3000
 

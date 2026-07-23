@@ -80,6 +80,172 @@ class SignalingService:
                 send_push_notification(dev["token"], title, body, data)
         except Exception as e:
             logger.error(f"Error sending push to {user_id}: {e}")
+        # Also send Web Push to PWA subscribers (iOS PWA users)
+        try:
+            self._send_web_push(user_id, title, body, data)
+        except Exception as e:
+            logger.error(f"Web Push error for {user_id}: {e}")
+
+    def _send_web_push(self, user_id: str, title: str, body: str, data: dict | None = None):
+        """Send Web Push to PWA subscribers (iOS PWA users)."""
+        try:
+            from sqlalchemy import text
+            with self.broker.repo._session() as session:
+                rows = session.execute(
+                    text("SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = :uid"),
+                    {"uid": user_id}
+                ).fetchall()
+
+            if not rows:
+                return
+
+            import hashlib
+            import hmac
+            import base64
+            import time
+            import json
+            import struct
+            import os
+            import urllib.request
+
+            vapid_private = os.environ.get("VAPID_PRIVATE_KEY", "")
+            vapid_public = os.environ.get("VAPID_PUBLIC_KEY", "")
+            vapid_claims = {"sub": "mailto:admin@vondic.ru"}
+
+            payload = json.dumps({
+                "title": title,
+                "body": body,
+                "data": data or {},
+            }).encode("utf-8")
+
+            for row in rows:
+                endpoint = row[0]
+                p256dh = row[1]
+                auth = row[2]
+                try:
+                    self._web_push_send(endpoint, p256dh, auth, payload, vapid_private, vapid_public, vapid_claims)
+                except Exception as e:
+                    logger.warning(f"Web Push to {endpoint[:40]} failed: {e}")
+                    # Remove dead subscription
+                    try:
+                        with self.broker.repo._session() as session:
+                            session.execute(
+                                text("DELETE FROM push_subscriptions WHERE endpoint = :ep"),
+                                {"ep": endpoint}
+                            )
+                            session.commit()
+                    except Exception:
+                        pass
+        except Exception as e:
+            logger.error(f"Web Push batch error: {e}")
+
+    @staticmethod
+    def _web_push_send(endpoint: str, p256dh: str, auth_key: str, payload: bytes,
+                        vapid_private: str, vapid_public: str, claims: dict):
+        """Send a single Web Push notification using raw HTTP (no py-vapid dependency)."""
+        import base64
+        import json
+        import time
+        import os
+        import struct
+        import hashlib
+        import hmac
+        import urllib.request
+
+        # Decode keys
+        def b64url_decode(s):
+            s += '=' * (4 - len(s) % 4)
+            return base64.urlsafe_b64decode(s)
+
+        user_key = b64url_decode(p256dh)
+        user_auth = b64url_decode(auth_key)
+
+        # Generate ECDH shared secret (simplified — use py_vapid if available)
+        try:
+            from py_vapid import Vapid
+            from cryptography.hazmat.primitives.asymmetric import ec
+            from cryptography.hazmat.primitives import serialization
+            from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+            from cryptography.hazmat.primitives import hashes
+
+            vapid = Vapid()
+            raw_private = b64url_decode(vapid_private)
+            private_key = ec.derive_private_key(
+                int.from_bytes(raw_private, 'big'), ec.SECP256R1()
+            )
+            public_key = private_key.public_key()
+
+            # ECDH
+            peer_key = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), user_key)
+            shared_secret = private_key.exchange(ec.ECDH(), peer_key)
+
+            # Derive encryption key
+            info = b"WebPush: info\x00" + user_key + public_key.public_bytes(
+                serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint
+            )
+            hkdf = HKDF(algorithm=hashes.SHA256(), length=32, salt=b"\x00" * 32, info=info)
+            ikm = hkdf.derive(shared_secret)
+
+            auth_hkdf = HKDF(algorithm=hashes.SHA256(), length=16, salt=user_auth, info=b"WebPush: info\x00")
+            auth_secret = auth_hkdf.derive(b"")
+
+            content_enc_key_hkdf = HKDF(algorithm=hashes.SHA256(), length=16, salt=auth_secret, info=b"Content-Encoding: aes128gcm\x00")
+            aes_key = content_enc_key_hkdf.derive(ikm)
+
+            nonce_hkdf = HKDF(algorithm=hashes.SHA256(), length=12, salt=auth_secret, info=b"Content-Encoding: nonce\x00")
+            nonce = nonce_hkdf.derive(ikm)
+
+            # Encrypt payload
+            from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+            aesgcm = AESGCM(aes_key)
+            # aes128gcm header: 4 byte record size (4096) + 1 byte delimiter
+            record_size = b'\x00\x00\x10\x00'
+            delimiter = b'\x02'
+            encrypted = aesgcm.encrypt(nonce, payload, record_size + delimiter)
+            body = record_size + delimiter + encrypted
+
+            # VAPID authorization header
+            vapid_claims_exp = {**claims, "exp": int(time.time()) + 43200}
+            vapid_header = base64.urlsafe_b64encode(
+                json.dumps(vapid_claims_exp, separators=(',', ':')).encode()
+            ).rstrip(b'=').decode()
+
+            # Sign
+            signing_key = private_key
+            signature = signing_key.sign(
+                vapid_header.encode() + b"\n" + endpoint.encode() + b"\n" + str(int(time.time()) + 43200).encode(),
+                ec.ECDSA(hashes.SHA256())
+            )
+            # DER to raw r||s
+            from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
+            r, s = decode_dss_signature(signature)
+            raw_sig = r.to_bytes(32, 'big') + s.to_bytes(32, 'big')
+            sig_b64 = base64.urlsafe_b64encode(raw_sig).rstrip(b'=').decode()
+
+            vapid_pub_b64 = base64.urlsafe_b64encode(
+                public_key.public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
+            ).rstrip(b'=').decode()
+
+            authorization = f"vapid t={vapid_header},k={vapid_pub_b64},sig={sig_b64}"
+
+            # Send request
+            req = urllib.request.Request(
+                endpoint,
+                data=body,
+                headers={
+                    "Content-Encoding": "aes128gcm",
+                    "Content-Type": "application/octet-stream",
+                    "TTL": "86400",
+                    "Authorization": authorization,
+                },
+                method="POST",
+            )
+            resp = urllib.request.urlopen(req, timeout=10)
+            return resp.status
+
+        except ImportError:
+            logger.warning("py_vapid not installed — cannot send Web Push")
+            return None
 
     def _push_call_user(self, user_id: str, call_data: dict):
         try:
@@ -311,7 +477,7 @@ class SignalingService:
         caller_username,
     ):
         message_id = str(uuid.uuid4())
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.utcnow().isoformat() + "Z" + "Z"
         label = (caller_username or "Пользователь").strip()
         content = (
             f"📞 Входящий звонок от {label}. Ответьте во всплывающем окне "
@@ -365,7 +531,7 @@ class SignalingService:
         caller_username,
     ):
         message_id = str(uuid.uuid4())
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.utcnow().isoformat() + "Z" + "Z"
         label = (caller_username or "Участник").strip()
         content = (
             f"📞 Входящий групповой звонок (от {label}). "
@@ -968,10 +1134,12 @@ class SignalingService:
         channel_id = payload.get("channel_id")
         group_id = payload.get("group_id")
         reply_to = payload.get("reply_to")
+        thread_id = payload.get("thread_id")
         content = payload.get("content")
         attachments = payload.get("attachments")
         msg_type = payload.get("type", "text")
         forwarded_from = payload.get("forwarded_from")
+        disappear_after = payload.get("disappear_after")
 
         logger.info(
             f"Получен запрос send_message от {
@@ -1027,7 +1195,7 @@ class SignalingService:
         logger.info(f"Sender identified: {sender_id}")
 
         message_id = str(uuid.uuid4())
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.utcnow().isoformat() + "Z"
 
         if channel_id:
             participants = self.broker.repo.get_channel_participants(
@@ -1050,6 +1218,7 @@ class SignalingService:
                 "sender_id": sender_id,
                 "channel_id": channel_id,
                 "reply_to": reply_to,
+                "thread_id": thread_id,
                 "content": content,
                 "attachments": attachments,
                 "type": msg_type,
@@ -1073,6 +1242,7 @@ class SignalingService:
                 "sender_id": sender_id,
                 "channel_id": channel_id,
                 "reply_to": reply_to,
+                "thread_id": thread_id,
                 "content": content,
                 "attachments": attachments,
                 "type": msg_type,
@@ -1109,6 +1279,7 @@ class SignalingService:
                 "sender_id": sender_id,
                 "group_id": group_id,
                 "reply_to": reply_to,
+                "thread_id": thread_id,
                 "content": content,
                 "attachments": attachments,
                 "type": msg_type,
@@ -1130,6 +1301,7 @@ class SignalingService:
                 "sender_id": sender_id,
                 "group_id": group_id,
                 "reply_to": reply_to,
+                "thread_id": thread_id,
                 "content": content,
                 "attachments": attachments,
                 "type": msg_type,
@@ -1158,6 +1330,7 @@ class SignalingService:
                 "sender_id": sender_id,
                 "target_id": target_user_id,
                 "reply_to": reply_to,
+                "thread_id": thread_id,
                 "content": content,
                 "attachments": attachments,
                 "type": msg_type,
@@ -1166,6 +1339,11 @@ class SignalingService:
 
             if forwarded_from:
                 msg_data["forwarded_from_id"] = forwarded_from.get("sender_id")
+
+            if disappear_after and int(disappear_after) > 0:
+                from datetime import timedelta as td
+                msg_data["disappear_after"] = int(disappear_after)
+                msg_data["disappear_at"] = datetime.utcnow() + td(seconds=int(disappear_after))
 
             saved, error = self.broker.repo.save_message(msg_data)
             if not saved:
@@ -1184,6 +1362,7 @@ class SignalingService:
                 "sender_id": sender_id,
                 "target_id": target_user_id,
                 "reply_to": reply_to,
+                "thread_id": thread_id,
                 "content": content,
                 "attachments": attachments,
                 "type": msg_type,
@@ -1193,6 +1372,10 @@ class SignalingService:
 
             if forwarded_from:
                 full_message_payload["forwarded_from"] = forwarded_from
+
+            if disappear_after and int(disappear_after) > 0:
+                full_message_payload["disappear_after"] = int(disappear_after)
+                full_message_payload["disappear_at"] = (datetime.utcnow() + td(seconds=int(disappear_after))).isoformat() + "Z"
 
             if target_socket:
                 logger.info(

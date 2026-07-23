@@ -250,3 +250,26 @@ class PublicAPIClient:
             access_token=access_token,
             json_body={"rotate": rotate},
         )
+
+    def send_action(self, action: str, data: dict):
+        """Generic send action — routes to backend send endpoint."""
+        bot_id = data.pop("bot_id", None) or self._last_bot_id
+        bot_token = data.pop("bot_token", None) or self._last_bot_token
+        # Preserve bot_id/token for the _send_action mixin call
+        if not bot_id:
+            from botiksdk.bot import Bot
+            raise ValueError("send_action requires bot_id and bot_token")
+        return self._request(
+            "POST",
+            f"/api/public/v1/bots/{bot_id}/send",
+            json_body=data,
+            bot_token=bot_token,
+        )
+
+    def check_bot_permissions(self, bot_id: str, bot_token: str, user_id: str):
+        """Check user permissions for a bot."""
+        return self._request(
+            "GET",
+            f"/api/public/v1/bots/{bot_id}/permissions/{user_id}",
+            bot_token=bot_token,
+        )

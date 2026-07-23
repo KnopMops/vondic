@@ -65,10 +65,25 @@ def _decode_base64(data: str, max_size: int = None) -> bytes:
     return decoded
 
 
-def _save_upload(file_bytes: bytes, ext: str, subdir: str) -> str:
-    """Upload file to S3."""
+def _save_upload(file_bytes: bytes, ext: str, subdir: str, user=None) -> str:
+    """Upload file to S3 or Yandex Disk based on user storage rules."""
     filename = f"{uuid.uuid4()}.{ext}"
     key = f"{subdir}/{filename}"
+
+    from app.services.storage_router import resolve_storage_target
+    target = resolve_storage_target(
+        ext, len(file_bytes),
+        user.storage_rules if user else None,
+        yandex_disk_available=bool(user and user.yandex_token),
+    )
+
+    if target == "yandex_disk" and user and user.yandex_token:
+        from app.services.yandex_disk_service import YandexDiskService
+        ydisk = YandexDiskService(user.yandex_token)
+        public_url = ydisk.upload_file(key, file_bytes)
+        if public_url:
+            return public_url
+        logger.warning("Yandex Disk upload failed, falling back to S3")
 
     try:
         s3 = _get_s3_client()
@@ -116,7 +131,14 @@ def upload_voice(current_user):
         file_size = len(file_bytes)
         logger.info("[upload_voice] user=%s file_size=%d ext=%s", current_user.id, file_size, ext)
 
-        if (current_user.disk_usage or 0) + file_size > current_user.disk_limit:
+        from app.services.storage_router import resolve_storage_target
+        target = resolve_storage_target(
+            ext, file_size,
+            current_user.storage_rules if current_user else None,
+            yandex_disk_available=bool(current_user and current_user.yandex_token),
+        )
+
+        if target == "s3" and (current_user.disk_usage or 0) + file_size > current_user.disk_limit:
             return jsonify(
                 {
                     "error": "Disk space limit exceeded. Upgrade to Premium for more space."
@@ -127,7 +149,7 @@ def upload_voice(current_user):
             delay = file_size / THROTTLE_SPEED_BPS
             time.sleep(delay)
 
-        file_url = _save_upload(file_bytes, ext, "voice")
+        file_url = _save_upload(file_bytes, ext, "voice", user=current_user)
 
         try:
             db.session.add(
@@ -142,13 +164,16 @@ def upload_voice(current_user):
         except Exception as uf_err:
             logger.warning("[upload_voice] UserFile insert failed (ignored): %s", uf_err)
 
-        current_user.disk_usage = (current_user.disk_usage or 0) + file_size
+        if target == "s3":
+            current_user.disk_usage = (current_user.disk_usage or 0) + file_size
         db.session.commit()
 
         return jsonify(
             {
                 "url": file_url,
                 "size": file_size,
+                "disk_usage": current_user.disk_usage or 0,
+                "storage": target,
                 "message": "Voice uploaded successfully",
             }
         ), 201
@@ -179,7 +204,14 @@ def upload_file(current_user):
         file_bytes = _decode_base64(file_data, max_size)
         file_size = len(file_bytes)
 
-        if current_user.disk_usage + file_size > current_user.disk_limit:
+        from app.services.storage_router import resolve_storage_target
+        target = resolve_storage_target(
+            ext, file_size,
+            current_user.storage_rules if current_user else None,
+            yandex_disk_available=bool(current_user and current_user.yandex_token),
+        )
+
+        if target == "s3" and current_user.disk_usage + file_size > current_user.disk_limit:
             return jsonify(
                 {
                     "error": "Disk space limit exceeded. Upgrade to Premium for more space."
@@ -190,7 +222,7 @@ def upload_file(current_user):
             delay = file_size / THROTTLE_SPEED_BPS
             time.sleep(delay)
 
-        file_url = _save_upload(file_bytes, ext, "files")
+        file_url = _save_upload(file_bytes, ext, "files", user=current_user)
 
         try:
             from app.core.extensions import db
@@ -209,7 +241,8 @@ def upload_file(current_user):
 
             pass
 
-        current_user.disk_usage += file_size
+        if target == "s3":
+            current_user.disk_usage += file_size
         db.session.commit()
 
         return jsonify(
@@ -217,6 +250,8 @@ def upload_file(current_user):
                 "url": file_url,
                 "original_filename": filename,
                 "size_bytes": file_size,
+                "disk_usage": current_user.disk_usage or 0,
+                "storage": target,
                 "ext": ext,
             }
         ), 201
@@ -250,11 +285,25 @@ def upload_video(current_user):
         file_size = len(file_bytes)
         logger.info("[upload_video] user=%s file_size=%d ext=%s", current_user.id, file_size, ext)
 
+        from app.services.storage_router import resolve_storage_target
+        target = resolve_storage_target(
+            ext, file_size,
+            current_user.storage_rules if current_user else None,
+            yandex_disk_available=bool(current_user and current_user.yandex_token),
+        )
+
+        if target == "s3" and current_user.disk_usage + file_size > current_user.disk_limit:
+            return jsonify(
+                {
+                    "error": "Disk space limit exceeded. Upgrade to Premium for more space."
+                }
+            ), 403
+
         if not current_user.premium:
             delay = file_size / THROTTLE_SPEED_BPS
             time.sleep(delay)
 
-        file_url = _save_upload(file_bytes, ext, "video")
+        file_url = _save_upload(file_bytes, ext, "video", user=current_user)
 
         try:
             db.session.add(
@@ -277,6 +326,8 @@ def upload_video(current_user):
                 "url": file_url,
                 "original_filename": filename,
                 "size_bytes": file_size,
+                "disk_usage": current_user.disk_usage or 0,
+                "storage": target,
                 "ext": ext,
             }
         ), 201

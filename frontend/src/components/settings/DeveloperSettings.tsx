@@ -54,6 +54,22 @@ export default function DeveloperSettings({ enabled }: Props) {
     setShowSecrets(prev => ({ ...prev, [clientId]: !prev[clientId] }))
   }
 
+  const handleToggleVerified = async (client: OAuthClient) => {
+    try {
+      const token = await getAuthToken()
+      if (!token) return
+      const updated = await updateOAuthClient(
+        client.client_id,
+        { verified: !client.verified },
+        token,
+      )
+      setClients(prev => prev.map(c => (c.client_id === client.client_id ? updated : c)))
+      showToast(updated.verified ? 'Приложение помечено как проверенное' : 'Пометка «Проверено» снята', 'success')
+    } catch (error: any) {
+      showToast(error.message || 'Не удалось обновить', 'error')
+    }
+  }
+
   useEffect(() => {
     if (enabled && user) {
       loadClients()
@@ -346,8 +362,25 @@ export default function DeveloperSettings({ enabled }: Props) {
           clients.map(client => (
             <div key={client.client_id} className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-2">
               <div className="flex items-center justify-between">
-                <h4 className="font-semibold text-white">{client.name}</h4>
+                <div className="flex items-center gap-2">
+                  <h4 className="font-semibold text-white">{client.name}</h4>
+                  {client.verified && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-500/25 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+                      ✓ Проверено
+                    </span>
+                  )}
+                </div>
                 <div className='flex items-center gap-3'>
+                  <button
+                    onClick={() => handleToggleVerified(client)}
+                    className={`text-xs px-2 py-1 rounded-lg border transition-colors ${
+                      client.verified
+                        ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25'
+                        : 'border-white/15 bg-white/5 text-gray-400 hover:bg-white/10 hover:text-gray-300'
+                    }`}
+                  >
+                    {client.verified ? '✓ Проверено' : 'Проверить'}
+                  </button>
                   <button
                     onClick={() =>
                       editingClientId === client.client_id ? cancelEdit() : startEdit(client)
@@ -409,6 +442,27 @@ export default function DeveloperSettings({ enabled }: Props) {
               </div>
               {editingClientId === client.client_id && (
                 <div className='mt-3 space-y-2 rounded-lg border border-white/10 bg-black/30 p-3'>
+                  {user?.role === 'Admin' && (
+                  <div className='flex items-center justify-between rounded-lg border border-white/10 bg-black/20 px-3 py-2'>
+                    <span className='text-sm text-white/80'>Проверено</span>
+                    <button
+                      type='button'
+                      onClick={() => {
+                        const newVerified = !client.verified
+                        handleToggleVerified(client)
+                      }}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        client.verified ? 'bg-emerald-500' : 'bg-white/20'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          client.verified ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                  )}
                   <input
                     type='text'
                     value={editName}
