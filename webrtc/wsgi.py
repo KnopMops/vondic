@@ -1,8 +1,3 @@
-from webrtc.main import create_app
-import eventlet
+from webrtc.main import asgi_app as app, asgi_app, create_app
 
-
-eventlet.monkey_patch()
-
-
-app, socketio = create_app()
+__all__ = ["app", "asgi_app", "create_app"]

@@ -1,4 +1,4 @@
-ай aiogram
+aiogram
 bcrypt
 python-dotenv
 flask
@@ -20,7 +20,10 @@ charset-normalizer==3.3.2
 chardet==5.2.0
 flasgger
 flask-socketio
-eventlet
+fastapi
+python-socketio
+httpx
+aiosqlite
 cryptography
 stripe
 pytz
