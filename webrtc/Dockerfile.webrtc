@@ -8,7 +8,7 @@ RUN pip install --no-cache-dir -r requirements_a.txt
 # Копируем код webrtc в подпапку /app/webrtc
 COPY webrtc/ /app/webrtc/
 
-RUN pip install --no-cache-dir gunicorn==23.0.0 uvicorn fastapi python-socketio httpx asyncpg aiosqlite
+RUN pip install --no-cache-dir gunicorn==23.0.0 uvicorn websockets fastapi python-socketio httpx asyncpg aiosqlite
 
 RUN useradd --create-home appuser
 USER appuser

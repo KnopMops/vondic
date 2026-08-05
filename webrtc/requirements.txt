@@ -3,6 +3,7 @@ bcrypt
 python-dotenv
 fastapi
 uvicorn
+websockets
 python-socketio
 httpx
 asyncpg

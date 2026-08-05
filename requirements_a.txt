@@ -32,6 +32,7 @@ asyncpg
 user-agents
 pika
 uvicorn
+websockets
 prometheus-client
 botiksdk
 boto3

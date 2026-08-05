@@ -32,4 +32,5 @@ asyncpg
 user-agents
 pika
 uvicorn
+websockets
 gunicorn==23.0.0
