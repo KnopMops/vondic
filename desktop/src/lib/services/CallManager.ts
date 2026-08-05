@@ -26,6 +26,7 @@ export class CallManager {
 	private currentUser: { id: string; name: string; avatar?: string } | null =
 		null
 	private listenersInitialized = false
+	private callTimeouts: Map<string, NodeJS.Timeout> = new Map()
 
 	
 	public onIncomingCall?: (call: CallState) => void
@@ -293,6 +294,29 @@ export class CallManager {
 						isGroupCall: true,
 						callId: call_id,
 					})
+			}
+		})
+
+		// Migration event for pending calls — responder receives real caller socket
+		this.socket.on('call_migrate', (...args: any[]) => {
+			console.log('DEBUG: call_migrate raw args:', JSON.stringify(args, null, 2))
+			const firstArg = args[0]
+			if (typeof firstArg === 'object' && firstArg !== null) {
+				const oldKey = firstArg.old_key
+				const newKey = firstArg.new_key
+				if (oldKey && newKey) {
+					console.log(`[CallManager] Migrating call from ${oldKey} to ${newKey}`)
+					this.webRTCService.migrateCall(oldKey, newKey)
+
+					// Also migrate the call state in currentCalls
+					const call = this.currentCalls.get(oldKey)
+					if (call) {
+						this.currentCalls.delete(oldKey)
+						call.socketId = newKey
+						this.currentCalls.set(newKey, call)
+						this.updateCallState(newKey, call)
+					}
+				}
 			}
 		})
 
@@ -1083,6 +1107,17 @@ export class CallManager {
 			// Временно сохраняем с userId как ключ, так как socketId пока неизвестен
 			this.currentCalls.set(targetUserId, callState)
 			this.updateCallState(targetUserId, callState)
+
+			// Set a 60-second timeout for call answer
+			const timeoutId = setTimeout(() => {
+				const call = this.currentCalls.get(targetUserId)
+				if (call && call.status === 'calling') {
+					console.log(`[CallManager] Call timeout for ${targetUserId}`)
+					this.handleCallEnded(targetUserId, 'timeout')
+					this.webRTCService.cleanupCall(targetUserId)
+				}
+			}, 60000)
+			this.callTimeouts.set(targetUserId, timeoutId)
 		} catch (error) {
 			console.error('Failed to initiate call:', error)
 			const callState: CallState = {
@@ -1176,6 +1211,16 @@ export class CallManager {
 			call.status = 'connected'
 			call.startTime = new Date()
 			this.updateCallState(responderSocketId, call)
+
+			// Clear call timeout
+			if (oldSocketId && this.callTimeouts.has(oldSocketId)) {
+				clearTimeout(this.callTimeouts.get(oldSocketId)!)
+				this.callTimeouts.delete(oldSocketId)
+			}
+			if (this.callTimeouts.has(responderSocketId)) {
+				clearTimeout(this.callTimeouts.get(responderSocketId)!)
+				this.callTimeouts.delete(responderSocketId)
+			}
 
 			if (this.onCallAccepted) {
 				this.onCallAccepted(call, oldSocketId)
@@ -1273,6 +1318,15 @@ export class CallManager {
 			}
 		}
 
+		// Clear any pending timeout for this call
+		for (const key of [socketId, resourceKey]) {
+			const timeout = this.callTimeouts.get(key)
+			if (timeout) {
+				clearTimeout(timeout)
+				this.callTimeouts.delete(key)
+			}
+		}
+
 		// Always clean up WebRTC resources
 		this.webRTCService.cleanupCall(resourceKey)
 		if (resourceKey !== socketId) {
@@ -1340,6 +1394,10 @@ export class CallManager {
 	}
 
 	cleanup(): void {
+		// Clear all pending call timeouts
+		this.callTimeouts.forEach(timeout => clearTimeout(timeout))
+		this.callTimeouts.clear()
+
 		this.webRTCService.cleanup()
 		this.currentCalls.clear()
 		this.socket.off('incoming_call')
@@ -1351,6 +1409,7 @@ export class CallManager {
 		this.socket.off('call_ended')
 		this.socket.off('call_reject')
 		this.socket.off('call_rejected')
+		this.socket.off('call_migrate')
 		this.socket.off('error')
 		this.socket.off('ice_candidate')
 	}

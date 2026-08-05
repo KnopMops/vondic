@@ -30,6 +30,19 @@ def join_group(current_user):
     group, error = GroupService.join_group(invite_code, current_user.id)
     if error:
         return jsonify({"error": error}), 400
+    try:
+        from app.services.fcm_service import FCMService
+        from app.models.group import Group
+        g = Group.query.get(group.id) if hasattr(group, 'id') else None
+        if g and str(g.owner_id) != str(current_user.id):
+            FCMService.send_notification(
+                str(g.owner_id),
+                "Новый участник",
+                f"{current_user.username} вступил в группу «{g.name}»",
+                {"type": "group_join", "group_id": str(g.id)},
+            )
+    except Exception:
+        pass
     return jsonify(group_schema.dump(group)), 200
 
 

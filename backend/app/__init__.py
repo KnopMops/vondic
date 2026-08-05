@@ -219,7 +219,6 @@ def create_app(config_class=Config):
     from app.api.v1.comments import comments_bp
     from app.api.v1.communities import communities_bp
     from app.api.v1.social_communities import social_communities_bp
-    from app.api.v1.e2e_keys import e2e_keys_bp
     from app.api.v1.direct_messages import dm_bp
     from app.api.v1.friends import friends_bp
     from app.api.v1.app_downloads import app_downloads_bp
@@ -263,7 +262,6 @@ def create_app(config_class=Config):
     app.register_blueprint(comments_bp)
     app.register_blueprint(communities_bp)
     app.register_blueprint(social_communities_bp)
-    app.register_blueprint(e2e_keys_bp)
     app.register_blueprint(dm_bp)
     app.register_blueprint(friends_bp)
     app.register_blueprint(app_downloads_bp)

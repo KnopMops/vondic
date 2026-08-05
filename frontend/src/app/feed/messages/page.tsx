@@ -1212,6 +1212,9 @@ export default function MessengerPage() {
 	const [selectedSupportId, setSelectedSupportId] = useState<number | null>(null)
 	const [supportMessages, setSupportMessages] = useState<{id:number;sender:string;content:string;created_at:number}[]>([])
 	const [supportInput, setSupportInput] = useState('')
+	const [supportAttachments, setSupportAttachments] = useState<string[]>([])
+	const [supportUploading, setSupportUploading] = useState(false)
+	const supportFileInputRef = useRef<HTMLInputElement | null>(null)
 	const [supportStatus, setSupportStatus] = useState('open')
 	const supportChatRef = useRef<HTMLDivElement | null>(null)
 	const supportPollRef = useRef<number | null>(null)
@@ -1623,20 +1626,117 @@ export default function MessengerPage() {
 		} catch {}
 	}
 
+	const handleSupportFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+		const files = e.target.files
+		if (!files || files.length === 0) return
+		setSupportUploading(true)
+		try {
+			const token = localStorage.getItem('access_token') || ''
+			const uploadedUrls: string[] = []
+			for (const file of Array.from(files)) {
+				if (file.size > 10 * 1024 * 1024) {
+					alert('Файл слишком большой (макс 10МБ)')
+					continue
+				}
+				const base64 = await new Promise<string>((resolve) => {
+					const reader = new FileReader()
+					reader.onload = () => resolve(reader.result as string)
+					reader.readAsDataURL(file)
+				})
+				const res = await fetch('/api/v1/upload/file', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						Authorization: `Bearer ${token}`,
+					},
+					body: JSON.stringify({ file: base64, filename: file.name }),
+				})
+				const data = await res.json()
+				if (data?.url) {
+					uploadedUrls.push(data.url)
+				}
+			}
+			if (uploadedUrls.length > 0) {
+				setSupportAttachments(prev => [...prev, ...uploadedUrls])
+			}
+		} catch (err) {
+			console.error('File upload error:', err)
+		} finally {
+			setSupportUploading(false)
+			if (supportFileInputRef.current) supportFileInputRef.current.value = ''
+		}
+	}
+
+	const renderSupportContent = (content: string) => {
+		const lines = content.split('\n')
+		const elements: React.ReactNode[] = []
+		let textParts: string[] = []
+		const flushText = () => {
+			if (textParts.length > 0) {
+				const text = textParts.join('\n').trim()
+				if (text) {
+					elements.push(<span key={`t-${elements.length}`}>{text}</span>)
+				}
+				textParts = []
+			}
+		}
+		for (const line of lines) {
+			const trimmed = line.trim()
+			if (
+				trimmed.startsWith('http') &&
+				/\.(jpg|jpeg|png|gif|webp|mp4|webm|pdf|doc|docx|zip)$/i.test(trimmed)
+			) {
+				flushText()
+				if (/\.(jpg|jpeg|png|gif|webp)$/i.test(trimmed)) {
+					elements.push(
+						<img
+							key={`img-${elements.length}`}
+							src={trimmed}
+							alt='attachment'
+							className='max-w-full rounded-lg max-h-48 object-contain cursor-pointer mt-1'
+							onClick={() => window.open(trimmed, '_blank')}
+						/>
+					)
+				} else {
+					elements.push(
+						<a
+							key={`file-${elements.length}`}
+							href={trimmed}
+							target='_blank'
+							rel='noopener noreferrer'
+							className='inline-flex items-center gap-1 text-emerald-300 hover:underline text-sm mt-1'
+						>
+							📎 {trimmed.split('/').pop()}
+						</a>
+					)
+				}
+			} else {
+				textParts.push(line)
+			}
+		}
+		flushText()
+		return elements.length > 0 ? elements : content
+	}
+
 	const sendSupportMessage = async () => {
-		if (!selectedSupportId || !supportInput.trim() || supportStatus === 'closed') return
+		if (!selectedSupportId || supportStatus === 'closed') return
 		const text = supportInput.trim()
+		if (!text && supportAttachments.length === 0) return
 		setSupportInput('')
 		const tempId = Date.now()
+		const content = text
+			? (supportAttachments.length > 0 ? `${text}\n${supportAttachments.join('\n')}` : text)
+			: supportAttachments.join('\n')
 		setSupportMessages(prev => [
 			...prev,
-			{ id: tempId, sender: 'user', content: text, created_at: Date.now() },
+			{ id: tempId, sender: 'user', content, created_at: Date.now() },
 		])
+		setSupportAttachments([])
 		try {
 			const res = await fetch(`/api/support/messenger/${selectedSupportId}/send`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ message: text }),
+				body: JSON.stringify({ message: text, attachments: supportAttachments }),
 			})
 			const data = await res.json()
 			if (data?.ok && data?.id) {
@@ -6729,7 +6829,9 @@ export default function MessengerPage() {
 											<div className='text-[10px] opacity-70 mb-1'>
 												{msg.sender === 'user' ? 'Вы' : msg.sender === 'support' ? 'Оператор' : 'Бот'}
 											</div>
-											<div className='text-sm whitespace-pre-wrap break-words'>{msg.content}</div>
+											<div className='text-sm whitespace-pre-wrap break-words'>
+												{renderSupportContent(msg.content)}
+											</div>
 											<div className='text-[10px] opacity-50 mt-1'>
 												{new Date(msg.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
 											</div>
@@ -6739,7 +6841,44 @@ export default function MessengerPage() {
 							</div>
 							{supportStatus !== 'closed' ? (
 								<div className='p-4 border-t border-white/10 bg-black/20 backdrop-blur-md'>
+									{supportAttachments.length > 0 && (
+										<div className='flex flex-wrap gap-2 mb-2'>
+											{supportAttachments.map((url, i) => (
+												<div key={i} className='relative group'>
+													{/\.(jpg|jpeg|png|gif|webp)$/i.test(url) ? (
+														<img src={url} alt='attachment' className='h-16 rounded-lg object-cover' />
+													) : (
+														<div className='h-16 px-3 rounded-lg bg-gray-800 flex items-center text-xs text-gray-300 max-w-[120px] truncate'>
+															{url.split('/').pop()}
+														</div>
+													)}
+													<button
+														onClick={() => setSupportAttachments(prev => prev.filter((_, j) => j !== i))}
+														className='absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-600 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity'
+													>
+														✕
+													</button>
+												</div>
+											))}
+										</div>
+									)}
 									<div className='flex gap-2 items-center'>
+										<input
+											ref={supportFileInputRef}
+											type='file'
+											multiple
+											accept='image/*,.pdf,.doc,.docx,.txt,.zip'
+											className='hidden'
+											onChange={handleSupportFileUpload}
+										/>
+										<button
+											onClick={() => supportFileInputRef.current?.click()}
+											disabled={supportUploading}
+											className='px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm disabled:opacity-60'
+											title='Прикрепить файл'
+										>
+											{supportUploading ? '⏳' : '📎'}
+										</button>
 										<input
 											value={supportInput}
 											onChange={e => setSupportInput(e.target.value)}
@@ -6749,7 +6888,7 @@ export default function MessengerPage() {
 										/>
 										<button
 											onClick={sendSupportMessage}
-											disabled={!supportInput.trim()}
+											disabled={!supportInput.trim() && supportAttachments.length === 0}
 											className='px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-medium'
 										>
 											<SendIcon className='w-4 h-4' />
@@ -7041,18 +7180,18 @@ export default function MessengerPage() {
 														)
 													}
 													disabled={
-														!isSelectedFriendOnline || isSelectedFriendInCall
+														isSelectedFriendInCall
 													}
 													className={`p-2 sm:px-3 sm:py-2 rounded-full sm:rounded-lg flex items-center gap-2 transition-colors ${
-														!isSelectedFriendOnline || isSelectedFriendInCall
+														isSelectedFriendInCall
 															? 'text-gray-600 cursor-not-allowed'
 															: 'text-emerald-400 hover:text-white hover:bg-emerald-500/20'
 													}`}
 													title={
-														!isSelectedFriendOnline
-															? 'Пользователь не в сети'
-															: isSelectedFriendInCall
-																? 'Уже идет звонок'
+														isSelectedFriendInCall
+															? 'Уже идет звонок'
+															: !isSelectedFriendOnline
+																? 'Позвонить (пользователь оффлайн)'
 																: 'Позвонить'
 													}
 												>

@@ -29,3 +29,6 @@ pika
 uvicorn
 prometheus-client
 boto3
+google-auth==2.35.0
+google-api-python-client
+firebase-admin==6.5.0

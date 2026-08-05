@@ -1,11 +1,6 @@
 /**
- * E2E Key Synchronization — client-side encrypted backups.
- *
- * v3: master = SHA256(userId + serverSalt + localDeviceSecret)
- * - serverSalt: random per user, only via authenticated API (not guessable from userId alone)
- * - localDeviceSecret: random per browser profile, synced wrapped with session key
- *
- * Legacy v1/v2 backups are still decrypted when possible (token-only / userId-only).
+ * E2E Key Synchronization — DISABLED (server-side backups removed).
+ * All functions return safe no-ops to avoid 404 errors.
  */
 
 const E2E_MASTER_KEY_STORAGE_KEY = 'e2e_master_key'
@@ -251,7 +246,7 @@ export async function ensureBackupMaterial(
 	accessToken: string,
 	userId: string,
 ): Promise<BackupMaterial | null> {
-	if (!accessToken || !userId) return null
+	return null // E2E backup disabled
 
 	if (
 		cachedBackupMaterial &&
@@ -429,26 +424,7 @@ export async function serverHasKeyBackup(
 	accessToken: string,
 	keyId: string,
 ): Promise<boolean> {
-	const wanted = new Set(
-		expandKeyIdVariants(keyId).map(id => normalizeE2eKeyId(id)),
-	)
-	try {
-		const response = await fetch('/api/v1/e2e-keys/list', {
-			headers: { Authorization: `Bearer ${accessToken}` },
-			credentials: 'include',
-		})
-		if (!response.ok) return false
-		const data = await response.json()
-		if (!data.success) return false
-		for (const row of data.keys || []) {
-			if (wanted.has(normalizeE2eKeyId(String(row.key_id)))) {
-				return true
-			}
-		}
-	} catch {
-		// ignore
-	}
-	return false
+	return false // E2E backup disabled
 }
 
 function markServerKeyMissing(keyId: string) {
@@ -613,32 +589,7 @@ export async function decryptKeyFromBackup(
 	expectedKeyId?: string,
 	encryptionAlgorithm?: string,
 ): Promise<{ keyId: string; keyData: Uint8Array } | null> {
-	const candidates = await collectMasterKeyCandidates(
-		accessToken,
-		userId,
-		encryptionAlgorithm,
-	)
-
-	for (const masterKey of candidates) {
-		const parsed = await tryDecryptPayload(encryptedData, masterKey)
-		if (!parsed?.keyData?.length) continue
-
-		const resolvedId = expectedKeyId
-			? normalizeE2eKeyId(expectedKeyId)
-			: normalizeE2eKeyId(parsed.keyId)
-
-		if (
-			expectedKeyId &&
-			normalizeE2eKeyId(parsed.keyId) !== resolvedId
-		) {
-			// Payload may use legacy unsorted id; trust server key_id when decrypt ok.
-			return { keyId: resolvedId, keyData: parsed.keyData }
-		}
-
-		return { keyId: resolvedId, keyData: parsed.keyData }
-	}
-
-	return null
+	return null // E2E backup disabled
 }
 
 /**
@@ -713,41 +664,7 @@ export async function backupKeyToServer(
 	userId?: string,
 	options?: { allowOverwrite?: boolean },
 ): Promise<boolean> {
-	try {
-		if (!options?.allowOverwrite) {
-			const exists = await serverHasKeyBackup(accessToken, keyId)
-			if (exists) return true
-		}
-		if (userId) {
-			await ensureBackupMaterial(accessToken, userId)
-		}
-		const encryptedKeyData = await encryptKeyForBackup(
-			keyId,
-			keyData,
-			accessToken,
-			userId,
-		)
-
-		const response = await fetch('/api/v1/e2e-keys/backup', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				Authorization: `Bearer ${accessToken}`,
-			},
-			credentials: 'include',
-			body: JSON.stringify({
-				key_id: normalizeE2eKeyId(keyId),
-				encrypted_key_data: encryptedKeyData,
-				device_id: deviceId,
-				device_name: deviceName,
-				encryption_algorithm: 'aes-256-gcm-v3',
-			}),
-		})
-
-		return response.ok
-	} catch {
-		return false
-	}
+	return true // E2E backup disabled
 }
 
 export async function restoreKeyFromServer(
@@ -755,63 +672,7 @@ export async function restoreKeyFromServer(
 	keyId: string,
 	userId?: string,
 ): Promise<Uint8Array | null> {
-	const cached = lookupCachedServerKey(keyId)
-	if (cached?.length) {
-		return cached
-	}
-
-	if (isServerKeyKnownMissing(keyId)) {
-		return null
-	}
-
-	if (!serverKeysCachePrimed) {
-		await beginServerKeysRestore(accessToken, userId)
-		const afterBatch = lookupCachedServerKey(keyId)
-		if (afterBatch?.length) return afterBatch
-	}
-
-	const variants = expandKeyIdVariants(keyId)
-	for (const variant of variants) {
-		try {
-			const response = await fetch('/api/v1/e2e-keys/restore', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${accessToken}`,
-				},
-				credentials: 'include',
-				body: JSON.stringify({ key_id: variant }),
-			})
-
-			if (!response.ok) continue
-
-			const data = await response.json()
-			if (!data.success || !data.encrypted_key_data) {
-				if (response.ok && data.success === false) {
-					markServerKeyMissing(variant)
-				}
-				continue
-			}
-
-			const decrypted = await decryptKeyFromBackup(
-				data.encrypted_key_data,
-				accessToken,
-				userId,
-				variant,
-				data.encryption_algorithm,
-			)
-
-			if (decrypted?.keyData?.length) {
-				mergeServerKeysCache(variant, decrypted.keyData)
-				persistKeyLocally(variant, decrypted.keyData)
-				return decrypted.keyData
-			}
-		} catch {
-			continue
-		}
-	}
-
-	return null
+	return null // E2E backup disabled
 }
 
 export async function syncKeysToServer(
@@ -822,113 +683,14 @@ export async function syncKeysToServer(
 	deviceName?: string,
 	userId?: string,
 ): Promise<number> {
-	try {
-		if (userId) {
-			await ensureBackupMaterial(accessToken, userId)
-		}
-		const keys = []
-		for (const keyId of keyIds) {
-			const keyData = keysMap.get(keyId)
-			if (!keyData) continue
-			const encryptedKeyData = await encryptKeyForBackup(
-				keyId,
-				keyData,
-				accessToken,
-				userId,
-			)
-			keys.push({
-				key_id: normalizeE2eKeyId(keyId),
-				encrypted_key_data: encryptedKeyData,
-			})
-		}
-		if (keys.length === 0) return 0
-
-		const response = await fetch('/api/v1/e2e-keys/sync', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				Authorization: `Bearer ${accessToken}`,
-			},
-			credentials: 'include',
-			body: JSON.stringify({
-				keys,
-				device_id: deviceId,
-				device_name: deviceName,
-			}),
-		})
-
-		if (!response.ok) return 0
-		const data = await response.json()
-		return data.synced_count || 0
-	} catch {
-		return 0
-	}
+	return 0 // E2E backup disabled
 }
 
 export async function restoreAllKeysFromServer(
 	accessToken: string,
 	userId?: string,
 ): Promise<Map<string, Uint8Array>> {
-	const restoredKeys = new Map<string, Uint8Array>()
-
-	try {
-		if (userId) {
-			await ensureBackupMaterial(accessToken, userId)
-		}
-
-		const listResponse = await fetch('/api/v1/e2e-keys/list', {
-			headers: { Authorization: `Bearer ${accessToken}` },
-			credentials: 'include',
-		})
-		if (!listResponse.ok) return restoredKeys
-
-		const listData = await listResponse.json()
-		if (!listData.success) return restoredKeys
-
-		const keyIds = (listData.keys || []).map((k: { key_id: string }) =>
-			normalizeE2eKeyId(k.key_id),
-		)
-		if (!keyIds.length) {
-			primeServerKeysCache(restoredKeys)
-			return restoredKeys
-		}
-
-		const restoreResponse = await fetch('/api/v1/e2e-keys/restore-batch', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				Authorization: `Bearer ${accessToken}`,
-			},
-			credentials: 'include',
-			body: JSON.stringify({ key_ids: keyIds }),
-		})
-
-		if (!restoreResponse.ok) return restoredKeys
-
-		const restoreData = await restoreResponse.json()
-		if (!restoreData.success || !restoreData.keys) return restoredKeys
-
-		for (const keyItem of restoreData.keys) {
-			const serverKeyId = normalizeE2eKeyId(keyItem.key_id)
-			const decrypted = await decryptKeyFromBackup(
-				keyItem.encrypted_key_data,
-				accessToken,
-				userId,
-				serverKeyId,
-				keyItem.encryption_algorithm,
-			)
-			if (decrypted?.keyData?.length) {
-				restoredKeys.set(serverKeyId, decrypted.keyData)
-				persistKeyLocally(serverKeyId, decrypted.keyData)
-			}
-		}
-
-		primeServerKeysCache(restoredKeys)
-	} catch {
-		// silent — legacy keys may be missing
-	}
-
-	return restoredKeys
+	return new Map() // E2E backup disabled
 }
 
 /** @deprecated Use ensureBackupMaterial; kept for compatibility. */
@@ -936,24 +698,7 @@ export async function getMasterKey(
 	accessToken?: string,
 	userId?: string,
 ): Promise<CryptoKey> {
-	if (accessToken && userId) {
-		const material = await ensureBackupMaterial(accessToken, userId)
-		if (material) {
-			return deriveV3MasterKey(
-				userId,
-				material.salt,
-				material.localSecretB64,
-			)
-		}
-	}
-	if (accessToken) return deriveLegacyTokenKey(accessToken)
-	if (userId) return deriveLegacyUserIdKey(userId)
-	const legacy = await getLegacyLocalMasterKey()
-	if (legacy) return legacy
-	const random = new Uint8Array(32)
-	crypto.getRandomValues(random)
-	localStorage.setItem(E2E_MASTER_KEY_STORAGE_KEY, bytesToB64(random))
-	return (await getLegacyLocalMasterKey())!
+	return null as any // E2E backup disabled
 }
 
 export function getDeviceInfo(): { deviceId: string; deviceName: string } {

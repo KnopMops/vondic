@@ -56,7 +56,4 @@ def register_error_handlers(app):
     def handle_unexpected_error(exc: Exception):
         db.session.rollback()
         app.logger.exception("Unhandled error: %s", exc)
-        if app.debug or app.config.get("TESTING"):
-            return jsonify(
-                {"error": "Внутренняя ошибка сервера", "detail": str(exc)}), 500
         return jsonify({"error": "Внутренняя ошибка сервера"}), 500

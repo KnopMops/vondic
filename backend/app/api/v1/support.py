@@ -123,6 +123,17 @@ def notify_user(
     )
     db.session.commit()
 
+    try:
+        from app.services.fcm_service import FCMService
+        FCMService.send_notification(
+            user_id,
+            title or "Уведомление",
+            msg[:200] if msg else "",
+            {"type": notification_type},
+        )
+    except Exception:
+        pass
+
     if send_email_copy:
         try:
             u = User.query.get(str(user_id))
@@ -534,19 +545,36 @@ def admin_answer(current_user, esc_id: int):
         return jsonify({"error": "Доступ запрещён"}), 403
     data = request.get_json() or {}
     answer = str(data.get("answer", "")).strip()
-    if not answer:
+    attachments = data.get("attachments") or []
+    if not answer and not attachments:
         return jsonify({"error": "Пустой ответ"}), 400
     escalation = Escalation.query.get(esc_id)
     if not escalation:
         return jsonify({"error": "Обращение не найдено"}), 404
+    content = answer
+    if attachments:
+        attachment_str = "\n".join(attachments) if isinstance(attachments, list) else str(attachments)
+        content = f"{answer}\n{attachment_str}".strip() if answer else attachment_str
     db.session.add(
         SupportChatMessage(
             escalation_id=esc_id,
             sender="support",
-            content=answer))
+            content=content))
     escalation.status = "answered"
     escalation.answered_at = datetime.utcnow()
     db.session.commit()
+
+    try:
+        from app.services.fcm_service import FCMService
+        FCMService.send_notification(
+            str(escalation.user_id),
+            "Ответ техподдержки",
+            answer[:200] if answer else "Получен ответ",
+            {"type": "support_reply", "escalation_id": str(esc_id)},
+        )
+    except Exception:
+        pass
+
     return jsonify({"ok": True})
 
 
@@ -735,7 +763,8 @@ def messenger_escalation_messages(current_user, esc_id: int):
 def messenger_send(current_user, esc_id: int):
     data = request.get_json(force=True) or {}
     content = str(data.get("message", "")).strip()
-    if not content:
+    attachments = data.get("attachments") or []
+    if not content and not attachments:
         return jsonify({"ok": False, "error": "Пустое сообщение"}), 400
     escalation = Escalation.query.get(esc_id)
     if not escalation:
@@ -747,10 +776,14 @@ def messenger_send(current_user, esc_id: int):
     if (escalation.status or "").lower() == "closed":
         return jsonify({"ok": False, "error": "Чат закрыт"}), 400
     sender = "support" if is_support else "user"
+    final_content = content
+    if attachments:
+        attachment_str = "\n".join(attachments) if isinstance(attachments, list) else str(attachments)
+        final_content = f"{content}\n{attachment_str}".strip() if content else attachment_str
     msg = SupportChatMessage(
         escalation_id=esc_id,
         sender=sender,
-        content=content,
+        content=final_content,
     )
     db.session.add(msg)
     if is_support:

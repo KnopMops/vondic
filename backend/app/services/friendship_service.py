@@ -81,6 +81,20 @@ class FriendshipService:
         try:
             db.session.add(new_request)
             db.session.commit()
+
+            try:
+                from app.services.fcm_service import FCMService
+                requester = User.query.get(requester_id)
+                name = (requester.username if requester else "Пользователь")
+                FCMService.send_notification(
+                    addressee_id,
+                    "Заявка в друзья",
+                    f"{name} отправил заявку в друзья",
+                    {"type": "friend_request", "sender_id": str(requester_id)},
+                )
+            except Exception:
+                pass
+
             return new_request, None
         except Exception as e:
             db.session.rollback()

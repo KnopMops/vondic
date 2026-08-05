@@ -20,6 +20,17 @@ def subscribe(current_user):
     if error:
         return jsonify({"error": error}), 400
 
+    try:
+        from app.services.fcm_service import FCMService
+        FCMService.send_notification(
+            str(target_id),
+            "Новый подписчик",
+            f"{current_user.username} подписался на вас",
+            {"type": "new_follower", "sender_id": str(current_user.id)},
+        )
+    except Exception:
+        pass
+
     return jsonify(sub.to_dict()), 201
 
 

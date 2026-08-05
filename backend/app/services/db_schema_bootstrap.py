@@ -42,14 +42,6 @@ def ensure_users_extended_columns(engine) -> None:
             run(
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_password_expires TIMESTAMP"
             )
-        if "e2e_backup_salt" not in names:
-            run(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS e2e_backup_salt TEXT"
-            )
-        if "e2e_wrapped_device_secret" not in names:
-            run(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS e2e_wrapped_device_secret TEXT"
-            )
         if "mail_api_permissions" not in names:
             run("ALTER TABLE users ADD COLUMN IF NOT EXISTS mail_api_permissions "
                 "JSONB DEFAULT '{\"send\": false, \"read\": false, \"delete\": false}'::jsonb")
@@ -81,10 +73,6 @@ def ensure_users_extended_columns(engine) -> None:
         run("ALTER TABLE users ADD COLUMN refresh_token_lookup TEXT")
     if "moderation_warnings" not in names:
         run("ALTER TABLE users ADD COLUMN moderation_warnings TEXT DEFAULT '[]'")
-    if "e2e_backup_salt" not in names:
-        run("ALTER TABLE users ADD COLUMN e2e_backup_salt TEXT")
-    if "e2e_wrapped_device_secret" not in names:
-        run("ALTER TABLE users ADD COLUMN e2e_wrapped_device_secret TEXT")
     if "mail_api_permissions" not in names:
         run(
             "ALTER TABLE users ADD COLUMN mail_api_permissions TEXT "

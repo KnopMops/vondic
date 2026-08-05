@@ -1,4 +1,5 @@
 import { GlobalCallUI, WebRTCProvider } from '@/components/calls'
+import CookieConsent from '@/components/CookieConsent'
 import DesktopReleaseBanner from '@/components/DesktopReleaseBanner'
 import GlobalPlayer from '@/components/music/GlobalPlayer'
 import NotificationBell from '@/components/notifications/NotificationBell'
@@ -75,6 +76,7 @@ export default function RootLayout({
 												<SupportWidget />
 											</ErrorBoundary>
 											</WebRTCProvider>
+											<CookieConsent />
 										</ToastProvider>
 									</SocketProvider>
 								</SocialCommunitiesProvider>

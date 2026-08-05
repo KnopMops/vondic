@@ -54,7 +54,19 @@ def join_community(current_user):
         invite_code, current_user.id)
     if err:
         return jsonify({"error": err}), 400
-
+    try:
+        from app.services.fcm_service import FCMService
+        from app.models.community import Community
+        c = Community.query.get(community.id) if hasattr(community, 'id') else None
+        if c and str(c.owner_id) != str(current_user.id):
+            FCMService.send_notification(
+                str(c.owner_id),
+                "Новый участник",
+                f"{current_user.username} вступил в сообщество «{c.name}»",
+                {"type": "community_join", "community_id": str(c.id)},
+            )
+    except Exception:
+        pass
     return jsonify(community_schema.dump(community)), 200
 
 

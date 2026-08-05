@@ -18,31 +18,30 @@ const CallButton: React.FC<CallButtonProps> = ({
 	className = '',
 }) => {
 	const handleCallClick = () => {
-		if (isOnline && !isInCall) {
-			onCallInitiate(userId, userName)
-		} else if (!isOnline) {
-			alert('Пользователь не в сети')
-		} else if (isInCall) {
+		if (isInCall) {
 			alert('Уже идет звонок')
+			return
 		}
+		// Allow calling both online and offline users
+		onCallInitiate(userId, userName)
 	}
 
 	const getButtonTitle = () => {
-		if (!isOnline) return 'Пользователь не в сети'
 		if (isInCall) return 'Уже идет звонок'
+		if (!isOnline) return 'Позвонить (пользователь оффлайн)'
 		return 'Позвонить'
 	}
 
 	return (
 		<button
 			onClick={handleCallClick}
-			disabled={!isOnline || isInCall}
+			disabled={isInCall}
 			className={`call-button ${isOnline ? 'online' : 'offline'} ${isInCall ? 'in-call' : ''} ${className}`}
 			title={getButtonTitle()}
 		>
-			<span className="call-icon">📞</span>
-			<span className="call-text">
-				{!isOnline ? 'Оффлайн' : isInCall ? 'В звонке' : 'Позвонить'}
+			<span className='call-icon'>📞</span>
+			<span className='call-text'>
+				{isInCall ? 'В звонке' : 'Позвонить'}
 			</span>
 		</button>
 	)

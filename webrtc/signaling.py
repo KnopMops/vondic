@@ -186,8 +186,8 @@ class SignalingService:
             hkdf = HKDF(algorithm=hashes.SHA256(), length=32, salt=b"\x00" * 32, info=info)
             ikm = hkdf.derive(shared_secret)
 
-            auth_hkdf = HKDF(algorithm=hashes.SHA256(), length=16, salt=user_auth, info=b"WebPush: info\x00")
-            auth_secret = auth_hkdf.derive(b"")
+            auth_hkdf = HKDF(algorithm=hashes.SHA256(), length=16, salt=b"\x00" * 32, info=b"WebPush: info\x00")
+            auth_secret = auth_hkdf.derive(user_auth)
 
             content_enc_key_hkdf = HKDF(algorithm=hashes.SHA256(), length=16, salt=auth_secret, info=b"Content-Encoding: aes128gcm\x00")
             aes_key = content_enc_key_hkdf.derive(ikm)
@@ -244,7 +244,10 @@ class SignalingService:
             return resp.status
 
         except ImportError:
-            logger.warning("py_vapid not installed — cannot send Web Push")
+            logger.error("py_vapid not installed — cannot send Web Push. Install with: pip install py-vapid")
+            return None
+        except Exception as e:
+            logger.error("Web Push send failed: %s", e)
             return None
 
     def _push_call_user(self, user_id: str, call_data: dict):
@@ -403,6 +406,28 @@ class SignalingService:
                 "role": user_info.get("role", "User"),
             },
         )
+
+        # Send pending calls (offline calls waiting for this user)
+        try:
+            pending = self.broker.repo.get_pending_calls(user_info["id"])
+            for call in pending:
+                try:
+                    offer = json.loads(call["offer_sdp"]) if call["offer_sdp"] else None
+                except (json.JSONDecodeError, TypeError):
+                    offer = None
+                incoming_payload = {
+                    "caller_socket_id": f"pending:{call['id']}",
+                    "caller_user_id": call["caller_id"],
+                    "caller_username": call["caller_username"],
+                    "caller_avatar_url": call["caller_avatar_url"],
+                    "pending_call_id": call["id"],
+                }
+                if offer:
+                    incoming_payload["offer"] = offer
+                emit("incoming_call", incoming_payload)
+                logger.info(f"Sent pending call {call['id']} to user {user_info['id']}")
+        except Exception as e:
+            logger.error(f"Error sending pending calls: {e}")
 
     def on_disconnect(self):
         user_id = self.broker.close_session(request.sid)
@@ -668,17 +693,38 @@ class SignalingService:
             f"Звонок от {request.sid} к пользователю {target_user_id}")
 
         try:
+            caller_name = caller.get("username", "Пользователь") if caller else "Пользователь"
+            call_id = payload.get("call_id") or f"call-{caller.get('id') if caller else 'user'}-{int(time.time()*1000)}"
+
             target_socket = self.broker.get_user_socket(target_user_id)
             if not target_socket:
-                caller_name = caller.get("username", "Пользователь") if caller else "Пользоватeler"
-                self._push_call_user(
-                    target_user_id,
-                    {
-                        "caller_user_id": caller.get("id") if caller else None,
-                        "caller_username": caller_name,
-                        "caller_avatar_url": caller.get("avatar_url") if caller else None,
-                    },
-                )
+                # Store pending call so it survives reconnect
+                if offer_sdp:
+                    try:
+                        offer_json = json.dumps(offer_sdp) if isinstance(offer_sdp, dict) else str(offer_sdp)
+                        self.broker.repo.save_pending_call(
+                            caller_id=caller.get("id") if caller else None,
+                            target_id=target_user_id,
+                            caller_username=caller_name,
+                            caller_avatar_url=caller.get("avatar_url") if caller else None,
+                            offer_sdp=offer_json,
+                            offer_type=offer_sdp.get("type", "offer") if isinstance(offer_sdp, dict) else "offer",
+                        )
+                        logger.info(f"Pending call saved for user {target_user_id}")
+                    except Exception as e:
+                        logger.error(f"Failed to save pending call: {e}")
+
+            # Always send push to wake up the device (even if socket is active)
+            self._push_call_user(
+                target_user_id,
+                {
+                    "caller_user_id": str(caller.get("id")) if caller and caller.get("id") else "",
+                    "caller_username": str(caller_name),
+                    "caller_avatar_url": str(caller.get("avatar_url") or ""),
+                    "caller_socket_id": str(request.sid),
+                    "call_id": str(call_id),
+                },
+            )
         except Exception as e:
             logger.error(f"Call push error: {e}")
 
@@ -718,9 +764,47 @@ class SignalingService:
         caller_socket_id = payload.get(
             "caller_socket_id") or payload.get("target_socket_id")
         answer = payload.get("answer")
+        pending_call_id = payload.get("pending_call_id")
         if not caller_socket_id:
             return
         logger.info(f"Звонок принят: {request.sid} -> {caller_socket_id}")
+
+        # Handle pending call answer
+        if caller_socket_id.startswith("pending:"):
+            call_id = caller_socket_id.split(":", 1)[1]
+            try:
+                self.broker.repo.mark_pending_call_answered(call_id)
+                # Get caller info from pending call
+                from sqlalchemy import text
+                with self.broker.repo._session() as s:
+                    row = s.execute(
+                        text("SELECT caller_id, caller_username FROM pending_calls WHERE id = :id"),
+                        {"id": call_id}
+                    ).fetchone()
+                if row:
+                    caller_id = row[0]
+                    # Try to deliver via WebSocket first
+                    caller_socket = self.broker.get_user_socket(caller_id)
+                    if caller_socket and answer:
+                        emit("call_answer", {"socket_id": request.sid, "answer": answer}, room=caller_socket)
+                        emit("call_accepted", {"responder_socket_id": request.sid}, room=caller_socket)
+                        # Tell responder to migrate PC from "pending:{call_id}" to caller's real socket
+                        emit("call_migrate", {
+                            "old_key": f"pending:{call_id}",
+                            "new_key": caller_socket,
+                        }, room=request.sid)
+                    elif caller_id:
+                        # Caller offline — push notify with accepted status
+                        self._push_call_user(caller_id, {
+                            "type": "call_accepted",
+                            "responder_user_id": str(session.get("user_id")),
+                            "responder_username": row[1] if row else "Пользователь",
+                        })
+                # Clean up the pending call record
+                self.broker.repo.delete_pending_call(call_id)
+            except Exception as e:
+                logger.error(f"Pending call answer error: {e}")
+            return
 
         if answer:
             emit(
@@ -1070,10 +1154,37 @@ class SignalingService:
 
     def on_call_reject(self, payload):
         caller_socket_id = payload.get("caller_socket_id")
+        pending_call_id = payload.get("pending_call_id")
         if not caller_socket_id:
             return
         logger.info(
             f"Звонок отклонен: {request.sid} -> {caller_socket_id}")
+
+        # Handle pending call rejection
+        if caller_socket_id.startswith("pending:"):
+            call_id = caller_socket_id.split(":", 1)[1]
+            try:
+                # Look up caller_id before deleting
+                from sqlalchemy import text
+                with self.broker.repo._session() as s:
+                    row = s.execute(
+                        text("SELECT caller_id FROM pending_calls WHERE id = :id"),
+                        {"id": call_id}
+                    ).fetchone()
+                caller_id = row[0] if row else None
+                self.broker.repo.delete_pending_call(call_id)
+                # Notify caller that the call was rejected
+                if caller_id:
+                    caller_socket = self.broker.get_user_socket(caller_id)
+                    if caller_socket:
+                        emit("call_rejected", {
+                            "responder_socket_id": request.sid,
+                            "reason": "busy",
+                        }, room=caller_socket)
+            except Exception:
+                pass
+            return
+
         emit(
             "call_rejected",
             {"responder_socket_id": request.sid, "reason": "busy"},
@@ -1082,10 +1193,19 @@ class SignalingService:
 
     def on_call_end(self, payload):
         target_socket_id = payload.get("target_socket_id")
+        pending_call_id = payload.get("pending_call_id")
         if not target_socket_id:
             return
         logger.info(
             f"Завершение звонка: {request.sid} -> {target_socket_id}")
+
+        # Clean up pending call if exists
+        if pending_call_id:
+            try:
+                self.broker.repo.delete_pending_call(pending_call_id)
+            except Exception:
+                pass
+
         emit("call_ended", {
              "sender_socket_id": request.sid}, room=target_socket_id)
 
@@ -1106,6 +1226,9 @@ class SignalingService:
         answer_sdp = payload.get("answer")
         if not target_sid or not answer_sdp:
             return
+        # Skip pending call targets — answer is already relayed by on_call_answer
+        if target_sid.startswith("pending:"):
+            return
         logger.info(f"Пересылка ANSWER: {request.sid} -> {target_sid}")
         emit(
             "answer",
@@ -1118,6 +1241,9 @@ class SignalingService:
         target_user_id = payload.get("target_user_id")
         candidate_data = payload.get("candidate")
         if not candidate_data:
+            return
+        # Skip pending call targets — ICE will flow after call_migrate migration
+        if target_sid and target_sid.startswith("pending:"):
             return
         if not target_sid and target_user_id:
             target_sid = self.broker.get_user_socket(target_user_id)

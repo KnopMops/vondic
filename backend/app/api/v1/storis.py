@@ -249,6 +249,17 @@ def react_storis(current_user):
     user.storis = items
     flag_modified(user, "storis")
     db.session.commit()
+    try:
+        if str(owner_id) != str(current_user.id):
+            from app.services.fcm_service import FCMService
+            FCMService.send_notification(
+                str(owner_id),
+                "Реакция на сторис",
+                f"{current_user.username} отреагировал {emoji} на вашу сторис",
+                {"type": "story_reaction", "story_id": str(story_id)},
+            )
+    except Exception:
+        pass
     return jsonify({"story": target}), 200
 
 

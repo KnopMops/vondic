@@ -422,6 +422,19 @@ def like_toggle(current_user):
                 current_user.id, "video_likes", video_id, True)
         likes = _sync_video_likes(video_id)
         db.session.commit()
+        if action != "unlike":
+            try:
+                from app.services.fcm_service import FCMService
+                v = Video.query.get(video_id)
+                if v and str(v.user_id) != str(current_user.id):
+                    FCMService.send_notification(
+                        str(v.user_id),
+                        "Нравится",
+                        f"{current_user.username} лайкнул ваше видео",
+                        {"type": "video_like", "video_id": str(video_id)},
+                    )
+            except Exception:
+                pass
         return jsonify({"ok": True, "likes": likes}), 200
     except Exception as e:
         db.session.rollback()
@@ -553,6 +566,17 @@ def create_video_comment(current_user):
         )
         db.session.add(comment)
         db.session.commit()
+        try:
+            if str(video.user_id) != str(current_user.id):
+                from app.services.fcm_service import FCMService
+                FCMService.send_notification(
+                    str(video.user_id),
+                    "Комментарий к видео",
+                    f"{current_user.username} прокомментировал ваше видео",
+                    {"type": "video_comment", "video_id": str(video_id)},
+                )
+        except Exception:
+            pass
         return jsonify(
             {
                 "id": comment.id,

@@ -291,6 +291,20 @@ def like_post(current_user):
         return jsonify({"error": "Требуется post_id"}), 400
 
     post = PostService.like_post(post_id, current_user.id)
+    try:
+        if post and str(post.posted_by) != str(current_user.id):
+            from app.services.fcm_service import FCMService
+            from app.models.post import Post
+            p = Post.query.get(post_id)
+            if p:
+                FCMService.send_notification(
+                    str(p.posted_by),
+                    "Нравится",
+                    f"{current_user.username} лайкнул ваш пост",
+                    {"type": "post_like", "post_id": str(post_id)},
+                )
+    except Exception:
+        pass
     return jsonify(post_schema.dump(post)), 200
 
 
@@ -327,5 +341,19 @@ def create_comment(current_user):
         data, current_user.id, post_id)
     if error:
         return jsonify({"error": error}), 400
+
+    try:
+        from app.models.post import Post
+        from app.services.fcm_service import FCMService
+        p = Post.query.get(post_id)
+        if p and str(p.posted_by) != str(current_user.id):
+            FCMService.send_notification(
+                str(p.posted_by),
+                "Комментарий",
+                f"{current_user.username} прокомментировал ваш пост",
+                {"type": "post_comment", "post_id": str(post_id)},
+            )
+    except Exception:
+        pass
 
     return jsonify(comment_schema.dump(comment)), 201

@@ -77,6 +77,9 @@ export default function AdminSupportPage() {
 		{ id: number; sender: string; content: string; created_at: number }[]
 	>([])
 	const [chatInput, setChatInput] = useState('')
+	const [chatAttachments, setChatAttachments] = useState<string[]>([])
+	const [chatUploading, setChatUploading] = useState(false)
+	const chatFileInputRef = useRef<HTMLInputElement | null>(null)
 	const [pollTimer, setPollTimer] = useState<NodeJS.Timeout | null>(null)
 	const lastMsgIdRef = useRef(0)
 	const BACKEND_URL =
@@ -179,6 +182,61 @@ export default function AdminSupportPage() {
 			}
 			return block.trim() ? renderTextBlock(block, `text-${index}`) : null
 		})
+	}
+
+	const renderChatContent = (content: string) => {
+		const lines = content.split('\n')
+		const elements: React.ReactNode[] = []
+		let textParts: string[] = []
+		const flushText = () => {
+			if (textParts.length > 0) {
+				const text = textParts.join('\n').trim()
+				if (text) {
+					elements.push(
+						<div key={`t-${elements.length}`} className='space-y-2'>
+							{renderFormattedContent(text)}
+						</div>
+					)
+				}
+				textParts = []
+			}
+		}
+		for (const line of lines) {
+			const trimmed = line.trim()
+			if (
+				trimmed.startsWith('http') &&
+				/\.(jpg|jpeg|png|gif|webp|mp4|webm|pdf|doc|docx|zip)$/i.test(trimmed)
+			) {
+				flushText()
+				if (/\.(jpg|jpeg|png|gif|webp)$/i.test(trimmed)) {
+					elements.push(
+						<img
+							key={`img-${elements.length}`}
+							src={trimmed}
+							alt='attachment'
+							className='max-w-full rounded-lg max-h-60 object-contain cursor-pointer'
+							onClick={() => window.open(trimmed, '_blank')}
+						/>
+					)
+				} else {
+					elements.push(
+						<a
+							key={`file-${elements.length}`}
+							href={trimmed}
+							target='_blank'
+							rel='noopener noreferrer'
+							className='inline-flex items-center gap-1 text-emerald-400 hover:underline text-sm'
+						>
+							📎 {trimmed.split('/').pop()}
+						</a>
+					)
+				}
+			} else {
+				textParts.push(line)
+			}
+		}
+		flushText()
+		return elements.length > 0 ? elements : renderFormattedContent(content)
 	}
 
 	const formatTimeLeft = (deadline?: number | null) => {
@@ -575,12 +633,7 @@ export default function AdminSupportPage() {
 				for (const m of data.messages) {
 					uniqueById.set(m.id, m)
 				}
-				const msgs = Array.from(uniqueById.values()).sort((a, b) => {
-					if (a.sender === 'admin' && b.sender !== 'admin') return -1
-					if (a.sender !== 'admin' && b.sender === 'admin') return 1
-					if (b.created_at !== a.created_at) return b.created_at - a.created_at
-					return b.id - a.id
-				})
+				const msgs = Array.from(uniqueById.values()).sort((a, b) => a.created_at - b.created_at || a.id - b.id)
 				setChatMessages(msgs)
 				const lastServerId = msgs.length
 					? Math.max(...msgs.filter(m => m.id > 0).map(m => m.id))
@@ -628,13 +681,7 @@ export default function AdminSupportPage() {
 						for (const m of data.messages) {
 							map.set(m.id, m)
 						}
-						const merged = Array.from(map.values()).sort((a, b) => {
-							if (a.sender === 'admin' && b.sender !== 'admin') return -1
-							if (a.sender !== 'admin' && b.sender === 'admin') return 1
-							if (b.created_at !== a.created_at)
-								return b.created_at - a.created_at
-							return b.id - a.id
-						})
+						const merged = Array.from(map.values()).sort((a, b) => a.created_at - b.created_at || a.id - b.id)
 						const positiveIds = merged.filter(m => m.id > 0).map(m => m.id)
 						if (positiveIds.length) {
 							lastMsgIdRef.current = Math.max(...positiveIds)
@@ -658,15 +705,56 @@ export default function AdminSupportPage() {
 		}
 	}
 
+	const handleChatFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+		const files = e.target.files
+		if (!files || files.length === 0) return
+		setChatUploading(true)
+		try {
+			const token = await ensureToken()
+			const uploadedUrls: string[] = []
+			for (const file of Array.from(files)) {
+				if (file.size > 10 * 1024 * 1024) {
+					alert('Файл слишком большой (макс 10МБ)')
+					continue
+				}
+				const base64 = await new Promise<string>((resolve) => {
+					const reader = new FileReader()
+					reader.onload = () => resolve(reader.result as string)
+					reader.readAsDataURL(file)
+				})
+				const res = await fetch(`${BACKEND_URL}/api/v1/upload/file`, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						Authorization: `Bearer ${token}`,
+					},
+					body: JSON.stringify({ file: base64, filename: file.name }),
+				})
+				const data = await res.json()
+				if (data?.url) {
+					uploadedUrls.push(data.url)
+				}
+			}
+			if (uploadedUrls.length > 0) {
+				setChatAttachments(prev => [...prev, ...uploadedUrls])
+			}
+		} catch (err) {
+			console.error('File upload error:', err)
+		} finally {
+			setChatUploading(false)
+			if (chatFileInputRef.current) chatFileInputRef.current.value = ''
+		}
+	}
+
 	const sendChatMessage = async () => {
 		if (!selectedId) return
 		const text = chatInput.trim()
-		if (!text) return
+		if (!text && chatAttachments.length === 0) return
 		try {
 			const res = await fetch(`/api/support/admin/escalations/answer`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ escId: selectedId, answer: text }),
+				body: JSON.stringify({ escId: selectedId, answer: text, attachments: chatAttachments }),
 			})
 			const t = await res.text()
 			let data: any = {}
@@ -675,12 +763,14 @@ export default function AdminSupportPage() {
 			} catch {}
 			if (res.ok && data?.ok) {
 				const ts = Math.floor(Date.now() / 1000)
-				// Append optimistic admin message with unique negative id to avoid collisions
+				const content = text
+					? (chatAttachments.length > 0 ? `${text}\n${chatAttachments.join('\n')}` : text)
+					: chatAttachments.join('\n')
 				setChatMessages(prev => {
 					const optimistic = {
 						id: -Date.now(),
-						sender: 'admin',
-						content: text,
+						sender: 'support',
+						content,
 						created_at: ts,
 					}
 					const map = new Map<
@@ -689,15 +779,10 @@ export default function AdminSupportPage() {
 					>()
 					for (const m of prev) map.set(m.id, m)
 					map.set(optimistic.id, optimistic)
-					return Array.from(map.values()).sort((a, b) => {
-						if (a.sender === 'admin' && b.sender !== 'admin') return -1
-						if (a.sender !== 'admin' && b.sender === 'admin') return 1
-						if (b.created_at !== a.created_at)
-							return b.created_at - a.created_at
-						return b.id - a.id
-					})
+					return Array.from(map.values()).sort((a, b) => a.created_at - b.created_at || a.id - b.id)
 				})
 				setChatInput('')
+				setChatAttachments([])
 			} else {
 				console.error('Admin answer error:', t)
 			}
@@ -1857,54 +1942,71 @@ export default function AdminSupportPage() {
 									<div
 										key={`${m.id}-${m.sender}-${m.created_at}`}
 										className={`rounded-lg px-3 py-2 text-sm ${
-											m.sender === 'admin'
+											m.sender === 'support' || m.sender === 'admin'
 												? 'bg-emerald-900/30 text-emerald-100'
 												: 'bg-gray-800 text-gray-100'
 										}`}
 									>
 										<div className='text-xs opacity-70'>
-											{m.sender === 'admin'
+											{m.sender === 'support' || m.sender === 'admin'
 												? 'Оператор'
 												: m.sender === 'bot'
 													? 'Бот'
 													: 'Пользователь'}
 										</div>
 										<div>
-											{m.content.startsWith('/static/uploads/') &&
-											/\.(jpg|jpeg|png|gif|webp)$/i.test(m.content) ? (
-												<img
-													src={
-														m.content.startsWith('http')
-															? m.content
-															: `${BACKEND_URL}${m.content}`
-													}
-													alt='attachment'
-													className='max-w-full rounded-lg max-h-60 object-contain cursor-pointer'
-													onClick={() =>
-														window.open(
-															m.content.startsWith('http')
-																? m.content
-																: `${BACKEND_URL}${m.content}`,
-															'_blank',
-														)
-													}
-												/>
-											) : (
-												<div className='space-y-2'>
-													{renderFormattedContent(m.content)}
-												</div>
-											)}
+											{renderChatContent(m.content)}
 										</div>
 									</div>
 								))
 							)}
 						</div>
+						{chatAttachments.length > 0 && (
+							<div className='mt-2 flex flex-wrap gap-2'>
+								{chatAttachments.map((url, i) => (
+									<div key={i} className='relative group'>
+										{/\.(jpg|jpeg|png|gif|webp)$/i.test(url) ? (
+											<img src={url} alt='attachment' className='h-16 rounded-lg object-cover' />
+										) : (
+											<div className='h-16 px-3 rounded-lg bg-gray-800 flex items-center text-xs text-gray-300 max-w-[120px] truncate'>
+												{url.split('/').pop()}
+											</div>
+										)}
+										<button
+											onClick={() => setChatAttachments(prev => prev.filter((_, j) => j !== i))}
+											className='absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-600 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity'
+										>
+											✕
+										</button>
+									</div>
+								))}
+							</div>
+						)}
 						<div className='mt-3 flex gap-2'>
+							<input
+								ref={chatFileInputRef}
+								type='file'
+								multiple
+								accept='image/*,.pdf,.doc,.docx,.txt,.zip'
+								className='hidden'
+								onChange={handleChatFileUpload}
+							/>
+							<button
+								onClick={() => chatFileInputRef.current?.click()}
+								disabled={chatUploading}
+								className='px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm disabled:opacity-60'
+								title='Прикрепить файл'
+							>
+								{chatUploading ? '⏳' : '📎'}
+							</button>
 							<input
 								value={chatInput}
 								onChange={e => setChatInput(e.target.value)}
 								onKeyDown={e => {
-									if (e.key === 'Enter') sendChatMessage()
+									if (e.key === 'Enter' && !e.shiftKey) {
+										e.preventDefault()
+										sendChatMessage()
+									}
 								}}
 								placeholder='Написать сообщение...'
 								className='flex-1 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-600'

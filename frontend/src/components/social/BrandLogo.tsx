@@ -6,7 +6,7 @@ import React from "react";
 export default function BrandLogo({ size = 28 }: { size?: number }) {
   return (
     <Image
-      src="/favicon.ico"
+      src="/logo.png"
       alt="Вондик"
       width={size}
       height={size}

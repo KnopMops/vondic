@@ -277,6 +277,8 @@ export default function Home() {
 						<a href='https://s3.vondic.ru/uploads/docs/moderation_regulations_and_reasons_for_blocking.rtf' target='_blank' rel='noopener' className='hover:text-gray-300 transition-colors'>Правила модерации</a>
 						<a href='https://s3.vondic.ru/uploads/docs/regulations_for_reviewing_complaints_and_moderating_content.rtf' target='_blank' rel='noopener' className='hover:text-gray-300 transition-colors text-right'>Рассмотрение жалоб</a>
 						<a href='https://s3.vondic.ru/uploads/docs/сommunity_rules.rtf' target='_blank' rel='noopener' className='hover:text-gray-300 transition-colors'>Правила сообщества</a>
+						<a href='https://s3.vondic.ru/uploads/docs/cookie_policy.rtf' target='_blank' rel='noopener' className='hover:text-gray-300 transition-colors text-right'>Политика cookies</a>
+						<a href='https://s3.vondic.ru/uploads/docs/terms_of_service.rtf' target='_blank' rel='noopener' className='hover:text-gray-300 transition-colors'>Пользовательское соглашение</a>
 					</div>
 					<p className='text-gray-600 text-sm'>&copy; 2026 Вондик</p>
 				</div>

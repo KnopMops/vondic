@@ -216,8 +216,16 @@ export class WebRTCService {
 
 			console.log('[WebRTC] Native audio capture enabled')
 			return this.localStream
-		} catch (error) {
+		} catch (error: any) {
 			console.error('Error accessing microphone:', error)
+			const msg = error?.message || ''
+			if (msg.includes('organization') || msg.includes('организация') || msg.includes('NotAllowedError') || msg.includes('Permission denied')) {
+				throw new Error(
+					'Доступ к микрофону запрещён. ' +
+					'Нажмите на 🔒 в адресной строке → Настройки сайта → Микрофон → Разрешить, ' +
+					'затем обновите страницу.'
+				)
+			}
 			throw new Error('Не удалось получить доступ к микрофону')
 		}
 	}
@@ -556,8 +564,13 @@ export class WebRTCService {
 			return stream
 		} catch (error: any) {
 			console.error('[WebRTC] Video error:', error)
-			if (error.name === 'NotAllowedError') {
-				throw new Error('Доступ к камере запрещён')
+			const msg = error?.message || ''
+			if (error.name === 'NotAllowedError' || msg.includes('organization') || msg.includes('организация') || msg.includes('Permission denied')) {
+				throw new Error(
+					'Доступ к камере запрещён. ' +
+					'Нажмите на 🔒 в адресной строке → Настройки сайта → Камера → Разрешить, ' +
+					'затем обновите страницу.'
+				)
 			} else if (error.name === 'NotFoundError') {
 				throw new Error('Камера не найдена')
 			}
@@ -1717,6 +1730,17 @@ export class WebRTCService {
 			this.stopScreenShare().catch(() => {})
 			this.stopVideo().catch(() => {})
 		}
+	}
+
+	closePeerConnection(targetKey: string): void {
+		const pc = this.peerConnections.get(targetKey)
+		if (pc) {
+			pc.close()
+			this.peerConnections.delete(targetKey)
+		}
+		this.remoteStreams.delete(targetKey)
+		this.iceCandidateQueue.delete(targetKey)
+		this.incomingIceQueue.delete(targetKey)
 	}
 
 	endAllCalls(): void {

@@ -6,7 +6,6 @@ from .comment import Comment
 from .community import Community
 from .community_channel import CommunityChannel
 from .device import Device
-from .e2e_key_backup import E2EKeyBackup
 from .escalation import Escalation
 from .friendship import Friendship
 from .gift_catalog import GiftCatalog
@@ -40,7 +39,6 @@ __all__ = [
     "Channel",
     "Comment",
     "Device",
-    "E2EKeyBackup",
     "Escalation",
     "Friendship",
     "Group",

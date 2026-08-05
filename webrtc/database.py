@@ -174,6 +174,22 @@ class ChatClear(Base):
     cleared_at: Mapped[datetime] = mapped_column(nullable=False)
 
 
+class PendingCall(Base):
+    """Stores SDP offer for offline users so call survives reconnect."""
+
+    __tablename__ = "pending_calls"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    caller_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    target_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    caller_username: Mapped[str | None] = mapped_column(String, nullable=True)
+    caller_avatar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    offer_sdp: Mapped[str] = mapped_column(Text, nullable=False)
+    offer_type: Mapped[str] = mapped_column(String, nullable=False, default="offer")
+    created_at: Mapped[datetime] = mapped_column(nullable=False, default=datetime.utcnow)
+    answered: Mapped[bool] = mapped_column(nullable=False, default=False)
+
+
 class UserRepository:
     def __init__(self):
         try:
@@ -314,6 +330,55 @@ class UserRepository:
                 ChatClear.peer_id == str(peer_id),
                 ChatClear.chat_type == str(chat_type),
             ).delete(synchronize_session=False)
+
+    def save_pending_call(self, caller_id, target_id, caller_username, caller_avatar_url, offer_sdp, offer_type="offer"):
+        with self._session() as session:
+            # Clean expired calls (>5 min old)
+            from datetime import timedelta
+            session.query(PendingCall).filter(
+                PendingCall.created_at < datetime.utcnow() - timedelta(minutes=5)
+            ).delete(synchronize_session=False)
+            # Clean old pending call from same caller to same target
+            session.query(PendingCall).filter(
+                PendingCall.caller_id == str(caller_id),
+                PendingCall.target_id == str(target_id),
+            ).delete(synchronize_session=False)
+            pc = PendingCall(
+                caller_id=str(caller_id),
+                target_id=str(target_id),
+                caller_username=caller_username,
+                caller_avatar_url=caller_avatar_url,
+                offer_sdp=offer_sdp,
+                offer_type=offer_type,
+            )
+            session.add(pc)
+            return pc.id
+
+    def get_pending_calls(self, user_id):
+        with self._session() as session:
+            calls = session.query(PendingCall).filter_by(
+                target_id=str(user_id), answered=False
+            ).all()
+            return [
+                {
+                    "id": c.id,
+                    "caller_id": c.caller_id,
+                    "caller_username": c.caller_username,
+                    "caller_avatar_url": c.caller_avatar_url,
+                    "offer_sdp": c.offer_sdp,
+                    "offer_type": c.offer_type,
+                    "created_at": c.created_at.isoformat() if c.created_at else None,
+                }
+                for c in calls
+            ]
+
+    def mark_pending_call_answered(self, call_id):
+        with self._session() as session:
+            session.query(PendingCall).filter_by(id=str(call_id)).update({"answered": True})
+
+    def delete_pending_call(self, call_id):
+        with self._session() as session:
+            session.query(PendingCall).filter_by(id=str(call_id)).delete()
 
     @contextmanager
     def _session(self):

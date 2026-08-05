@@ -20,6 +20,21 @@ _cached_token = None
 _cached_token_expiry = None
 
 
+def _remove_stale_token(device_token: str):
+    """Remove an invalid FCM token from the devices table."""
+    try:
+        from sqlalchemy import text
+        from app.core.extensions import db
+        db.session.execute(
+            text("DELETE FROM devices WHERE token = :token"),
+            {"token": device_token},
+        )
+        db.session.commit()
+        logger.info("Removed stale FCM token: %s...", device_token[:20])
+    except Exception as e:
+        logger.error("Failed to remove stale token: %s", e)
+
+
 def _get_access_token():
     global _cached_token, _cached_token_expiry
     if _cached_token and _cached_token_expiry and datetime.utcnow() < _cached_token_expiry:
@@ -73,7 +88,11 @@ def send_push_notification(device_token: str, title: str, body: str, data: dict 
             timeout=10,
         )
         if not resp.ok:
-            logger.error("FCM send failed: %s %s", resp.status_code, resp.text[:200])
+            body = resp.text[:500]
+            if resp.status_code == 404 and "NotRegistered" in body:
+                _remove_stale_token(device_token)
+            else:
+                logger.error("FCM send failed: %s %s", resp.status_code, body[:200])
     except Exception as e:
         logger.error("FCM send error: %s", e)
 
@@ -104,6 +123,10 @@ def send_call_wake(device_token: str, call_data: dict):
             timeout=10,
         )
         if not resp.ok:
-            logger.error("FCM call wake failed: %s %s", resp.status_code, resp.text[:200])
+            body = resp.text[:500]
+            if resp.status_code == 404 and "NotRegistered" in body:
+                _remove_stale_token(device_token)
+            else:
+                logger.error("FCM call wake failed: %s %s", resp.status_code, body[:200])
     except Exception as e:
         logger.error("FCM call wake error: %s", e)

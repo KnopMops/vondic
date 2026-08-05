@@ -31,3 +31,4 @@ pika
 uvicorn
 prometheus-client
 botiksdk
+boto3

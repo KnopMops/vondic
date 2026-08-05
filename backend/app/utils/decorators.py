@@ -63,32 +63,45 @@ def rate_limit(key_prefix: str, limit: int, window_seconds: int):
     return decorator
 
 
+import secrets
+
+
+def generate_csrf_token() -> str:
+    return secrets.token_hex(32)
+
+
+def set_csrf_cookie(response):
+    token = generate_csrf_token()
+    response.set_cookie(
+        "csrf_token", token,
+        httponly=False, samesite="Strict", secure=True, path="/",
+    )
+    return token
+
+
 def csrf_protect(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if request.method in ("GET", "HEAD", "OPTIONS"):
             return f(*args, **kwargs)
 
+        # Bearer tokens are not auto-sent by browsers — CSRF not applicable
         auth = request.headers.get("Authorization", "")
         if auth.startswith("Bearer "):
             return f(*args, **kwargs)
 
-        origin = request.headers.get("Origin") or ""
-        referer = request.headers.get("Referer") or ""
+        # Double-submit cookie pattern
+        cookie_token = request.cookies.get("csrf_token")
+        header_token = request.headers.get("X-CSRF-Token")
+        body_token = None
+        if request.is_json:
+            body_token = (request.get_json(silent=True) or {}).get("csrf_token")
 
-        allowed = ("https://vondic.ru", "https://api.vondic.ru",
-                    "http://localhost:3000", "http://localhost:5050",
-                    "http://127.0.0.1:3000")
-
-        if origin:
-            if not any(origin.startswith(a) for a in allowed):
-                return jsonify({"error": "CSRF origin mismatch"}), 403
-        elif referer:
-            if not any(referer.startswith(a) for a in allowed):
-                return jsonify({"error": "CSRF referer mismatch"}), 403
-        else:
-            if request.content_type and "json" in request.content_type:
-                return jsonify({"error": "CSRF: missing Origin/Referer"}), 403
+        submitted = header_token or body_token
+        if not cookie_token or not submitted:
+            return jsonify({"error": "CSRF token missing"}), 403
+        if not secrets.compare_digest(cookie_token, submitted):
+            return jsonify({"error": "CSRF token mismatch"}), 403
 
         return f(*args, **kwargs)
 

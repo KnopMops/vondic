@@ -20,7 +20,6 @@ from app.services.auth_service import AuthService
 from app.services.channel_service import ChannelService
 from app.services.community_channel_service import CommunityChannelService
 from app.services.community_service import CommunityService
-from app.services.e2e_key_backup_service import E2EKeyBackupService
 from app.services.friendship_service import FriendshipService
 from app.services.group_service import GroupService
 from app.services.message_service import MessageService
@@ -944,84 +943,6 @@ def online_count():
         return jsonify(resp.json()), resp.status_code
     except http_requests.RequestException as e:
         return jsonify({"error": str(e)}), 502
-
-
-@public_chat_bp.route("/e2e-keys/backup", methods=["POST"])
-@embed_auth_required
-def e2e_backup(current_user, access_token):
-    data = request.get_json() or {}
-    if not data.get("key_id") or not data.get("encrypted_key_data"):
-        return jsonify(
-            {"error": "key_id and encrypted_key_data required"}), 400
-    backup = E2EKeyBackupService.backup_key(
-        user_id=str(current_user.id),
-        key_id=data["key_id"],
-        encrypted_key_data=data["encrypted_key_data"],
-        device_id=data.get("device_id"),
-        device_name=data.get("device_name"),
-        encryption_algorithm=data.get("encryption_algorithm", "aes-256-gcm"),
-    )
-    return jsonify(
-        {
-            "success": True,
-            "key_id": backup.key_id,
-            "updated_at": backup.updated_at.isoformat() if backup.updated_at else None,
-        }
-    ), 200
-
-
-@public_chat_bp.route("/e2e-keys/restore", methods=["POST"])
-@embed_auth_required
-def e2e_restore(current_user, access_token):
-    data = request.get_json() or {}
-    if not data.get("key_id"):
-        return jsonify({"error": "key_id required"}), 400
-    backup = E2EKeyBackupService.get_key(
-        user_id=str(current_user.id), key_id=data["key_id"]
-    )
-    if not backup:
-        return jsonify({"error": "Key not found"}), 404
-    return jsonify(
-        {
-            "success": True,
-            "key_id": backup.key_id,
-            "encrypted_key_data": backup.encrypted_key_data,
-            "encryption_algorithm": backup.encryption_algorithm,
-            "device_id": backup.device_id,
-            "device_name": backup.device_name,
-            "updated_at": backup.updated_at.isoformat() if backup.updated_at else None,
-        }
-    ), 200
-
-
-@public_chat_bp.route("/e2e-keys/list", methods=["GET"])
-@embed_auth_required
-def e2e_list(current_user, access_token):
-    backups = E2EKeyBackupService.get_all_keys(user_id=str(current_user.id))
-    keys = [
-        {
-            "key_id": b.key_id,
-            "device_id": b.device_id,
-            "device_name": b.device_name,
-            "updated_at": b.updated_at.isoformat() if b.updated_at else None,
-        }
-        for b in backups
-    ]
-    return jsonify({"keys": keys, "count": len(keys)}), 200
-
-
-@public_chat_bp.route("/e2e-keys/delete", methods=["POST"])
-@embed_auth_required
-def e2e_delete(current_user, access_token):
-    data = request.get_json() or {}
-    if not data.get("key_id"):
-        return jsonify({"error": "key_id required"}), 400
-    ok = E2EKeyBackupService.delete_key(
-        user_id=str(current_user.id), key_id=data["key_id"]
-    )
-    if not ok:
-        return jsonify({"error": "Key not found"}), 404
-    return jsonify({"success": True}), 200
 
 
 @public_chat_bp.route("/upload/voice", methods=["POST"])

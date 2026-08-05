@@ -94,6 +94,19 @@ def join_channel(current_user):
     channel, error = ChannelService.join_channel(invite_code, current_user.id)
     if error:
         return jsonify({"error": error}), 400
+    try:
+        from app.services.fcm_service import FCMService
+        from app.models.channel import Channel
+        ch = Channel.query.get(channel.id) if hasattr(channel, 'id') else None
+        if ch and str(ch.owner_id) != str(current_user.id):
+            FCMService.send_notification(
+                str(ch.owner_id),
+                "Новый подписчик",
+                f"{current_user.username} подписался на канал «{ch.name}»",
+                {"type": "channel_join", "channel_id": str(ch.id)},
+            )
+    except Exception:
+        pass
     return jsonify(channel_schema.dump(channel)), 200
 
 
