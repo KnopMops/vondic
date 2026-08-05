@@ -41,7 +41,8 @@ async function proxyToWebRTC(req: NextRequest, params: { path: string[] }) {
 	// Forward CORS headers from backend if present
 	const allowOrigin = response.headers.get('Access-Control-Allow-Origin')
 	if (allowOrigin) {
-		responseHeaders['Access-Control-Allow-Origin'] = allowOrigin
+		const firstOrigin = allowOrigin.split(',')[0].trim()
+		responseHeaders['Access-Control-Allow-Origin'] = firstOrigin
 	}
 	
 	const allowCredentials = response.headers.get('Access-Control-Allow-Credentials')
