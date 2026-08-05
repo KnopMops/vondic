@@ -31,9 +31,18 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-	title: 'Вондик',
-	description: 'Универсальный коммуникационный хаб',
+	title: 'Вондик — Коммуникационный хаб',
+	description: 'Универсальный коммуникационный хаб: чаты, видео и аудио звонки WebRTC, сообщества',
 	manifest: '/manifest.webmanifest',
+	appleWebApp: {
+		capable: true,
+		statusBarStyle: 'black-translucent',
+		title: 'Вондик',
+	},
+	icons: {
+		icon: '/favicon.ico',
+		apple: '/logo.png',
+	},
 }
 
 export const viewport: Viewport = {
