@@ -558,7 +558,15 @@ class UserRepository:
                                 and check_password_hash(sess.access_token_hash, token)
                             ):
                                 now = datetime.now(timezone.utc)
-                                if sess.expires_at and sess.expires_at.replace(tzinfo=timezone.utc) < now:
+                                sess_exp = sess.expires_at
+                                is_expired = False
+                                if sess_exp:
+                                    if sess_exp.tzinfo is None:
+                                        sess_exp = sess_exp.replace(tzinfo=timezone.utc)
+                                    if sess_exp < now:
+                                        is_expired = True
+
+                                if is_expired:
                                     await session.delete(sess)
                                 else:
                                     sess.last_active = datetime.now(timezone.utc)
@@ -566,8 +574,8 @@ class UserRepository:
                                         select(User).where(User.id == sess.user_id)
                                     )
                                     row = res_user.scalars().first()
-                        except Exception:
-                            pass
+                        except Exception as ex:
+                            logger.warning(f"UserSession lookup check error: {ex}")
                 if not row and "." in token:
                     lookup, _, sec = token.partition(".")
                     if lookup and sec and "." not in sec:
