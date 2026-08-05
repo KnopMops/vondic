@@ -1,4 +1,36 @@
-/* Vondic PWA Service Worker — Web Push notifications */
+/* Vondic PWA Service Worker — Web Push Notifications & iOS Standalone Support */
+
+const CACHE_NAME = 'vondic-pwa-v1';
+const STATIC_ASSETS = [
+  '/',
+  '/manifest.webmanifest',
+  '/logo.png',
+  '/favicon.ico',
+];
+
+self.addEventListener('install', function (event) {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(function (cache) {
+      return cache.addAll(STATIC_ASSETS).catch(function () {});
+    })
+  );
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', function (event) {
+  event.waitUntil(
+    caches.keys().then(function (cacheNames) {
+      return Promise.all(
+        cacheNames.map(function (cacheName) {
+          if (cacheName !== CACHE_NAME) {
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    })
+  );
+  self.clients.claim();
+});
 
 self.addEventListener('push', function (event) {
   if (!event.data) return;
@@ -11,15 +43,22 @@ self.addEventListener('push', function (event) {
   }
 
   const title = data.title || 'Вондик';
+  const isCall = data.data?.type === 'incoming_call' || data.type === 'incoming_call';
+
   const options = {
-    body: data.body || 'Новое сообщение',
-    icon: '/favicon.ico',
-    badge: '/favicon.ico',
-    data: data.data || {},
-    actions: [
-      { action: 'open', title: 'Открыть' },
-    ],
-    vibrate: [200, 100, 200],
+    body: data.body || (isCall ? 'Входящий звонок...' : 'Новое сообщение'),
+    icon: '/logo.png',
+    badge: '/logo.png',
+    data: data.data || data,
+    tag: isCall ? 'call_notification' : (data.data?.message_id || 'vondic_notification'),
+    renotify: true,
+    vibrate: isCall ? [500, 250, 500, 250, 500] : [200, 100, 200],
+    actions: isCall
+      ? [
+          { action: 'answer', title: 'Принять' },
+          { action: 'decline', title: 'Отклонить' },
+        ]
+      : [{ action: 'open', title: 'Открыть' }],
   };
 
   event.waitUntil(self.registration.showNotification(title, options));
@@ -31,7 +70,11 @@ self.addEventListener('notificationclick', function (event) {
   const data = event.notification.data || {};
   let url = '/feed';
 
-  if (data.type === 'incoming_call') {
+  if (event.action === 'decline') {
+    return;
+  }
+
+  if (data.type === 'incoming_call' || data.call_id) {
     url = `/feed/messages?call=${data.call_id || ''}`;
   } else if (data.type === 'friend_request') {
     url = '/feed/friends';
@@ -46,7 +89,7 @@ self.addEventListener('notificationclick', function (event) {
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (windowClients) {
       for (const client of windowClients) {
-        if (client.url.includes('vondic.ru') && 'focus' in client) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
           client.navigate(url);
           return client.focus();
         }
@@ -56,11 +99,7 @@ self.addEventListener('notificationclick', function (event) {
   );
 });
 
-self.addEventListener('notificationclose', function (event) {
-  // Optional: track dismissal
-});
-
-/* Re-subscribe on pushsubscriptionchange (required for iOS PWA) */
+/* Re-subscribe on pushsubscriptionchange (iOS Safari PWA compatibility) */
 self.addEventListener('pushsubscriptionchange', function (event) {
   event.waitUntil(
     self.registration.pushManager.subscribe(event.oldSubscription.options).then(function (subscription) {
