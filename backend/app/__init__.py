@@ -127,7 +127,10 @@ def create_app(config_class=Config):
 
     @app.teardown_appcontext
     def shutdown_session(exception=None):
-        db.session.remove()
+        try:
+            db.session.remove()
+        except Exception:
+            pass
 
     cache.init_app(app)
 
