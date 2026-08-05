@@ -1,11 +1,12 @@
 import logging
 import os
 import time
+from typing import Any
 
-from flasgger import Swagger
-from flask import Flask, Response, jsonify, request
-from flask_cors import CORS
-from flask_socketio import SocketIO
+import socketio
+import uvicorn
+from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import Counter, Gauge, Histogram, generate_latest
 
 from webrtc.config import Config
@@ -30,59 +31,6 @@ REQUEST_IN_PROGRESS = Gauge(
 WEBSOCKET_CONNECTIONS = Gauge(
     "websocket_connections", "Текущие WebSocket подключения"
 )
-
-
-def _tag_for_rule(rule: str) -> str:
-    if rule.startswith("/messages"):
-        return "Messages"
-    if rule.startswith("/channels"):
-        return "Channels"
-    if rule.startswith("/chats"):
-        return "Chats"
-    if rule.startswith("/api/online-users"):
-        return "Stats"
-    if rule.startswith("/set_socket_id") or rule.startswith("/get_socket_id"):
-        return "Sockets"
-    if rule.startswith("/internal"):
-        return "Internal"
-    if rule == "/":
-        return "Root"
-    return "Other"
-
-
-def _build_swagger_paths(app: Flask):
-    protected_rules = {
-        "/messages/history",
-        "/channels/history",
-        "/chats/search",
-        "/messages/search",
-    }
-    paths = {}
-    for rule in app.url_map.iter_rules():
-        if rule.endpoint == "static":
-            continue
-        if rule.rule.startswith("/flasgger_static"):
-            continue
-        if rule.rule in ("/apispec.json", "/docs/"):
-            continue
-        methods = sorted(m for m in rule.methods if m not in {
-                         "HEAD", "OPTIONS"})
-        if not methods:
-            continue
-        is_protected = rule.rule in protected_rules
-        tags = [_tag_for_rule(rule.rule),
-                "Protected" if is_protected else "Public"]
-        entry = paths.setdefault(rule.rule, {})
-        for method in methods:
-            responses = {"200": {"description": "Успех"}}
-            if is_protected:
-                responses["401"] = {"description": "Не авторизовано"}
-            entry[method.lower()] = {
-                "summary": rule.endpoint,
-                "tags": tags,
-                "responses": responses,
-            }
-    return paths
 
 
 def _build_allowed_origins() -> list[str]:
@@ -110,386 +58,283 @@ def _build_allowed_origins() -> list[str]:
 
 
 def create_app():
-    app = Flask(__name__)
-    app.config.from_object(Config)
-
     allowed_origins = _build_allowed_origins()
-    async_mode = os.getenv("SOCKETIO_ASYNC_MODE", "eventlet")
-    socketio = SocketIO(
-        app,
+
+    sio = socketio.AsyncServer(
+        async_mode="asgi",
         cors_allowed_origins=allowed_origins,
-        async_mode=async_mode,
         logger=True,
         engineio_logger=True,
     )
+
+    app = FastAPI(
+        title="WebRTC Signaling Server API",
+        description="API документация для асинхронного сервера сигнализации WebRTC",
+        version="2.0.0",
+    )
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allowed_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
     user_repo = UserRepository()
-    logger.info("WebRTC Server initialized. Message encryption enabled.")
+    logger.info("WebRTC Server initialized (Async ASGI mode). Message encryption enabled.")
     broker = ConnectionBroker(user_repo)
-    signaling = SignalingService(socketio, broker, bind_disconnect=False)
+    signaling = SignalingService(sio, broker, bind_disconnect=False)
 
-    @socketio.on("disconnect")
-    def on_socket_disconnect():
-        """Метрики + сброс presence в одном месте (раньше был второй @disconnect только с dec)."""
+    @app.on_event("startup")
+    async def startup_event():
+        await user_repo._ensure_schema()
+        await signaling.load_existing_interactions()
+
+    @sio.on("connect")
+    async def on_connect(sid, environ, auth=None):
+        WEBSOCKET_CONNECTIONS.inc()
+
+    @sio.on("disconnect")
+    async def on_disconnect(sid):
         WEBSOCKET_CONNECTIONS.dec()
-        signaling.on_disconnect()
+        await signaling.on_disconnect(sid)
 
-    @app.route("/api/online-users", methods=["GET"])
-    def get_online_users():
-        count = user_repo.get_online_users_count()
-        return jsonify({"count": count}), 200
+    @app.middleware("http")
+    async def metrics_middleware(request: Request, call_next):
+        endpoint = request.url.path
+        method = request.method
+        REQUEST_IN_PROGRESS.labels(method=method, endpoint=endpoint).inc()
+        start_time = time.time()
+        try:
+            response = await call_next(request)
+            status_code = response.status_code
+        except Exception:
+            status_code = 500
+            raise
+        finally:
+            latency = time.time() - start_time
+            REQUEST_COUNT.labels(method=method, endpoint=endpoint, status=status_code).inc()
+            REQUEST_IN_PROGRESS.labels(method=method, endpoint=endpoint).dec()
+            REQUEST_LATENCY.labels(method=method, endpoint=endpoint).observe(latency)
+        return response
 
-    @app.route("/")
-    def index():
-        return "Сервер сигнализации WebRTC запущен."
+    @app.get("/")
+    async def index():
+        return "Сервер сигнализации WebRTC запущен (Async)."
 
-    @app.route("/get_socket_id/<user_id>")
-    def get_socket_id(user_id):
-        socket_id = broker.get_user_socket(user_id)
+    @app.get("/metrics")
+    async def metrics():
+        return Response(generate_latest(), media_type="text/plain; charset=utf-8")
+
+    @app.get("/api/online-users")
+    async def get_online_users():
+        count = await user_repo.get_online_users_count()
+        return {"count": count}
+
+    @app.get("/get_socket_id/{user_id}")
+    async def get_socket_id(user_id: str):
+        socket_id = await broker.get_user_socket(user_id)
         if socket_id:
-            return ({"socket_id": socket_id}, 200)
-        return ({"error": "Пользователь не найден или не в сети"}, 404)
+            return {"socket_id": socket_id}
+        raise HTTPException(status_code=404, detail="Пользователь не найден или не в сети")
 
-    @app.route("/set_socket_id", methods=["POST"])
-    def set_socket_id():
-        """Устарело: наличие в сети и socket_id задаёт только живой Socket.IO.
-        Произвольный UUID от клиента ломал logout (release_socket по реальному sid)."""
-        data = request.get_json()
-        if not data:
-            return (jsonify({"error": "Данные не предоставлены"}), 400)
-
+    @app.post("/set_socket_id")
+    async def set_socket_id(data: dict[str, Any]):
         user_id = data.get("user_id")
         socket_id = data.get("socket_id")
-
         if not user_id or not socket_id:
-            return (
-                jsonify({"error": "Отсутствует user_id или socket_id"}), 400)
+            raise HTTPException(status_code=400, detail="Отсутствует user_id или socket_id")
 
-        updated_user = user_repo.update_socket_id_for_user(user_id, socket_id)
-
+        updated_user = await user_repo.update_socket_id_for_user(user_id, socket_id)
         if updated_user:
-            return (
-                jsonify(
-                    {
-                        "message": "Сокет пользователя успешно обновлён",
-                        "user": updated_user,
-                    }
-                ),
-                200,
-            )
-        return (
-            jsonify({"error": "Пользователь не найден или ошибка базы данных"}), 404)
+            return {"message": "Сокет пользователя успешно обновлён", "user": updated_user}
+        raise HTTPException(status_code=404, detail="Пользователь не найден или ошибка базы данных")
 
-    @app.route("/messages/history", methods=["POST"])
-    def get_messages_history():
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "Данные не предоставлены"}), 400
-
+    @app.post("/messages/history")
+    async def get_messages_history(data: dict[str, Any]):
         token = data.get("token")
         target_id = data.get("target_id")
         limit = data.get("limit", 50)
         offset = data.get("offset", 0)
 
         if not token:
-            return jsonify({"error": "Требуется токен"}), 401
+            raise HTTPException(status_code=401, detail="Требуется токен")
 
-        user = user_repo.fetch_user_by_token(token)
+        user = await user_repo.fetch_user_by_token(token)
         if not user:
-            return jsonify({"error": "Неверный токен"}), 401
+            raise HTTPException(status_code=401, detail="Неверный токен")
 
-        messages = user_repo.get_messages_history(
-            user["id"], target_id, limit, offset)
-        return jsonify(messages), 200
+        messages = await user_repo.get_messages_history(user["id"], target_id, limit, offset)
+        return messages
 
-    @app.route("/messages/history", methods=["DELETE"])
-    def delete_messages_history():
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "Данные не предоставлены"}), 400
-
+    @app.delete("/messages/history")
+    async def delete_messages_history(data: dict[str, Any]):
         token = data.get("token")
         target_id = data.get("target_id")
 
         if not token:
-            return jsonify({"error": "Требуется токен"}), 401
-
+            raise HTTPException(status_code=401, detail="Требуется токен")
         if not target_id:
-            return jsonify({"error": "Требуется target_id"}), 400
+            raise HTTPException(status_code=400, detail="Требуется target_id")
 
-        user = user_repo.fetch_user_by_token(token)
+        user = await user_repo.fetch_user_by_token(token)
         if not user:
-            return jsonify({"error": "Неверный токен"}), 401
+            raise HTTPException(status_code=401, detail="Неверный токен")
 
         scope = data.get("scope", "for_all")
-        deleted = user_repo.delete_messages_history(
-            user["id"], target_id, scope=scope
-        )
-        return jsonify({"deleted": deleted}), 200
+        deleted = await user_repo.delete_messages_history(user["id"], target_id, scope=scope)
+        return {"deleted": deleted}
 
-    @app.route("/channels/history", methods=["POST"])
-    def get_channel_history():
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "Данные не предоставлены"}), 400
-
+    @app.post("/channels/history")
+    async def get_channel_history(data: dict[str, Any]):
         token = data.get("token")
         channel_id = data.get("channel_id")
         limit = data.get("limit", 50)
         offset = data.get("offset", 0)
 
         if not token:
-            return jsonify({"error": "Требуется токен"}), 401
-
+            raise HTTPException(status_code=401, detail="Требуется токен")
         if not channel_id:
-            return jsonify({"error": "Требуется channel_id"}), 400
+            raise HTTPException(status_code=400, detail="Требуется channel_id")
 
-        user = user_repo.fetch_user_by_token(token)
+        user = await user_repo.fetch_user_by_token(token)
         if not user:
-            return jsonify({"error": "Неверный токен"}), 401
+            raise HTTPException(status_code=401, detail="Неверный токен")
 
-        messages = user_repo.get_channel_history(channel_id, limit, offset)
-        return jsonify(messages), 200
+        messages = await user_repo.get_channel_history(channel_id, limit, offset)
+        return messages
 
-    @app.route("/channels/history", methods=["DELETE"])
-    def delete_channel_history():
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "Данные не предоставлены"}), 400
-
+    @app.delete("/channels/history")
+    async def delete_channel_history(data: dict[str, Any]):
         token = data.get("token")
         channel_id = data.get("channel_id")
 
         if not token:
-            return jsonify({"error": "Требуется токен"}), 401
-
+            raise HTTPException(status_code=401, detail="Требуется токен")
         if not channel_id:
-            return jsonify({"error": "Требуется channel_id"}), 400
+            raise HTTPException(status_code=400, detail="Требуется channel_id")
 
-        user = user_repo.fetch_user_by_token(token)
+        user = await user_repo.fetch_user_by_token(token)
         if not user:
-            return jsonify({"error": "Неверный токен"}), 401
+            raise HTTPException(status_code=401, detail="Неверный токен")
 
-        owner_id = user_repo.get_channel_owner(channel_id)
+        owner_id = await user_repo.get_channel_owner(channel_id)
         if owner_id and str(owner_id) != str(user["id"]):
-            return jsonify({"error": "Запрещено"}), 403
+            raise HTTPException(status_code=403, detail="Запрещено")
 
-        participants = user_repo.get_channel_participants(channel_id)
-        if not participants or str(user["id"]) not in [
-                str(p) for p in participants]:
-            return jsonify({"error": "Доступ запрещён"}), 403
+        participants = await user_repo.get_channel_participants(channel_id)
+        if not participants or str(user["id"]) not in [str(p) for p in participants]:
+            raise HTTPException(status_code=403, detail="Доступ запрещён")
 
-        deleted = user_repo.delete_channel_history(channel_id)
-        return jsonify({"deleted": deleted}), 200
+        deleted = await user_repo.delete_channel_history(channel_id)
+        return {"deleted": deleted}
 
-    @app.route("/groups/history", methods=["DELETE"])
-    def delete_group_history():
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "Данные не предоставлены"}), 400
-
+    @app.delete("/groups/history")
+    async def delete_group_history(data: dict[str, Any]):
         token = data.get("token")
         group_id = data.get("group_id")
 
         if not token:
-            return jsonify({"error": "Требуется токен"}), 401
-
+            raise HTTPException(status_code=401, detail="Требуется токен")
         if not group_id:
-            return jsonify({"error": "Требуется group_id"}), 400
+            raise HTTPException(status_code=400, detail="Требуется group_id")
 
-        user = user_repo.fetch_user_by_token(token)
+        user = await user_repo.fetch_user_by_token(token)
         if not user:
-            return jsonify({"error": "Неверный токен"}), 401
+            raise HTTPException(status_code=401, detail="Неверный токен")
 
-        participants = user_repo.get_group_participants(group_id)
-        if not participants or str(user["id"]) not in [
-                str(p) for p in participants]:
-            return jsonify({"error": "Доступ запрещён"}), 403
+        participants = await user_repo.get_group_participants(group_id)
+        if not participants or str(user["id"]) not in [str(p) for p in participants]:
+            raise HTTPException(status_code=403, detail="Доступ запрещён")
 
-        owner_id = user_repo.get_group_owner(group_id)
+        owner_id = await user_repo.get_group_owner(group_id)
         if owner_id and str(owner_id) != str(user["id"]):
-            return jsonify({"error": "Запрещено"}), 403
+            raise HTTPException(status_code=403, detail="Запрещено")
 
-        deleted = user_repo.delete_group_history(group_id)
-        return jsonify({"deleted": deleted}), 200
+        deleted = await user_repo.delete_group_history(group_id)
+        return {"deleted": deleted}
 
-    @app.route("/chats/search", methods=["POST"])
-    def search_chats():
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "Нет данных"}), 400
-
+    @app.post("/chats/search")
+    async def search_chats(data: dict[str, Any]):
         token = data.get("token")
         query = data.get("query")
 
         if not token:
-            return jsonify({"error": "Требуется токен"}), 401
+            raise HTTPException(status_code=401, detail="Требуется токен")
 
-        user = user_repo.fetch_user_by_token(token)
+        user = await user_repo.fetch_user_by_token(token)
         if not user:
-            return jsonify({"error": "Неверный токен"}), 401
+            raise HTTPException(status_code=401, detail="Неверный токен")
 
         if not query:
-            return jsonify([]), 200
+            return []
 
-        results = user_repo.search_users(query)
-        return jsonify(results), 200
+        results = await user_repo.search_users(query)
+        return results
 
-    @app.route("/messages/search", methods=["POST"])
-    def search_messages():
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "Нет данных"}), 400
-
+    @app.post("/messages/search")
+    async def search_messages(data: dict[str, Any]):
         token = data.get("token")
         target_id = data.get("target_id")
         query = data.get("query")
 
         if not token:
-            return jsonify({"error": "Требуется токен"}), 401
+            raise HTTPException(status_code=401, detail="Требуется токен")
 
-        user = user_repo.fetch_user_by_token(token)
+        user = await user_repo.fetch_user_by_token(token)
         if not user:
-            return jsonify({"error": "Неверный токен"}), 401
+            raise HTTPException(status_code=401, detail="Неверный токен")
 
         if not target_id or not query:
-            return jsonify([]), 200
+            return []
 
-        results = user_repo.search_messages(user["id"], target_id, query)
-        return jsonify(results), 200
+        results = await user_repo.search_messages(user["id"], target_id, query)
+        return results
 
-    @app.route("/internal/broadcast_message", methods=["POST"])
-    def broadcast_message():
-        data = request.get_json()
-        if not data:
-            logger.error("broadcast_message: Данные не предоставлены")
-            return jsonify({"error": "Нет данных"}), 400
-
+    @app.post("/internal/broadcast_message")
+    async def broadcast_message(data: dict[str, Any]):
         group_id = data.get("group_id")
         channel_id = data.get("channel_id")
         target_id = data.get("target_id")
         payload = data.get("payload")
 
-        logger.info(
-            f"broadcast_message: target_id={target_id}, group_id={group_id}, "
-            f"channel_id={channel_id}, payload_keys={
-                list(payload.keys()) if payload else 'None'}")
-
         if not payload:
-            logger.error("broadcast_message: Отсутствует payload")
-            return jsonify({"error": "Отсутствует payload"}), 400
+            raise HTTPException(status_code=400, detail="Отсутствует payload")
 
         if group_id:
-            participants = user_repo.get_group_participants(group_id)
-            logger.info(
-                f"broadcast_message: Найдено {
-                    len(participants)} участников для группы {group_id}")
+            participants = await user_repo.get_group_participants(group_id)
             for pid in participants:
-                pid_socket = broker.get_user_socket(pid)
+                pid_socket = await broker.get_user_socket(pid)
                 if pid_socket:
-                    socketio.emit("receive_message", payload, room=pid_socket)
-                else:
-                    logger.warning(
-                        f"broadcast_message: Сокет не найден для участника {pid}")
+                    await sio.emit("receive_message", payload, room=pid_socket)
         elif channel_id:
-            participants = user_repo.get_channel_participants(channel_id)
+            participants = await user_repo.get_channel_participants(channel_id)
             if not participants:
-                owner_id = user_repo.get_channel_owner(channel_id)
+                owner_id = await user_repo.get_channel_owner(channel_id)
                 if owner_id:
                     participants = [owner_id]
             for pid in participants:
-                pid_socket = broker.get_user_socket(pid)
+                pid_socket = await broker.get_user_socket(pid)
                 if pid_socket:
-                    socketio.emit("receive_message", payload, room=pid_socket)
+                    await sio.emit("receive_message", payload, room=pid_socket)
         elif target_id:
-            target_socket = broker.get_user_socket(target_id)
+            target_socket = await broker.get_user_socket(target_id)
             if target_socket:
-                logger.info(
-                    f"broadcast_message: Отправка {target_id} на сокет {target_socket}")
-                socketio.emit("receive_message", payload, room=target_socket)
-            else:
-                logger.warning(
-                    f"broadcast_message: Сокет не найден для {target_id}")
+                await sio.emit("receive_message", payload, room=target_socket)
         else:
-            logger.error(
-                "broadcast_message: Отсутствует group_id, channel_id или target_id")
-            return jsonify(
-                {"error": "Отсутствует group_id, channel_id или target_id"}), 400
+            raise HTTPException(status_code=400, detail="Отсутствует group_id, channel_id или target_id")
 
-        return jsonify({"status": "success"}), 200
+        return {"status": "success"}
 
-    swagger_config = {
-        "headers": [],
-        "specs": [
-            {
-                "endpoint": "apispec",
-                "route": "/apispec.json",
-                "rule_filter": lambda rule: True,
-                "model_filter": lambda tag: True,
-            }
-        ],
-        "static_url_path": "/flasgger_static",
-        "swagger_ui": True,
-        "specs_route": "/docs/",
-    }
-    swagger_template = {
-        "swagger": "2.0",
-        "info": {
-            "title": "WebRTC Signaling Server API",
-            "description": "API документация для сервера сигнализации WebRTC",
-            "version": "1.0.0",
-        },
-        "paths": _build_swagger_paths(app),
-    }
-    Swagger(app, config=swagger_config, template=swagger_template)
+    combined_app = socketio.ASGIApp(sio, app)
+    return combined_app
 
-    @app.before_request
-    def before_request_metrics():
-        endpoint = request.endpoint or "unknown"
-        REQUEST_IN_PROGRESS.labels(
-            method=request.method,
-            endpoint=endpoint).inc()
-        request.start_time = time.time()
 
-    @app.after_request
-    def after_request_metrics(response):
-        endpoint = request.endpoint or "unknown"
-        status = response.status_code
-        REQUEST_COUNT.labels(
-            method=request.method,
-            endpoint=endpoint,
-            status=status).inc()
-        REQUEST_IN_PROGRESS.labels(
-            method=request.method,
-            endpoint=endpoint).dec()
-        if hasattr(request, 'start_time') and request.start_time:
-            latency = time.time() - request.start_time
-            REQUEST_LATENCY.labels(
-                method=request.method,
-                endpoint=endpoint).observe(latency)
-        return response
-
-    @app.route("/metrics")
-    def metrics():
-        return Response(
-            generate_latest(),
-            mimetype="text/plain; charset=utf-8")
-
-    @socketio.on("connect")
-    def on_connect():
-        WEBSOCKET_CONNECTIONS.inc()
-
-    return (app, socketio)
-
+asgi_app = create_app()
 
 if __name__ == "__main__":
-    app, socketio = create_app()
-    logger.info(f"Запуск сервера на {app.config['HOST']}:{app.config['PORT']}")
-
-    socketio.run(
-        app,
-        host=app.config["HOST"],
-        port=app.config["PORT"],
-        debug=app.config["DEBUG"],
-        allow_unsafe_werkzeug=True,
-        use_reloader=False
-    )
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", 5000))
+    logger.info(f"Запуск асинхронного WebRTC сервера на {host}:{port}")
+    uvicorn.run("webrtc.main:asgi_app", host=host, port=port, reload=False)
