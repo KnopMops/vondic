@@ -44,7 +44,7 @@ def _build_allowed_origins() -> list[str]:
         "http://localhost:5000",
         "http://localhost:1420",
         "http://127.0.0.1:1420",
-        "http://192.168.140.10",
+        "http://192.168.140.11",
         "tauri://localhost",
     ]
     raw = os.getenv("CORS_ALLOWED_ORIGINS", "")

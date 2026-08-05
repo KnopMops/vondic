@@ -31,7 +31,7 @@ class AppConfig {
 
   static const String internalTurnHost = String.fromEnvironment(
     'INTERNAL_TURN_HOST',
-    defaultValue: '192.168.140.10',
+    defaultValue: '192.168.140.11',
   );
 
   static const String turnUrl = String.fromEnvironment(
