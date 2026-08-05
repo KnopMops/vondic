@@ -182,14 +182,25 @@ class PendingCall(Base):
     answered: Mapped[bool] = mapped_column(nullable=False, default=False)
 
 
+import urllib.parse
+
 def _get_async_db_url(raw_url: str) -> str:
-    if raw_url.startswith("postgresql://"):
-        return raw_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    if raw_url.startswith("postgres://"):
-        return raw_url.replace("postgres://", "postgresql+asyncpg://", 1)
-    if raw_url.startswith("sqlite://"):
-        return raw_url.replace("sqlite://", "sqlite+aiosqlite://", 1)
-    return raw_url
+    url = raw_url
+    if url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    elif url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+    elif url.startswith("sqlite://"):
+        url = url.replace("sqlite://", "sqlite+aiosqlite://", 1)
+
+    if "sslmode=" in url:
+        parsed = urllib.parse.urlparse(url)
+        query_params = urllib.parse.parse_qs(parsed.query)
+        query_params.pop("sslmode", None)
+        new_query = urllib.parse.urlencode(query_params, doseq=True)
+        url = urllib.parse.urlunparse(parsed._replace(query=new_query))
+
+    return url
 
 
 class UserRepository:
