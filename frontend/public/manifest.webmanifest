@@ -1,7 +1,7 @@
 {
   "name": "Вондик — Коммуникационный хаб",
   "short_name": "Вондик",
-  "description": "Мессенджер Вондик: чаты, голосые и видеозвонки WebRTC, сообщества",
+  "description": "Мессенджер Вондик: чаты, голосовые и видеозвонки WebRTC, сообщества",
   "start_url": "/feed",
   "scope": "/",
   "display": "standalone",
@@ -21,11 +21,6 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
-    },
-    {
-      "src": "/favicon.ico",
-      "sizes": "any",
-      "type": "image/x-icon"
     }
   ]
 }

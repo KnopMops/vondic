@@ -67,6 +67,7 @@ def create_app():
     sio = socketio.AsyncServer(
         async_mode="asgi",
         cors_allowed_origins="*",
+        transports=["websocket", "polling"],
         logger=True,
         engineio_logger=True,
     )
