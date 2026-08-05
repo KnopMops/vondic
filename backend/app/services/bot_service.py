@@ -121,7 +121,19 @@ class BotService:
     def verify_bot_token(bot_id, token):
         if not bot_id or not token:
             return False
-        bot = Bot.query.get(bot_id)
-        if not bot or not bot.bot_token_hash:
-            return False
-        return check_password_hash(bot.bot_token_hash, token)
+        try:
+            bot = Bot.query.get(bot_id)
+            if not bot or not bot.bot_token_hash:
+                return False
+            return check_password_hash(bot.bot_token_hash, token)
+        except Exception:
+            try:
+                db.session.rollback()
+                db.session.remove()
+                bot = Bot.query.get(bot_id)
+                if not bot or not bot.bot_token_hash:
+                    return False
+                return check_password_hash(bot.bot_token_hash, token)
+            except Exception:
+                db.session.rollback()
+                return False
