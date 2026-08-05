@@ -2,7 +2,7 @@ import { Socket } from 'socket.io-client'
 import { getDiscordLikeAudioConstraints } from './AudioProcessor'
 
 /** Внутренний coturn (LAN). Переопределение: NEXT_PUBLIC_INTERNAL_TURN_HOST */
-const DEFAULT_INTERNAL_TURN_HOST = '192.168.120.248'
+const DEFAULT_INTERNAL_TURN_HOST = '192.168.140.10'
 
 export interface WebRTCConfig {
 	iceServers: RTCIceServer[]
@@ -62,7 +62,7 @@ export class WebRTCService {
 		this.configuration = {
 			iceServers: [
 				{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
-				{ urls: 'stun:192.168.120.248:3478' },
+				{ urls: 'stun:192.168.140.10:3478' },
 			],
 		}
 		try {
