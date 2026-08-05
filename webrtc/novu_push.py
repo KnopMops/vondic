@@ -1,7 +1,6 @@
 import logging
 import os
-
-import requests as http_requests
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +17,7 @@ class NovuPushService:
         }
 
     @staticmethod
-    def _trigger_event(event_name: str, subscriber_id: str, payload: dict):
+    async def _trigger_event(event_name: str, subscriber_id: str, payload: dict):
         if not NOVU_API_URL or not NOVU_API_KEY:
             return
         url = f"{NOVU_API_URL}/v1/events/trigger"
@@ -28,15 +27,16 @@ class NovuPushService:
             "payload": payload,
         }
         try:
-            resp = http_requests.post(url, json=body, headers=NovuPushService._headers(), timeout=10)
-            if not resp.ok:
-                logger.error("Novu trigger failed: %s %s", resp.status_code, resp.text[:200])
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.post(url, json=body, headers=NovuPushService._headers())
+                if resp.status_code >= 400:
+                    logger.error("Novu trigger failed: %s %s", resp.status_code, resp.text[:200])
         except Exception as e:
             logger.error("Novu trigger error: %s", e)
 
     @staticmethod
-    def send_notification(user_id: str, title: str, body: str, data: dict | None = None):
-        NovuPushService._trigger_event("push-message", user_id, {
+    async def send_notification(user_id: str, title: str, body: str, data: dict | None = None):
+        await NovuPushService._trigger_event("push-message", user_id, {
             "title": title,
             "body": body,
             "sound": "message",
@@ -44,8 +44,8 @@ class NovuPushService:
         })
 
     @staticmethod
-    def send_call_wake(user_id: str, call_data: dict):
-        NovuPushService._trigger_event("push-call", user_id, {
+    async def send_call_wake(user_id: str, call_data: dict):
+        await NovuPushService._trigger_event("push-call", user_id, {
             "type": "incoming_call",
             **call_data,
         })

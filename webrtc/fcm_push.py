@@ -9,14 +9,14 @@ logger = logging.getLogger(__name__)
 _app = None
 
 
-def _remove_stale_token(device_token: str):
+async def _remove_stale_token(device_token: str):
     """Remove an invalid FCM token from the devices table."""
     try:
         from sqlalchemy import text
         from webrtc.database import UserRepository
         repo = UserRepository()
-        with repo._session() as session:
-            session.execute(
+        async with repo._session() as session:
+            await session.execute(
                 text("DELETE FROM devices WHERE token = :token"),
                 {"token": device_token},
             )
@@ -46,7 +46,7 @@ def _get_firebase_app():
         return None
 
 
-def send_push_notification(device_token: str, title: str, body: str, data: dict | None = None):
+async def send_push_notification(device_token: str, title: str, body: str, data: dict | None = None):
     app = _get_firebase_app()
     if not app:
         return
@@ -67,12 +67,12 @@ def send_push_notification(device_token: str, title: str, body: str, data: dict 
         response = messaging.send(message, app=app)
         logger.info("FCM sent to %s: %s", device_token[:20], response)
     except messaging.UnregisteredError:
-        _remove_stale_token(device_token)
+        await _remove_stale_token(device_token)
     except Exception as e:
         logger.error("FCM send error: %s", e)
 
 
-def send_call_wake(device_token: str, call_data: dict):
+async def send_call_wake(device_token: str, call_data: dict):
     app = _get_firebase_app()
     if not app:
         return
@@ -93,6 +93,6 @@ def send_call_wake(device_token: str, call_data: dict):
         response = messaging.send(message, app=app)
         logger.info("FCM call wake sent to %s: %s", device_token[:20], response)
     except messaging.UnregisteredError:
-        _remove_stale_token(device_token)
+        await _remove_stale_token(device_token)
     except Exception as e:
         logger.error("FCM call wake error: %s", e)
