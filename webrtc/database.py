@@ -557,19 +557,19 @@ class UserRepository:
                                 and sess.access_token_hash
                                 and check_password_hash(sess.access_token_hash, token)
                             ):
-                                now = datetime.now(timezone.utc)
+                                now = datetime.utcnow()
                                 sess_exp = sess.expires_at
                                 is_expired = False
                                 if sess_exp:
-                                    if sess_exp.tzinfo is None:
-                                        sess_exp = sess_exp.replace(tzinfo=timezone.utc)
+                                    if sess_exp.tzinfo is not None:
+                                        sess_exp = sess_exp.astimezone(timezone.utc).replace(tzinfo=None)
                                     if sess_exp < now:
                                         is_expired = True
 
                                 if is_expired:
                                     await session.delete(sess)
                                 else:
-                                    sess.last_active = datetime.now(timezone.utc)
+                                    sess.last_active = datetime.utcnow()
                                     res_user = await session.execute(
                                         select(User).where(User.id == sess.user_id)
                                     )
