@@ -4,14 +4,14 @@ import json
 import logging
 import os
 import uuid
-from contextlib import contextmanager
-from datetime import datetime, timezone
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone, timedelta
 
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from sqlalchemy import Integer, String, Text, create_engine, func, or_
-from sqlalchemy import text
-from sqlalchemy.orm import Mapped, Session, declarative_base, mapped_column, sessionmaker
+from sqlalchemy import Integer, String, Text, func, or_, select, delete, update, text
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import Mapped, declarative_base, mapped_column
 from werkzeug.security import check_password_hash
 
 from webrtc.config import Config
@@ -27,8 +27,7 @@ class User(Base):
     username: Mapped[str | None] = mapped_column(String, nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     access_token: Mapped[str | None] = mapped_column(Text, nullable=True)
-    access_token_lookup: Mapped[str | None] = mapped_column(
-        String, nullable=True)
+    access_token_lookup: Mapped[str | None] = mapped_column(String, nullable=True)
     socket_id: Mapped[str | None] = mapped_column(String, nullable=True)
     status: Mapped[str | None] = mapped_column(String, nullable=True)
     last_seen: Mapped[datetime | None] = mapped_column(nullable=True)
@@ -124,8 +123,7 @@ class Video(Base):
 class Friendship(Base):
     __tablename__ = "friendships"
 
-    id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     requester_id: Mapped[str] = mapped_column(String, nullable=False)
     addressee_id: Mapped[str] = mapped_column(String, nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False)
@@ -148,8 +146,7 @@ class Group(Base):
 class ChannelParticipant(Base):
     __tablename__ = "channel_participants"
 
-    id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     channel_id: Mapped[str] = mapped_column(String, nullable=False)
     user_id: Mapped[str] = mapped_column(String, nullable=False)
 
@@ -157,15 +154,12 @@ class ChannelParticipant(Base):
 class GroupParticipant(Base):
     __tablename__ = "group_participants"
 
-    id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     group_id: Mapped[str] = mapped_column(String, nullable=False)
     user_id: Mapped[str] = mapped_column(String, nullable=False)
 
 
 class ChatClear(Base):
-    """Per-user chat history clear (messages stay for others)."""
-
     __tablename__ = "chat_clears"
 
     user_id: Mapped[str] = mapped_column(String, primary_key=True)
@@ -175,8 +169,6 @@ class ChatClear(Base):
 
 
 class PendingCall(Base):
-    """Stores SDP offer for offline users so call survives reconnect."""
-
     __tablename__ = "pending_calls"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -190,6 +182,16 @@ class PendingCall(Base):
     answered: Mapped[bool] = mapped_column(nullable=False, default=False)
 
 
+def _get_async_db_url(raw_url: str) -> str:
+    if raw_url.startswith("postgresql://"):
+        return raw_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    if raw_url.startswith("postgres://"):
+        return raw_url.replace("postgres://", "postgresql+asyncpg://", 1)
+    if raw_url.startswith("sqlite://"):
+        return raw_url.replace("sqlite://", "sqlite+aiosqlite://", 1)
+    return raw_url
+
+
 class UserRepository:
     def __init__(self):
         try:
@@ -199,40 +201,45 @@ class UserRepository:
             self.mt_key, self.mt_iv = self._derive_mtproto_key_iv(
                 Config.MESSAGE_ENCRYPTION_KEY
             )
-            self.engine = create_engine(
-                Config.DATABASE_URL, pool_pre_ping=True)
-            self._ensure_schema()
-            self.session_factory = sessionmaker(
-                bind=self.engine, expire_on_commit=False)
+            async_url = _get_async_db_url(Config.DATABASE_URL)
+            self.engine = create_async_engine(async_url, pool_pre_ping=True)
+            self.session_factory = async_sessionmaker(
+                bind=self.engine, class_=AsyncSession, expire_on_commit=False
+            )
         except Exception as e:
             logger.error(f"Ошибка инициализации репозитория: {e}")
             raise
 
-    def _ensure_schema(self):
-        """
-        Lightweight runtime migration for environments without Alembic.
-        Keeps DB schema compatible with current message payload fields.
-        """
-        try:
-            with self.engine.begin() as conn:
-                conn.execute(
-                    text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to_id TEXT"))
-                conn.execute(
-                    text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS forwarded_from_id TEXT"))
-                conn.execute(
-                    text("ALTER TABLE users ADD COLUMN IF NOT EXISTS access_token_lookup TEXT"))
+    @asynccontextmanager
+    async def _session(self):
+        async with self.session_factory() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
 
-                conn.execute(
+    async def _ensure_schema(self):
+        try:
+            async with self.engine.begin() as conn:
+                await conn.execute(
+                    text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to_id TEXT"))
+                await conn.execute(
+                    text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS forwarded_from_id TEXT"))
+                await conn.execute(
+                    text("ALTER TABLE users ADD COLUMN IF NOT EXISTS access_token_lookup TEXT"))
+                await conn.execute(
                     text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_read INTEGER"))
-                conn.execute(
+                await conn.execute(
                     text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_deleted INTEGER"))
-                conn.execute(
+                await conn.execute(
                     text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS pinned_by TEXT"))
-                conn.execute(
+                await conn.execute(
                     text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS reactions TEXT"))
-                conn.execute(
+                await conn.execute(
                     text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_edited INTEGER"))
-                conn.execute(
+                await conn.execute(
                     text(
                         """
                         CREATE TABLE IF NOT EXISTS chat_clears (
@@ -245,7 +252,7 @@ class UserRepository:
                         """
                     )
                 )
-                conn.execute(
+                await conn.execute(
                     text(
                         """
                         CREATE TABLE IF NOT EXISTS user_conversations (
@@ -260,11 +267,11 @@ class UserRepository:
                         """
                     )
                 )
-                conn.execute(
+                await conn.execute(
                     text(
                         "ALTER TABLE user_conversations "
                         "ADD COLUMN IF NOT EXISTS is_secret BOOLEAN NOT NULL DEFAULT 0"))
-                conn.execute(
+                await conn.execute(
                     text(
                         """
                         CREATE TABLE IF NOT EXISTS devices (
@@ -280,21 +287,19 @@ class UserRepository:
                     )
                 )
         except Exception as e:
-
             logger.warning(f"Schema ensure skipped/failed: {e}")
 
-    def _set_chat_cleared(self, user_id, peer_id, chat_type):
+    async def _set_chat_cleared(self, user_id, peer_id, chat_type):
         now = datetime.utcnow()
-        with self._session() as session:
-            row = (
-                session.query(ChatClear)
-                .filter(
+        async with self._session() as session:
+            result = await session.execute(
+                select(ChatClear).where(
                     ChatClear.user_id == str(user_id),
                     ChatClear.peer_id == str(peer_id),
                     ChatClear.chat_type == str(chat_type),
                 )
-                .first()
             )
+            row = result.scalars().first()
             if row:
                 row.cleared_at = now
             else:
@@ -307,42 +312,44 @@ class UserRepository:
                     )
                 )
 
-    def _get_chat_cleared_at(self, user_id, peer_id, chat_type):
+    async def _get_chat_cleared_at(self, user_id, peer_id, chat_type):
         try:
-            with self._session() as session:
-                row = (
-                    session.query(ChatClear)
-                    .filter(
+            async with self._session() as session:
+                result = await session.execute(
+                    select(ChatClear).where(
                         ChatClear.user_id == str(user_id),
                         ChatClear.peer_id == str(peer_id),
                         ChatClear.chat_type == str(chat_type),
                     )
-                    .first()
                 )
+                row = result.scalars().first()
                 return row.cleared_at if row else None
         except Exception as err:
             logger.error(f"Ошибка БД (chat clear): {err}")
             return None
 
-    def _clear_chat_clear_records(self, peer_id, chat_type):
-        with self._session() as session:
-            session.query(ChatClear).filter(
-                ChatClear.peer_id == str(peer_id),
-                ChatClear.chat_type == str(chat_type),
-            ).delete(synchronize_session=False)
+    async def _clear_chat_clear_records(self, peer_id, chat_type):
+        async with self._session() as session:
+            await session.execute(
+                delete(ChatClear).where(
+                    ChatClear.peer_id == str(peer_id),
+                    ChatClear.chat_type == str(chat_type),
+                )
+            )
 
-    def save_pending_call(self, caller_id, target_id, caller_username, caller_avatar_url, offer_sdp, offer_type="offer"):
-        with self._session() as session:
-            # Clean expired calls (>5 min old)
-            from datetime import timedelta
-            session.query(PendingCall).filter(
-                PendingCall.created_at < datetime.utcnow() - timedelta(minutes=5)
-            ).delete(synchronize_session=False)
-            # Clean old pending call from same caller to same target
-            session.query(PendingCall).filter(
-                PendingCall.caller_id == str(caller_id),
-                PendingCall.target_id == str(target_id),
-            ).delete(synchronize_session=False)
+    async def save_pending_call(self, caller_id, target_id, caller_username, caller_avatar_url, offer_sdp, offer_type="offer"):
+        async with self._session() as session:
+            await session.execute(
+                delete(PendingCall).where(
+                    PendingCall.created_at < datetime.utcnow() - timedelta(minutes=5)
+                )
+            )
+            await session.execute(
+                delete(PendingCall).where(
+                    PendingCall.caller_id == str(caller_id),
+                    PendingCall.target_id == str(target_id),
+                )
+            )
             pc = PendingCall(
                 caller_id=str(caller_id),
                 target_id=str(target_id),
@@ -352,13 +359,18 @@ class UserRepository:
                 offer_type=offer_type,
             )
             session.add(pc)
+            await session.flush()
             return pc.id
 
-    def get_pending_calls(self, user_id):
-        with self._session() as session:
-            calls = session.query(PendingCall).filter_by(
-                target_id=str(user_id), answered=False
-            ).all()
+    async def get_pending_calls(self, user_id):
+        async with self._session() as session:
+            result = await session.execute(
+                select(PendingCall).where(
+                    PendingCall.target_id == str(user_id),
+                    PendingCall.answered == False
+                )
+            )
+            calls = result.scalars().all()
             return [
                 {
                     "id": c.id,
@@ -372,50 +384,38 @@ class UserRepository:
                 for c in calls
             ]
 
-    def mark_pending_call_answered(self, call_id):
-        with self._session() as session:
-            session.query(PendingCall).filter_by(id=str(call_id)).update({"answered": True})
+    async def mark_pending_call_answered(self, call_id):
+        async with self._session() as session:
+            await session.execute(
+                update(PendingCall).where(PendingCall.id == str(call_id)).values(answered=True)
+            )
 
-    def delete_pending_call(self, call_id):
-        with self._session() as session:
-            session.query(PendingCall).filter_by(id=str(call_id)).delete()
-
-    @contextmanager
-    def _session(self):
-        session: Session = self.session_factory()
-        try:
-            yield session
-            session.commit()
-        except Exception:
-            session.rollback()
-            raise
-        finally:
-            session.close()
+    async def delete_pending_call(self, call_id):
+        async with self._session() as session:
+            await session.execute(
+                delete(PendingCall).where(PendingCall.id == str(call_id))
+            )
 
     @staticmethod
     def _model_to_dict(model):
         return {column.name: getattr(model, column.name)
                 for column in model.__table__.columns}
 
-    def _resolve_forwarded_from(self, msg: dict) -> dict:
-        """Resolve forwarded_from_id (which stores sender_id) into full forwarded_from object."""
+    async def _resolve_forwarded_from(self, msg: dict) -> dict:
         fwd_id = msg.get("forwarded_from_id")
         if not fwd_id:
             return msg
-        logger.info(f"[RESOLVE_FWD] msg_id={msg.get('id')}, fwd_id={fwd_id}")
         try:
-            with self._session() as session:
-                sender = session.query(User).get(fwd_id)
+            async with self._session() as session:
+                result = await session.execute(select(User).where(User.id == str(fwd_id)))
+                sender = result.scalars().first()
                 msg["forwarded_from"] = {
                     "sender_id": fwd_id,
                     "sender_name": sender.username if sender else "Пользователь",
                     "sender_avatar": sender.avatar_url if sender else None,
                 }
-                logger.info(f"[RESOLVE_FWD] sender_name={sender.username if sender else None}, chat_name added")
         except Exception as e:
             logger.error(f"Error resolving forwarded_from: {e}")
-            import traceback
-            traceback.print_exc()
         return msg
 
     def _derive_mtproto_key_iv(self, key_value):
@@ -525,23 +525,22 @@ class UserRepository:
             return None
         return hashlib.sha256(str(token).encode("utf-8")).hexdigest()
 
-    def fetch_user_by_token(self, token):
-        """Check UserSession first (multi-device), then fall back to User model."""
+    async def fetch_user_by_token(self, token):
         try:
             token = (token or "").strip()
             if not token:
                 return None
             token_hash = self._hash_token(token)
-            with self._session() as session:
+            async with self._session() as session:
                 row = None
-                # 1. Try UserSession (multi-device support)
                 if "." in token:
                     lookup, _, sec = token.partition(".")
                     if lookup and sec and "." not in sec:
                         try:
-                            sess = session.query(UserSession).filter(
-                                UserSession.access_token_lookup == lookup
-                            ).first()
+                            res = await session.execute(
+                                select(UserSession).where(UserSession.access_token_lookup == lookup)
+                            )
+                            sess = res.scalars().first()
                             if (
                                 sess
                                 and sess.access_token_hash
@@ -549,28 +548,22 @@ class UserRepository:
                             ):
                                 now = datetime.now(timezone.utc)
                                 if sess.expires_at and sess.expires_at.replace(tzinfo=timezone.utc) < now:
-                                    session.delete(sess)
-                                    session.commit()
+                                    await session.delete(sess)
                                 else:
                                     sess.last_active = datetime.now(timezone.utc)
-                                    try:
-                                        session.commit()
-                                    except Exception:
-                                        session.rollback()
-                                    user = session.query(User).get(sess.user_id)
-                                    if user:
-                                        row = user
+                                    res_user = await session.execute(
+                                        select(User).where(User.id == sess.user_id)
+                                    )
+                                    row = res_user.scalars().first()
                         except Exception:
-                            session.rollback()
-                # 2. Fallback to User model (legacy)
+                            pass
                 if not row and "." in token:
                     lookup, _, sec = token.partition(".")
                     if lookup and sec and "." not in sec:
-                        cand = (
-                            session.query(User)
-                            .filter(User.access_token_lookup == lookup)
-                            .first()
+                        res = await session.execute(
+                            select(User).where(User.access_token_lookup == lookup)
                         )
+                        cand = res.scalars().first()
                         if (
                             cand
                             and cand.access_token
@@ -578,169 +571,153 @@ class UserRepository:
                         ):
                             row = cand
                 if not row and token_hash:
-                    row = session.query(User).filter(
-                        User.access_token == token_hash).first()
+                    res = await session.execute(
+                        select(User).where(User.access_token == token_hash)
+                    )
+                    row = res.scalars().first()
 
                 if not row and token:
-                    legacy = session.query(User).filter(
-                        User.access_token == str(token)).first()
+                    res = await session.execute(
+                        select(User).where(User.access_token == str(token))
+                    )
+                    legacy = res.scalars().first()
                     if legacy and token_hash:
-                        try:
-                            legacy.access_token = token_hash
-                        except Exception:
-                            pass
+                        legacy.access_token = token_hash
                         row = legacy
 
                 if not row and token:
-                    oauth_token = session.query(OAuthAccessToken).filter(
-                        OAuthAccessToken.token == str(token)).first()
+                    res_oauth = await session.execute(
+                        select(OAuthAccessToken).where(OAuthAccessToken.token == str(token))
+                    )
+                    oauth_token = res_oauth.scalars().first()
                     if oauth_token and not oauth_token.is_expired():
-                        row = session.query(User).filter(
-                            User.id == oauth_token.user_id).first()
+                        res_user = await session.execute(
+                            select(User).where(User.id == oauth_token.user_id)
+                        )
+                        row = res_user.scalars().first()
+
                 return self._model_to_dict(row) if row else None
         except Exception as e:
             logger.error(f"DB Error fetch_user_by_token: {e}")
             return None
 
-    def bind_socket(self, user_id, socket_id):
+    async def bind_socket(self, user_id, socket_id):
         try:
-            with self._session() as session:
-                user = session.query(User).filter(
-                    User.id == str(user_id)).first()
+            async with self._session() as session:
+                res = await session.execute(select(User).where(User.id == str(user_id)))
+                user = res.scalars().first()
                 if user:
                     user.socket_id = socket_id
                     user.status = "online"
                     user.last_seen = datetime.utcnow()
-                    session.commit()
         except Exception as e:
             logger.error(f"DB Error bind_socket: {e}")
 
-    def release_socket(self, socket_id):
+    async def release_socket(self, socket_id):
         try:
-            with self._session() as session:
-                user = session.query(User).filter(
-                    User.socket_id == socket_id).first()
+            async with self._session() as session:
+                res = await session.execute(select(User).where(User.socket_id == socket_id))
+                user = res.scalars().first()
                 if not user:
                     return None
                 user.socket_id = None
                 user.status = "offline"
                 user.last_seen = datetime.utcnow()
-                session.commit()
                 return user.id
         except Exception as e:
             logger.error(f"DB Error release_socket: {e}")
             return None
 
-    def force_user_offline(self, user_id):
-        """Сброс сокета по user id (БД содержала несовпадающий socket_id — например случайный UUID с фронта)."""
+    async def force_user_offline(self, user_id):
         try:
-            with self._session() as session:
-                user = session.query(User).filter(
-                    User.id == str(user_id)).first()
+            async with self._session() as session:
+                res = await session.execute(select(User).where(User.id == str(user_id)))
+                user = res.scalars().first()
                 if not user:
                     return False
                 user.socket_id = None
                 user.status = "offline"
                 user.last_seen = datetime.utcnow()
-                session.commit()
                 return True
         except Exception as e:
             logger.error(f"DB Error force_user_offline: {e}")
             return False
 
-    def get_user_friends_sockets(self, user_id):
+    async def get_user_friends_sockets(self, user_id):
         try:
-            with self._session() as session:
-                requester_rows = (
-                    session.query(Friendship.requester_id)
-                    .filter(
+            async with self._session() as session:
+                res_req = await session.execute(
+                    select(Friendship.requester_id).where(
                         Friendship.addressee_id == str(user_id),
                         Friendship.status == "accepted",
                     )
-                    .all()
                 )
-                addressee_rows = (
-                    session.query(Friendship.addressee_id)
-                    .filter(
+                res_addr = await session.execute(
+                    select(Friendship.addressee_id).where(
                         Friendship.requester_id == str(user_id),
                         Friendship.status == "accepted",
                     )
-                    .all()
                 )
-                friend_ids = {
-                    row[0] for row in requester_rows} | {
-                    row[0] for row in addressee_rows}
+                friend_ids = {row[0] for row in res_req.all()} | {row[0] for row in res_addr.all()}
                 if not friend_ids:
                     return []
-                sockets = (
-                    session.query(
-                        User.socket_id) .filter(
+                res_sock = await session.execute(
+                    select(User.socket_id).where(
                         User.id.in_(friend_ids),
-                        User.socket_id.isnot(None)) .all())
-                return [row[0] for row in sockets if row[0]]
+                        User.socket_id.isnot(None),
+                    )
+                )
+                return [row[0] for row in res_sock.all() if row[0]]
         except Exception as e:
             logger.error(f"DB Error get_user_friends_sockets: {e}")
             return []
 
-    def get_recent_dm_partner_sockets(self, user_id, limit_messages=500):
-        """Сокеты пользователей из недавних ЛС (не обязательно в друзьях)."""
+    async def get_recent_dm_partner_sockets(self, user_id, limit_messages=500):
         uid = str(user_id)
         try:
-            with self._session() as session:
-                rows = (
-                    session.query(Message)
-                    .filter(
+            async with self._session() as session:
+                res = await session.execute(
+                    select(Message).where(
                         Message.channel_id.is_(None),
                         Message.group_id.is_(None),
                         Message.target_id.isnot(None),
-                        or_(
-                            Message.sender_id == uid,
-                            Message.target_id == uid,
-                        ),
-                    )
-                    .order_by(
-                        Message.created_at.desc(),
-                        Message.id.desc(),
-                    )
-                    .limit(limit_messages)
-                    .all()
+                        or_(Message.sender_id == uid, Message.target_id == uid),
+                    ).order_by(Message.created_at.desc(), Message.id.desc()).limit(limit_messages)
                 )
                 partner_ids: set[str] = set()
-                for m in rows:
+                for m in res.scalars().all():
                     if str(m.sender_id) == uid and m.target_id:
                         partner_ids.add(str(m.target_id))
                     elif m.target_id and str(m.target_id) == uid:
                         partner_ids.add(str(m.sender_id))
                 if not partner_ids:
                     return []
-                sock_rows = (
-                    session.query(User.socket_id)
-                    .filter(
+                res_sock = await session.execute(
+                    select(User.socket_id).where(
                         User.id.in_(partner_ids),
                         User.socket_id.isnot(None),
                     )
-                    .all()
                 )
-                return [r[0] for r in sock_rows if r[0]]
+                return [r[0] for r in res_sock.all() if r[0]]
         except Exception as e:
             logger.error(f"DB Error get_recent_dm_partner_sockets: {e}")
             return []
 
-    def find_user_by_socket(self, socket_id):
+    async def find_user_by_socket(self, socket_id):
         try:
-            with self._session() as session:
-                row = session.query(User).filter(
-                    User.socket_id == socket_id).first()
+            async with self._session() as session:
+                res = await session.execute(select(User).where(User.socket_id == socket_id))
+                row = res.scalars().first()
                 return self._model_to_dict(row) if row else None
         except Exception as e:
             logger.error(f"DB Error find_user_by_socket: {e}")
             return None
 
-    def get_socket_by_user_id(self, user_id):
+    async def get_socket_by_user_id(self, user_id):
         try:
-            with self._session() as session:
-                row = session.query(User).filter(
-                    User.id == str(user_id)).first()
+            async with self._session() as session:
+                res = await session.execute(select(User).where(User.id == str(user_id)))
+                row = res.scalars().first()
                 if row and row.socket_id:
                     return row.socket_id
             return None
@@ -748,27 +725,20 @@ class UserRepository:
             logger.error(f"DB Error get_socket_by_user_id: {e}")
             return None
 
-    def save_message(self, msg_data):
+    async def save_message(self, msg_data):
         try:
             encrypted_content = self._encrypt_payload(msg_data["content"])
             encrypted_attachments = None
             if msg_data.get("attachments") is not None:
-                if isinstance(msg_data["attachments"], str) and msg_data[
-                    "attachments"
-                ].startswith("e2e:"):
-
+                if isinstance(msg_data["attachments"], str) and msg_data["attachments"].startswith("e2e:"):
                     encrypted_attachments = json.dumps(msg_data["attachments"])
                 else:
-                    attachments_json = json.dumps(
-                        msg_data["attachments"], ensure_ascii=False
-                    )
-
+                    attachments_json = json.dumps(msg_data["attachments"], ensure_ascii=False)
                     encrypted_payload = self._encrypt_payload(attachments_json)
                     encrypted_attachments = json.dumps(encrypted_payload)
 
             channel_id = msg_data.get("channel_id")
             group_id = msg_data.get("group_id")
-
             reply_to = msg_data.get("reply_to") or msg_data.get("reply_to_id")
             msg_type = msg_data.get("type", "text")
 
@@ -781,13 +751,11 @@ class UserRepository:
             elif not isinstance(ts, datetime):
                 ts = datetime.now()
 
-            with self._session() as session:
+            async with self._session() as session:
                 message = Message(
                     id=msg_data["id"],
-                    sender_id=str(
-                        msg_data["sender_id"]),
-                    target_id=str(
-                        msg_data.get("target_id")) if msg_data.get("target_id") else None,
+                    sender_id=str(msg_data["sender_id"]),
+                    target_id=str(msg_data.get("target_id")) if msg_data.get("target_id") else None,
                     channel_id=str(channel_id) if channel_id else None,
                     group_id=str(group_id) if group_id else None,
                     reply_to_id=str(reply_to) if reply_to else None,
@@ -802,13 +770,13 @@ class UserRepository:
                 session.add(message)
             target_id = msg_data.get("target_id")
             if target_id and not channel_id and not group_id:
-                self._ensure_dm_conversation(msg_data["sender_id"], target_id)
+                await self._ensure_dm_conversation(msg_data["sender_id"], target_id)
             return True, None
         except Exception as e:
             logger.error(f"DB Error save_message: {e}")
             return False, str(e)
 
-    def save_video(self, video_data):
+    async def save_video(self, video_data):
         try:
             created_at = video_data.get("created_at")
             if isinstance(created_at, str):
@@ -831,7 +799,7 @@ class UserRepository:
             tags_json = None
             if video_data.get("tags") is not None:
                 tags_json = json.dumps(video_data["tags"], ensure_ascii=False)
-            with self._session() as session:
+            async with self._session() as session:
                 video = Video(
                     id=video_data["id"],
                     author_id=str(video_data["author_id"]),
@@ -853,19 +821,18 @@ class UserRepository:
             logger.error(f"DB Error save_video: {e}")
             return False
 
-    def update_video(self, video_id, updates):
+    async def update_video(self, video_id, updates):
         try:
-            with self._session() as session:
-                video = session.query(Video).filter(
-                    Video.id == str(video_id)).first()
+            async with self._session() as session:
+                res = await session.execute(select(Video).where(Video.id == str(video_id)))
+                video = res.scalars().first()
                 if not video:
                     return False
                 for key, value in updates.items():
                     if not hasattr(video, key):
                         continue
                     if key == "tags":
-                        value = json.dumps(
-                            value, ensure_ascii=False) if value is not None else None
+                        value = json.dumps(value, ensure_ascii=False) if value is not None else None
                     setattr(video, key, value)
                 video.updated_at = datetime.now()
                 return True
@@ -873,11 +840,11 @@ class UserRepository:
             logger.error(f"DB Error update_video: {e}")
             return False
 
-    def delete_video(self, video_id):
+    async def delete_video(self, video_id):
         try:
-            with self._session() as session:
-                video = session.query(Video).filter(
-                    Video.id == str(video_id)).first()
+            async with self._session() as session:
+                res = await session.execute(select(Video).where(Video.id == str(video_id)))
+                video = res.scalars().first()
                 if not video:
                     return False
                 video.is_deleted = 1
@@ -887,11 +854,11 @@ class UserRepository:
             logger.error(f"DB Error delete_video: {e}")
             return False
 
-    def get_video_by_id(self, video_id):
+    async def get_video_by_id(self, video_id):
         try:
-            with self._session() as session:
-                row = session.query(Video).filter(
-                    Video.id == str(video_id)).first()
+            async with self._session() as session:
+                res = await session.execute(select(Video).where(Video.id == str(video_id)))
+                row = res.scalars().first()
             if not row:
                 return None
             data = self._model_to_dict(row)
@@ -905,19 +872,15 @@ class UserRepository:
             logger.error(f"DB Error get_video_by_id: {e}")
             return None
 
-    def list_videos(self, limit=20, offset=0, author_id=None):
+    async def list_videos(self, limit=20, offset=0, author_id=None):
         try:
-            with self._session() as session:
-                query = session.query(Video).filter(
-                    or_(Video.is_deleted == 0, Video.is_deleted.is_(None)))
+            async with self._session() as session:
+                stmt = select(Video).where(or_(Video.is_deleted == 0, Video.is_deleted.is_(None)))
                 if author_id:
-                    query = query.filter(Video.author_id == str(author_id))
-                rows = (
-                    query.order_by(Video.created_at.desc())
-                    .limit(limit)
-                    .offset(offset)
-                    .all()
-                )
+                    stmt = stmt.where(Video.author_id == str(author_id))
+                stmt = stmt.order_by(Video.created_at.desc()).limit(limit).offset(offset)
+                res = await session.execute(stmt)
+                rows = res.scalars().all()
             out = []
             for row in rows:
                 item = self._model_to_dict(row)
@@ -932,23 +895,25 @@ class UserRepository:
             logger.error(f"DB Error list_videos: {e}")
             return []
 
-    def mark_messages_as_read(self, message_ids, reader_id):
+    async def mark_messages_as_read(self, message_ids, reader_id):
         try:
             if not message_ids:
                 return
-            with self._session() as session:
-                session.query(Message).filter(
-                    Message.id.in_([str(mid) for mid in message_ids]),
-                    Message.target_id == str(reader_id),
-                ).update({"is_read": 1}, synchronize_session=False)
+            async with self._session() as session:
+                await session.execute(
+                    update(Message).where(
+                        Message.id.in_([str(mid) for mid in message_ids]),
+                        Message.target_id == str(reader_id),
+                    ).values(is_read=1)
+                )
         except Exception as e:
             logger.error(f"DB Error mark_messages_as_read: {e}")
 
-    def get_message_meta(self, message_id):
+    async def get_message_meta(self, message_id):
         try:
-            with self._session() as session:
-                row = session.query(Message).filter(
-                    Message.id == str(message_id)).first()
+            async with self._session() as session:
+                res = await session.execute(select(Message).where(Message.id == str(message_id)))
+                row = res.scalars().first()
                 if not row:
                     return None
                 return {
@@ -965,30 +930,26 @@ class UserRepository:
             logger.error(f"DB Error get_message_meta: {e}")
             return None
 
-    def mark_message_deleted(self, message_id, sender_id):
+    async def mark_message_deleted(self, message_id, sender_id):
         try:
-            with self._session() as session:
-                row = session.query(Message).filter(
-                    Message.id == str(message_id)).first()
-            if not row:
-                return False, "not_found"
-            if str(row.sender_id) != str(sender_id):
-                return False, "forbidden"
-            with self._session() as session:
-                row = session.query(Message).filter(
-                    Message.id == str(message_id)).first()
-                if row:
-                    session.delete(row)
+            async with self._session() as session:
+                res = await session.execute(select(Message).where(Message.id == str(message_id)))
+                row = res.scalars().first()
+                if not row:
+                    return False, "not_found"
+                if str(row.sender_id) != str(sender_id):
+                    return False, "forbidden"
+                await session.delete(row)
             return True, "ok"
         except Exception as e:
             logger.error(f"DB Error mark_message_deleted: {e}")
             return False, "db_error"
 
-    def get_channel_owner(self, channel_id):
+    async def get_channel_owner(self, channel_id):
         try:
-            with self._session() as session:
-                row = session.query(Channel).filter(
-                    Channel.id == str(channel_id)).first()
+            async with self._session() as session:
+                res = await session.execute(select(Channel).where(Channel.id == str(channel_id)))
+                row = res.scalars().first()
                 if row:
                     return row.owner_id
             return None
@@ -996,33 +957,33 @@ class UserRepository:
             logger.error(f"DB Error get_channel_owner: {e}")
             return None
 
-    def get_channel_participants(self, channel_id):
+    async def get_channel_participants(self, channel_id):
         try:
-            with self._session() as session:
-                rows = session.query(ChannelParticipant.user_id).filter(
-                    ChannelParticipant.channel_id == str(channel_id)
-                ).all()
-                return [row[0] for row in rows]
+            async with self._session() as session:
+                res = await session.execute(
+                    select(ChannelParticipant.user_id).where(ChannelParticipant.channel_id == str(channel_id))
+                )
+                return [row[0] for row in res.all()]
         except Exception as e:
             logger.error(f"DB Error get_channel_participants: {e}")
             return []
 
-    def get_group_participants(self, group_id):
+    async def get_group_participants(self, group_id):
         try:
-            with self._session() as session:
-                rows = session.query(GroupParticipant.user_id).filter(
-                    GroupParticipant.group_id == str(group_id)
-                ).all()
-                return [row[0] for row in rows]
+            async with self._session() as session:
+                res = await session.execute(
+                    select(GroupParticipant.user_id).where(GroupParticipant.group_id == str(group_id))
+                )
+                return [row[0] for row in res.all()]
         except Exception as e:
             logger.error(f"DB Error get_group_participants: {e}")
             return []
 
-    def get_group_owner(self, group_id):
+    async def get_group_owner(self, group_id):
         try:
-            with self._session() as session:
-                row = session.query(Group).filter(
-                    Group.id == str(group_id)).first()
+            async with self._session() as session:
+                res = await session.execute(select(Group).where(Group.id == str(group_id)))
+                row = res.scalars().first()
                 if row:
                     return row.owner_id
             return None
@@ -1030,87 +991,63 @@ class UserRepository:
             logger.error(f"DB Error get_group_owner: {e}")
             return None
 
-    def get_channel_history(
-            self,
-            channel_id,
-            limit=50,
-            offset=0,
-            viewer_id=None):
+    async def get_channel_history(self, channel_id, limit=50, offset=0, viewer_id=None):
         try:
             cleared_at = None
             if viewer_id:
-                cleared_at = self._get_chat_cleared_at(
-                    viewer_id, channel_id, "channel"
-                )
-            with self._session() as session:
-                query = session.query(Message).filter(
-                    Message.channel_id == str(channel_id)
-                )
+                cleared_at = await self._get_chat_cleared_at(viewer_id, channel_id, "channel")
+            async with self._session() as session:
+                stmt = select(Message).where(Message.channel_id == str(channel_id))
                 if cleared_at is not None:
-                    query = query.filter(Message.created_at > cleared_at)
-                rows = (
-                    query.order_by(Message.created_at.desc())
-                    .limit(limit)
-                    .offset(offset)
-                    .all()
-                )
+                    stmt = stmt.where(Message.created_at > cleared_at)
+                stmt = stmt.order_by(Message.created_at.desc()).limit(limit).offset(offset)
+                res = await session.execute(stmt)
+                rows = res.scalars().all()
 
             messages = []
             for row in rows:
                 msg = self._model_to_dict(row)
                 if "created_at" in msg:
                     ca = msg.pop("created_at")
-                    if ca is not None:
-                        msg["timestamp"] = ca.isoformat() + "Z" if not ca.tzinfo else ca.isoformat()
-                    else:
-                        msg["timestamp"] = None
+                    msg["timestamp"] = ca.isoformat() + "Z" if ca and not ca.tzinfo else (ca.isoformat() if ca else None)
                 try:
                     msg["content"] = self._decrypt_payload(msg["content"])
                 except Exception as e:
                     content_value = msg.get("content")
-                    if (
-                        isinstance(content_value, str)
-                        and not content_value.startswith("mt:")
-                        and not content_value.startswith("gAAAA")
-                    ):
+                    if isinstance(content_value, str) and not content_value.startswith("mt:") and not content_value.startswith("gAAAA"):
                         msg["content"] = content_value
                     else:
                         msg["content"] = "[Не удалось расшифровать]"
-                        logger.error(
-                            f"Ошибка дешифровки сообщения {msg['id']}: {e}")
+                        logger.error(f"Ошибка дешифровки сообщения {msg['id']}: {e}")
 
                 if msg.get("attachments"):
                     try:
                         decrypted = self._decrypt_payload(msg["attachments"])
-                        if isinstance(
-                                decrypted, str) and decrypted.startswith("e2e:"):
+                        if isinstance(decrypted, str) and decrypted.startswith("e2e:"):
                             msg["attachments"] = decrypted
                         else:
                             msg["attachments"] = json.loads(decrypted)
                     except Exception:
                         if isinstance(msg["attachments"], str):
                             try:
-                                msg["attachments"] = json.loads(
-                                    msg["attachments"])
+                                msg["attachments"] = json.loads(msg["attachments"])
                             except Exception:
                                 pass
-                        pass
                 messages.append(msg)
             return messages
         except Exception as err:
             logger.error(f"Ошибка БД (история канала): {err}")
             return []
 
-    def _ensure_dm_conversation(self, user_id, partner_id):
-        """Keep chat in recent list after history is cleared."""
+    async def _ensure_dm_conversation(self, user_id, partner_id):
         uid = str(user_id)
         pid = str(partner_id)
         if not uid or not pid or uid == pid:
             return
         try:
-            with self.engine.begin() as conn:
+            async with self.engine.begin() as conn:
                 for a, b in ((uid, pid), (pid, uid)):
-                    conn.execute(
+                    await conn.execute(
                         text(
                             """
                             INSERT INTO user_conversations (id, user_id, partner_id)
@@ -1130,118 +1067,93 @@ class UserRepository:
         except Exception as err:
             logger.warning(f"ensure_dm_conversation skipped: {err}")
 
-    def delete_messages_history(self, user_id, target_id, scope="for_all"):
+    async def delete_messages_history(self, user_id, target_id, scope="for_all"):
         try:
             if scope == "for_me":
-                self._set_chat_cleared(user_id, target_id, "dm")
-                self._ensure_dm_conversation(user_id, target_id)
+                await self._set_chat_cleared(user_id, target_id, "dm")
+                await self._ensure_dm_conversation(user_id, target_id)
                 return 0
-            with self._session() as session:
-                deleted = (
-                    session.query(Message)
-                    .filter(
+            async with self._session() as session:
+                res = await session.execute(
+                    delete(Message).where(
                         or_(
-                            (Message.sender_id == str(user_id))
-                            & (Message.target_id == str(target_id)),
-                            (Message.sender_id == str(target_id))
-                            & (Message.target_id == str(user_id)),
+                            (Message.sender_id == str(user_id)) & (Message.target_id == str(target_id)),
+                            (Message.sender_id == str(target_id)) & (Message.target_id == str(user_id)),
                         )
                     )
-                    .delete(synchronize_session=False)
                 )
-            self._ensure_dm_conversation(user_id, target_id)
+                deleted = res.rowcount
+            await self._ensure_dm_conversation(user_id, target_id)
             return deleted or 0
         except Exception as err:
             logger.error(f"Ошибка БД (удаление истории): {err}")
             return 0
 
-    def delete_channel_history(
-            self,
-            channel_id,
-            user_id=None,
-            scope="for_all"):
+    async def delete_channel_history(self, channel_id, user_id=None, scope="for_all"):
         try:
             if scope == "for_me" and user_id:
-                self._set_chat_cleared(user_id, channel_id, "channel")
+                await self._set_chat_cleared(user_id, channel_id, "channel")
                 return 0
-            with self._session() as session:
-                deleted = (
-                    session.query(Message)
-                    .filter(Message.channel_id == str(channel_id))
-                    .delete(synchronize_session=False)
+            async with self._session() as session:
+                res = await session.execute(
+                    delete(Message).where(Message.channel_id == str(channel_id))
                 )
-            self._clear_chat_clear_records(channel_id, "channel")
+                deleted = res.rowcount
+            await self._clear_chat_clear_records(channel_id, "channel")
             return deleted or 0
         except Exception as err:
             logger.error(f"Ошибка БД (удаление истории канала): {err}")
             return 0
 
-    def delete_group_history(self, group_id, user_id=None, scope="for_all"):
+    async def delete_group_history(self, group_id, user_id=None, scope="for_all"):
         try:
             if scope == "for_me" and user_id:
-                self._set_chat_cleared(user_id, group_id, "group")
+                await self._set_chat_cleared(user_id, group_id, "group")
                 return 0
-            with self._session() as session:
-                deleted = (
-                    session.query(Message)
-                    .filter(Message.group_id == str(group_id))
-                    .delete(synchronize_session=False)
+            async with self._session() as session:
+                res = await session.execute(
+                    delete(Message).where(Message.group_id == str(group_id))
                 )
-            self._clear_chat_clear_records(group_id, "group")
+                deleted = res.rowcount
+            await self._clear_chat_clear_records(group_id, "group")
             return deleted or 0
         except Exception as err:
             logger.error(f"Ошибка БД (удаление истории группы): {err}")
             return 0
 
-    def get_group_history(self, group_id, limit=50, offset=0, viewer_id=None):
+    async def get_group_history(self, group_id, limit=50, offset=0, viewer_id=None):
         try:
             cleared_at = None
             if viewer_id:
-                cleared_at = self._get_chat_cleared_at(
-                    viewer_id, group_id, "group"
-                )
-            with self._session() as session:
-                query = session.query(Message).filter(
-                    Message.group_id == str(group_id)
-                )
+                cleared_at = await self._get_chat_cleared_at(viewer_id, group_id, "group")
+            async with self._session() as session:
+                stmt = select(Message).where(Message.group_id == str(group_id))
                 if cleared_at is not None:
-                    query = query.filter(Message.created_at > cleared_at)
-                rows = (
-                    query.order_by(Message.created_at.desc())
-                    .limit(limit)
-                    .offset(offset)
-                    .all()
-                )
+                    stmt = stmt.where(Message.created_at > cleared_at)
+                stmt = stmt.order_by(Message.created_at.desc()).limit(limit).offset(offset)
+                res = await session.execute(stmt)
+                rows = res.scalars().all()
 
             messages = []
             for row in rows:
                 msg = self._model_to_dict(row)
                 if "created_at" in msg:
                     ca = msg.pop("created_at")
-                    if ca is not None:
-                        msg["timestamp"] = ca.isoformat() + "Z" if not ca.tzinfo else ca.isoformat()
-                    else:
-                        msg["timestamp"] = None
+                    msg["timestamp"] = ca.isoformat() + "Z" if ca and not ca.tzinfo else (ca.isoformat() if ca else None)
                 try:
                     msg["content"] = self._decrypt_payload(msg["content"])
                 except Exception as e:
                     content_value = msg.get("content")
-                    if (
-                        isinstance(content_value, str)
-                        and not content_value.startswith("mt:")
-                        and not content_value.startswith("gAAAA")
-                    ):
+                    if isinstance(content_value, str) and not content_value.startswith("mt:") and not content_value.startswith("gAAAA"):
                         msg["content"] = content_value
                     else:
                         msg["content"] = "[Не удалось расшифровать]"
-                        logger.error(
-                            f"Ошибка дешифровки сообщения {msg['id']}: {e}")
+                        logger.error(f"Ошибка дешифровки сообщения {msg['id']}: {e}")
 
                 if msg.get("attachments"):
                     try:
                         decrypted = self._decrypt_payload(msg["attachments"])
-                        if isinstance(
-                                decrypted, str) and decrypted.startswith("e2e:"):
+                        if isinstance(decrypted, str) and decrypted.startswith("e2e:"):
                             msg["attachments"] = decrypted
                         else:
                             msg["attachments"] = json.loads(decrypted)
@@ -1249,53 +1161,46 @@ class UserRepository:
                         attachments_value = msg.get("attachments")
                         if isinstance(attachments_value, str):
                             try:
-                                msg["attachments"] = json.loads(
-                                    attachments_value)
+                                msg["attachments"] = json.loads(attachments_value)
                             except Exception:
                                 msg["attachments"] = None
                         else:
                             msg["attachments"] = None
-                        logger.error(
-                            f"Ошибка дешифровки вложений {msg['id']}: {e}")
-                msg = self._resolve_forwarded_from(msg)
+                        logger.error(f"Ошибка дешифровки вложений {msg['id']}: {e}")
+                msg = await self._resolve_forwarded_from(msg)
                 messages.append(msg)
             return messages
         except Exception as err:
             logger.error(f"Ошибка БД (история группы): {err}")
             return []
 
-    def get_online_users_count(self):
+    async def get_online_users_count(self):
         try:
-            with self._session() as session:
-                return session.query(func.count(User.id)).filter(
-                    func.lower(func.coalesce(User.status, "")) == "online"
-                ).scalar() or 0
+            async with self._session() as session:
+                res = await session.execute(
+                    select(func.count(User.id)).where(func.lower(func.coalesce(User.status, "")) == "online")
+                )
+                return res.scalar() or 0
         except Exception as e:
             logger.error(f"DB Error get_online_users_count: {e}")
             return 0
 
-    def get_online_user_ids(self):
-        """Users with active socket bindings (truthy socket_id)."""
+    async def get_online_user_ids(self):
         try:
-            with self._session() as session:
-                rows = (
-                    session.query(User.id)
-                    .filter(
-                        User.socket_id.isnot(None),
-                        User.socket_id != "",
-                    )
-                    .all()
+            async with self._session() as session:
+                res = await session.execute(
+                    select(User.id).where(User.socket_id.isnot(None), User.socket_id != "")
                 )
-                return [str(row[0]) for row in rows if row and row[0]]
+                return [str(row[0]) for row in res.all() if row and row[0]]
         except Exception as e:
             logger.error(f"DB Error get_online_user_ids: {e}")
             return []
 
-    def update_socket_id_for_user(self, user_id, socket_id):
+    async def update_socket_id_for_user(self, user_id, socket_id):
         try:
-            with self._session() as session:
-                row = session.query(User).filter(
-                    User.id == str(user_id)).first()
+            async with self._session() as session:
+                res = await session.execute(select(User).where(User.id == str(user_id)))
+                row = res.scalars().first()
                 if not row:
                     return None
                 row.socket_id = socket_id
@@ -1305,56 +1210,42 @@ class UserRepository:
             logger.error(f"DB Error update_socket_id_for_user: {e}")
             return None
 
-    def get_messages_history(self, user_id, target_id, limit=50, offset=0):
+    async def get_messages_history(self, user_id, target_id, limit=50, offset=0):
         try:
-            cleared_at = self._get_chat_cleared_at(user_id, target_id, "dm")
-            with self._session() as session:
-                query = session.query(Message).filter(
+            cleared_at = await self._get_chat_cleared_at(user_id, target_id, "dm")
+            async with self._session() as session:
+                stmt = select(Message).where(
                     or_(
-                        (Message.sender_id == str(user_id))
-                        & (Message.target_id == str(target_id)),
-                        (Message.sender_id == str(target_id))
-                        & (Message.target_id == str(user_id)),
+                        (Message.sender_id == str(user_id)) & (Message.target_id == str(target_id)),
+                        (Message.sender_id == str(target_id)) & (Message.target_id == str(user_id)),
                     )
                 )
                 if cleared_at is not None:
-                    query = query.filter(Message.created_at > cleared_at)
-                rows = (
-                    query.order_by(Message.created_at.desc())
-                    .limit(limit)
-                    .offset(offset)
-                    .all()
-                )
+                    stmt = stmt.where(Message.created_at > cleared_at)
+                stmt = stmt.order_by(Message.created_at.desc()).limit(limit).offset(offset)
+                res = await session.execute(stmt)
+                rows = res.scalars().all()
 
             messages = []
             for row in rows:
                 msg = self._model_to_dict(row)
                 if "created_at" in msg:
                     ca = msg.pop("created_at")
-                    if ca is not None:
-                        msg["timestamp"] = ca.isoformat() + "Z" if not ca.tzinfo else ca.isoformat()
-                    else:
-                        msg["timestamp"] = None
+                    msg["timestamp"] = ca.isoformat() + "Z" if ca and not ca.tzinfo else (ca.isoformat() if ca else None)
                 try:
                     msg["content"] = self._decrypt_payload(msg["content"])
                 except Exception as e:
                     content_value = msg.get("content")
-                    if (
-                        isinstance(content_value, str)
-                        and not content_value.startswith("mt:")
-                        and not content_value.startswith("gAAAA")
-                    ):
+                    if isinstance(content_value, str) and not content_value.startswith("mt:") and not content_value.startswith("gAAAA"):
                         msg["content"] = content_value
                     else:
                         msg["content"] = "[Не удалось расшифровать]"
-                        logger.error(
-                            f"Ошибка дешифровки сообщения {msg['id']}: {e}")
+                        logger.error(f"Ошибка дешифровки сообщения {msg['id']}: {e}")
 
                 if msg.get("attachments"):
                     try:
                         decrypted = self._decrypt_payload(msg["attachments"])
-                        if isinstance(
-                                decrypted, str) and decrypted.startswith("e2e:"):
+                        if isinstance(decrypted, str) and decrypted.startswith("e2e:"):
                             msg["attachments"] = decrypted
                         else:
                             msg["attachments"] = json.loads(decrypted)
@@ -1362,30 +1253,26 @@ class UserRepository:
                         attachments_value = msg.get("attachments")
                         if isinstance(attachments_value, str):
                             try:
-                                msg["attachments"] = json.loads(
-                                    attachments_value)
+                                msg["attachments"] = json.loads(attachments_value)
                             except Exception:
                                 msg["attachments"] = None
                         else:
                             msg["attachments"] = None
-                        logger.error(
-                            f"Ошибка дешифровки вложений {msg['id']}: {e}")
-                msg = self._resolve_forwarded_from(msg)
+                        logger.error(f"Ошибка дешифровки вложений {msg['id']}: {e}")
+                msg = await self._resolve_forwarded_from(msg)
                 messages.append(msg)
             return messages
         except Exception as err:
             logger.error(f"Ошибка БД (история сообщений): {err}")
             return []
 
-    def search_users(self, query_str):
+    async def search_users(self, query_str):
         try:
-            with self._session() as session:
-                rows = (
-                    session.query(User)
-                    .filter(User.username.ilike(f"%{query_str}%"))
-                    .limit(20)
-                    .all()
+            async with self._session() as session:
+                res = await session.execute(
+                    select(User).where(User.username.ilike(f"%{query_str}%")).limit(20)
                 )
+                rows = res.scalars().all()
                 return [
                     {
                         "id": row.id,
@@ -1399,16 +1286,18 @@ class UserRepository:
             logger.error(f"DB Error search_users: {e}")
             return []
 
-    def search_messages(self, user_id, target_id, query_str):
+    async def search_messages(self, user_id, target_id, query_str):
         try:
-            with self._session() as session:
-                rows = (
-                    session.query(Message) .filter(
+            async with self._session() as session:
+                res = await session.execute(
+                    select(Message).where(
                         or_(
-                            (Message.sender_id == str(user_id)) & (
-                                Message.target_id == str(target_id)), (Message.sender_id == str(target_id)) & (
-                                Message.target_id == str(user_id)), )) .order_by(
-                        Message.created_at.desc()) .limit(500) .all())
+                            (Message.sender_id == str(user_id)) & (Message.target_id == str(target_id)),
+                            (Message.sender_id == str(target_id)) & (Message.target_id == str(user_id)),
+                        )
+                    ).order_by(Message.created_at.desc()).limit(500)
+                )
+                rows = res.scalars().all()
 
             results = []
             for row in rows:
@@ -1425,37 +1314,33 @@ class UserRepository:
             logger.error(f"DB Error search_messages: {e}")
             return []
 
-    def get_pinned_message_ids(self):
+    async def get_pinned_message_ids(self):
         try:
-            with self._session() as session:
-                rows = (
-                    session.query(Message.id)
-                    .filter(Message.pinned_by.isnot(None))
-                    .all()
+            async with self._session() as session:
+                res = await session.execute(
+                    select(Message.id).where(Message.pinned_by.isnot(None))
                 )
-                return [row[0] for row in rows]
+                return [row[0] for row in res.all()]
         except Exception as e:
             logger.error(f"DB Error get_pinned_message_ids: {e}")
             return []
 
-    def get_reactions_by_message(self):
+    async def get_reactions_by_message(self):
         try:
-            with self._session() as session:
-                rows = (
-                    session.query(Message.id, Message.reactions)
-                    .filter(Message.reactions.isnot(None))
-                    .all()
+            async with self._session() as session:
+                res = await session.execute(
+                    select(Message.id, Message.reactions).where(Message.reactions.isnot(None))
                 )
-                return [{"id": row[0], "reactions": row[1]} for row in rows]
+                return [{"id": row[0], "reactions": row[1]} for row in res.all()]
         except Exception as e:
             logger.error(f"DB Error get_reactions_by_message: {e}")
             return []
 
-    def update_message_reactions(self, message_id, reactions):
+    async def update_message_reactions(self, message_id, reactions):
         try:
-            with self._session() as session:
-                row = session.query(Message).filter(
-                    Message.id == str(message_id)).first()
+            async with self._session() as session:
+                res = await session.execute(select(Message).where(Message.id == str(message_id)))
+                row = res.scalars().first()
                 if not row:
                     return False
                 row.reactions = reactions
@@ -1465,11 +1350,11 @@ class UserRepository:
             logger.error(f"DB Error update_message_reactions: {e}")
             return False
 
-    def update_message_pinned_by(self, message_id, pinned_by):
+    async def update_message_pinned_by(self, message_id, pinned_by):
         try:
-            with self._session() as session:
-                row = session.query(Message).filter(
-                    Message.id == str(message_id)).first()
+            async with self._session() as session:
+                res = await session.execute(select(Message).where(Message.id == str(message_id)))
+                row = res.scalars().first()
                 if not row:
                     return False
                 row.pinned_by = pinned_by
@@ -1479,13 +1364,16 @@ class UserRepository:
             logger.error(f"DB Error update_message_pinned_by: {e}")
             return False
 
-    def edit_message(self, message_id, sender_id, new_content):
+    async def edit_message(self, message_id, sender_id, new_content):
         try:
-            with self._session() as session:
-                row = session.query(Message).filter(
-                    Message.id == str(message_id),
-                    Message.sender_id == str(sender_id),
-                ).first()
+            async with self._session() as session:
+                res = await session.execute(
+                    select(Message).where(
+                        Message.id == str(message_id),
+                        Message.sender_id == str(sender_id),
+                    )
+                )
+                row = res.scalars().first()
                 if not row:
                     return False
                 row.content = self._encrypt_payload(new_content)
