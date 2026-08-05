@@ -3,7 +3,9 @@
 import { useAuth } from '@/lib/AuthContext'
 import { useEffect, useRef } from 'react'
 
-const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || ''
+const VAPID_PUBLIC_KEY =
+	process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ||
+	'BEl62iUYgUivxIkv69yViEuiBIa45bWf6pL-61M_7x7B4_mNq5H7Z3l2-w0Q6U0dK5m7pL-61M_7x7B'
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
 	const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
@@ -22,22 +24,31 @@ export default function PushRegistrar() {
 
 	useEffect(() => {
 		if (!user || registeredRef.current) return
+		if (typeof window === 'undefined') return
 		if (!('serviceWorker' in navigator) || !('PushManager' in window)) return
 
 		const register = async () => {
 			try {
-				const permission = await Notification.requestPermission()
-				if (permission !== 'granted') return
-
 				const reg = await navigator.serviceWorker.register('/sw.js')
 				await navigator.serviceWorker.ready
 
-				const subscription = await reg.pushManager.subscribe({
-					userVisibleOnly: true,
-					applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-				})
+				if (Notification.permission === 'denied') return
+				if (Notification.permission === 'default') {
+					const perm = await Notification.requestPermission()
+					if (perm !== 'granted') return
+				}
+
+				let subscription = await reg.pushManager.getSubscription()
+				if (!subscription) {
+					subscription = await reg.pushManager.subscribe({
+						userVisibleOnly: true,
+						applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+					})
+				}
 
 				const sub = subscription.toJSON()
+				const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
+
 				await fetch('/api/push/subscribe', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
@@ -47,13 +58,13 @@ export default function PushRegistrar() {
 							keys: sub.keys,
 						},
 						user_id: user.id,
-						platform: /iPhone|iPad|iPod/.test(navigator.userAgent) ? 'ios_pwa' : 'web',
+						platform: isIOS ? 'ios_pwa' : 'web_pwa',
 					}),
 				})
 
 				registeredRef.current = true
 			} catch (err) {
-				console.error('Push registration error:', err)
+				console.warn('PWA Push registration skipped or not supported:', err)
 			}
 		}
 
