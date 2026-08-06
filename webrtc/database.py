@@ -9,7 +9,7 @@ from datetime import datetime, timezone, timedelta
 
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from sqlalchemy import Integer, String, Text, JSON, func, or_, select, delete, update, text
+from sqlalchemy import Boolean, Integer, String, Text, JSON, func, or_, select, delete, update, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Mapped, declarative_base, mapped_column
 from werkzeug.security import check_password_hash
@@ -95,10 +95,10 @@ class Message(Base):
     created_at: Mapped[datetime | None] = mapped_column(nullable=True)
     updated_at: Mapped[datetime | None] = mapped_column(nullable=True)
     is_read: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    is_deleted: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_deleted: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
     pinned_by: Mapped[str | None] = mapped_column(String, nullable=True)
     reactions: Mapped[dict | list | str | None] = mapped_column(JSON, nullable=True)
-    is_edited: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_edited: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
     forwarded_from_id: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
@@ -790,6 +790,8 @@ class UserRepository:
                     created_at=ts,
                     updated_at=ts,
                     is_read=0,
+                    is_deleted=False,
+                    is_edited=False,
                 )
                 session.add(message)
             target_id = msg_data.get("target_id")
