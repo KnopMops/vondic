@@ -122,6 +122,15 @@ def create_app(config_class=Config):
     register_error_handlers(app)
 
     db.init_app(app)
+
+    with app.app_context():
+        from sqlalchemy import event
+        @event.listens_for(db.engine, "handle_error")
+        def handle_db_error(exception_context):
+            err_msg = str(exception_context.original_exception or "")
+            if "PGRES_TUPLES_OK" in err_msg or "no message from the libpq" in err_msg or "ResourceClosedError" in err_msg:
+                exception_context.is_disconnect = True
+                app.logger.warning("[DB] Stale PgBouncer connection error detected, forcing pool disconnect.")
     migrate.init_app(app, db)
     ma.init_app(app)
 
