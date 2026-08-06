@@ -9,7 +9,7 @@ from datetime import datetime, timezone, timedelta
 
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from sqlalchemy import Integer, String, Text, func, or_, select, delete, update, text
+from sqlalchemy import Integer, String, Text, JSON, func, or_, select, delete, update, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Mapped, declarative_base, mapped_column
 from werkzeug.security import check_password_hash
@@ -90,14 +90,14 @@ class Message(Base):
 
     reply_to_id: Mapped[str | None] = mapped_column(String, nullable=True)
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    attachments: Mapped[str | None] = mapped_column(Text, nullable=True)
+    attachments: Mapped[dict | list | str | None] = mapped_column(JSON, nullable=True)
     type: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime | None] = mapped_column(nullable=True)
     updated_at: Mapped[datetime | None] = mapped_column(nullable=True)
     is_read: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_deleted: Mapped[int | None] = mapped_column(Integer, nullable=True)
     pinned_by: Mapped[str | None] = mapped_column(String, nullable=True)
-    reactions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reactions: Mapped[dict | list | str | None] = mapped_column(JSON, nullable=True)
     is_edited: Mapped[int | None] = mapped_column(Integer, nullable=True)
     forwarded_from_id: Mapped[str | None] = mapped_column(String, nullable=True)
 
@@ -764,11 +764,16 @@ class UserRepository:
             ts = msg_data.get("timestamp")
             if isinstance(ts, str):
                 try:
-                    ts = datetime.fromisoformat(ts)
+                    ts = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                    if ts.tzinfo is not None:
+                        ts = ts.astimezone(timezone.utc).replace(tzinfo=None)
                 except ValueError:
-                    ts = datetime.now()
-            elif not isinstance(ts, datetime):
-                ts = datetime.now()
+                    ts = datetime.utcnow()
+            elif isinstance(ts, datetime):
+                if ts.tzinfo is not None:
+                    ts = ts.astimezone(timezone.utc).replace(tzinfo=None)
+            else:
+                ts = datetime.utcnow()
 
             async with self._session() as session:
                 message = Message(
