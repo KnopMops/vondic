@@ -128,6 +128,8 @@ def create_app(config_class=Config):
     @app.teardown_appcontext
     def shutdown_session(exception=None):
         try:
+            if exception:
+                db.session.rollback()
             db.session.remove()
         except Exception:
             pass

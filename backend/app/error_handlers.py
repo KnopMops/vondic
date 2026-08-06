@@ -23,28 +23,12 @@ def register_error_handlers(app):
 
     @app.errorhandler(SQLAlchemyError)
     def handle_database_error(exc: SQLAlchemyError):
-        if not isinstance(exc, (OperationalError, DBAPIError)):
+        try:
             db.session.rollback()
-            app.logger.exception("Database error: %s", exc)
-            return jsonify({"error": "Ошибка базы данных"}), 500
-
-        # Transient connection error — try retry with fresh connection
-        for attempt in range(MAX_RETRIES):
-            try:
-                db.session.rollback()
-                db.session.remove()
-                # Force a new connection
-                with db.engine.connect() as conn:
-                    conn.execute(db.text("SELECT 1"))
-                db.session.commit()
-                app.logger.info("DB connection recovered after retry %d", attempt + 1)
-                return jsonify({"error": "Ошибка базы данных, попробуйте снова"}), 503
-            except Exception:
-                time.sleep(RETRY_DELAY)
-
-        app.logger.exception("Database error after %d retries: %s", MAX_RETRIES, exc)
-        db.session.rollback()
-        db.session.remove()
+            db.session.remove()
+        except Exception:
+            pass
+        app.logger.exception("Database error: %s", exc)
         return jsonify({"error": "Ошибка базы данных"}), 500
 
     @app.errorhandler(HTTPException)
