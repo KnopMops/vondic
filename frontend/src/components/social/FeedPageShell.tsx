@@ -38,7 +38,7 @@ export default function FeedPageShell({
 					</div>
 					<SiteFooter />
 				</main>
-				<div className='hidden lg:block fixed top-20 right-0 h-auto max-h-[calc(100vh-5rem)] w-80 overflow-y-auto p-6 z-20 custom-scrollbar'>
+				<div className='hidden lg:block max-lg:!hidden fixed top-20 right-0 h-auto max-h-[calc(100vh-5rem)] w-80 overflow-y-auto p-6 z-20 custom-scrollbar'>
 					<RightPanel />
 				</div>
 			</div>

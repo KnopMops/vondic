@@ -54,7 +54,7 @@ export default function Sidebar() {
 	return (
 		<>
 		<aside
-				className={`fixed top-20 left-0 hidden lg:flex h-auto max-h-[calc(100vh-5rem)] flex-col glass-sidebar rounded-r-2xl py-4 transition-all duration-300 z-40 ${
+				className={`fixed top-20 left-0 hidden lg:flex max-lg:!hidden h-auto max-h-[calc(100vh-5rem)] flex-col glass-sidebar rounded-r-2xl py-4 transition-all duration-300 z-40 ${
 					isExpanded ? 'w-44' : 'w-16'
 				}`}
 			>

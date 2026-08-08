@@ -201,6 +201,7 @@ def create_app(config_class=Config):
                 ensure_user_conversations_secret_column,
                 ensure_users_extended_columns,
                 ensure_oauth_clients_verified_column,
+                ensure_push_subscriptions_table,
             )
 
             ensure_users_extended_columns(db.engine)
@@ -212,8 +213,9 @@ def create_app(config_class=Config):
             ensure_user_conversations_table(db.engine)
             ensure_user_conversations_secret_column(db.engine)
             ensure_oauth_clients_verified_column(db.engine)
+            ensure_push_subscriptions_table(db.engine)
             print(
-                "[DB] Дополнительные колонки users/posts/chat/bots/conversations/oauth проверены.")
+                "[DB] Дополнительные колонки users/posts/chat/bots/conversations/oauth/push проверены.")
         except Exception as e:
             print(f"[DB] ensure_users_extended_columns: {e}")
 

@@ -276,3 +276,50 @@ def ensure_oauth_clients_verified_column(engine) -> None:
         run("ALTER TABLE oauth_clients ADD COLUMN IF NOT EXISTS verified INTEGER DEFAULT 0")
     else:
         run("ALTER TABLE oauth_clients ADD COLUMN verified INTEGER DEFAULT 0")
+
+
+def ensure_push_subscriptions_table(engine) -> None:
+    """Ensure push_subscriptions table exists for Web Push PWA notifications."""
+    insp = inspect(engine)
+    if insp.has_table("push_subscriptions"):
+        return
+
+    def run(sql: str) -> None:
+        with engine.begin() as conn:
+            conn.execute(text(sql))
+
+    dialect = engine.dialect.name
+    if dialect == "postgresql":
+        run(
+            """
+            CREATE TABLE IF NOT EXISTS push_subscriptions (
+                id SERIAL PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                endpoint TEXT NOT NULL,
+                p256dh TEXT NOT NULL,
+                auth TEXT NOT NULL,
+                platform TEXT DEFAULT 'web',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT uq_push_sub_user_ep UNIQUE (user_id, endpoint)
+            )
+            """
+        )
+        run(
+            "CREATE INDEX IF NOT EXISTS ix_push_subscriptions_user_id ON push_subscriptions (user_id)"
+        )
+    else:
+        run(
+            """
+            CREATE TABLE IF NOT EXISTS push_subscriptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                endpoint TEXT NOT NULL,
+                p256dh TEXT NOT NULL,
+                auth TEXT NOT NULL,
+                platform TEXT DEFAULT 'web',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (user_id, endpoint)
+            )
+            """
+        )
+

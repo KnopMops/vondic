@@ -801,6 +801,13 @@ def push_subscribe():
     try:
         from sqlalchemy import text
         db.session.execute(text(
+            "CREATE TABLE IF NOT EXISTS push_subscriptions ("
+            "id SERIAL PRIMARY KEY, user_id TEXT NOT NULL, endpoint TEXT NOT NULL, "
+            "p256dh TEXT NOT NULL, auth TEXT NOT NULL, platform TEXT DEFAULT 'web', "
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+            "CONSTRAINT uq_push_sub_user_ep UNIQUE (user_id, endpoint))"
+        ))
+        db.session.execute(text(
             "INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, platform) "
             "VALUES (:uid, :ep, :p256, :auth, :plat) "
             "ON CONFLICT (user_id, endpoint) DO UPDATE SET p256dh = :p256, auth = :auth, platform = :plat"

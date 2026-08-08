@@ -324,6 +324,22 @@ class UserRepository:
                         """
                     )
                 )
+                await conn.execute(
+                    text(
+                        """
+                        CREATE TABLE IF NOT EXISTS push_subscriptions (
+                            id SERIAL PRIMARY KEY,
+                            user_id TEXT NOT NULL,
+                            endpoint TEXT NOT NULL,
+                            p256dh TEXT NOT NULL,
+                            auth TEXT NOT NULL,
+                            platform TEXT DEFAULT 'web',
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT uq_push_sub_user_ep UNIQUE (user_id, endpoint)
+                        )
+                        """
+                    )
+                )
         except Exception as e:
             logger.warning(f"Schema ensure skipped/failed: {e}")
 
