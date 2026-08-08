@@ -116,7 +116,7 @@ class Video(Base):
     updated_at: Mapped[datetime | None] = mapped_column(nullable=True)
     views: Mapped[int | None] = mapped_column(Integer, nullable=True)
     likes: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    is_deleted: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_deleted: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
     tags: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
@@ -243,13 +243,40 @@ class UserRepository:
                 await conn.execute(
                     text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_read INTEGER"))
                 await conn.execute(
-                    text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_deleted INTEGER"))
+                    text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE"))
                 await conn.execute(
                     text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS pinned_by TEXT"))
                 await conn.execute(
                     text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS reactions TEXT"))
                 await conn.execute(
-                    text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_edited INTEGER"))
+                    text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_edited BOOLEAN DEFAULT FALSE"))
+                await conn.execute(
+                    text(
+                        """
+                        DO $$
+                        BEGIN
+                            IF EXISTS (
+                                SELECT 1 FROM information_schema.columns 
+                                WHERE table_name='messages' AND column_name='is_deleted' AND data_type LIKE '%int%'
+                            ) THEN
+                                ALTER TABLE messages ALTER COLUMN is_deleted TYPE BOOLEAN USING (is_deleted IS NOT NULL AND is_deleted != 0);
+                            END IF;
+                            IF EXISTS (
+                                SELECT 1 FROM information_schema.columns 
+                                WHERE table_name='messages' AND column_name='is_edited' AND data_type LIKE '%int%'
+                            ) THEN
+                                ALTER TABLE messages ALTER COLUMN is_edited TYPE BOOLEAN USING (is_edited IS NOT NULL AND is_edited != 0);
+                            END IF;
+                            IF EXISTS (
+                                SELECT 1 FROM information_schema.columns 
+                                WHERE table_name='videos' AND column_name='is_deleted' AND data_type LIKE '%int%'
+                            ) THEN
+                                ALTER TABLE videos ALTER COLUMN is_deleted TYPE BOOLEAN USING (is_deleted IS NOT NULL AND is_deleted != 0);
+                            END IF;
+                        END $$;
+                        """
+                    )
+                )
                 await conn.execute(
                     text(
                         """
@@ -270,7 +297,7 @@ class UserRepository:
                             id TEXT PRIMARY KEY,
                             user_id TEXT NOT NULL,
                             partner_id TEXT NOT NULL,
-                            is_secret BOOLEAN NOT NULL DEFAULT 0,
+                            is_secret BOOLEAN NOT NULL DEFAULT FALSE,
                             created_at TIMESTAMP,
                             updated_at TIMESTAMP,
                             CONSTRAINT uq_user_conversation UNIQUE (user_id, partner_id)
@@ -281,7 +308,7 @@ class UserRepository:
                 await conn.execute(
                     text(
                         "ALTER TABLE user_conversations "
-                        "ADD COLUMN IF NOT EXISTS is_secret BOOLEAN NOT NULL DEFAULT 0"))
+                        "ADD COLUMN IF NOT EXISTS is_secret BOOLEAN NOT NULL DEFAULT FALSE"))
                 await conn.execute(
                     text(
                         """
@@ -838,7 +865,7 @@ class UserRepository:
                     updated_at=updated_at,
                     views=video_data.get("views", 0),
                     likes=video_data.get("likes", 0),
-                    is_deleted=video_data.get("is_deleted", 0),
+                    is_deleted=bool(video_data.get("is_deleted", False)),
                     tags=tags_json,
                 )
                 session.add(video)
@@ -873,7 +900,7 @@ class UserRepository:
                 video = res.scalars().first()
                 if not video:
                     return False
-                video.is_deleted = 1
+                video.is_deleted = True
                 video.updated_at = datetime.now()
                 return True
         except Exception as e:
@@ -901,7 +928,7 @@ class UserRepository:
     async def list_videos(self, limit=20, offset=0, author_id=None):
         try:
             async with self._session() as session:
-                stmt = select(Video).where(or_(Video.is_deleted == 0, Video.is_deleted.is_(None)))
+                stmt = select(Video).where(or_(Video.is_deleted.is_(False), Video.is_deleted.is_(None)))
                 if author_id:
                     stmt = stmt.where(Video.author_id == str(author_id))
                 stmt = stmt.order_by(Video.created_at.desc()).limit(limit).offset(offset)
@@ -1403,7 +1430,7 @@ class UserRepository:
                 if not row:
                     return False
                 row.content = self._encrypt_payload(new_content)
-                row.is_edited = 1
+                row.is_edited = True
                 row.updated_at = datetime.now()
                 return True
         except Exception as e:

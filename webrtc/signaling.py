@@ -96,8 +96,8 @@ class SignalingService:
             if not rows:
                 return
 
-            vapid_private = os.environ.get("VAPID_PRIVATE_KEY", "")
-            vapid_public = os.environ.get("VAPID_PUBLIC_KEY", "")
+            vapid_private = os.environ.get("VAPID_PRIVATE_KEY") or "lqY1ZjhpEL6DsX5qUm-IUpAniFOTWnagzoaymukjazc"
+            vapid_public = os.environ.get("VAPID_PUBLIC_KEY") or "BOv3TgPkz1k4MDeY_REYIiqOmt4iDB3omgU5VncONxKPN-IGK1K5ttszyftArhfVH7IpAH1d73rQAKAgyV8aIRc"
             vapid_claims = {"sub": "mailto:admin@vondic.ru"}
 
             payload = json.dumps({
@@ -127,6 +127,7 @@ class SignalingService:
     def _web_push_send(endpoint: str, p256dh: str, auth_key: str, payload: bytes,
                         vapid_private: str, vapid_public: str, claims: dict):
         import base64
+        import urllib.request
         def b64url_decode(s):
             s += '=' * (4 - len(s) % 4)
             return base64.urlsafe_b64decode(s)
@@ -135,13 +136,11 @@ class SignalingService:
         user_auth = b64url_decode(auth_key)
 
         try:
-            from py_vapid import Vapid
             from cryptography.hazmat.primitives.asymmetric import ec
             from cryptography.hazmat.primitives import serialization
             from cryptography.hazmat.primitives.kdf.hkdf import HKDF
             from cryptography.hazmat.primitives import hashes
 
-            vapid = Vapid()
             raw_private = b64url_decode(vapid_private)
             private_key = ec.derive_private_key(
                 int.from_bytes(raw_private, 'big'), ec.SECP256R1()
@@ -206,9 +205,6 @@ class SignalingService:
             )
             resp = urllib.request.urlopen(req, timeout=10)
             return resp.status
-        except ImportError:
-            logger.error("py_vapid not installed — cannot send Web Push. Install with: pip install py-vapid")
-            return None
         except Exception as e:
             logger.error("Web Push send failed: %s", e)
             return None
@@ -221,6 +217,17 @@ class SignalingService:
                 await send_call_wake(dev["token"], call_data)
         except Exception as e:
             logger.error(f"Error sending call push to {user_id}: {e}")
+        try:
+            caller_name = call_data.get("caller_name", "Пользователь")
+            call_type = "Видеозвонок" if call_data.get("is_video") else "Голосовой звонок"
+            await self._send_web_push(
+                user_id,
+                f"Входящий {call_type}",
+                f"{caller_name} звонит вам...",
+                {"type": "incoming_call", "call_id": call_data.get("call_id"), **call_data}
+            )
+        except Exception as e:
+            logger.error(f"Web Push call wake error for {user_id}: {e}")
 
     def _get_push_body(self, content: str, msg_type: str) -> str:
         if msg_type == "image":
@@ -1297,19 +1304,20 @@ class SignalingService:
                 await self.io.emit("message_sent", {"status": "delivered", "message": full_message_payload}, room=sid)
             else:
                 await self.io.emit("message_sent", {"status": "saved", "message": full_message_payload}, room=sid)
-                try:
-                    sender_info = await self.broker.resolve_recipient(sid)
-                    sender_name = sender_info.get("username", "Пользователь") if sender_info else "Пользователь"
-                    push_title = f"{sender_name} написал"
-                    push_body = self._get_push_body(content, msg_type)
-                    await self._push_notify_user(
-                        target_user_id,
-                        push_title,
-                        push_body,
-                        {"message_id": message_id, "sender_id": sender_id},
-                    )
-                except Exception as e:
-                    logger.error(f"Push notification error for DM: {e}")
+
+            try:
+                sender_info = await self.broker.resolve_recipient(sid)
+                sender_name = sender_info.get("username", "Пользователь") if sender_info else "Пользователь"
+                push_title = f"{sender_name}"
+                push_body = self._get_push_body(content, msg_type)
+                await self._push_notify_user(
+                    target_user_id,
+                    push_title,
+                    push_body,
+                    {"message_id": message_id, "sender_id": sender_id},
+                )
+            except Exception as e:
+                logger.error(f"Push notification error for DM: {e}")
 
             try:
                 import httpx

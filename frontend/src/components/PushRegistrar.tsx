@@ -3,9 +3,11 @@
 import { useAuth } from '@/lib/AuthContext'
 import { useEffect, useRef } from 'react'
 
+const DEFAULT_VAPID_PUBLIC_KEY =
+	'BOv3TgPkz1k4MDeY_REYIiqOmt4iDB3omgU5VncONxKPN-IGK1K5ttszyftArhfVH7IpAH1d73rQAKAgyV8aIRc'
+
 const VAPID_PUBLIC_KEY =
-	process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ||
-	'BEl62iUYgUivxIkv69yViEuiBIa45bWf6pL-61M_7x7B4_mNq5H7Z3l2-w0Q6U0dK5m7pL-61M_7x7B'
+	process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || DEFAULT_VAPID_PUBLIC_KEY
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
 	const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
@@ -23,7 +25,7 @@ export default function PushRegistrar() {
 	const registeredRef = useRef(false)
 
 	useEffect(() => {
-		if (!user || registeredRef.current) return
+		if (!user) return
 		if (typeof window === 'undefined') return
 		if (!('serviceWorker' in navigator) || !('PushManager' in window)) return
 
@@ -38,11 +40,35 @@ export default function PushRegistrar() {
 					if (perm !== 'granted') return
 				}
 
+				const targetKeyArray = urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
 				let subscription = await reg.pushManager.getSubscription()
+
+				if (subscription) {
+					// Check key match
+					const existingKey = subscription.options.applicationServerKey
+					let keyMismatch = false
+					if (existingKey) {
+						const existingArray = new Uint8Array(existingKey)
+						if (
+							existingArray.length !== targetKeyArray.length ||
+							!existingArray.every((val, idx) => val === targetKeyArray[idx])
+						) {
+							keyMismatch = true
+						}
+					} else {
+						keyMismatch = true
+					}
+
+					if (keyMismatch) {
+						await subscription.unsubscribe()
+						subscription = null
+					}
+				}
+
 				if (!subscription) {
 					subscription = await reg.pushManager.subscribe({
 						userVisibleOnly: true,
-						applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+						applicationServerKey: targetKeyArray,
 					})
 				}
 
@@ -69,7 +95,17 @@ export default function PushRegistrar() {
 		}
 
 		register()
+
+		const handleFocus = () => {
+			if (!registeredRef.current) {
+				register()
+			}
+		}
+
+		window.addEventListener('focus', handleFocus)
+		return () => window.removeEventListener('focus', handleFocus)
 	}, [user?.id])
 
 	return null
 }
+
