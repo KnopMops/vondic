@@ -86,10 +86,16 @@
 	box-shadow: 0 4px 32px rgb(0 0 0 / 0.2);
 }
 .glass-sidebar {
-	background: rgb(var(--app-surface-rgb) / 0.95);
+	background-color: #151326;
+	background-color: rgba(21, 19, 38, 0.98);
 	border-right: 1px solid var(--app-glass-border);
 	backdrop-filter: blur(24px);
 	-webkit-backdrop-filter: blur(24px);
+}
+@media (max-width: 1023px) {
+	.glass-sidebar {
+		display: none !important;
+	}
 }
 .glass-header {
 	background: rgb(var(--app-bg-rgb) / 0.80);

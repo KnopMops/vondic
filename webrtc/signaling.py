@@ -96,8 +96,8 @@ class SignalingService:
             if not rows:
                 return
 
-            vapid_private = os.environ.get("VAPID_PRIVATE_KEY") or "lqY1ZjhpEL6DsX5qUm-IUpAniFOTWnagzoaymukjazc"
-            vapid_public = os.environ.get("VAPID_PUBLIC_KEY") or "BOv3TgPkz1k4MDeY_REYIiqOmt4iDB3omgU5VncONxKPN-IGK1K5ttszyftArhfVH7IpAH1d73rQAKAgyV8aIRc"
+            vapid_private = os.environ.get("VAPID_PRIVATE_KEY") or "ZgiAe9mf4fmMp_Suy_ZQjj0CZVys5zRsFex25DllvTo"
+            vapid_public = os.environ.get("VAPID_PUBLIC_KEY") or "BIe-Z2GMAZp05xBkGysdmolFc7jczvXIQJcGDVfkWkyY-P1XJnJoTcyOzW00-z6AvlleA7wxFXa8B-f_RHI5pBk"
             vapid_claims = {"sub": "mailto:admin@vondic.ru"}
 
             payload = json.dumps({

@@ -5699,7 +5699,7 @@ export default function MessengerPage() {
 	return (
 		<div className='flex h-[100dvh] w-full overflow-hidden bg-[color:var(--app-bg)] text-[color:var(--app-fg)] font-sans'>
 			<div
-				className={`w-full md:w-80 border-r border-white/10 bg-[var(--app-surface)]/95 flex-shrink-0 z-30 shadow-2xl flex-col backdrop-blur-2xl ${
+				className={`w-full md:w-80 border-r border-white/10 bg-[#151326] flex-shrink-0 z-30 shadow-2xl flex-col backdrop-blur-2xl ${
 					hasActiveChat ? 'hidden md:flex' : 'flex'
 				}`}
 			>

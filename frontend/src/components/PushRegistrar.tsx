@@ -4,7 +4,7 @@ import { useAuth } from '@/lib/AuthContext'
 import { useEffect, useRef } from 'react'
 
 const DEFAULT_VAPID_PUBLIC_KEY =
-	'BOv3TgPkz1k4MDeY_REYIiqOmt4iDB3omgU5VncONxKPN-IGK1K5ttszyftArhfVH7IpAH1d73rQAKAgyV8aIRc'
+	'BIe-Z2GMAZp05xBkGysdmolFc7jczvXIQJcGDVfkWkyY-P1XJnJoTcyOzW00-z6AvlleA7wxFXa8B-f_RHI5pBk'
 
 const VAPID_PUBLIC_KEY =
 	process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || DEFAULT_VAPID_PUBLIC_KEY
