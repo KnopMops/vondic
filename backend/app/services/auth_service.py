@@ -163,11 +163,25 @@ class AuthService:
                 try:
                     session = UserSession.query.filter_by(access_token_lookup=lookup).first()
                 except Exception:
-                    db.session.rollback()
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+                    try:
+                        db.session.remove()
+                    except Exception:
+                        pass
                     try:
                         session = UserSession.query.filter_by(access_token_lookup=lookup).first()
                     except Exception:
-                        db.session.rollback()
+                        try:
+                            db.session.rollback()
+                        except Exception:
+                            pass
+                        try:
+                            db.session.remove()
+                        except Exception:
+                            pass
                         session = None
                 if session and session.access_token_hash and check_password_hash(session.access_token_hash, token):
                     if session.is_expired():

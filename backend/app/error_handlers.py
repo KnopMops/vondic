@@ -25,6 +25,9 @@ def register_error_handlers(app):
     def handle_database_error(exc: SQLAlchemyError):
         try:
             db.session.rollback()
+        except Exception:
+            pass
+        try:
             db.session.remove()
         except Exception:
             pass
