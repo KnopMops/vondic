@@ -171,26 +171,33 @@ class SignalingService:
             encrypted = aesgcm.encrypt(nonce, payload, record_size + delimiter)
             body = record_size + delimiter + encrypted
 
-            vapid_claims_exp = {**claims, "exp": int(time.time()) + 43200}
-            vapid_header = base64.urlsafe_b64encode(
-                json.dumps(vapid_claims_exp, separators=(',', ':')).encode()
-            ).rstrip(b'=').decode()
+            # RFC 8292 VAPID Standard JWT Specification for iOS Safari & Web Push
+            import urllib.parse
+            parsed_ep = urllib.parse.urlparse(endpoint)
+            aud = f"{parsed_ep.scheme}://{parsed_ep.netloc}"
 
-            signing_key = private_key
-            signature = signing_key.sign(
-                vapid_header.encode() + b"\n" + endpoint.encode() + b"\n" + str(int(time.time()) + 43200).encode(),
+            def b64url_encode(data: bytes) -> str:
+                return base64.urlsafe_b64encode(data).rstrip(b'=').decode('ascii')
+
+            jwt_header = b64url_encode(json.dumps({"alg": "ES256", "typ": "JWT"}, separators=(',', ':')).encode('utf-8'))
+            jwt_payload = b64url_encode(json.dumps({
+                "aud": aud,
+                "exp": int(time.time()) + 43200,
+                "sub": claims.get("sub", "mailto:admin@vondic.ru")
+            }, separators=(',', ':')).encode('utf-8'))
+
+            unsigned_token = f"{jwt_header}.{jwt_payload}"
+            signature = private_key.sign(
+                unsigned_token.encode('ascii'),
                 ec.ECDSA(hashes.SHA256())
             )
             from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
             r, s = decode_dss_signature(signature)
             raw_sig = r.to_bytes(32, 'big') + s.to_bytes(32, 'big')
-            sig_b64 = base64.urlsafe_b64encode(raw_sig).rstrip(b'=').decode()
+            sig_b64 = b64url_encode(raw_sig)
 
-            vapid_pub_b64 = base64.urlsafe_b64encode(
-                public_key.public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
-            ).rstrip(b'=').decode()
-
-            authorization = f"vapid t={vapid_header},k={vapid_pub_b64},sig={sig_b64}"
+            vapid_jwt = f"{unsigned_token}.{sig_b64}"
+            authorization = f"vapid t={vapid_jwt},k={vapid_public}"
 
             req = urllib.request.Request(
                 endpoint,

@@ -33,13 +33,15 @@ self.addEventListener('activate', function (event) {
 });
 
 self.addEventListener('push', function (event) {
-  if (!event.data) return;
-
-  let data;
-  try {
-    data = event.data.json();
-  } catch {
-    data = { title: 'Вондик', body: event.data.text() };
+  let data = {};
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch (e) {
+      data = { title: 'Вондик', body: event.data.text() };
+    }
+  } else {
+    data = { title: 'Вондик', body: 'У вас новое сообщение' };
   }
 
   const title = data.title || 'Вондик';
@@ -50,7 +52,7 @@ self.addEventListener('push', function (event) {
     icon: '/logo.png',
     badge: '/logo.png',
     data: data.data || data,
-    tag: isCall ? 'call_notification' : (data.data?.message_id || 'vondic_notification'),
+    tag: isCall ? 'call_notification' : (data.data?.message_id || 'vondic_notification_' + Date.now()),
     renotify: true,
     vibrate: isCall ? [500, 250, 500, 250, 500] : [200, 100, 200],
     actions: isCall
