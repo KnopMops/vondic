@@ -223,6 +223,23 @@ services:
       - app-network
     restart: unless-stopped
 
+  notification-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.backend
+    container_name: vondic-notification-worker
+    command: python notification_worker.py
+    env_file:
+      - ./backend/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: unless-stopped
+
   angie:
     build: ./nginx
     container_name: angie

@@ -72,6 +72,20 @@ class SignalingService:
 
     async def _push_notify_user(self, user_id: str, title: str, body: str, data: dict | None = None):
         try:
+            from webrtc.rabbitmq_publisher import publish_to_queue
+            published = publish_to_queue("push_queue", {
+                "type": "notification",
+                "user_id": user_id,
+                "title": title,
+                "body": body,
+                "data": data or {},
+            })
+            if published:
+                return
+        except Exception as pe:
+            logger.warning(f"RabbitMQ push publish error: {pe}")
+
+        try:
             from webrtc.fcm_push import send_push_notification
             devices = await self._get_user_devices(user_id)
             for dev in devices:
