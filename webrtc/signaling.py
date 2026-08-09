@@ -208,6 +208,7 @@ class SignalingService:
                     "Content-Encoding": "aes128gcm",
                     "Content-Type": "application/octet-stream",
                     "TTL": "86400",
+                    "Urgency": "high",
                     "Authorization": authorization,
                 },
                 method="POST",
