@@ -7,14 +7,14 @@ services:
       POSTGRES_PASSWORD: ..
       POSTGRES_DB: ...
     ports:
-      - "5432:5432"
+      - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - app-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U vondic -d vondic"]
+      test: ['CMD-SHELL', 'pg_isready -U vondic -d vondic']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -28,10 +28,10 @@ services:
     networks:
       - app-network
     ports:
-      - "6379:6379"
+      - '6379:6379'
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -44,15 +44,15 @@ services:
       RABBITMQ_DEFAULT_USER: ...
       RABBITMQ_DEFAULT_PASS: ...
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - '5672:5672'
+      - '15672:15672'
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - app-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -74,7 +74,7 @@ services:
       - SERVER_RESET_QUERY="DISCARD ALL"
       - ADMIN_USERS=postgres,admin
     ports:
-      - "6432:6432"
+      - '6432:6432'
     networks:
       - app-network
     depends_on:
@@ -102,7 +102,7 @@ services:
       minio:
         condition: service_started
     ports:
-      - "5050:5050"
+      - '5050:5050'
     environment:
       - S3_ENDPOINT=http://minio:9000
       - S3_ACCESS_KEY=...
@@ -126,10 +126,10 @@ services:
       MINIO_ROOT_PASSWORD: ...
     command: server --console-address ":9001" /data
     expose:
-      - "9000"
-      - "9001"
+      - '9000'
+      - '9001'
     ports:
-      - "9001:9001"
+      - '9001:9001'
     networks:
       - app-network
 
@@ -186,7 +186,7 @@ services:
     networks:
       - app-network
     ports:
-      - "5000:5000"
+      - '5000:5000'
     restart: unless-stopped
 
   frontend:
@@ -202,7 +202,7 @@ services:
     networks:
       - app-network
     ports:
-      - "3000:3000"
+      - '3000:3000'
     restart: unless-stopped
 
   bot:
@@ -230,7 +230,7 @@ services:
     container_name: vondic-notification-worker
     command: python notification_worker.py
     env_file:
-      - ./backend/.env
+      - ./backend/.env.backend
     depends_on:
       postgres:
         condition: service_healthy
@@ -244,8 +244,8 @@ services:
     build: ./nginx
     container_name: angie
     ports:
-      - "80:80"
-      - "443:443"
+      - '80:80'
+      - '443:443'
     volumes:
       - ./nginx/ssl:/etc/angie/ssl:ro
     depends_on:
@@ -262,10 +262,10 @@ services:
     container_name: turn
     restart: unless-stopped
     ports:
-      - "3478:3478"
-      - "3478:3478/udp"
-      - "50000-50050:50000-50050"
-      - "50000-50050:50000-50050/udp"
+      - '3478:3478'
+      - '3478:3478/udp'
+      - '50000-50050:50000-50050'
+      - '50000-50050:50000-50050/udp'
     command: >
       -n --log-file=stdout
       --min-port=50000 --max-port=50050
