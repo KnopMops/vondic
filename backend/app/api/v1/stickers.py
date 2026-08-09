@@ -4,7 +4,7 @@ import uuid
 import logging
 from flask import Blueprint, jsonify, request
 from app.core.extensions import db
-from app.core.auth import token_required
+from app.utils.decorators import token_required
 from app.models.sticker import UserCustomSticker
 
 logger = logging.getLogger(__name__)
