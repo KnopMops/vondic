@@ -16,3 +16,4 @@ psycopg2-binary
 user-agents
 prometheus-client
 py-vapid>=1.9.0
+pywebpush>=1.14.0

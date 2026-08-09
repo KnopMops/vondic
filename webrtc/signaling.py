@@ -128,99 +128,29 @@ class SignalingService:
     @staticmethod
     def _web_push_send(endpoint: str, p256dh: str, auth_key: str, payload: bytes,
                         vapid_private: str, vapid_public: str, claims: dict):
-        import base64
-        import urllib.request
-        def b64url_decode(s):
-            s += '=' * (4 - len(s) % 4)
-            return base64.urlsafe_b64decode(s)
-
-        user_key = b64url_decode(p256dh)
-        user_auth = b64url_decode(auth_key)
-
         try:
-            from cryptography.hazmat.primitives.asymmetric import ec
-            from cryptography.hazmat.primitives import serialization
-            from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-            from cryptography.hazmat.primitives import hashes
-
-            raw_private = b64url_decode(vapid_private)
-            private_key = ec.derive_private_key(
-                int.from_bytes(raw_private, 'big'), ec.SECP256R1()
+            from pywebpush import webpush, WebPushException
+            subscription_info = {
+                "endpoint": endpoint,
+                "keys": {
+                    "p256dh": p256dh,
+                    "auth": auth_key,
+                }
+            }
+            data_str = payload.decode("utf-8") if isinstance(payload, bytes) else payload
+            resp = webpush(
+                subscription_info=subscription_info,
+                data=data_str,
+                vapid_private_key=vapid_private,
+                vapid_claims=claims,
+                headers={"Urgency": "high", "TTL": "86400"},
+                timeout=10,
             )
-            public_key = private_key.public_key()
-            peer_key = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), user_key)
-            shared_secret = private_key.exchange(ec.ECDH(), peer_key)
-
-            info = b"WebPush: info\x00" + user_key + public_key.public_bytes(
-                serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint
-            )
-            hkdf = HKDF(algorithm=hashes.SHA256(), length=32, salt=b"\x00" * 32, info=info)
-            ikm = hkdf.derive(shared_secret)
-
-            auth_hkdf = HKDF(algorithm=hashes.SHA256(), length=16, salt=b"\x00" * 32, info=b"WebPush: info\x00")
-            auth_secret = auth_hkdf.derive(user_auth)
-
-            content_enc_key_hkdf = HKDF(algorithm=hashes.SHA256(), length=16, salt=auth_secret, info=b"Content-Encoding: aes128gcm\x00")
-            aes_key = content_enc_key_hkdf.derive(ikm)
-
-            nonce_hkdf = HKDF(algorithm=hashes.SHA256(), length=12, salt=auth_secret, info=b"Content-Encoding: nonce\x00")
-            nonce = nonce_hkdf.derive(ikm)
-
-            from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-            aesgcm = AESGCM(aes_key)
-            record_size = b'\x00\x00\x10\x00'
-            delimiter = b'\x02'
-            encrypted = aesgcm.encrypt(nonce, payload, record_size + delimiter)
-            body = record_size + delimiter + encrypted
-
-            # RFC 8292 VAPID Standard JWT Specification for iOS Safari & Web Push
-            import urllib.parse
-            parsed_ep = urllib.parse.urlparse(endpoint)
-            aud = f"{parsed_ep.scheme}://{parsed_ep.netloc}"
-
-            def b64url_encode(data: bytes) -> str:
-                return base64.urlsafe_b64encode(data).rstrip(b'=').decode('ascii')
-
-            jwt_header = b64url_encode(json.dumps({"alg": "ES256", "typ": "JWT"}, separators=(',', ':')).encode('utf-8'))
-            jwt_payload = b64url_encode(json.dumps({
-                "aud": aud,
-                "exp": int(time.time()) + 43200,
-                "sub": claims.get("sub", "mailto:admin@vondic.ru")
-            }, separators=(',', ':')).encode('utf-8'))
-
-            unsigned_token = f"{jwt_header}.{jwt_payload}"
-            signature = private_key.sign(
-                unsigned_token.encode('ascii'),
-                ec.ECDSA(hashes.SHA256())
-            )
-            from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
-            r, s = decode_dss_signature(signature)
-            raw_sig = r.to_bytes(32, 'big') + s.to_bytes(32, 'big')
-            sig_b64 = b64url_encode(raw_sig)
-
-            vapid_jwt = f"{unsigned_token}.{sig_b64}"
-            authorization = f"vapid t={vapid_jwt},k={vapid_public}"
-
-            req = urllib.request.Request(
-                endpoint,
-                data=body,
-                headers={
-                    "Content-Encoding": "aes128gcm",
-                    "Content-Type": "application/octet-stream",
-                    "TTL": "86400",
-                    "Urgency": "high",
-                    "Authorization": authorization,
-                },
-                method="POST",
-            )
-            resp = urllib.request.urlopen(req, timeout=10)
-            logger.info(f"Web Push endpoint HTTP status: {resp.status}")
-            return resp.status
-        except urllib.error.HTTPError as he:
-            logger.error(f"Web Push HTTP error status={he.code} body={he.read().decode('utf-8', errors='ignore')}")
-            return he.code
-        except Exception as e:
-            logger.error("Web Push send failed: %s", e)
+            status = resp.status_code if hasattr(resp, "status_code") else 201
+            logger.info(f"Web Push (pywebpush) status: {status} for {endpoint[:45]}")
+            return status
+        except Exception as pe:
+            logger.error(f"pywebpush error for {endpoint[:45]}: {pe}")
             return None
 
     async def _push_call_user(self, user_id: str, call_data: dict):
