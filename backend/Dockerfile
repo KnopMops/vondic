@@ -2,9 +2,10 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
-# Копируем общий файл зависимостей и устанавливаем их
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt && pip install --no-cache-dir sqlalchemy==2.0.40
+# Копируем файл зависимостей бэкенда и устанавливаем их
+COPY backend/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
 
 # Копируем код бэкенда в подпапку /app/backend
 COPY backend/ /app/backend/
