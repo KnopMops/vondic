@@ -31,3 +31,22 @@ class Sticker(db.Model):
 
     def to_dict(self):
         return {"id": self.id, "image_url": self.image_url, "emoji": self.emoji, "position": self.position}
+
+
+class UserCustomSticker(db.Model):
+    __tablename__ = "user_custom_stickers"
+    id = db.Column(TEXT, primary_key=True)
+    user_id = db.Column(TEXT, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    url = db.Column(TEXT, nullable=False)
+    name = db.Column(TEXT, nullable=True)
+    type = db.Column(TEXT, nullable=False, default="sticker")  # "sticker" или "gif"
+    created_at = db.Column(TIMESTAMP, server_default=func.now())
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "url": self.url,
+            "name": self.name or ("Стикер" if self.type == "sticker" else "GIF"),
+            "type": self.type,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
