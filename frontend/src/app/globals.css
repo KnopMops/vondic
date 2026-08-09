@@ -86,7 +86,7 @@
 	box-shadow: 0 4px 32px rgb(0 0 0 / 0.2);
 }
 .glass-sidebar {
-	background-color: #151326 !important;
+	background-color: var(--app-surface) !important;
 	border-right: 1px solid var(--app-glass-border);
 	box-shadow: 4px 0 32px rgba(0, 0, 0, 0.6);
 	z-index: 9999 !important;
