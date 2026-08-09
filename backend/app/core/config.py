@@ -8,11 +8,21 @@ backend_dir = os.path.join(basedir, "../../")
 load_dotenv(os.path.join(backend_dir, ".env.backend"))
 
 
-def get_async_database_url() -> str:
-    explicit = os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL")
-    if explicit:
-        url = explicit
-    else:
+def make_async_database_url(url: str) -> str:
+    if not url:
+        return url
+    if url.startswith("postgresql+psycopg2://"):
+        return url.replace("postgresql+psycopg2://", "postgresql+asyncpg://", 1)
+    if url.startswith("postgresql://"):
+        return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    if not url.startswith("postgresql+asyncpg://"):
+        return f"postgresql+asyncpg://{url.split('://', 1)[-1]}"
+    return url
+
+
+def get_async_database_url(explicit: str | None = None) -> str:
+    url = explicit or os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL")
+    if not url:
         host = os.environ.get("POSTGRES_HOST", "localhost")
         user = os.environ.get("POSTGRES_USER", "postgres")
         password = os.environ.get("POSTGRES_PASSWORD", "")
@@ -23,15 +33,8 @@ def get_async_database_url() -> str:
             auth = f"{user}:{quote_plus(password)}@"
         url = f"postgresql://{auth}{host}:{port}/{db}"
 
-    # Ensure postgresql+asyncpg scheme
-    if url.startswith("postgresql+psycopg2://"):
-        url = url.replace("postgresql+psycopg2://", "postgresql+asyncpg://", 1)
-    elif url.startswith("postgresql://"):
-        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    elif not url.startswith("postgresql+asyncpg://"):
-        url = f"postgresql+asyncpg://{url.split('://', 1)[-1]}"
-        
-    return url
+    return make_async_database_url(url)
+
 
 
 def _build_redis_url() -> str | None:
@@ -53,7 +56,12 @@ class Settings(BaseSettings):
     SECRET_KEY: str = os.environ.get("SECRET_KEY", "you-will-never-guess")
     BASE_DIR: str = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../"))
     
-    DATABASE_URL: str = get_async_database_url()
+    DATABASE_URL: str = os.environ.get("DATABASE_URL") or get_async_database_url()
+    
+    @property
+    def ASYNC_DATABASE_URL(self) -> str:
+        return make_async_database_url(self.DATABASE_URL)
+
     
     # S3 / MinIO Settings
     S3_ENDPOINT: str = os.environ.get("S3_ENDPOINT", "http://minio:9000")

@@ -9,7 +9,8 @@ from app.core.config import settings
 
 # Engine with PgBouncer transaction mode compatibility
 engine = create_async_engine(
-    settings.DATABASE_URL,
+    settings.ASYNC_DATABASE_URL,
+
     echo=False,
     pool_pre_ping=True,
     pool_recycle=120,
