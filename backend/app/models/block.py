@@ -1,25 +1,26 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import TEXT, TIMESTAMP
+from sqlalchemy import Column, DateTime, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy.orm import relationship
 
-from app.core.extensions import db
+from app.core.database import Base
 
 
-class Block(db.Model):
+class Block(Base):
     __tablename__ = "blocks"
-    id = db.Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
-    blocker_id = db.Column(TEXT, db.ForeignKey("users.id"), nullable=False)
-    blocked_id = db.Column(TEXT, db.ForeignKey("users.id"), nullable=False)
-    created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
+    id = Column(Text, primary_key=True, default=lambda: str(uuid.uuid4()))
+    blocker_id = Column(Text, ForeignKey("users.id"), nullable=False)
+    blocked_id = Column(Text, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
-        db.UniqueConstraint("blocker_id", "blocked_id", name="uq_block"),
+        UniqueConstraint("blocker_id", "blocked_id", name="uq_block"),
     )
 
-    blocker = db.relationship(
+    blocker = relationship(
         "User", foreign_keys=[blocker_id], backref="blocks_made"
     )
-    blocked = db.relationship(
+    blocked = relationship(
         "User", foreign_keys=[blocked_id], backref="blocks_received"
     )

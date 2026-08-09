@@ -1,16 +1,15 @@
 from datetime import datetime
 
-from sqlalchemy import INTEGER, TEXT, TIMESTAMP
+from sqlalchemy import Column, DateTime, Integer, String, Text
+from app.core.database import Base
 
-from app.core.extensions import db
 
-
-class Escalation(db.Model):
+class Escalation(Base):
     __tablename__ = "escalations"
 
-    id = db.Column(INTEGER, primary_key=True, autoincrement=True)
-    user_id = db.Column(TEXT, nullable=False)
-    question = db.Column(TEXT, nullable=False)
-    status = db.Column(TEXT, default="open")
-    created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
-    answered_at = db.Column(TIMESTAMP, nullable=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Text, nullable=False)
+    question = Column(Text, nullable=False)
+    status = Column(Text, default="open")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    answered_at = Column(DateTime, nullable=True)

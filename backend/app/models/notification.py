@@ -1,19 +1,18 @@
 from datetime import datetime
 
-from sqlalchemy import INTEGER, TEXT, TIMESTAMP
+from sqlalchemy import Column, DateTime, Integer, String, Text
+from app.core.database import Base
 
-from app.core.extensions import db
 
-
-class Notification(db.Model):
+class Notification(Base):
     __tablename__ = "notifications"
 
-    id = db.Column(INTEGER, primary_key=True, autoincrement=True)
-    user_id = db.Column(TEXT, nullable=False)
-    title = db.Column(TEXT, nullable=True)
-    type = db.Column(TEXT, default="system")
-    message = db.Column(TEXT, nullable=False)
-    notification_hash = db.Column(TEXT, nullable=False)
-    created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Text, nullable=False)
+    title = Column(Text, nullable=True)
+    type = Column(Text, default="system")
+    message = Column(Text, nullable=False)
+    notification_hash = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
-    is_read = db.Column("read", INTEGER, default=0)
+    is_read = Column("read", Integer, default=0)

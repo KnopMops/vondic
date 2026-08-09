@@ -1,22 +1,21 @@
-from sqlalchemy import TEXT, TIMESTAMP, JSON
-from sqlalchemy.sql import func
-from app.core.extensions import db
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, JSON, String, Text, func
+from app.core.database import Base
 
 
-class ScheduledMessage(db.Model):
+class ScheduledMessage(Base):
     __tablename__ = "scheduled_messages"
 
-    id = db.Column(TEXT, primary_key=True)
-    sender_id = db.Column(TEXT, db.ForeignKey("users.id"), nullable=False, index=True)
-    target_user_id = db.Column(TEXT, nullable=True)
-    channel_id = db.Column(TEXT, nullable=True)
-    group_id = db.Column(TEXT, nullable=True)
-    content = db.Column(db.Text, nullable=False)
-    type = db.Column(TEXT, nullable=False, default="text")
-    attachments = db.Column(JSON, nullable=True)
-    scheduled_at = db.Column(TIMESTAMP, nullable=False)
-    sent_at = db.Column(TIMESTAMP, nullable=True)
-    created_at = db.Column(TIMESTAMP, server_default=func.now())
+    id = Column(Text, primary_key=True)
+    sender_id = Column(Text, ForeignKey("users.id"), nullable=False, index=True)
+    target_user_id = Column(Text, nullable=True)
+    channel_id = Column(Text, nullable=True)
+    group_id = Column(Text, nullable=True)
+    content = Column(Text, nullable=False)
+    type = Column(Text, nullable=False, default="text")
+    attachments = Column(JSON, nullable=True)
+    scheduled_at = Column(DateTime, nullable=False)
+    sent_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
 
     def to_dict(self):
         return {

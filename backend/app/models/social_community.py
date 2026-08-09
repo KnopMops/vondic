@@ -1,52 +1,44 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BOOLEAN, TEXT, TIMESTAMP
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, Table, Text
+from sqlalchemy.orm import backref, relationship
+from app.core.database import Base
 
-from app.core.extensions import db
-
-social_community_members = db.Table(
+social_community_members = Table(
     "social_community_members",
-    db.Column("user_id", TEXT, db.ForeignKey("users.id"), primary_key=True),
-    db.Column(
-        "social_community_id",
-        TEXT,
-        db.ForeignKey("social_communities.id"),
-        primary_key=True,
-    ),
-    db.Column("role", TEXT, nullable=False, default="member"),
-    db.Column("joined_at", TIMESTAMP, default=datetime.utcnow),
+    Base.metadata,
+    Column("user_id", Text, ForeignKey("users.id"), primary_key=True),
+    Column("social_community_id", Text, ForeignKey("social_communities.id"), primary_key=True),
+    Column("role", Text, nullable=False, default="member"),
+    Column("joined_at", DateTime, default=datetime.utcnow),
 )
 
 
-class SocialCommunity(db.Model):
+class SocialCommunity(Base):
     """Публичное сообщество (страница/группа как во VK), не сервер мессенджера."""
 
     __tablename__ = "social_communities"
 
-    id = db.Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
-    name = db.Column(TEXT, nullable=False)
-    description = db.Column(TEXT, nullable=True)
-    avatar_url = db.Column(TEXT, nullable=True)
-    cover_url = db.Column(TEXT, nullable=True)
-    invite_code = db.Column(
-        TEXT, unique=True, default=lambda: str(uuid.uuid4())[:8]
-    )
-    is_public = db.Column(BOOLEAN, default=True)
-    owner_id = db.Column(TEXT, db.ForeignKey("users.id"), nullable=False)
-    created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
-    updated_at = db.Column(
-        TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
+    id = Column(Text, primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = Column(Text, nullable=False)
+    description = Column(Text, nullable=True)
+    avatar_url = Column(Text, nullable=True)
+    cover_url = Column(Text, nullable=True)
+    invite_code = Column(Text, unique=True, default=lambda: str(uuid.uuid4())[:8])
+    is_public = Column(Boolean, default=True)
+    owner_id = Column(Text, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    owner = db.relationship(
+    owner = relationship(
         "User", foreign_keys=[owner_id], backref="owned_social_communities"
     )
-    members = db.relationship(
+    members = relationship(
         "User",
         secondary=social_community_members,
         lazy="subquery",
-        backref=db.backref("social_communities", lazy=True),
+        backref=backref("social_communities", lazy=True),
     )
 
     def to_dict(self):
@@ -59,7 +51,7 @@ class SocialCommunity(db.Model):
             "invite_code": self.invite_code,
             "is_public": bool(self.is_public),
             "owner_id": self.owner_id,
-            "members_count": len(self.members),
+            "members_count": len(self.members) if self.members else 0,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

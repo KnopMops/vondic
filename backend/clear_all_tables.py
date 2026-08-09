@@ -19,8 +19,8 @@ def build_dsn() -> str:
             f"postgresql://{quote_plus(user)}:{quote_plus(password)}@"
             f"{host}:{port}/{dbname}?sslmode={sslmode}"
         )
-    return f"postgresql://{
-        quote_plus(user)}@{host}:{port}/{dbname}?sslmode={sslmode}"
+    return f"postgresql://{quote_plus(user)}@{host}:{port}/{dbname}?sslmode={sslmode}"
+
 
 
 def main() -> int:

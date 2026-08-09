@@ -1,31 +1,28 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import TEXT, TIMESTAMP
+from sqlalchemy import Column, DateTime, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy.orm import relationship
+from app.core.database import Base
 
-from app.core.extensions import db
 
-
-class Friendship(db.Model):
+class Friendship(Base):
     __tablename__ = "friendships"
-    id = db.Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
-    requester_id = db.Column(TEXT, db.ForeignKey("users.id"), nullable=False)
-    addressee_id = db.Column(TEXT, db.ForeignKey("users.id"), nullable=False)
-    status = db.Column(TEXT, default="pending")
-    created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
-    updated_at = db.Column(
-        TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
+    id = Column(Text, primary_key=True, default=lambda: str(uuid.uuid4()))
+    requester_id = Column(Text, ForeignKey("users.id"), nullable=False)
+    addressee_id = Column(Text, ForeignKey("users.id"), nullable=False)
+    status = Column(Text, default="pending")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     __table_args__ = (
-        db.UniqueConstraint(
-            "requester_id", "addressee_id", name="uq_friendship_request"
-        ),
+        UniqueConstraint("requester_id", "addressee_id", name="uq_friendship_request"),
     )
 
-    requester = db.relationship(
+    requester = relationship(
         "User", foreign_keys=[requester_id], backref="sent_friend_requests"
     )
-    addressee = db.relationship(
+    addressee = relationship(
         "User", foreign_keys=[addressee_id], backref="friendships"
     )
 

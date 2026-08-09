@@ -638,8 +638,8 @@ def admin_escalation_close(current_user, esc_id: int):
     user_id = escalation.user_id
     if user_id:
         content_hash = hashlib.sha256(
-            f"{user_id}|Оператор закрыл обращение|{
-                time.time()}".encode("utf-8")).hexdigest()
+            f"{user_id}|Оператор закрыл обращение|{time.time()}".encode("utf-8")).hexdigest()
+
         db.session.add(
             Notification(
                 user_id=user_id,

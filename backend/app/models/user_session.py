@@ -1,26 +1,25 @@
 import uuid
 from datetime import datetime, timedelta
 
-from sqlalchemy import TEXT, TIMESTAMP, ForeignKey
+from sqlalchemy import Column, DateTime, ForeignKey, String, Text
+from app.core.database import Base
 
-from app.core.extensions import db
 
-
-class UserSession(db.Model):
+class UserSession(Base):
     __tablename__ = "user_sessions"
 
-    id = db.Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = db.Column(TEXT, ForeignKey("users.id"), nullable=False, index=True)
-    device_type = db.Column(TEXT, nullable=False, default="web")
-    device_name = db.Column(TEXT, nullable=True)
-    ip_address = db.Column(TEXT, nullable=True)
-    access_token_lookup = db.Column(TEXT, unique=True, nullable=False, index=True)
-    access_token_hash = db.Column(TEXT, nullable=False)
-    refresh_token_lookup = db.Column(TEXT, unique=True, nullable=False, index=True)
-    refresh_token_hash = db.Column(TEXT, nullable=False)
-    created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
-    last_active = db.Column(TIMESTAMP, default=datetime.utcnow)
-    expires_at = db.Column(TIMESTAMP, nullable=True)
+    id = Column(Text, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(Text, ForeignKey("users.id"), nullable=False, index=True)
+    device_type = Column(Text, nullable=False, default="web")
+    device_name = Column(Text, nullable=True)
+    ip_address = Column(Text, nullable=True)
+    access_token_lookup = Column(Text, unique=True, nullable=False, index=True)
+    access_token_hash = Column(Text, nullable=False)
+    refresh_token_lookup = Column(Text, unique=True, nullable=False, index=True)
+    refresh_token_hash = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_active = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=True)
 
     MAX_SESSIONS = 3
     WEB_SESSION_TTL = timedelta(days=7)

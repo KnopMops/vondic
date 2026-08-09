@@ -1,21 +1,20 @@
 from datetime import datetime
 
-from sqlalchemy import INTEGER, TEXT, TIMESTAMP
+from sqlalchemy import Column, DateTime, Integer, String, Text
+from app.core.database import Base
 
-from app.core.extensions import db
 
-
-class PostReport(db.Model):
+class PostReport(Base):
     __tablename__ = "post_reports"
 
-    id = db.Column(INTEGER, primary_key=True, autoincrement=True)
-    reporter_id = db.Column(TEXT, nullable=False)
-    reporter_login = db.Column(TEXT, nullable=True)
-    post_id = db.Column(TEXT, nullable=False)
-    post_author_login = db.Column(TEXT, nullable=True)
-    description = db.Column(TEXT, nullable=True)
-    attachments = db.Column(TEXT, nullable=True)
-    reason = db.Column(TEXT, nullable=True)
-    status = db.Column(TEXT, default="open")
-    created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
-    verdict_at = db.Column(INTEGER, nullable=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    reporter_id = Column(Text, nullable=False)
+    reporter_login = Column(Text, nullable=True)
+    post_id = Column(Text, nullable=False)
+    post_author_login = Column(Text, nullable=True)
+    description = Column(Text, nullable=True)
+    attachments = Column(Text, nullable=True)
+    reason = Column(Text, nullable=True)
+    status = Column(Text, default="open")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    verdict_at = Column(Integer, nullable=True)

@@ -1,25 +1,25 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BOOLEAN, INTEGER, JSON, TEXT, TIMESTAMP, ForeignKey
-from app.core.extensions import db
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy.orm import backref, relationship
+from app.core.database import Base
 
 
-class Playlist(db.Model):
+class Playlist(Base):
     __tablename__ = "playlists"
-    id = db.Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
-    name = db.Column(TEXT, nullable=False)
-    description = db.Column(TEXT, nullable=True)
-    cover_image = db.Column(TEXT, nullable=True)
-    owner_id = db.Column(TEXT, ForeignKey("users.id"), nullable=False)
-    is_public = db.Column(BOOLEAN, default=True)
-    is_pinned = db.Column(BOOLEAN, default=False)
-    tracks = db.Column(JSON, default=list)
-    created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
-    updated_at = db.Column(
-        TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
+    id = Column(Text, primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = Column(Text, nullable=False)
+    description = Column(Text, nullable=True)
+    cover_image = Column(Text, nullable=True)
+    owner_id = Column(Text, ForeignKey("users.id"), nullable=False)
+    is_public = Column(Boolean, default=True)
+    is_pinned = Column(Boolean, default=False)
+    tracks = Column(JSON, default=list)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    owner = db.relationship("User", backref=db.backref("playlists", lazy=True))
+    owner = relationship("User", backref=backref("playlists", lazy=True))
 
     def to_dict(self):
         return {

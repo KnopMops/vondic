@@ -1,36 +1,32 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint
-from sqlalchemy import TEXT, TIMESTAMP
+from sqlalchemy import CheckConstraint, Column, DateTime, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy.orm import backref, relationship
+from app.core.database import Base
 
-from app.core.extensions import db
 
-
-class CommunityChannel(db.Model):
+class CommunityChannel(Base):
     __tablename__ = "community_channels"
 
-    id = db.Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
-    community_id = db.Column(TEXT, db.ForeignKey(
-        "communities.id"), nullable=False)
-    name = db.Column(TEXT, nullable=False)
-    description = db.Column(TEXT, nullable=True)
-    type = db.Column(TEXT, nullable=False, default="text")
+    id = Column(Text, primary_key=True, default=lambda: str(uuid.uuid4()))
+    community_id = Column(Text, ForeignKey("communities.id"), nullable=False)
+    name = Column(Text, nullable=False)
+    description = Column(Text, nullable=True)
+    type = Column(Text, nullable=False, default="text")
 
-    created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
-    updated_at = db.Column(
-        TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     __table_args__ = (
-        db.UniqueConstraint("community_id", "name",
-                            name="uq_community_channel_name"),
+        UniqueConstraint("community_id", "name", name="uq_community_channel_name"),
         CheckConstraint("type IN ('text','voice')", name="ck_channel_type"),
     )
 
-    community = db.relationship(
+    community = relationship(
         "Community",
         foreign_keys=[community_id],
-        backref=db.backref("channels", lazy=True),
+        backref=backref("channels", lazy=True),
     )
 
     def to_dict(self):

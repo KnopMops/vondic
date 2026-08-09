@@ -397,8 +397,8 @@ def borrow_playlist(current_user):
         _notify(
             src_owner_id,
             "Запрос синхронизации плейлиста",
-            f"Пользователь {
-                current_user.username} хочет синхронизировать плейлист «{name}». Откройте VМьюзик → Запросы синхронизации.",
+            f"Пользователь {current_user.username} хочет синхронизировать плейлист «{name}». Откройте VМьюзик → Запросы синхронизации.",
+
             "warning",
         )
     except Exception:

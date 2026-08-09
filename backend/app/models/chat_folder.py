@@ -1,20 +1,19 @@
-from sqlalchemy import TEXT, INTEGER, TIMESTAMP
-from sqlalchemy.sql import func
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy.orm import relationship
+from app.core.database import Base
 
-from app.core.extensions import db
 
-
-class ChatFolder(db.Model):
+class ChatFolder(Base):
     __tablename__ = "chat_folders"
 
-    id = db.Column(TEXT, primary_key=True)
-    user_id = db.Column(TEXT, db.ForeignKey("users.id"), nullable=False, index=True)
-    name = db.Column(TEXT, nullable=False)
-    icon = db.Column(TEXT, nullable=True, default="📁")
-    position = db.Column(INTEGER, nullable=False, default=0)
-    created_at = db.Column(TIMESTAMP, server_default=func.now())
+    id = Column(Text, primary_key=True)
+    user_id = Column(Text, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(Text, nullable=False)
+    icon = Column(Text, nullable=True, default="📁")
+    position = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, server_default=func.now())
 
-    items = db.relationship("ChatFolderItem", backref="folder", cascade="all, delete-orphan")
+    items = relationship("ChatFolderItem", backref="folder", cascade="all, delete-orphan")
 
     def to_dict(self):
         return {
@@ -29,10 +28,10 @@ class ChatFolder(db.Model):
         }
 
 
-class ChatFolderItem(db.Model):
+class ChatFolderItem(Base):
     __tablename__ = "chat_folder_items"
 
-    id = db.Column(INTEGER, primary_key=True, autoincrement=True)
-    folder_id = db.Column(TEXT, db.ForeignKey("chat_folders.id", ondelete="CASCADE"), nullable=False)
-    chat_type = db.Column(TEXT, nullable=False)
-    chat_id = db.Column(TEXT, nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    folder_id = Column(Text, ForeignKey("chat_folders.id", ondelete="CASCADE"), nullable=False)
+    chat_type = Column(Text, nullable=False)
+    chat_id = Column(Text, nullable=False)

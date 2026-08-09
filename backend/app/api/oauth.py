@@ -448,14 +448,10 @@ def authorize():
             "read_messages": "Чтение сообщений",
             "write_messages": "Отправка сообщений",
         }
-        scopes_html = "".join(
-            [
-                f'<li style="margin-bottom:6px;"><span style="color:#a5b4fc;">•</span> {
-                    escape(
-                        scope_labels.get(
-                            s,
-                            s))} <span style="color:#94a3b8;">({
-                    escape(s)})</span></li>' for s in scopes])
+        scopes_html = "".join([
+            f'<li style="margin-bottom:6px;"><span style="color:#a5b4fc;">•</span> {escape(scope_labels.get(s, s))} <span style="color:#94a3b8;">({escape(s)})</span></li>'
+            for s in scopes
+        ])
         app_initial = (app_name[:1] or "V").upper()
         logo_url = (
             client.get_logo_url() or "").replace(

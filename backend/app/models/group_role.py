@@ -1,15 +1,14 @@
-from sqlalchemy import TEXT, INTEGER, TIMESTAMP, UniqueConstraint
-from sqlalchemy.sql import func
-from app.core.extensions import db
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from app.core.database import Base
 
 
-class GroupRole(db.Model):
+class GroupRole(Base):
     __tablename__ = "group_roles"
 
-    id = db.Column(INTEGER, primary_key=True, autoincrement=True)
-    group_id = db.Column(TEXT, db.ForeignKey("groups.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id = db.Column(TEXT, db.ForeignKey("users.id"), nullable=False)
-    role = db.Column(TEXT, nullable=False, default="member")
-    created_at = db.Column(TIMESTAMP, server_default=func.now())
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    group_id = Column(Text, ForeignKey("groups.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Text, ForeignKey("users.id"), nullable=False)
+    role = Column(Text, nullable=False, default="member")
+    created_at = Column(DateTime, server_default=func.now())
 
     __table_args__ = (UniqueConstraint("group_id", "user_id", name="uq_group_role"),)

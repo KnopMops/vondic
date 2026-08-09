@@ -167,9 +167,8 @@ def _consume(app):
             break
         except pika.exceptions.AMQPConnectionError as e:
             if attempt < max_retries - 1:
-                print(
-                    f"RabbitMQ connection failed (attempt {
-                        attempt + 1}/{max_retries}), retrying in {retry_delay}s...")
+                print(f"RabbitMQ connection failed (attempt {attempt + 1}/{max_retries}), retrying in {retry_delay}s...")
+
                 time.sleep(retry_delay)
             else:
                 print(

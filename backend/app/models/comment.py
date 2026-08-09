@@ -1,29 +1,28 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BOOLEAN, INTEGER, TEXT, TIMESTAMP
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import backref, relationship
+from app.core.database import Base
 
-from app.core.extensions import db
 
-
-class Comment(db.Model):
+class Comment(Base):
     __tablename__ = "comments"
-    id = db.Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
-    content = db.Column(TEXT, nullable=False)
-    posted_by = db.Column(TEXT, db.ForeignKey("users.id"), nullable=False)
-    post_id = db.Column(TEXT, db.ForeignKey("posts.id"), nullable=False)
-    parent_id = db.Column(TEXT, db.ForeignKey("comments.id"), nullable=True)
-    deleted = db.Column(BOOLEAN, default=False)
-    deleted_by = db.Column(TEXT, nullable=True)
-    reason_for_deletion = db.Column(TEXT, nullable=True)
-    deleted_at = db.Column(TIMESTAMP, nullable=True)
-    created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
-    updated_at = db.Column(
-        TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
-    likes = db.Column(INTEGER, default=0)
+    id = Column(Text, primary_key=True, default=lambda: str(uuid.uuid4()))
+    content = Column(Text, nullable=False)
+    posted_by = Column(Text, ForeignKey("users.id"), nullable=False)
+    post_id = Column(Text, ForeignKey("posts.id"), nullable=False)
+    parent_id = Column(Text, ForeignKey("comments.id"), nullable=True)
+    deleted = Column(Boolean, default=False)
+    deleted_by = Column(Text, nullable=True)
+    reason_for_deletion = Column(Text, nullable=True)
+    deleted_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    likes = Column(Integer, default=0)
 
-    replies = db.relationship(
-        "Comment", backref=db.backref("parent", remote_side=[id]), lazy=True
+    replies = relationship(
+        "Comment", backref=backref("parent", remote_side=[id]), lazy=True
     )
 
     def to_dict(self):

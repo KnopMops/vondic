@@ -1,27 +1,26 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import TEXT, TIMESTAMP
+from sqlalchemy import Column, DateTime, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy.orm import relationship
+from app.core.database import Base
 
-from app.core.extensions import db
 
-
-class Subscription(db.Model):
+class Subscription(Base):
     __tablename__ = "subscriptions"
-    id = db.Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
-    subscriber_id = db.Column(TEXT, db.ForeignKey("users.id"), nullable=False)
-    target_id = db.Column(TEXT, db.ForeignKey("users.id"), nullable=False)
-    created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
+    id = Column(Text, primary_key=True, default=lambda: str(uuid.uuid4()))
+    subscriber_id = Column(Text, ForeignKey("users.id"), nullable=False)
+    target_id = Column(Text, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
-        db.UniqueConstraint("subscriber_id", "target_id",
-                            name="uq_subscription"),
+        UniqueConstraint("subscriber_id", "target_id", name="uq_subscription"),
     )
 
-    subscriber = db.relationship(
+    subscriber = relationship(
         "User", foreign_keys=[subscriber_id], backref="following_subscriptions"
     )
-    target = db.relationship(
+    target = relationship(
         "User", foreign_keys=[target_id], backref="follower_subscriptions"
     )
 

@@ -1,21 +1,20 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import TEXT, TIMESTAMP, ForeignKey
+from sqlalchemy import Column, DateTime, ForeignKey, String, Text
+from app.core.database import Base
 
-from app.core.extensions import db
 
-
-class Device(db.Model):
+class Device(Base):
     __tablename__ = "devices"
 
-    id = db.Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = db.Column(TEXT, ForeignKey("users.id"), nullable=False, index=True)
-    token = db.Column(TEXT, unique=True, nullable=False, index=True)
-    platform = db.Column(TEXT, nullable=False, default="android")
-    device_type = db.Column(TEXT, nullable=False, default="mobile")
-    created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
-    updated_at = db.Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
+    id = Column(Text, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(Text, ForeignKey("users.id"), nullable=False, index=True)
+    token = Column(Text, unique=True, nullable=False, index=True)
+    platform = Column(Text, nullable=False, default="android")
+    device_type = Column(Text, nullable=False, default="mobile")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def to_dict(self):
         return {
