@@ -34,11 +34,7 @@ export default function PushRegistrar() {
 				const reg = await navigator.serviceWorker.register('/sw.js')
 				await navigator.serviceWorker.ready
 
-				if (Notification.permission === 'denied') return
-				if (Notification.permission === 'default') {
-					const perm = await Notification.requestPermission()
-					if (perm !== 'granted') return
-				}
+				if (Notification.permission !== 'granted') return
 
 				const targetKeyArray = urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
 				let subscription = await reg.pushManager.getSubscription()
