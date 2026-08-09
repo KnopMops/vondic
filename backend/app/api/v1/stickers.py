@@ -1,17 +1,25 @@
+import asyncio
 import io
-import os
-import uuid
 import logging
-from flask import Blueprint, jsonify, request
-from app.core.extensions import db
-from app.utils.decorators import token_required
+import os
+import tempfile
+import uuid
+from typing import Optional
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.database import get_async_session
+from app.core.deps import get_current_user
 from app.models.sticker import UserCustomSticker
+from app.models.user import User
+from app.services.s3_service import upload_file_to_s3
 
 logger = logging.getLogger(__name__)
 
-stickers_bp = Blueprint("stickers", __name__, url_prefix="/api/v1/stickers")
+stickers_router = APIRouter(prefix="/api/v1/stickers", tags=["Stickers"])
 
-# Встроенная подборка трендовых стикеров и GIF для чата
 FEATURED_STICKERS = [
     {
         "category": "Реакции",
@@ -39,7 +47,7 @@ FEATURED_STICKERS = [
 
 
 def _convert_to_webp(file_bytes: bytes, max_size: int = 512) -> bytes:
-    """Конвертирует png, jpeg, jpg, webp в оптимизированный WebP кадра 512x512."""
+    """Конвертирует png, jpeg, jpg, webp в оптимизированный прозрачный WebP (512x512)."""
     try:
         from PIL import Image
         img = Image.open(io.BytesIO(file_bytes))
@@ -48,15 +56,12 @@ def _convert_to_webp(file_bytes: bytes, max_size: int = 512) -> bytes:
         img.save(out, format="WEBP", quality=90, method=6)
         return out.getvalue()
     except Exception as e:
-        logger.warning(f"PIL WebP conversion failed: {e}")
+        logger.warning(f"Pillow WebP conversion failed: {e}")
         return file_bytes
 
 
-def _convert_to_mp4(file_bytes: bytes, original_ext: str) -> bytes:
+async def _convert_to_mp4_async(file_bytes: bytes, original_ext: str) -> bytes:
     """Конвертирует mp4 или gif в сжатый зацикленный MP4 ролик."""
-    import subprocess
-    import tempfile
-
     ext = (original_ext or "gif").lower()
     if ext not in ["gif", "mp4", "mov", "webm"]:
         ext = "gif"
@@ -75,26 +80,37 @@ def _convert_to_mp4(file_bytes: bytes, original_ext: str) -> bytes:
             "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
             tmp_out_path
         ]
-        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=20)
-        if res.returncode == 0 and os.path.exists(tmp_out_path):
-            with open(tmp_out_path, "rb") as f:
-                mp4_bytes = f.read()
-            try:
-                os.remove(tmp_in_path)
-                os.remove(tmp_out_path)
-            except Exception:
-                pass
-            return mp4_bytes
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            await asyncio.wait_for(proc.communicate(), timeout=20.0)
+            if proc.returncode == 0 and os.path.exists(tmp_out_path):
+                with open(tmp_out_path, "rb") as f:
+                    return f.read()
+        finally:
+            for p in (tmp_in_path, tmp_out_path):
+                if os.path.exists(p):
+                    try:
+                        os.remove(p)
+                    except Exception:
+                        pass
     except Exception as e:
-        logger.warning(f"ffmpeg MP4 conversion failed: {e}")
+        logger.warning(f"Async ffmpeg MP4 conversion failed: {e}")
     return file_bytes
 
 
-@stickers_bp.route("", methods=["GET"])
-@token_required
-def get_stickers(current_user):
-    user_stickers = UserCustomSticker.query.filter_by(user_id=current_user.id).order_by(UserCustomSticker.created_at.desc()).all()
-    
+@stickers_router.get("")
+async def get_stickers(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    stmt = select(UserCustomSticker).where(UserCustomSticker.user_id == current_user.id).order_by(UserCustomSticker.created_at.desc())
+    res = await db.execute(stmt)
+    user_stickers = res.scalars().all()
+
     my_stickers = [s.to_dict() for s in user_stickers if s.type == "sticker"]
     my_gifs = [s.to_dict() for s in user_stickers if s.type == "gif"]
 
@@ -106,38 +122,34 @@ def get_stickers(current_user):
 
     categories.extend(FEATURED_STICKERS)
 
-    return jsonify({
+    return {
         "success": True,
-        "categories": categories
-    })
+        "categories": categories,
+    }
 
 
-@stickers_bp.route("/upload", methods=["POST"])
-@token_required
-def upload_custom_sticker(current_user):
-    if "file" not in request.files:
-        return jsonify({"success": False, "error": "Файл не передан"}), 400
-
-    file_obj = request.files["file"]
-    sticker_type = request.form.get("type", "sticker").lower()  # "sticker" или "gif"
-    custom_name = request.form.get("name", "").strip()
-
-    filename = file_obj.filename or "file"
-    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-    file_bytes = file_obj.read()
-
+@stickers_router.post("/upload")
+async def upload_custom_sticker(
+    file: UploadFile = File(...),
+    type: str = Form("sticker"),
+    name: str = Form(""),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    file_bytes = await file.read()
     if not file_bytes:
-        return jsonify({"success": False, "error": "Пустой файл"}), 400
+        raise HTTPException(status_code=400, detail="Пустой файл")
 
-    from app.api.v1.upload import _get_s3_client, _get_s3_bucket, _get_s3_public_url
+    filename = file.filename or "file"
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    sticker_type = type.lower()
+    custom_name = name.strip()
 
     if sticker_type == "gif":
-        # mp4 или gif конвертируются в .mp4
-        converted_bytes = _convert_to_mp4(file_bytes, ext)
+        converted_bytes = await _convert_to_mp4_async(file_bytes, ext)
         final_ext = "mp4"
         content_type = "video/mp4"
     else:
-        # png, jpg, jpeg, webp конвертируются в .webp
         converted_bytes = _convert_to_webp(file_bytes)
         final_ext = "webp"
         content_type = "image/webp"
@@ -146,16 +158,7 @@ def upload_custom_sticker(current_user):
     key = f"stickers/{current_user.id}/{file_id}.{final_ext}"
 
     try:
-        s3 = _get_s3_client()
-        bucket = _get_s3_bucket()
-        s3.put_object(
-            Bucket=bucket,
-            Key=key,
-            Body=converted_bytes,
-            ContentType=content_type,
-        )
-        public_url = f"{_get_s3_public_url()}/uploads/{key}"
-
+        public_url = await upload_file_to_s3(converted_bytes, key, content_type=content_type)
         new_item = UserCustomSticker(
             id=file_id,
             user_id=current_user.id,
@@ -163,30 +166,40 @@ def upload_custom_sticker(current_user):
             name=custom_name or ("Мой стикер" if sticker_type == "sticker" else "Мой GIF"),
             type=sticker_type,
         )
-        db.session.add(new_item)
-        db.session.commit()
+        db.add(new_item)
+        await db.commit()
 
-        return jsonify({
+        return {
             "success": True,
-            "sticker": new_item.to_dict()
-        })
+            "sticker": new_item.to_dict(),
+        }
     except Exception as e:
-        db.session.rollback()
+        await db.rollback()
         logger.error(f"Failed to upload sticker: {e}")
-        return jsonify({"success": False, "error": f"Ошибка сохранения: {e}"}), 500
+        raise HTTPException(status_code=500, detail=f"Ошибка сохранения: {e}")
 
 
-@stickers_bp.route("/<sticker_id>", methods=["DELETE"])
-@token_required
-def delete_custom_sticker(current_user, sticker_id):
-    item = UserCustomSticker.query.filter_by(id=sticker_id, user_id=current_user.id).first()
+@stickers_router.delete("/{sticker_id}")
+async def delete_custom_sticker(
+    sticker_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    stmt = select(UserCustomSticker).where(
+        UserCustomSticker.id == sticker_id,
+        UserCustomSticker.user_id == current_user.id,
+    )
+    res = await db.execute(stmt)
+    item = res.scalars().first()
+
     if not item:
-        return jsonify({"success": False, "error": "Стикер не найден"}), 404
+        raise HTTPException(status_code=404, detail="Стикер не найден")
 
     try:
-        db.session.delete(item)
-        db.session.commit()
-        return jsonify({"success": True})
+        await db.delete(item)
+        await db.commit()
+        return {"success": True}
     except Exception as e:
-        db.session.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+

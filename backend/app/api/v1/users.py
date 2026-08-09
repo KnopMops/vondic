@@ -1,802 +1,154 @@
 import os
 from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
 
-from app.core.extensions import db
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy import or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.database import get_async_session
+from app.core.deps import get_current_user, get_optional_current_user
 from app.models.user import User
-from app.schemas.user_schema import user_schema, users_schema
-from app.services.user_service import UserService
-from app.utils.decorators import token_required
-from flask import Blueprint, jsonify, request
 
-users_bp = Blueprint("users", __name__, url_prefix="/api/v1/users")
+users_router = APIRouter(prefix="/api/v1/users", tags=["Users"])
 
 
-def _viewer_id_from_request() -> str | None:
-    from app.services.auth_service import AuthService
-
-    data = request.get_json(silent=True) or {}
-    token = data.get("access_token")
-    if not token:
-        auth_header = request.headers.get("Authorization", "")
-        if auth_header.startswith("Bearer "):
-            token = auth_header.split(" ", 1)[1].strip()
-    if not token:
-        token = request.args.get("access_token")
-    if not token:
-        token = request.cookies.get("access_token")
-    if not token:
-        return None
-    user, error = AuthService.get_user_by_token(token)
-    if error or not user:
-        return None
-    return str(user.id)
+@users_router.get("")
+@users_router.get("/")
+async def get_users(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    stmt = select(User).limit(100)
+    res = await db.execute(stmt)
+    users = res.scalars().all()
+    return [u.to_dict(viewer_id=current_user.id) for u in users]
 
 
-@users_bp.route("/", methods=["GET"])
-@token_required
-def get_users(current_user):
-    users = UserService.get_all_users()
-    return (
-        jsonify([u.to_dict(viewer_id=current_user.id) for u in users]),
-        200,
-    )
+@users_router.get("/me")
+async def get_me(
+    current_user: User = Depends(get_current_user),
+):
+    return current_user.to_dict(viewer_id=current_user.id)
 
 
-@users_bp.route("/get", methods=["POST"])
-def get_user_detail():
-    data = request.get_json() or {}
-    user_id = data.get("user_id")
+@users_router.put("/me")
+async def update_me(
+    payload: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    allowed_fields = {"username", "description", "avatar_url", "profile_bg_theme", "profile_bg_gradient", "profile_bg_image", "privacy_settings"}
+    for k, v in payload.items():
+        if k in allowed_fields:
+            setattr(current_user, k, v)
+    await db.commit()
+    return current_user.to_dict(viewer_id=current_user.id)
 
+
+@users_router.post("/get")
+async def get_user_detail(
+    payload: Dict[str, Any],
+    optional_user: Optional[User] = Depends(get_optional_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    user_id = payload.get("user_id")
     if not user_id:
-        return jsonify({"error": "Требуется user_id"}), 400
+        raise HTTPException(status_code=400, detail="Требуется user_id")
 
-    user = UserService.get_user_by_id(user_id)
+    stmt = select(User).where(User.id == str(user_id))
+    res = await db.execute(stmt)
+    user = res.scalars().first()
     if not user:
-        return jsonify({"code": "USER_NOT_FOUND"}), 404
-    viewer_id = _viewer_id_from_request()
-    return jsonify(user.to_dict(viewer_id=viewer_id)), 200
+        raise HTTPException(status_code=404, detail="USER_NOT_FOUND")
+
+    viewer_id = optional_user.id if optional_user else None
+    return user.to_dict(viewer_id=viewer_id)
 
 
-@users_bp.route("/by-email/<email>", methods=["GET"])
-def get_user_by_email(email):
-    user = UserService.get_user_by_email(email)
+@users_router.get("/by-email/{email}")
+async def get_user_by_email(
+    email: str,
+    optional_user: Optional[User] = Depends(get_optional_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    stmt = select(User).where(User.email == email)
+    res = await db.execute(stmt)
+    user = res.scalars().first()
     if not user:
-        return jsonify({"code": "USER_NOT_FOUND"}), 404
-    viewer_id = _viewer_id_from_request()
-    return jsonify(user.to_dict(viewer_id=viewer_id)), 200
+        raise HTTPException(status_code=404, detail="USER_NOT_FOUND")
+
+    viewer_id = optional_user.id if optional_user else None
+    return user.to_dict(viewer_id=viewer_id)
 
 
-@users_bp.route("/search", methods=["POST"])
-@token_required
-def search_users(current_user):
-    data = request.get_json() or {}
-    query = data.get("query")
-
+@users_router.post("/search")
+async def search_users(
+    payload: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    query = payload.get("query", "").strip()
     if not query:
-        return jsonify({"error": "Требуется query"}), 400
-
-    users = UserService.search_users(query)
-    return (
-        jsonify(
-            [u.to_dict(viewer_id=current_user.id) for u in users]
-        ),
-        200,
-    )
-
-
-@users_bp.route("/internal/process_message", methods=["POST"])
-def internal_process_message():
-    data = request.get_json() or {}
-    message_id = data.get("message_id")
-    target_id = data.get("target_id")
-
-    if not message_id or not target_id:
-        return jsonify({"error": "Отсутствуют данные"}), 400
-
-    from app.services.ollama_service import OllamaService
-
-    ai_user = OllamaService.get_ai_user()
-
-    if str(target_id) == str(ai_user.id):
-        content = data.get("content")
-        sender_id = data.get("sender_id")
-        OllamaService.process_message_async(
-            message_id, is_dm=True, content=content, sender_id=sender_id
-        )
-        return jsonify({"status": "processing"}), 200
-
-    return jsonify({"status": "ignored"}), 200
-
-
-@users_bp.route("/", methods=["POST"])
-def create_user():
-    data = request.get_json()
-    if not data:
-        return (jsonify({"error": "Нет данных"}), 400)
-    user = UserService.create_user(data)
-    if not user:
-        return (
-            jsonify({"error": "Не удалось создать пользователя (дубликат?)"}), 400)
-    return (jsonify(user_schema.dump(user)), 201)
-
-
-@users_bp.route("/", methods=["PUT"])
-@token_required
-def update_user(current_user):
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "Нет данных"}), 400
-
-    user_id = data.get("user_id")
-    if not user_id:
-        return jsonify({"error": "Требуется user_id"}), 400
-
-    user, error = UserService.update_user(user_id, data, current_user)
-    if error:
-        status_code = 404 if error == "Пользователь не найден" else 400
-        if error == "Неавторизовано":
-            status_code = 403
-        return jsonify({"error": error}), status_code
-
-    return jsonify(user_schema.dump(user)), 200
-
-
-@users_bp.route("/block", methods=["POST"])
-@token_required
-def block_user(current_user):
-    data = request.get_json() or {}
-    user_id = data.get("user_id")
-    admin_user_id = data.get("admin_user_id")
-
-    if not user_id or not admin_user_id:
-        return jsonify(
-            {"error": "Требуется user_id и admin_user_id"}), 400
-
-    if str(admin_user_id) != str(current_user.id):
-        return jsonify({"error": "Несоответствие ID администратора"}), 403
-
-    user, error = UserService.block_user(user_id, current_user)
-    if error:
-        status_code = 404 if error == "Пользователь не найден" else 403
-        return jsonify({"error": error}), status_code
-    return jsonify(
-        {"message": "Пользователь заблокирован",
-            "user": user_schema.dump(user)}
-    ), 200
-
-
-@users_bp.route("/unblock", methods=["POST"])
-@token_required
-def unblock_user(current_user):
-    data = request.get_json() or {}
-    user_id = data.get("user_id")
-    admin_user_id = data.get("admin_user_id")
-
-    if not user_id or not admin_user_id:
-        return jsonify(
-            {"error": "Требуется user_id и admin_user_id"}), 400
-
-    if str(admin_user_id) != str(current_user.id):
-        return jsonify({"error": "Несоответствие ID администратора"}), 403
-
-    user, error = UserService.unblock_user(user_id, current_user)
-    if error:
-        status_code = 404 if error == "Пользователь не найден" else 403
-        return jsonify({"error": error}), status_code
-    return jsonify(
-        {"message": "Пользователь разблокирован",
-            "user": user_schema.dump(user)}
-    ), 200
-
-
-@users_bp.route("/block-user", methods=["POST"])
-@token_required
-def block_user_by_user(current_user):
-    data = request.get_json() or {}
-    blocked_id = data.get("user_id")
-    if not blocked_id:
-        return jsonify({"error": "Требуется user_id"}), 400
-    result, error = UserService.block_user_by_user(
-        str(current_user.id), str(blocked_id))
-    if error:
-        return jsonify({"error": error}), 400
-    return jsonify({"message": "Пользователь заблокирован"}), 200
-
-
-@users_bp.route("/unblock-user", methods=["POST"])
-@token_required
-def unblock_user_by_user(current_user):
-    data = request.get_json() or {}
-    blocked_id = data.get("user_id")
-    if not blocked_id:
-        return jsonify({"error": "Требуется user_id"}), 400
-    result, error = UserService.unblock_user_by_user(
-        str(current_user.id), str(blocked_id))
-    if error:
-        return jsonify({"error": error}), 400
-    return jsonify({"message": "Пользователь разблокирован"}), 200
-
-
-@users_bp.route("/block-status", methods=["POST"])
-@token_required
-def block_status(current_user):
-    data = request.get_json() or {}
-    target_id = data.get("user_id")
-    if not target_id:
-        return jsonify({"error": "Требуется user_id"}), 400
-    status = UserService.get_block_status(str(current_user.id), str(target_id))
-    return jsonify(status), 200
-
-
-@users_bp.route("/delete", methods=["DELETE"])
-@token_required
-def delete_user_account(current_user):
-    success, error = UserService.delete_user_account(current_user.id)
-    if error:
-        status_code = 404 if error == "Пользователь не найден" else 400
-        return jsonify({"error": error}), status_code
-    return jsonify({"message": "Пользователь успешно удалён"}), 200
-
-
-GIFT_PRICING = {
-    "newyear_fireworks": 99,
-    "valentine_heart": 39,
-    "womens_day_bouquet": 89,
-    "birthday_cake": 149,
-    "halloween_pumpkin": 59,
-    "easter_egg": 49,
-    "christmas_gift": 99,
-    "knowledge_day_coffee": 39,
-    "anniversary_crown": 199,
-    "party_flame": 29,
-    "partner_badge": 1999,
-    "gold_star": 1999,
-}
-STORAGE_TB_PRICE = 499
-STORAGE_TB_BYTES = 1024 * 1024 * 1024 * 1024
-
-PREMIUM_PRICE_RUB = 50
-PREMIUM_DURATION_DAYS = 30
-
-
-@users_bp.route("/buy-premium", methods=["POST"])
-@users_bp.route("/buy-premium-coins", methods=["POST"])
-@token_required
-def buy_premium(current_user):
-    """Оплата Premium балансом в рублях."""
-    price = PREMIUM_PRICE_RUB
-    spendable = (current_user.balance or 0) + (getattr(current_user, 'bonus_balance', 0) or 0)
-    if spendable < price:
-        return jsonify({"error": "Недостаточно средств"}), 400
-    try:
-        now = datetime.utcnow()
-        base = now
-        if (
-            getattr(current_user, "premium", 0)
-            and current_user.premium_expired_at
-            and current_user.premium_expired_at > now
-        ):
-            base = current_user.premium_expired_at
-        new_expiry = base + timedelta(days=PREMIUM_DURATION_DAYS)
-        remaining = price
-        bal = current_user.balance or 0
-        if bal >= remaining:
-            current_user.balance = bal - remaining
-        else:
-            remaining -= bal
-            current_user.balance = 0
-            current_user.bonus_balance = (getattr(current_user, 'bonus_balance', 0) or 0) - remaining
-        current_user.premium = 1
-        if not current_user.premium_started_at:
-            current_user.premium_started_at = now
-        current_user.premium_expired_at = new_expiry
-        db.session.commit()
-        return jsonify(
-            {
-                "success": True,
-                "balance": current_user.balance,
-                "premium": True,
-                "premium_expired_at": new_expiry.isoformat(),
-            }
-        ), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
-
-
-@users_bp.route("/gift-premium", methods=["POST"])
-@users_bp.route("/gift-premium-coins", methods=["POST"])
-@token_required
-def gift_premium(current_user):
-    """Подарить Vondic Premium (30 дней) за рубли любому пользователю по ID."""
-    data = request.get_json() or {}
-    target_user_id = data.get("target_user_id")
-    if not target_user_id:
-        return jsonify({"error": "Требуется target_user_id"}), 400
-    if str(target_user_id) == str(current_user.id):
-        return jsonify({"error": "Нельзя подарить Premium самому себе"}), 400
-    price = PREMIUM_PRICE_RUB
-    if (current_user.balance or 0) < price:
-        return jsonify({"error": "Недостаточно средств"}), 400
-    recipient = User.query.get(target_user_id)
-    if not recipient:
-        return jsonify({"error": "Получатель не найден"}), 404
-    try:
-        now = datetime.utcnow()
-        base = now
-        if (
-            getattr(recipient, "premium", 0)
-            and recipient.premium_expired_at
-            and recipient.premium_expired_at > now
-        ):
-            base = recipient.premium_expired_at
-        new_expiry = base + timedelta(days=PREMIUM_DURATION_DAYS)
-        current_user.balance = (current_user.balance or 0) - price
-        recipient.premium = 1
-        if not recipient.premium_started_at:
-            recipient.premium_started_at = now
-        recipient.premium_expired_at = new_expiry
-        db.session.commit()
-        try:
-            from app.api.v1.support import notify_user
-
-            notify_user(
-                str(recipient.id),
-                f"Вам подарили Vondic Premium на 30 дней от @{current_user.username}.",
-                title="Подарок — Premium",
-                notification_type="system",
-                send_email_copy=True,
-            )
-        except Exception:
-            pass
-        return jsonify(
-            {
-                "success": True,
-                "balance": current_user.balance,
-                "recipient_premium_expired_at": new_expiry.isoformat(),
-            }
-        ), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
-
-
-@users_bp.route("/transfer-balance", methods=["POST"])
-@users_bp.route("/gift-coins", methods=["POST"])
-@token_required
-def transfer_balance(current_user):
-    """Перевести рубли другому пользователю."""
-    data = request.get_json() or {}
-    target_user_id = data.get("target_user_id")
-    try:
-        amount = int(data.get("amount") or 0)
-    except (TypeError, ValueError):
-        return jsonify({"error": "Неверная сумма"}), 400
-    if not target_user_id:
-        return jsonify({"error": "Требуется target_user_id"}), 400
-    if str(target_user_id) == str(current_user.id):
-        return jsonify({"error": "Нельзя перевести самому себе"}), 400
-    if amount < 1:
-        return jsonify({"error": "Минимум 1₽"}), 400
-    if amount > 10000:
-        return jsonify({"error": "Максимум 10000₽ за раз"}), 400
-    if (current_user.balance or 0) < amount:
-        return jsonify({"error": "Недостаточно средств"}), 400
-    recipient = User.query.get(target_user_id)
-    if not recipient:
-        return jsonify({"error": "Получатель не найден"}), 404
-    try:
-        current_user.balance = (current_user.balance or 0) - amount
-        recipient.balance = (recipient.balance or 0) + amount
-        db.session.commit()
-        try:
-            from app.api.v1.support import notify_user
-
-            notify_user(
-                str(recipient.id),
-                f"Вам подарили {amount} Вондик Coins от @{current_user.username}.",
-                title="Подарок — коины",
-                notification_type="system",
-                send_email_copy=False,
-            )
-        except Exception:
-            pass
-        return jsonify(
-            {
-                "success": True,
-                "balance": current_user.balance,
-                "recipient_balance": recipient.balance,
-            }
-        ), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
-
-
-@users_bp.route("/purchase-gift", methods=["POST"])
-@token_required
-def purchase_gift(current_user):
-    data = request.get_json() or {}
-    gift_id = data.get("gift_id")
-    qty_raw = data.get("quantity", 1)
-    try:
-        quantity = int(qty_raw) if qty_raw is not None else 1
-    except Exception:
-        quantity = 1
-    if not gift_id or quantity <= 0:
-        return jsonify({"error": "Неверные параметры"}), 400
-    from app.models.gift_catalog import GiftCatalog
-
-    catalog_item = GiftCatalog.query.get(gift_id)
-    if catalog_item is not None:
-        price = catalog_item.price
-        if catalog_item.total_supply is not None:
-            if (catalog_item.minted_count or 0) + \
-                    quantity > catalog_item.total_supply:
-                return jsonify({"error": "Лимит подарков исчерпан"}), 400
-    else:
-        price = GIFT_PRICING.get(gift_id)
-    if price is None:
-        return jsonify({"error": "Неизвестный подарок"}), 400
-
-    existing_gifts = list(current_user.gifts or [])
-    already_owned = any(g.get("gift_id") == gift_id for g in existing_gifts)
-    if already_owned:
-        return jsonify({"error": "У вас уже есть этот подарок"}), 400
-    total = price * quantity
-    spendable = (current_user.balance or 0) + (getattr(current_user, 'bonus_balance', 0) or 0)
-    if spendable < total:
-        return jsonify({"error": "Недостаточно средств"}), 400
-    try:
-        remaining = total
-        bal = current_user.balance or 0
-        if bal >= remaining:
-            current_user.balance = bal - remaining
-        else:
-            remaining -= bal
-            current_user.balance = 0
-            current_user.bonus_balance = (getattr(current_user, 'bonus_balance', 0) or 0) - remaining
-        gifts = list(existing_gifts)
-        gifts.append(
-            {
-                "gift_id": gift_id,
-                "quantity": 1,
-                "from_user_id": current_user.id,
-                "created_at": datetime.utcnow().isoformat(),
-                "is_displayed": False,
-            }
-        )
-        current_user.gifts = gifts
-        if catalog_item is not None and catalog_item.total_supply is not None:
-            catalog_item.minted_count = (
-                catalog_item.minted_count or 0) + quantity
-        db.session.commit()
-        return jsonify(
-            {
-                "success": True,
-                "balance": current_user.balance,
-                "gifts": current_user.gifts,
-            }
-        ), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
-
-
-@users_bp.route("/purchase-storage", methods=["POST"])
-@token_required
-def purchase_storage(current_user):
-    data = request.get_json() or {}
-    qty_raw = data.get("quantity", 1)
-    try:
-        quantity = int(qty_raw) if qty_raw is not None else 1
-    except Exception:
-        quantity = 1
-    if quantity < 1:
-        return jsonify({"error": "Неверные параметры"}), 400
-    total_price = STORAGE_TB_PRICE * quantity
-    spendable = (current_user.balance or 0) + (getattr(current_user, 'bonus_balance', 0) or 0)
-    if spendable < total_price:
-        return jsonify({"error": "Недостаточно средств"}), 400
-    try:
-        remaining = total_price
-        bal = current_user.balance or 0
-        if bal >= remaining:
-            current_user.balance = bal - remaining
-        else:
-            remaining -= bal
-            current_user.balance = 0
-            current_user.bonus_balance = (getattr(current_user, 'bonus_balance', 0) or 0) - remaining
-        current_user.storage_bonus = (current_user.storage_bonus or 0) + (
-            STORAGE_TB_BYTES * quantity
-        )
-        db.session.commit()
-        return jsonify(
-            {
-                "success": True,
-                "balance": current_user.balance,
-                "storage_bonus": current_user.storage_bonus,
-                "disk_limit": current_user.disk_limit,
-            }
-        ), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
-
-
-@users_bp.route("/send-gift", methods=["POST"])
-@token_required
-def send_gift(current_user):
-    data = request.get_json() or {}
-    gift_id = data.get("gift_id")
-    comment = (data.get("comment") or "").strip()
-    qty_raw = data.get("quantity", 1)
-    target_user_id = data.get("target_user_id")
-    try:
-        quantity = int(qty_raw) if qty_raw is not None else 1
-    except Exception:
-        quantity = 1
-    if not gift_id or quantity <= 0 or not target_user_id:
-        return jsonify({"error": "Неверные параметры"}), 400
-    if str(target_user_id) == str(current_user.id):
-        return jsonify({"error": "Нельзя отправить подарок самому себе"}), 400
-    from app.models.gift_catalog import GiftCatalog
-
-    catalog_item = GiftCatalog.query.get(gift_id)
-    if catalog_item is not None:
-        price = catalog_item.price
-        if catalog_item.total_supply is not None:
-            if (catalog_item.minted_count or 0) + \
-                    quantity > catalog_item.total_supply:
-                return jsonify({"error": "Лимит подарков исчерпан"}), 400
-    else:
-        price = GIFT_PRICING.get(gift_id)
-    if price is None:
-        return jsonify({"error": "Неизвестный подарок"}), 400
-    total = price * quantity
-    if (current_user.balance or 0) < total:
-        return jsonify({"error": "Недостаточно средств"}), 400
-    recipient = User.query.get(target_user_id)
-    if not recipient:
-        return jsonify({"error": "Получатель не найден"}), 404
-    try:
-        current_user.balance = (current_user.balance or 0) - total
-        gifts = list(recipient.gifts or [])
-        gifts.append(
-            {
-                "gift_id": gift_id,
-                "quantity": quantity,
-                "from_user_id": current_user.id,
-                "created_at": datetime.utcnow().isoformat(),
-                "is_displayed": True,
-                "comment": comment or None,
-            }
-        )
-        recipient.gifts = gifts
-        if catalog_item is not None and catalog_item.total_supply is not None:
-            catalog_item.minted_count = (
-                catalog_item.minted_count or 0) + quantity
-        db.session.commit()
-        return jsonify(
-            {
-                "success": True,
-                "balance": current_user.balance,
-                "recipient_gifts": recipient.gifts,
-            }
-        ), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
-
-
-@users_bp.route("/set-gift-display", methods=["POST"])
-@token_required
-def set_gift_display(current_user):
-    data = request.get_json() or {}
-    gift_index = data.get("gift_index")
-    is_displayed = data.get("is_displayed")
-    if gift_index is None or is_displayed is None:
-        return jsonify(
-            {"error": "Требуется gift_index и is_displayed"}), 400
-    gifts = list(current_user.gifts or [])
-    if gift_index < 0 or gift_index >= len(gifts):
-        return jsonify({"error": "gift_index вне диапазона"}), 400
-    gifts[gift_index]["is_displayed"] = bool(is_displayed)
-    try:
-        current_user.gifts = gifts
-        db.session.commit()
-        return jsonify({"success": True, "gifts": current_user.gifts}), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
-
-
-@users_bp.route("/status", methods=["POST"])
-@token_required
-def set_user_status(current_user):
-
-    data = request.get_json() or {}
-    status = data.get("status")
-
-    if not status or status not in ["online", "offline"]:
-        return jsonify(
-            {"error": "Неверный статус. Должен быть 'online' или 'offline'"}), 400
-
-    try:
-        current_user.status = status
-        current_user.last_seen = datetime.utcnow()
-
-        if status == "offline":
-            current_user.socket_id = None
-        db.session.commit()
-        return jsonify({"success": True, "status": status}), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
-
-
-@users_bp.route("/pinned-chats", methods=["POST"])
-@token_required
-def set_pinned_chats(current_user):
-    data = request.get_json() or {}
-    pinned_chats = data.get("pinned_chats", [])
-
-    if not current_user.premium or (
-            current_user.premium_expired_at and current_user.premium_expired_at < datetime.utcnow()):
-        return jsonify({"error": "Требуется подписка Premium"}), 403
-
-    if not isinstance(pinned_chats, list):
-        return jsonify({"error": "pinned_chats должен быть списком"}), 400
-
-    if len(pinned_chats) > 5:
-        return jsonify({"error": "Максимум 5 закреплённых чатов"}), 400
-
-    try:
-        current_user.pinned_chats = pinned_chats
-        db.session.commit()
-        return jsonify({"success": True, "pinned_chats": pinned_chats}), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
-
-
-@users_bp.route("/me", methods=["GET"])
-@token_required
-def get_me(current_user):
-    try:
-        return jsonify(current_user.to_dict(viewer_id=current_user.id)), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@users_bp.route("/me", methods=["PUT"])
-@token_required
-def update_me(current_user):
-    try:
-        data = request.get_json() or {}
-        user, error = UserService.update_user(current_user.id, data, current_user)
-        if error:
-            return jsonify({"error": error}), 400
-        return jsonify(user.to_dict(viewer_id=current_user.id)), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@users_bp.route("/storage-rules", methods=["GET"])
-@token_required
-def get_storage_rules(current_user):
-    return jsonify({
-        "rules": current_user.storage_rules or {"enabled": False, "rules": [], "default_target": "s3"},
-        "yandex_disk_available": bool(current_user.yandex_token),
-    }), 200
-
-
-@users_bp.route("/storage-rules", methods=["PUT"])
-@token_required
-def update_storage_rules(current_user):
-    data = request.get_json() or {}
-    rules = data.get("rules")
-
-    if not isinstance(rules, dict):
-        return jsonify({"error": "rules must be an object"}), 400
-
-    if rules.get("enabled") and not current_user.yandex_token:
-        return jsonify({"error": "Yandex Disk не подключён"}), 400
-
-    for rule in rules.get("rules", []):
-        if not isinstance(rule, dict):
-            return jsonify({"error": "Each rule must be an object"}), 400
-        if rule.get("type") not in ("size", "extension", "category"):
-            return jsonify({"error": f"Invalid rule type: {rule.get('type')}"}), 400
-        if rule.get("operator") not in ("gt", "gte", "lt", "lte", "eq", "in", "not_in"):
-            return jsonify({"error": f"Invalid operator: {rule.get('operator')}"}), 400
-        if rule.get("target") not in ("s3", "yandex_disk"):
-            return jsonify({"error": f"Invalid target: {rule.get('target')}"}), 400
-
-    current_user.storage_rules = rules
-    db.session.commit()
-
-    return jsonify({"ok": True, "rules": rules}), 200
-
-
-@users_bp.route("/admin/search", methods=["GET"])
-@token_required
-def admin_search_users(current_user):
-    role = str(getattr(current_user, "role", "") or "").strip().lower()
-    if role not in ("admin", "support"):
-        return jsonify({"error": "Доступ запрещён"}), 403
-    q = request.args.get("q", "").strip()
-    if not q or len(q) < 2:
-        return jsonify({"ok": True, "users": []})
-    like_q = f"%{q}%"
-    users = User.query.filter(
-        db.or_(
+        raise HTTPException(status_code=400, detail="Требуется query")
+
+    like_q = f"%{query}%"
+    stmt = select(User).where(
+        or_(
             User.username.ilike(like_q),
             User.email.ilike(like_q),
-            User.role.ilike(like_q),
         )
-    ).limit(50).all()
-    result = []
-    for u in users:
-        result.append({
-            "id": u.id,
-            "username": u.username,
-            "email": u.email,
-            "role": u.role or "User",
-            "is_blocked": u.is_blocked or 0,
-            "is_blocked_system": u.is_blocked_system or 0,
-            "registration_ip": getattr(u, "registration_ip", None),
-            "created_at": u.created_at.isoformat() if u.created_at else None,
-        })
-    return jsonify({"ok": True, "users": result})
+    ).limit(50)
+    res = await db.execute(stmt)
+    users = res.scalars().all()
+    return [u.to_dict(viewer_id=current_user.id) for u in users]
 
 
-@users_bp.route("/admin/generate-reset-link", methods=["POST"])
-@token_required
-def admin_generate_reset_link(current_user):
-    role = str(getattr(current_user, "role", "") or "").strip().lower()
-    if role not in ("admin",):
-        return jsonify({"error": "Только администраторы"}), 403
-    data = request.get_json(force=True) or {}
-    user_id = data.get("user_id")
-    if not user_id:
-        return jsonify({"error": "user_id обязателен"}), 400
-    user = User.query.get(str(user_id))
-    if not user:
-        return jsonify({"error": "Пользователь не найден"}), 404
-    if not user.registration_ip:
-        return jsonify({"error": "registration_ip неизвестен — восстановление невозможно"}), 400
-    from app.services.email_service import EmailService
-    from app.services.auth_service import AuthService
-    raw_verify_token = EmailService.generate_password_reset_token(user.email)
-    user.reset_verify_token = AuthService._hash_token(raw_verify_token)
-    user.reset_verify_expires = datetime.utcnow() + timedelta(hours=1)
-    user.reset_ip_required = user.registration_ip
-    db.session.commit()
-    FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://vondic.ru")
-    verify_link = f"{FRONTEND_URL}/reset-verify?token={raw_verify_token}"
-    return jsonify({
-        "ok": True,
-        "verify_link": verify_link,
-        "registration_ip": user.registration_ip,
-        "expires_in": 3600,
-        "username": user.username,
-        "email": user.email,
-    })
+@users_router.post("/status")
+async def set_user_status(
+    payload: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    user_status = payload.get("status")
+    if not user_status or user_status not in ["online", "offline"]:
+        raise HTTPException(status_code=400, detail="Неверный статус")
+
+    current_user.status = user_status
+    current_user.last_seen = datetime.utcnow()
+    if user_status == "offline":
+        current_user.socket_id = None
+    await db.commit()
+    return {"success": True, "status": user_status}
 
 
-@users_bp.route("/internal/push-subscribe", methods=["POST"])
-def push_subscribe():
-    """Store PWA push subscription (Web Push for iOS PWA)."""
-    data = request.get_json() or {}
-    user_id = data.get("user_id")
-    endpoint = data.get("endpoint")
-    p256dh = data.get("p256dh", "")
-    auth = data.get("auth", "")
-    platform = data.get("platform", "web")
+@users_router.get("/storage-rules")
+async def get_storage_rules(
+    current_user: User = Depends(get_current_user),
+):
+    return {
+        "rules": current_user.storage_rules or {"enabled": False, "rules": [], "default_target": "s3"},
+        "yandex_disk_available": bool(current_user.yandex_token),
+    }
 
-    if not user_id or not endpoint:
-        return jsonify({"error": "user_id and endpoint required"}), 400
+
+@users_router.put("/storage-rules")
+async def update_storage_rules(
+    payload: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    rules = payload.get("rules")
+    if not isinstance(rules, dict):
+        raise HTTPException(status_code=400, detail="rules must be an object")
+
+    if rules.get("enabled") and not current_user.yandex_token:
+        raise HTTPException(status_code=400, detail="Yandex Disk не подключён")
+
+    current_user.storage_rules = rules
+    await db.commit()
+    return {"ok": True, "rules": rules}
+
 
     try:
         from sqlalchemy import text

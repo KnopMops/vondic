@@ -1,82 +1,59 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, TEXT, TIMESTAMP
+from sqlalchemy import Column, ForeignKey, Boolean, Integer, JSON, TEXT, TIMESTAMP
+from sqlalchemy.orm import relationship, backref
 
-from app.core.extensions import db
+from app.core.database import Base
 
 
-class Message(db.Model):
+class Message(Base):
     __tablename__ = "messages"
 
-    id = db.Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
-    content = db.Column(TEXT, nullable=False)
-    attachments = db.Column(JSON, nullable=True)
-    type = db.Column(TEXT, default="text", nullable=False)
-    sender_id = db.Column(TEXT, db.ForeignKey("users.id"), nullable=False)
-    target_id = db.Column(TEXT, db.ForeignKey("users.id"), nullable=True)
-    group_id = db.Column(TEXT, db.ForeignKey("groups.id"), nullable=True)
-    channel_id = db.Column(TEXT, db.ForeignKey("channels.id"), nullable=True)
+    id = Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
+    content = Column(TEXT, nullable=False)
+    attachments = Column(JSON, nullable=True)
+    type = Column(TEXT, default="text", nullable=False)
+    sender_id = Column(TEXT, ForeignKey("users.id"), nullable=False)
+    target_id = Column(TEXT, ForeignKey("users.id"), nullable=True)
+    group_id = Column(TEXT, ForeignKey("groups.id"), nullable=True)
+    channel_id = Column(TEXT, ForeignKey("channels.id"), nullable=True)
 
-    is_deleted = db.Column(db.Boolean, default=False)
-    is_edited = db.Column(db.Boolean, default=False)
-    edit_history = db.Column(JSON, nullable=True)
+    is_deleted = Column(Boolean, default=False)
+    is_edited = Column(Boolean, default=False)
+    edit_history = Column(JSON, nullable=True)
 
-    pinned_by = db.Column(TEXT, nullable=True)
+    pinned_by = Column(TEXT, nullable=True)
 
-    reactions = db.Column(JSON, nullable=True)
-    read_by = db.Column(JSON, nullable=True)
-    reply_to_id = db.Column(TEXT, nullable=True)
-    forwarded_from_id = db.Column(TEXT, nullable=True)
-    thread_id = db.Column(TEXT, nullable=True)
-    disappear_after = db.Column(db.Integer, nullable=True)
-    disappear_at = db.Column(TIMESTAMP, nullable=True)
+    reactions = Column(JSON, nullable=True)
+    read_by = Column(JSON, nullable=True)
+    reply_to_id = Column(TEXT, nullable=True)
+    forwarded_from_id = Column(TEXT, nullable=True)
+    thread_id = Column(TEXT, nullable=True)
+    disappear_after = Column(Integer, nullable=True)
+    disappear_at = Column(TIMESTAMP, nullable=True)
 
-    created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
-    updated_at = db.Column(
+    created_at = Column(TIMESTAMP, default=datetime.utcnow)
+    updated_at = Column(
         TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    sender = db.relationship(
+    sender = relationship(
         "User",
         foreign_keys=[sender_id],
-        backref=db.backref(
+        backref=backref(
             "sent_messages",
-            lazy=True))
-    target = db.relationship(
+            lazy="selectin"))
+    target = relationship(
         "User",
         foreign_keys=[target_id],
-        backref=db.backref("received_messages", lazy=True),
+        backref=backref("received_messages", lazy="selectin"),
     )
-    group = db.relationship(
+    group = relationship(
         "Group",
-        backref=db.backref(
+        backref=backref(
             "messages",
-            lazy=True,
+            lazy="selectin",
             cascade="all, delete-orphan"))
-
-    def _get_forwarded_from(self) -> dict | None:
-        if not self.forwarded_from_id:
-            return None
-        from app.models.message import Message
-        orig = Message.query.get(self.forwarded_from_id)
-        if not orig:
-            return None
-        sender = orig.sender
-        chat_name = None
-        if orig.group_id:
-            from app.models.group import Group
-            group = Group.query.get(orig.group_id)
-            chat_name = group.name if group else None
-        elif orig.channel_id:
-            from app.models.channel import Channel
-            channel = Channel.query.get(orig.channel_id)
-            chat_name = channel.name if channel else None
-        return {
-            "sender_id": orig.sender_id,
-            "sender_name": sender.username if sender else "Пользователь",
-            "sender_avatar": sender.avatar_url if sender else None,
-            "chat_name": chat_name,
-        }
 
     def to_dict(self):
         return {
@@ -105,9 +82,10 @@ class Message(db.Model):
             "reactions": self.reactions or [],
             "read_by": self.read_by or [],
             "reply_to_id": self.reply_to_id,
-            "forwarded_from": self._get_forwarded_from(),
+            "forwarded_from_id": self.forwarded_from_id,
             "is_deleted": getattr(
                     self,
                     'is_deleted',
                     False),
         }
+

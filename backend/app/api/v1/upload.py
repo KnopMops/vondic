@@ -1,55 +1,40 @@
+import asyncio
 import base64
 import binascii
 import io
 import logging
 import os
-import time
+import tempfile
 import uuid
+from typing import Optional
 
-import boto3
-from botocore.config import Config
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import settings
+from app.core.database import get_async_session
+from app.core.deps import get_current_user
+from app.models.user import User
+from app.models.user_file import UserFile
+from app.services.s3_service import upload_file_to_s3
 
 logger = logging.getLogger(__name__)
-from app.utils.decorators import token_required
-from flask import Blueprint, current_app, jsonify, request
 
-upload_bp = Blueprint("upload", __name__, url_prefix="/api/v1/upload")
+upload_router = APIRouter(prefix="/api/v1/upload", tags=["Upload"])
 
 VOICE_EXTENSIONS = {"wav", "mp3", "ogg", "webm", "m4a"}
 VIDEO_EXTENSIONS = {"mp4", "mov", "webm", "mkv", "avi"}
-ATTACHMENT_EXTENSIONS = None
 LIMIT_FREE = 20 * 1024 * 1024
 LIMIT_PREMIUM = 100 * 1024 * 1024
 
-THROTTLE_SPEED_BPS = 1_750_000
 
-
-def _get_s3_client():
-    return boto3.client(
-        "s3",
-        endpoint_url=os.getenv("S3_ENDPOINT", "http://minio:9000"),
-        aws_access_key_id=os.getenv("S3_ACCESS_KEY", "vondic"),
-        aws_secret_access_key=os.getenv("S3_SECRET_KEY", "Dim4566212Len"),
-        region_name=os.getenv("S3_REGION", "us-east-1"),
-        config=Config(signature_version="s3v4"),
-    )
-
-
-def _get_s3_bucket():
-    return os.getenv("S3_BUCKET", "uploads")
-
-
-def _get_s3_public_url():
-    return os.getenv("S3_PUBLIC_URL", "https://s3.vondic.ru")
-
-
-def _get_extension(filename: str) -> str | None:
+def _get_extension(filename: str) -> Optional[str]:
     if not filename or "." not in filename:
         return None
     return filename.rsplit(".", 1)[1].lower()
 
 
-def _decode_base64(data: str, max_size: int = None) -> bytes:
+def _decode_base64(data: str, max_size: Optional[int] = None) -> bytes:
     if not isinstance(data, str) or not data:
         raise ValueError("Invalid base64 payload")
     if "," in data and data.strip().lower().startswith("data:"):
@@ -60,17 +45,13 @@ def _decode_base64(data: str, max_size: int = None) -> bytes:
     except (binascii.Error, Exception) as e:
         raise ValueError(f"Invalid base64 data: {e}") from e
     if max_size and len(decoded) > max_size:
-        raise ValueError(
-            f"File too large. Limit is {max_size // (1024 * 1024)} MB")
+        raise ValueError(f"File too large. Limit is {max_size // (1024 * 1024)} MB")
     return decoded
 
 
-def _convert_gif_to_mp4(gif_bytes: bytes) -> tuple[bytes, str]:
-    """Конвертирует GIF в зацикленный MP4 ролик (Telegram style) через ffmpeg или возвращает исходный GIF."""
+async def _convert_gif_to_mp4_async(gif_bytes: bytes) -> tuple[bytes, str]:
+    """Асинхронно конвертирует GIF в зацикленный MP4 ролик через ffmpeg (asyncio.create_subprocess_exec)."""
     try:
-        import subprocess
-        import tempfile
-
         with tempfile.NamedTemporaryFile(suffix=".gif", delete=False) as tmp_in:
             tmp_in.write(gif_bytes)
             tmp_in_path = tmp_in.name
@@ -84,28 +65,33 @@ def _convert_gif_to_mp4(gif_bytes: bytes) -> tuple[bytes, str]:
             "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
             tmp_out_path
         ]
-        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
-        if res.returncode == 0 and os.path.exists(tmp_out_path):
-            with open(tmp_out_path, "rb") as f:
-                mp4_bytes = f.read()
-            try:
-                os.remove(tmp_in_path)
-                os.remove(tmp_out_path)
-            except Exception:
-                pass
-            return mp4_bytes, "mp4"
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            await asyncio.wait_for(proc.communicate(), timeout=15.0)
+            if proc.returncode == 0 and os.path.exists(tmp_out_path):
+                with open(tmp_out_path, "rb") as f:
+                    mp4_bytes = f.read()
+                return mp4_bytes, "mp4"
+        finally:
+            for p in (tmp_in_path, tmp_out_path):
+                if os.path.exists(p):
+                    try:
+                        os.remove(p)
+                    except Exception:
+                        pass
     except Exception as e:
-        logger.warning(f"GIF to MP4 conversion fallback: {e}")
+        logger.warning(f"Async GIF to MP4 conversion fallback: {e}")
     return gif_bytes, "gif"
 
 
-def _save_upload(file_bytes: bytes, ext: str, subdir: str, user=None) -> str:
-    """Upload file to S3 or Yandex Disk based on user storage rules."""
+async def _save_upload_async(file_bytes: bytes, ext: str, subdir: str, user: User) -> str:
     ext = (ext or "").lower()
-    content_type = "application/octet-stream"
-
     if ext == "gif":
-        file_bytes, ext = _convert_gif_to_mp4(file_bytes)
+        file_bytes, ext = await _convert_gif_to_mp4_async(file_bytes)
 
     content_type_map = {
         "mp4": "video/mp4",
@@ -118,274 +104,200 @@ def _save_upload(file_bytes: bytes, ext: str, subdir: str, user=None) -> str:
         "mp3": "audio/mpeg",
     }
     content_type = content_type_map.get(ext, "application/octet-stream")
-
     filename = f"{uuid.uuid4()}.{ext}"
     key = f"{subdir}/{filename}"
 
-    from app.services.storage_router import resolve_storage_target
-    target = resolve_storage_target(
-        ext, len(file_bytes),
-        user.storage_rules if user else None,
-        yandex_disk_available=bool(user and user.yandex_token),
-    )
-
-    if target == "yandex_disk" and user and user.yandex_token:
-        from app.services.yandex_disk_service import YandexDiskService
-        ydisk = YandexDiskService(user.yandex_token)
-        public_url = ydisk.upload_file(key, file_bytes)
-        if public_url:
-            return public_url
-        logger.warning("Yandex Disk upload failed, falling back to S3")
-
-    try:
-        s3 = _get_s3_client()
-        bucket = _get_s3_bucket()
-        s3.put_object(
-            Bucket=bucket,
-            Key=key,
-            Body=file_bytes,
-            ContentType=content_type,
-        )
-        public_url = _get_s3_public_url()
-        return f"{public_url}/uploads/{key}"
-    except Exception as e:
-        raise RuntimeError(f"Failed to upload file to S3: {e}")
+    return await upload_file_to_s3(file_bytes, key, content_type=content_type)
 
 
-@upload_bp.route("/voice", methods=["POST"])
-@token_required
-def upload_voice(current_user):
-    from app.core.extensions import db
-    from app.models.user_file import UserFile
-    try:
-        data = request.get_json(silent=True)
-        if not data:
-            return jsonify({"error": "No input data provided"}), 400
+@upload_router.post("/voice", status_code=status.HTTP_201_CREATED)
+async def upload_voice(
+    request: Request,
+    file: Optional[UploadFile] = File(None),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    filename: Optional[str] = None
+    file_bytes: Optional[bytes] = None
 
-        file_data = data.get("file")
-        filename = data.get("filename")
-
-        if not file_data or not filename:
-            return jsonify({"error": "Missing file or filename"}), 400
-
-        ext = _get_extension(filename)
-        if ext not in VOICE_EXTENSIONS:
-            return jsonify({"error": f"Invalid file extension: {ext}. Allowed: {VOICE_EXTENSIONS}"}), 400
-
-        max_size = LIMIT_PREMIUM if current_user.premium else LIMIT_FREE
-
+    if file:
+        filename = file.filename
+        file_bytes = await file.read()
+    else:
         try:
-            file_bytes = _decode_base64(file_data, max_size)
-        except ValueError as e:
-            logger.error("[upload_voice] base64 decode error: %s", e)
-            return jsonify({"error": str(e)}), 400
-
-        file_size = len(file_bytes)
-        logger.info("[upload_voice] user=%s file_size=%d ext=%s", current_user.id, file_size, ext)
-
-        from app.services.storage_router import resolve_storage_target
-        target = resolve_storage_target(
-            ext, file_size,
-            current_user.storage_rules if current_user else None,
-            yandex_disk_available=bool(current_user and current_user.yandex_token),
-        )
-
-        if target == "s3" and (current_user.disk_usage or 0) + file_size > current_user.disk_limit:
-            return jsonify(
-                {
-                    "error": "Disk space limit exceeded. Upgrade to Premium for more space."
-                }
-            ), 403
-
-        if not current_user.premium:
-            delay = file_size / THROTTLE_SPEED_BPS
-            time.sleep(delay)
-
-        file_url = _save_upload(file_bytes, ext, "voice", user=current_user)
-
-        try:
-            db.session.add(
-                UserFile(
-                    user_id=current_user.id,
-                    name=filename,
-                    url=file_url,
-                    size=file_size,
-                )
-            )
-            db.session.flush()
-        except Exception as uf_err:
-            logger.warning("[upload_voice] UserFile insert failed (ignored): %s", uf_err)
-
-        if target == "s3":
-            current_user.disk_usage = (current_user.disk_usage or 0) + file_size
-        db.session.commit()
-
-        return jsonify(
-            {
-                "url": file_url,
-                "size": file_size,
-                "disk_usage": current_user.disk_usage or 0,
-                "storage": target,
-                "message": "Voice uploaded successfully",
-            }
-        ), 201
-
-    except Exception as e:
-        logger.exception("[upload_voice] Unexpected error: %s", e)
-        return jsonify({"error": f"Upload failed: {str(e)}"}), 500
-
-
-@upload_bp.route("/file", methods=["POST"])
-@token_required
-def upload_file(current_user):
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "No data provided"}), 400
-
-    file_data = data.get("file")
-    filename = data.get("filename")
-
-    if not file_data or not filename:
-        return jsonify({"error": "file and filename are required"}), 400
-
-    ext = _get_extension(filename) or "bin"
-
-    max_size = LIMIT_PREMIUM if current_user.premium else LIMIT_FREE
-
-    try:
-        file_bytes = _decode_base64(file_data, max_size)
-        file_size = len(file_bytes)
-
-        from app.services.storage_router import resolve_storage_target
-        target = resolve_storage_target(
-            ext, file_size,
-            current_user.storage_rules if current_user else None,
-            yandex_disk_available=bool(current_user and current_user.yandex_token),
-        )
-
-        if target == "s3" and current_user.disk_usage + file_size > current_user.disk_limit:
-            return jsonify(
-                {
-                    "error": "Disk space limit exceeded. Upgrade to Premium for more space."
-                }
-            ), 403
-
-        if not current_user.premium:
-            delay = file_size / THROTTLE_SPEED_BPS
-            time.sleep(delay)
-
-        file_url = _save_upload(file_bytes, ext, "files", user=current_user)
-
-        try:
-            from app.core.extensions import db
-            from app.models.user_file import UserFile
-
-            db.session.add(
-                UserFile(
-                    user_id=current_user.id,
-                    name=filename,
-                    url=file_url,
-                    size=file_size,
-                )
-            )
-            db.session.flush()
+            data = await request.json()
+            if data and data.get("file") and data.get("filename"):
+                filename = data["filename"]
+                max_size = LIMIT_PREMIUM if current_user.premium else LIMIT_FREE
+                file_bytes = _decode_base64(data["file"], max_size)
         except Exception:
-
             pass
 
-        if target == "s3":
-            current_user.disk_usage += file_size
-        db.session.commit()
+    if not file_bytes or not filename:
+        raise HTTPException(status_code=400, detail="Missing file or filename")
 
-        return jsonify(
-            {
-                "url": file_url,
-                "original_filename": filename,
-                "size_bytes": file_size,
-                "disk_usage": current_user.disk_usage or 0,
-                "storage": target,
-                "ext": ext,
-            }
-        ), 201
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
+    ext = _get_extension(filename)
+    if not ext or ext not in VOICE_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file extension: {ext}. Allowed: {VOICE_EXTENSIONS}",
+        )
+
+    file_size = len(file_bytes)
+    if (current_user.disk_usage or 0) + file_size > current_user.disk_limit:
+        raise HTTPException(
+            status_code=403,
+            detail="Disk space limit exceeded. Upgrade to Premium for more space.",
+        )
+
+    file_url = await _save_upload_async(file_bytes, ext, "voice", current_user)
+
+    try:
+        user_file = UserFile(
+            user_id=current_user.id,
+            name=filename,
+            url=file_url,
+            size=file_size,
+        )
+        db.add(user_file)
+        current_user.disk_usage = (current_user.disk_usage or 0) + file_size
+        await db.commit()
     except Exception as e:
-        return jsonify({"error": f"Failed to process file: {str(e)}"}), 400
+        logger.warning(f"Failed to record UserFile: {e}")
+        await db.rollback()
+
+    return {
+        "url": file_url,
+        "size": file_size,
+        "disk_usage": current_user.disk_usage or 0,
+        "storage": "s3",
+        "message": "Voice uploaded successfully",
+    }
 
 
-@upload_bp.route("/video", methods=["POST"])
-@token_required
-def upload_video(current_user):
-    from app.core.extensions import db
-    from app.models.user_file import UserFile
-    data = request.get_json(silent=True)
-    if not data:
-        return jsonify({"error": "No data provided"}), 400
+@upload_router.post("/file", status_code=status.HTTP_201_CREATED)
+async def upload_file(
+    request: Request,
+    file: Optional[UploadFile] = File(None),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    filename: Optional[str] = None
+    file_bytes: Optional[bytes] = None
 
-    file_data = data.get("file")
-    filename = data.get("filename")
+    if file:
+        filename = file.filename
+        file_bytes = await file.read()
+    else:
+        try:
+            data = await request.json()
+            if data and data.get("file") and data.get("filename"):
+                filename = data["filename"]
+                max_size = LIMIT_PREMIUM if current_user.premium else LIMIT_FREE
+                file_bytes = _decode_base64(data["file"], max_size)
+        except Exception:
+            pass
 
-    if not file_data or not filename:
-        return jsonify({"error": "file and filename are required"}), 400
+    if not file_bytes or not filename:
+        raise HTTPException(status_code=400, detail="file and filename are required")
+
+    ext = _get_extension(filename) or "bin"
+    file_size = len(file_bytes)
+
+    if (current_user.disk_usage or 0) + file_size > current_user.disk_limit:
+        raise HTTPException(
+            status_code=403,
+            detail="Disk space limit exceeded. Upgrade to Premium for more space.",
+        )
+
+    file_url = await _save_upload_async(file_bytes, ext, "files", current_user)
+
+    try:
+        user_file = UserFile(
+            user_id=current_user.id,
+            name=filename,
+            url=file_url,
+            size=file_size,
+        )
+        db.add(user_file)
+        current_user.disk_usage = (current_user.disk_usage or 0) + file_size
+        await db.commit()
+    except Exception as e:
+        logger.warning(f"Failed to save UserFile: {e}")
+        await db.rollback()
+
+    return {
+        "url": file_url,
+        "original_filename": filename,
+        "size_bytes": file_size,
+        "disk_usage": current_user.disk_usage or 0,
+        "storage": "s3",
+        "ext": ext,
+    }
+
+
+@upload_router.post("/video", status_code=status.HTTP_201_CREATED)
+async def upload_video(
+    request: Request,
+    file: Optional[UploadFile] = File(None),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    filename: Optional[str] = None
+    file_bytes: Optional[bytes] = None
+
+    if file:
+        filename = file.filename
+        file_bytes = await file.read()
+    else:
+        try:
+            data = await request.json()
+            if data and data.get("file") and data.get("filename"):
+                filename = data["filename"]
+                max_size = LIMIT_PREMIUM if current_user.premium else LIMIT_FREE
+                file_bytes = _decode_base64(data["file"], max_size)
+        except Exception:
+            pass
+
+    if not file_bytes or not filename:
+        raise HTTPException(status_code=400, detail="file and filename are required")
 
     ext = _get_extension(filename)
     if not ext or ext.lower() not in VIDEO_EXTENSIONS:
-        return jsonify({"error": f"Invalid video extension: {ext}. Allowed: {VIDEO_EXTENSIONS}"}), 400
-
-    try:
-        file_bytes = _decode_base64(file_data, LIMIT_PREMIUM if current_user.premium else LIMIT_FREE)
-        file_size = len(file_bytes)
-        logger.info("[upload_video] user=%s file_size=%d ext=%s", current_user.id, file_size, ext)
-
-        from app.services.storage_router import resolve_storage_target
-        target = resolve_storage_target(
-            ext, file_size,
-            current_user.storage_rules if current_user else None,
-            yandex_disk_available=bool(current_user and current_user.yandex_token),
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid video extension: {ext}. Allowed: {VIDEO_EXTENSIONS}",
         )
 
-        if target == "s3" and current_user.disk_usage + file_size > current_user.disk_limit:
-            return jsonify(
-                {
-                    "error": "Disk space limit exceeded. Upgrade to Premium for more space."
-                }
-            ), 403
+    file_size = len(file_bytes)
+    if (current_user.disk_usage or 0) + file_size > current_user.disk_limit:
+        raise HTTPException(
+            status_code=403,
+            detail="Disk space limit exceeded. Upgrade to Premium for more space.",
+        )
 
-        if not current_user.premium:
-            delay = file_size / THROTTLE_SPEED_BPS
-            time.sleep(delay)
+    file_url = await _save_upload_async(file_bytes, ext, "video", current_user)
 
-        file_url = _save_upload(file_bytes, ext, "video", user=current_user)
-
-        try:
-            db.session.add(
-                UserFile(
-                    user_id=current_user.id,
-                    name=filename,
-                    url=file_url,
-                    size=file_size,
-                )
-            )
-            db.session.flush()
-        except Exception as uf_err:
-            logger.warning("[upload_video] UserFile insert failed (ignored): %s", uf_err)
-
+    try:
+        user_file = UserFile(
+            user_id=current_user.id,
+            name=filename,
+            url=file_url,
+            size=file_size,
+        )
+        db.add(user_file)
         current_user.disk_usage = (current_user.disk_usage or 0) + file_size
-        db.session.commit()
-
-        return jsonify(
-            {
-                "url": file_url,
-                "original_filename": filename,
-                "size_bytes": file_size,
-                "disk_usage": current_user.disk_usage or 0,
-                "storage": target,
-                "ext": ext,
-            }
-        ), 201
-    except ValueError as e:
-        logger.error("[upload_video] ValueError: %s", e)
-        return jsonify({"error": str(e)}), 400
+        await db.commit()
     except Exception as e:
-        logger.exception("[upload_video] Unexpected error: %s", e)
-        return jsonify({"error": f"Failed to upload video: {str(e)}"}), 400
+        logger.warning(f"Failed to record UserFile: {e}")
+        await db.rollback()
+
+    return {
+        "url": file_url,
+        "original_filename": filename,
+        "size_bytes": file_size,
+        "disk_usage": current_user.disk_usage or 0,
+        "storage": "s3",
+        "ext": ext,
+    }
+

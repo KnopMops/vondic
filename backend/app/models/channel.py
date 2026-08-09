@@ -1,33 +1,34 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import TEXT, TIMESTAMP, CheckConstraint
+from sqlalchemy import Table, Column, ForeignKey, TEXT, TIMESTAMP, CheckConstraint
+from sqlalchemy.orm import relationship, backref
 
-from app.core.extensions import db
+from app.core.database import Base
 
-channel_participants = db.Table(
+channel_participants = Table(
     "channel_participants",
-    db.Column("user_id", TEXT, db.ForeignKey("users.id"), primary_key=True),
-    db.Column("channel_id", TEXT, db.ForeignKey(
-        "channels.id"), primary_key=True),
-    db.Column("joined_at", TIMESTAMP, default=datetime.utcnow),
+    Base.metadata,
+    Column("user_id", TEXT, ForeignKey("users.id"), primary_key=True),
+    Column("channel_id", TEXT, ForeignKey("channels.id"), primary_key=True),
+    Column("joined_at", TIMESTAMP, default=datetime.utcnow),
 )
 
 
-class Channel(db.Model):
+class Channel(Base):
     __tablename__ = "channels"
 
-    id = db.Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
-    name = db.Column(TEXT, nullable=False)
-    description = db.Column(TEXT, nullable=True)
-    avatar_url = db.Column(TEXT, nullable=True)
-    invite_code = db.Column(
+    id = Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = Column(TEXT, nullable=False)
+    description = Column(TEXT, nullable=True)
+    avatar_url = Column(TEXT, nullable=True)
+    invite_code = Column(
         TEXT, unique=True, default=lambda: str(uuid.uuid4())[:8])
-    owner_id = db.Column(TEXT, db.ForeignKey("users.id"), nullable=False)
-    type = db.Column(TEXT, nullable=False, default="text")
+    owner_id = Column(TEXT, ForeignKey("users.id"), nullable=False)
+    type = Column(TEXT, nullable=False, default="text")
 
-    created_at = db.Column(TIMESTAMP, default=datetime.utcnow)
-    updated_at = db.Column(
+    created_at = Column(TIMESTAMP, default=datetime.utcnow)
+    updated_at = Column(
         TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     __table_args__ = (
@@ -36,20 +37,19 @@ class Channel(db.Model):
             name="ck_channel_type"),
     )
 
-    owner = db.relationship("User", foreign_keys=[
-                            owner_id], backref="owned_channels")
-    participants = db.relationship(
+    owner = relationship("User", foreign_keys=[owner_id], backref="owned_channels")
+    participants = relationship(
         "User",
         secondary=channel_participants,
-        lazy="subquery",
-        backref=db.backref("channels", lazy=True),
+        lazy="selectin",
+        backref=backref("channels", lazy="selectin"),
     )
-    community_channel = db.relationship(
+    community_channel = relationship(
         "CommunityChannel",
         primaryjoin="Channel.id == CommunityChannel.id",
         foreign_keys="CommunityChannel.id",
         uselist=False,
-        backref=db.backref("channel_mirror", uselist=False),
+        backref=backref("channel_mirror", uselist=False),
         viewonly=True,
     )
 
@@ -63,8 +63,8 @@ class Channel(db.Model):
             "owner_id": self.owner_id,
             "type": self.type,
             "community_id": self.community_channel.community_id if self.community_channel else None,
-            "participants_count": len(
-                self.participants),
+            "participants_count": len(self.participants or []),
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
+

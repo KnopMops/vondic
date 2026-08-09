@@ -9,10 +9,10 @@ RUN pip install --no-cache-dir -r requirements.txt && pip install --no-cache-dir
 # Копируем код бэкенда в подпапку /app/backend
 COPY backend/ /app/backend/
 
-# Docker CLI + gosu (entrypoint подстраивает GID под docker.sock)
+# Docker CLI + gosu + ffmpeg for media conversions
 USER root
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends docker-cli gosu \
+    && apt-get install -y --no-install-recommends docker-cli gosu ffmpeg \
     && rm -rf /var/lib/apt/lists/* \
     && test -x /usr/bin/docker
 
@@ -31,4 +31,5 @@ WORKDIR /app/backend
 EXPOSE 5050
 
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["python", "-m", "gunicorn", "--preload", "-w", "4", "-b", "0.0.0.0:5050", "--max-requests", "1000", "--max-requests-jitter", "50", "--timeout", "120", "run:app"]
+CMD ["gunicorn", "-w", "8", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:5050", "--max-requests", "1000", "--max-requests-jitter", "50", "--timeout", "120", "run:app"]
+
