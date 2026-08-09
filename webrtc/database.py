@@ -213,7 +213,7 @@ class UserRepository:
                 Config.MESSAGE_ENCRYPTION_KEY
             )
             async_url = _get_async_db_url(Config.DATABASE_URL)
-            self.engine = create_async_engine(async_url, pool_pre_ping=True)
+            self.engine = create_async_engine(async_url, pool_pre_ping=True, pool_recycle=120)
             self.session_factory = async_sessionmaker(
                 bind=self.engine, class_=AsyncSession, expire_on_commit=False
             )

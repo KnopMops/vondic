@@ -77,6 +77,9 @@ class Config:
         "pool_size": 5,
         "max_overflow": 10,
         "pool_timeout": 10,
+        "connect_args": {
+            "prepare_threshold": None,
+        },
     }
     MAIL_SERVER = os.environ.get("MAIL_SERVER")
     MAIL_PORT = int(os.environ.get("MAIL_PORT") or 587)
