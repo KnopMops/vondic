@@ -42,6 +42,7 @@ from app.api.v1.bot_games import bot_games_router
 from app.api.oauth import oauth_router
 from app.api.v2.marketplace import v2_marketplace_router
 from app.api.v2.webhooks import v2_webhooks_router
+from app.api.public.v1.bots import public_bots_router
 
 # Load extension routes
 import app.api.v1.users_extension  # noqa: F401
@@ -142,3 +143,4 @@ app.include_router(bot_games_router)
 app.include_router(oauth_router)
 app.include_router(v2_marketplace_router)
 app.include_router(v2_webhooks_router)
+app.include_router(public_bots_router)
