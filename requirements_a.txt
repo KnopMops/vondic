@@ -36,3 +36,5 @@ websockets
 prometheus-client
 botiksdk
 boto3
+pywebpush
+py-vapid

@@ -34,3 +34,5 @@ pika
 uvicorn
 websockets
 gunicorn==23.0.0
+pywebpush
+py-vapid
