@@ -47,7 +47,7 @@ self.addEventListener('push', function (event) {
   const title = data.title || 'Вондик';
   const isCall = data.data?.type === 'incoming_call' || data.type === 'incoming_call';
 
-  const options = {
+  const basicOptions = {
     body: data.body || (isCall ? 'Входящий звонок...' : 'Новое сообщение'),
     icon: '/logo.png',
     badge: '/logo.png',
@@ -55,15 +55,13 @@ self.addEventListener('push', function (event) {
     tag: isCall ? 'call_notification' : (data.data?.message_id || 'vondic_notification_' + Date.now()),
     renotify: true,
     vibrate: isCall ? [500, 250, 500, 250, 500] : [200, 100, 200],
-    actions: isCall
-      ? [
-          { action: 'answer', title: 'Принять' },
-          { action: 'decline', title: 'Отклонить' },
-        ]
-      : [{ action: 'open', title: 'Открыть' }],
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(
+    self.registration.showNotification(title, basicOptions).catch(function (err) {
+      console.error('showNotification error:', err);
+    })
+  );
 });
 
 self.addEventListener('notificationclick', function (event) {
