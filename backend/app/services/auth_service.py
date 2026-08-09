@@ -34,8 +34,11 @@ class AuthService:
                 .first()
             )
             if oldest:
-                db.session.delete(oldest)
-                db.session.flush()
+                try:
+                    db.session.delete(oldest)
+                    db.session.flush()
+                except Exception:
+                    pass
         expires_at = None
         if device_type == "web":
             expires_at = datetime.utcnow() + UserSession.WEB_SESSION_TTL
