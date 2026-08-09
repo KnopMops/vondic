@@ -1320,9 +1320,13 @@ class SignalingService:
 
             try:
                 sender_info = await self.broker.resolve_recipient(sid)
-                sender_name = sender_info.get("username", "Пользователь") if sender_info else "Пользователь"
+                if sender_info:
+                    sender_name = getattr(sender_info, "username", None) or (sender_info.get("username") if isinstance(sender_info, dict) else "Пользователь")
+                else:
+                    sender_name = "Пользователь"
                 push_title = f"{sender_name}"
                 push_body = self._get_push_body(content, msg_type)
+                logger.info(f"Triggering DM push notification for target_user_id={target_user_id} from {sender_name}")
                 await self._push_notify_user(
                     target_user_id,
                     push_title,
@@ -1330,7 +1334,7 @@ class SignalingService:
                     {"message_id": message_id, "sender_id": sender_id},
                 )
             except Exception as e:
-                logger.error(f"Push notification error for DM: {e}")
+                logger.error(f"Push notification error for DM: {e}", exc_info=True)
 
             try:
                 import httpx
