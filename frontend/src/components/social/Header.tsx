@@ -601,10 +601,10 @@ export default function Header({ email, onLogout }: Props) {
 		{isMobileMenuOpen && (
 			<div className='fixed inset-0 z-[9999] md:hidden'>
 				<div
-					className='absolute inset-0 bg-black/60 backdrop-blur-sm'
+					className='absolute inset-0 bg-black/80 backdrop-blur-md'
 					onClick={() => setIsMobileMenuOpen(false)}
 				/>
-				<div className='absolute left-0 top-0 bottom-0 w-64 max-w-[80vw] bg-gradient-to-b from-indigo-950 to-gray-950 border-r border-indigo-500/20 p-4 flex flex-col animate-in slide-in-from-left duration-200 shadow-2xl shadow-indigo-900/30'>
+				<div className='absolute left-0 top-0 bottom-0 w-72 max-w-[85vw] bg-[#151326] border-r border-white/10 p-5 flex flex-col animate-in slide-in-from-left duration-200 shadow-2xl z-50 overflow-y-auto'>
 					<div className='flex items-center justify-between mb-6'>
 						<BrandLogo size={28} />
 						<button
