@@ -32,7 +32,7 @@ export default function FeedPageShell({
 				className={`relative z-10 mx-auto flex max-w-7xl ${withTopPadding ? 'pt-20' : ''}`}
 			>
 				<Sidebar />
-				<main className='flex-1 px-4 sm:px-6 lg:pl-20 lg:pr-80 lg:pt-6 min-w-0 min-h-[calc(100vh-5rem)] flex flex-col'>
+				<main className='flex-1 pl-20 pr-4 sm:pr-6 lg:pr-80 lg:pt-6 min-w-0 min-h-[calc(100vh-5rem)] flex flex-col'>
 					<div className='flex-1'>
 						{children}
 					</div>
