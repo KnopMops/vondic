@@ -1,13 +1,36 @@
-from flask_caching import Cache
-from flask_cors import CORS
-from flask_mail import Mail
-from flask_marshmallow import Marshmallow
-from flask_migrate import Migrate
-from flask_sqlalchemy import SQLAlchemy
+"""
+Core extensions module replacing Flask extensions with FastAPI / SQLAlchemy / Redis equivalents.
+"""
+import logging
+from typing import Any, Optional
+from app.core.database import Base
 
-db = SQLAlchemy()
-migrate = Migrate()
-ma = Marshmallow()
-cors = CORS()
-mail = Mail()
-cache = Cache()
+logger = logging.getLogger(__name__)
+
+
+class DummyCache:
+    def __init__(self):
+        self._memory_store = {}
+
+    def get(self, key: str) -> Optional[Any]:
+        return self._memory_store.get(key)
+
+    def set(self, key: str, value: Any, timeout: Optional[int] = None) -> None:
+        self._memory_store[key] = value
+
+    def delete(self, key: str) -> None:
+        self._memory_store.pop(key, None)
+
+
+class DummyDB:
+    Model = Base
+    Column = None
+    relationship = None
+
+
+db = DummyDB()
+cache = DummyCache()
+mail = None
+migrate = None
+ma = None
+cors = None
