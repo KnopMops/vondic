@@ -65,8 +65,60 @@ def _decode_base64(data: str, max_size: int = None) -> bytes:
     return decoded
 
 
+def _convert_gif_to_mp4(gif_bytes: bytes) -> tuple[bytes, str]:
+    """Конвертирует GIF в зацикленный MP4 ролик (Telegram style) через ffmpeg или возвращает исходный GIF."""
+    try:
+        import subprocess
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(suffix=".gif", delete=False) as tmp_in:
+            tmp_in.write(gif_bytes)
+            tmp_in_path = tmp_in.name
+
+        tmp_out_path = tmp_in_path + ".mp4"
+
+        cmd = [
+            "ffmpeg", "-y", "-i", tmp_in_path,
+            "-movflags", "faststart",
+            "-pix_fmt", "yuv420p",
+            "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+            tmp_out_path
+        ]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+        if res.returncode == 0 and os.path.exists(tmp_out_path):
+            with open(tmp_out_path, "rb") as f:
+                mp4_bytes = f.read()
+            try:
+                os.remove(tmp_in_path)
+                os.remove(tmp_out_path)
+            except Exception:
+                pass
+            return mp4_bytes, "mp4"
+    except Exception as e:
+        logger.warning(f"GIF to MP4 conversion fallback: {e}")
+    return gif_bytes, "gif"
+
+
 def _save_upload(file_bytes: bytes, ext: str, subdir: str, user=None) -> str:
     """Upload file to S3 or Yandex Disk based on user storage rules."""
+    ext = (ext or "").lower()
+    content_type = "application/octet-stream"
+
+    if ext == "gif":
+        file_bytes, ext = _convert_gif_to_mp4(file_bytes)
+
+    content_type_map = {
+        "mp4": "video/mp4",
+        "gif": "image/gif",
+        "webp": "image/webp",
+        "png": "image/png",
+        "jpg": "image/jpeg",
+        "jpeg": "image/jpeg",
+        "ogg": "audio/ogg",
+        "mp3": "audio/mpeg",
+    }
+    content_type = content_type_map.get(ext, "application/octet-stream")
+
     filename = f"{uuid.uuid4()}.{ext}"
     key = f"{subdir}/{filename}"
 
@@ -92,7 +144,7 @@ def _save_upload(file_bytes: bytes, ext: str, subdir: str, user=None) -> str:
             Bucket=bucket,
             Key=key,
             Body=file_bytes,
-            ContentType="application/octet-stream",
+            ContentType=content_type,
         )
         public_url = _get_s3_public_url()
         return f"{public_url}/uploads/{key}"

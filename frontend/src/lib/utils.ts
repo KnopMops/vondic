@@ -28,6 +28,18 @@ export const getAvatarUrl = (url: string | undefined | null) => {
 	return getAttachmentUrl(url || fallback)
 }
 
+export const isGifUrl = (url: string | undefined | null) => {
+	if (!url) return false
+	const lower = url.toLowerCase()
+	return lower.endsWith('.gif') || lower.includes('/gif/') || lower.includes('giphy.gif')
+}
+
+export const isStickerUrl = (url: string | undefined | null) => {
+	if (!url) return false
+	const lower = url.toLowerCase()
+	return lower.includes('type=sticker') || lower.includes('/stickers/') || lower.includes('giphy.gif') && lower.includes('/sticker')
+}
+
 export const parseAsUtc = (input: string | number | Date) => {
 	if (input instanceof Date) return new Date(input.getTime())
 	if (typeof input === 'number') return new Date(input)

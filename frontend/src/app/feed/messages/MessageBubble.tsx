@@ -12,7 +12,7 @@ import {
 	parseInviteLink,
 } from '@/lib/inviteLinks'
 import { renderRichFormattedContent } from '@/lib/messageRichText'
-import { formatMskTime, getAttachmentUrl, getAvatarUrl } from '@/lib/utils'
+import { formatMskTime, getAttachmentUrl, getAvatarUrl, isGifUrl, isStickerUrl } from '@/lib/utils'
 import { memo, useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
@@ -984,16 +984,41 @@ const MessageBubble = memo(
 									ext === 'webm'
 
 								if (isImage) {
+									const imgUrl = getAttachmentUrl(a.url)
+									if (isStickerUrl(imgUrl) || isStickerUrl(a.url)) {
+										return (
+											<img
+												key={a.url}
+												src={imgUrl}
+												alt={a.name}
+												className='w-36 h-36 object-contain filter drop-shadow-xl hover:scale-105 transition-transform duration-200'
+											/>
+										)
+									}
 									return (
 										<img
 											key={a.url}
-											src={getAttachmentUrl(a.url)}
+											src={imgUrl}
 											alt={a.name}
 											className='w-full rounded-lg object-cover'
 										/>
 									)
 								}
 								if (isVideo) {
+									const vidUrl = getAttachmentUrl(a.url)
+									if (a.name?.toLowerCase().includes('gif') || vidUrl.includes('faststart') || isGifUrl(a.url)) {
+										return (
+											<video
+												key={a.url}
+												src={vidUrl}
+												autoPlay
+												loop
+												muted
+												playsInline
+												className='rounded-xl max-w-xs max-h-72 object-cover shadow-lg'
+											/>
+										)
+									}
 									return <VideoPlayer key={a.url} src={a.url} />
 								}
 								if (isAudio) {
