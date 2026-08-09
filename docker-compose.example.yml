@@ -248,6 +248,7 @@ services:
       - '443:443'
     volumes:
       - ./nginx/ssl:/etc/angie/ssl:ro
+      - ./angie/angie.conf:/etc/angie/angie.conf:ro
     depends_on:
       - backend
       - webrtc
