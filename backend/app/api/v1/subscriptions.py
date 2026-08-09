@@ -1,77 +1,64 @@
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
+
+from app.core.deps import get_current_user
 from app.services.subscription_service import SubscriptionService
-from app.utils.decorators import token_required
-from flask import Blueprint, jsonify, request
 
-subscriptions_bp = Blueprint(
-    "subscriptions", __name__, url_prefix="/api/v1/subscriptions"
-)
+subscriptions_router = APIRouter(prefix="/api/v1/subscriptions", tags=["Subscriptions"])
 
 
-@subscriptions_bp.route("/subscribe", methods=["POST"])
-@token_required
-def subscribe(current_user):
-    data = request.get_json() or {}
-    target_id = data.get("target_id")
+class SubscriptionActionSchema(BaseModel):
+    target_id: Optional[str] = None
+    user_id: Optional[str] = None
 
-    if not target_id:
-        return jsonify({"error": "Требуется target_id"}), 400
 
-    sub, error = SubscriptionService.subscribe(current_user.id, target_id)
+@subscriptions_router.post("/subscribe", status_code=status.HTTP_201_CREATED)
+async def subscribe(
+    payload: SubscriptionActionSchema,
+    current_user=Depends(get_current_user)
+):
+    if not payload.target_id:
+        raise HTTPException(status_code=400, detail="target_id is required")
+
+    sub, error = SubscriptionService.subscribe(current_user.id, payload.target_id)
+    if error or not sub:
+        raise HTTPException(status_code=400, detail=error or "Failed to subscribe")
+    return sub.to_dict() if hasattr(sub, "to_dict") else {"subscription": sub}
+
+
+@subscriptions_router.post("/unsubscribe")
+async def unsubscribe(
+    payload: SubscriptionActionSchema,
+    current_user=Depends(get_current_user)
+):
+    if not payload.target_id:
+        raise HTTPException(status_code=400, detail="target_id is required")
+
+    success, error = SubscriptionService.unsubscribe(current_user.id, payload.target_id)
     if error:
-        return jsonify({"error": error}), 400
-
-    try:
-        from app.services.fcm_service import FCMService
-        FCMService.send_notification(
-            str(target_id),
-            "Новый подписчик",
-            f"{current_user.username} подписался на вас",
-            {"type": "new_follower", "sender_id": str(current_user.id)},
-        )
-    except Exception:
-        pass
-
-    return jsonify(sub.to_dict()), 201
+        raise HTTPException(status_code=400, detail=error)
+    return {"message": "Unsubscribed successfully"}
 
 
-@subscriptions_bp.route("/unsubscribe", methods=["POST"])
-@token_required
-def unsubscribe(current_user):
-    data = request.get_json() or {}
-    target_id = data.get("target_id")
-
-    if not target_id:
-        return jsonify({"error": "Требуется target_id"}), 400
-
-    success, error = SubscriptionService.unsubscribe(
-        current_user.id, target_id)
-    if error:
-        return jsonify({"error": error}), 400
-
-    return jsonify({"message": "Отписка успешна"}), 200
+@subscriptions_router.post("/followers")
+@subscriptions_router.get("/followers")
+async def get_followers(
+    payload: Optional[SubscriptionActionSchema] = None,
+    current_user=Depends(get_current_user)
+):
+    uid = (payload.user_id if payload else None) or current_user.id
+    followers = SubscriptionService.get_followers(uid)
+    return {"followers": followers}
 
 
-@subscriptions_bp.route("/followers", methods=["POST"])
-@token_required
-def get_followers(current_user):
-    data = request.get_json() or {}
-    user_id = data.get("user_id")
-
-    if not user_id:
-        return jsonify({"error": "Требуется user_id"}), 400
-
-    followers = SubscriptionService.get_followers(user_id)
-    return jsonify(followers), 200
-
-
-@subscriptions_bp.route("/following", methods=["POST"])
-@token_required
-def get_following(current_user):
-    data = request.get_json() or {}
-    user_id = data.get("user_id")
-
-    if not user_id:
-        return jsonify({"error": "Требуется user_id"}), 400
-
-    following = SubscriptionService.get_following(user_id)
-    return jsonify(following), 200
+@subscriptions_router.post("/following")
+@subscriptions_router.get("/following")
+async def get_following(
+    payload: Optional[SubscriptionActionSchema] = None,
+    current_user=Depends(get_current_user)
+):
+    uid = (payload.user_id if payload else None) or current_user.id
+    following = SubscriptionService.get_following(uid)
+    return {"following": following}

@@ -1,82 +1,87 @@
 import uuid
 from datetime import datetime
-from app.core.extensions import db
+from typing import Optional, List
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
+from sqlalchemy import select
+
+from app.core.database import get_async_db
+from app.core.deps import get_current_user
 from app.models.poll import Poll, PollVote
-from app.utils.decorators import token_required
-from flask import Blueprint, jsonify, request
 
-polls_bp = Blueprint("polls", __name__, url_prefix="/api/v1/polls")
+polls_router = APIRouter(prefix="/api/v1/polls", tags=["Polls"])
 
 
-@polls_bp.route("", methods=["POST"])
-@token_required
-def create_poll(current_user):
-    data = request.get_json() or {}
-    question = (data.get("question") or "").strip()
-    options = data.get("options", [])
-    if not question or len(options) < 2:
-        return jsonify({"error": "question and at least 2 options required"}), 400
+class PollCreateSchema(BaseModel):
+    question: str
+    options: List[str]
+    is_anonymous: Optional[bool] = True
+    multiple_choice: Optional[bool] = False
 
-    poll_options = [{"id": uuid.uuid4().hex[:8], "text": str(o)} for o in options]
+
+class PollVoteSchema(BaseModel):
+    option_id: str
+
+
+@polls_router.post("", status_code=status.HTTP_201_CREATED)
+@polls_router.post("/", status_code=status.HTTP_201_CREATED)
+async def create_poll(
+    payload: PollCreateSchema,
+    current_user=Depends(get_current_user),
+    db=Depends(get_async_db)
+):
+    question = payload.question.strip()
+    if not question or len(payload.options) < 2:
+        raise HTTPException(status_code=400, detail="question and at least 2 options required")
+
+    poll_options = [{"id": uuid.uuid4().hex[:8], "text": str(o)} for o in payload.options]
     poll = Poll(
         id=uuid.uuid4().hex[:16],
         question=question,
         options=poll_options,
-        is_anonymous=data.get("is_anonymous", True),
-        multiple_choice=data.get("multiple_choice", False),
+        is_anonymous=payload.is_anonymous if payload.is_anonymous is not None else True,
+        multiple_choice=payload.multiple_choice if payload.multiple_choice is not None else False,
     )
-    db.session.add(poll)
-    db.session.commit()
-    return jsonify(poll.to_dict()), 201
+    db.add(poll)
+    await db.commit()
+    return poll.to_dict()
 
 
-@polls_bp.route("/<poll_id>", methods=["GET"])
-@token_required
-def get_poll(current_user, poll_id):
-    poll = Poll.query.get(poll_id)
+@polls_router.get("/{poll_id}")
+async def get_poll(
+    poll_id: str,
+    current_user=Depends(get_current_user),
+    db=Depends(get_async_db)
+):
+    res = await db.execute(select(Poll).where(Poll.id == poll_id))
+    poll = res.scalar_one_or_none()
     if not poll:
-        return jsonify({"error": "Not found"}), 404
-    return jsonify(poll.to_dict())
+        raise HTTPException(status_code=404, detail="Poll not found")
+    return poll.to_dict()
 
 
-@polls_bp.route("/<poll_id>/vote", methods=["POST"])
-@token_required
-def vote(current_user, poll_id):
-    poll = Poll.query.get(poll_id)
+@polls_router.post("/{poll_id}/vote")
+async def vote_poll(
+    poll_id: str,
+    payload: PollVoteSchema,
+    current_user=Depends(get_current_user),
+    db=Depends(get_async_db)
+):
+    res = await db.execute(select(Poll).where(Poll.id == poll_id))
+    poll = res.scalar_one_or_none()
     if not poll:
-        return jsonify({"error": "Not found"}), 404
+        raise HTTPException(status_code=404, detail="Poll not found")
+
     if poll.expires_at and poll.expires_at < datetime.utcnow():
-        return jsonify({"error": "Poll expired"}), 400
-
-    data = request.get_json() or {}
-    option_id = data.get("option_id")
-    if not option_id:
-        return jsonify({"error": "option_id required"}), 400
+        raise HTTPException(status_code=400, detail="Poll expired")
 
     valid_ids = {o["id"] for o in poll.options}
-    if option_id not in valid_ids:
-        return jsonify({"error": "Invalid option"}), 400
+    if payload.option_id not in valid_ids:
+        raise HTTPException(status_code=400, detail="Invalid option")
 
-    if not poll.multiple_choice:
-        PollVote.query.filter_by(poll_id=poll_id, user_id=str(current_user.id)).delete()
+    vote_obj = PollVote(poll_id=poll_id, user_id=str(current_user.id), option_id=payload.option_id)
+    db.add(vote_obj)
+    await db.commit()
 
-    existing = PollVote.query.filter_by(
-        poll_id=poll_id, user_id=str(current_user.id), option_id=option_id).first()
-    if existing:
-        db.session.delete(existing)
-        db.session.commit()
-        return jsonify(poll.to_dict())
-
-    vote = PollVote(poll_id=poll_id, user_id=str(current_user.id), option_id=option_id)
-    db.session.add(vote)
-    db.session.commit()
-    return jsonify(poll.to_dict())
-
-
-@polls_bp.route("/<poll_id>/vote", methods=["DELETE"])
-@token_required
-def unvote(current_user, poll_id):
-    PollVote.query.filter_by(poll_id=poll_id, user_id=str(current_user.id)).delete()
-    db.session.commit()
-    poll = Poll.query.get(poll_id)
-    return jsonify(poll.to_dict() if poll else {"ok": True})
+    return poll.to_dict()

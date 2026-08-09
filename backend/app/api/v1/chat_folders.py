@@ -1,121 +1,128 @@
 import uuid
+from typing import Optional
 
-from app.core.extensions import db
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
+from sqlalchemy import select, func
+
+from app.core.database import get_async_db
+from app.core.deps import get_current_user
 from app.models.chat_folder import ChatFolder, ChatFolderItem
-from app.utils.decorators import token_required
-from flask import Blueprint, jsonify, request
 
-chat_folders_bp = Blueprint("chat_folders", __name__, url_prefix="/api/v1/chat-folders")
+chat_folders_router = APIRouter(prefix="/api/v1/chat-folders", tags=["Chat Folders"])
 
 
-@chat_folders_bp.route("", methods=["GET"])
-@token_required
-def list_folders(current_user):
-    folders = (
-        ChatFolder.query
-        .filter_by(user_id=str(current_user.id))
+class ChatFolderCreateSchema(BaseModel):
+    name: str
+    icon: Optional[str] = "📁"
+
+
+class ChatFolderUpdateSchema(BaseModel):
+    name: Optional[str] = None
+    icon: Optional[str] = None
+    position: Optional[int] = None
+
+
+class ChatFolderItemSchema(BaseModel):
+    type: str
+    chat_id: str
+
+
+@chat_folders_router.get("")
+@chat_folders_router.get("/")
+async def list_folders(
+    current_user=Depends(get_current_user),
+    db=Depends(get_async_db)
+):
+    res = await db.execute(
+        select(ChatFolder)
+        .where(ChatFolder.user_id == str(current_user.id))
         .order_by(ChatFolder.position.asc())
-        .all()
     )
-    return jsonify([f.to_dict() for f in folders])
+    folders = res.scalars().all()
+    return [f.to_dict() for f in folders]
 
 
-@chat_folders_bp.route("", methods=["POST"])
-@token_required
-def create_folder(current_user):
-    data = request.get_json() or {}
-    name = (data.get("name") or "").strip()
+@chat_folders_router.post("", status_code=status.HTTP_201_CREATED)
+@chat_folders_router.post("/", status_code=status.HTTP_201_CREATED)
+async def create_folder(
+    payload: ChatFolderCreateSchema,
+    current_user=Depends(get_current_user),
+    db=Depends(get_async_db)
+):
+    name = payload.name.strip()
     if not name:
-        return jsonify({"error": "name required"}), 400
-    icon = data.get("icon", "📁")
+        raise HTTPException(status_code=400, detail="name required")
 
-    max_pos = db.session.query(db.func.max(ChatFolder.position)).filter_by(
-        user_id=str(current_user.id)).scalar() or 0
+    res_max = await db.execute(
+        select(func.max(ChatFolder.position)).where(ChatFolder.user_id == str(current_user.id))
+    )
+    max_pos = res_max.scalar_one() or 0
 
     folder = ChatFolder(
         id=uuid.uuid4().hex[:12],
         user_id=str(current_user.id),
         name=name,
-        icon=icon,
+        icon=payload.icon or "📁",
         position=max_pos + 1,
     )
-    db.session.add(folder)
-    db.session.commit()
-    return jsonify(folder.to_dict()), 201
+    db.add(folder)
+    await db.commit()
+    return folder.to_dict()
 
 
-@chat_folders_bp.route("/<folder_id>", methods=["PUT"])
-@token_required
-def update_folder(current_user, folder_id):
-    folder = ChatFolder.query.filter_by(
-        id=folder_id, user_id=str(current_user.id)).first()
+@chat_folders_router.put("/{folder_id}")
+async def update_folder(
+    folder_id: str,
+    payload: ChatFolderUpdateSchema,
+    current_user=Depends(get_current_user),
+    db=Depends(get_async_db)
+):
+    res = await db.execute(
+        select(ChatFolder).where(ChatFolder.id == folder_id, ChatFolder.user_id == str(current_user.id))
+    )
+    folder = res.scalar_one_or_none()
     if not folder:
-        return jsonify({"error": "Not found"}), 404
-    data = request.get_json() or {}
-    if "name" in data:
-        folder.name = data["name"]
-    if "icon" in data:
-        folder.icon = data["icon"]
-    if "position" in data:
-        folder.position = int(data["position"])
-    db.session.commit()
-    return jsonify(folder.to_dict())
+        raise HTTPException(status_code=404, detail="Folder not found")
+
+    data = payload.model_dump(exclude_unset=True)
+    for field, val in data.items():
+        if hasattr(folder, field):
+            setattr(folder, field, val)
+
+    await db.commit()
+    return folder.to_dict()
 
 
-@chat_folders_bp.route("/<folder_id>", methods=["DELETE"])
-@token_required
-def delete_folder(current_user, folder_id):
-    folder = ChatFolder.query.filter_by(
-        id=folder_id, user_id=str(current_user.id)).first()
+@chat_folders_router.delete("/{folder_id}")
+async def delete_folder(
+    folder_id: str,
+    current_user=Depends(get_current_user),
+    db=Depends(get_async_db)
+):
+    res = await db.execute(
+        select(ChatFolder).where(ChatFolder.id == folder_id, ChatFolder.user_id == str(current_user.id))
+    )
+    folder = res.scalar_one_or_none()
     if not folder:
-        return jsonify({"error": "Not found"}), 404
-    db.session.delete(folder)
-    db.session.commit()
-    return jsonify({"ok": True})
+        raise HTTPException(status_code=404, detail="Folder not found")
+
+    await db.delete(folder)
+    await db.commit()
+    return {"ok": True}
 
 
-@chat_folders_bp.route("/<folder_id>/items", methods=["POST"])
-@token_required
-def add_item(current_user, folder_id):
-    folder = ChatFolder.query.filter_by(
-        id=folder_id, user_id=str(current_user.id)).first()
-    if not folder:
-        return jsonify({"error": "Not found"}), 404
-    data = request.get_json() or {}
-    chat_type = data.get("type")
-    chat_id = data.get("chat_id")
-    if not chat_type or not chat_id:
-        return jsonify({"error": "type and chat_id required"}), 400
-    if chat_type not in ("dm", "group", "channel"):
-        return jsonify({"error": "type must be dm/group/channel"}), 400
+@chat_folders_router.post("/{folder_id}/items", status_code=status.HTTP_201_CREATED)
+async def add_item(
+    folder_id: str,
+    payload: ChatFolderItemSchema,
+    current_user=Depends(get_current_user),
+    db=Depends(get_async_db)
+):
+    if payload.type not in ("dm", "group", "channel"):
+        raise HTTPException(status_code=400, detail="type must be dm/group/channel")
 
-    existing = ChatFolderItem.query.filter_by(
-        folder_id=folder_id, chat_type=chat_type, chat_id=str(chat_id)).first()
-    if existing:
-        return jsonify({"ok": True})
-
-    item = ChatFolderItem(folder_id=folder_id, chat_type=chat_type, chat_id=str(chat_id))
-    db.session.add(item)
-    db.session.commit()
-    return jsonify({"ok": True}), 201
-
-
-@chat_folders_bp.route("/<folder_id>/items", methods=["DELETE"])
-@token_required
-def remove_item(current_user, folder_id):
-    folder = ChatFolder.query.filter_by(
-        id=folder_id, user_id=str(current_user.id)).first()
-    if not folder:
-        return jsonify({"error": "Not found"}), 404
-    data = request.get_json() or {}
-    chat_type = data.get("type")
-    chat_id = data.get("chat_id")
-    if not chat_type or not chat_id:
-        return jsonify({"error": "type and chat_id required"}), 400
-
-    item = ChatFolderItem.query.filter_by(
-        folder_id=folder_id, chat_type=chat_type, chat_id=str(chat_id)).first()
-    if item:
-        db.session.delete(item)
-        db.session.commit()
-    return jsonify({"ok": True})
+    item = ChatFolderItem(folder_id=folder_id, chat_type=payload.type, chat_id=str(payload.chat_id))
+    db.add(item)
+    await db.commit()
+    return {"ok": True}

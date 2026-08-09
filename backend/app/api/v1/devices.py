@@ -1,37 +1,51 @@
-from app.core.extensions import db
+import uuid
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
+from sqlalchemy import select
+
+from app.core.database import get_async_db
+from app.core.deps import get_current_user
 from app.models.device import Device
-from app.utils.decorators import token_required
-from flask import Blueprint, jsonify, request
 
-devices_bp = Blueprint("devices", __name__, url_prefix="/api/v1/devices")
+devices_router = APIRouter(prefix="/api/v1/devices", tags=["Devices"])
 
 
-@devices_bp.route("/register", methods=["POST"])
-@token_required
-def register_device(current_user):
-    data = request.get_json(silent=True) or {}
-    token = (data.get("token") or "").strip()
-    platform = (data.get("platform") or "android").strip().lower()
-    device_type = (data.get("device_type") or "mobile").strip().lower()
+class DeviceRegisterSchema(BaseModel):
+    token: str
+    platform: Optional[str] = "android"
+    device_type: Optional[str] = "mobile"
 
+
+@devices_router.post("/register")
+async def register_device(
+    payload: DeviceRegisterSchema,
+    current_user=Depends(get_current_user),
+    db=Depends(get_async_db)
+):
+    token = payload.token.strip()
     if not token:
-        return jsonify({"error": "token is required"}), 400
+        raise HTTPException(status_code=400, detail="token is required")
 
-    existing = Device.query.filter_by(token=token).first()
+    res = await db.execute(select(Device).where(Device.token == token))
+    existing = res.scalar_one_or_none()
+
     if existing:
-        if str(existing.user_id) != str(current_user.id):
-            existing.user_id = current_user.id
-            existing.platform = platform
-            existing.device_type = device_type
-            db.session.commit()
-        return jsonify({"ok": True, "device_id": existing.id})
+        existing.user_id = current_user.id
+        existing.platform = payload.platform or "android"
+        existing.device_type = payload.device_type or "mobile"
+        await db.commit()
+        return {"ok": True, "device_id": existing.id}
 
     device = Device(
+        id=str(uuid.uuid4()),
         user_id=str(current_user.id),
         token=token,
-        platform=platform,
-        device_type=device_type,
+        platform=payload.platform or "android",
+        device_type=payload.device_type or "mobile",
     )
-    db.session.add(device)
-    db.session.commit()
-    return jsonify({"ok": True, "device_id": device.id}), 201
+    db.add(device)
+    await db.commit()
+
+    return {"ok": True, "device_id": device.id}

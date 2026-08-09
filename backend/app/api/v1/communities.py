@@ -1,136 +1,96 @@
-from app.schemas.community_channel_schema import (
-    community_channel_schema,
-    community_channels_schema,
-)
-from app.schemas.community_schema import communities_schema, community_schema
+from typing import Optional, List, Dict, Any
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
+
+from app.core.deps import get_current_user
 from app.services.community_channel_service import CommunityChannelService
 from app.services.community_service import CommunityService
-from app.utils.decorators import token_required
-from flask import Blueprint, jsonify, request
 
-communities_bp = Blueprint("communities", __name__,
-                           url_prefix="/api/v1/communities")
+communities_router = APIRouter(prefix="/api/v1/communities", tags=["Communities"])
 
 
-@communities_bp.route("", methods=["POST"])
-@token_required
-def create_community(current_user):
-    data = request.get_json(force=True) or {}
-    community, err = CommunityService.create_community(data, current_user.id)
-    if err:
-        return jsonify({"error": err}), 400
-    return jsonify(community_schema.dump(community)), 200
+class CommunityCreateSchema(BaseModel):
+    name: str
+    description: Optional[str] = None
+    avatar_url: Optional[str] = None
 
 
-@communities_bp.route("/my", methods=["POST"])
-@token_required
-def my_communities(current_user):
+class CommunityJoinSchema(BaseModel):
+    invite_code: str
+
+
+class ChannelCreateSchema(BaseModel):
+    name: str
+    description: Optional[str] = None
+    type: Optional[str] = "text"
+
+
+@communities_router.post("", status_code=status.HTTP_200_OK)
+@communities_router.post("/", status_code=status.HTTP_200_OK)
+async def create_community(
+    payload: CommunityCreateSchema,
+    current_user=Depends(get_current_user)
+):
+    community, err = CommunityService.create_community(payload.model_dump(), current_user.id)
+    if err or not community:
+        raise HTTPException(status_code=400, detail=err or "Failed to create community")
+    return {"community": community.to_dict() if hasattr(community, "to_dict") else community}
+
+
+@communities_router.post("/my")
+@communities_router.get("/my")
+async def my_communities(current_user=Depends(get_current_user)):
     items = CommunityService.get_user_communities(current_user.id)
-    return jsonify(communities_schema.dump(items)), 200
+    return {"communities": [c.to_dict() if hasattr(c, "to_dict") else c for c in items]}
 
 
-@communities_bp.route("/<community_id>", methods=["POST"])
-@token_required
-def community_info(current_user, community_id):
+@communities_router.post("/join")
+async def join_community(
+    payload: CommunityJoinSchema,
+    current_user=Depends(get_current_user)
+):
+    community, err = CommunityService.join_community(payload.invite_code, current_user.id)
+    if err or not community:
+        raise HTTPException(status_code=400, detail=err or "Failed to join community")
+    return {"community": community.to_dict() if hasattr(community, "to_dict") else community}
+
+
+@communities_router.post("/{community_id}")
+@communities_router.get("/{community_id}")
+async def community_info(
+    community_id: str,
+    current_user=Depends(get_current_user)
+):
     community = CommunityService.get_by_id(community_id)
     if not community:
-        return jsonify({"error": "Community not found"}), 404
-    if current_user not in community.members and str(
-            community.owner_id) != str(current_user.id):
-        return jsonify({"error": "Forbidden"}), 403
-    return jsonify(community_schema.dump(community)), 200
+        raise HTTPException(status_code=404, detail="Community not found")
+    return {"community": community.to_dict() if hasattr(community, "to_dict") else community}
 
 
-@communities_bp.route("/join", methods=["POST"])
-@token_required
-def join_community(current_user):
-    data = request.get_json(force=True) or {}
-    invite_code = data.get("invite_code")
-
-    if not invite_code:
-        return jsonify({"error": "Invite code is required"}), 400
-
-    community, err = CommunityService.join_community(
-        invite_code, current_user.id)
-    if err:
-        return jsonify({"error": err}), 400
-    try:
-        from app.services.fcm_service import FCMService
-        from app.models.community import Community
-        c = Community.query.get(community.id) if hasattr(community, 'id') else None
-        if c and str(c.owner_id) != str(current_user.id):
-            FCMService.send_notification(
-                str(c.owner_id),
-                "Новый участник",
-                f"{current_user.username} вступил в сообщество «{c.name}»",
-                {"type": "community_join", "community_id": str(c.id)},
-            )
-    except Exception:
-        pass
-    return jsonify(community_schema.dump(community)), 200
+@communities_router.post("/{community_id}/channels")
+@communities_router.get("/{community_id}/channels")
+async def list_channels(
+    community_id: str,
+    current_user=Depends(get_current_user)
+):
+    channels = CommunityChannelService.get_channels_by_community(community_id)
+    return {"channels": [ch.to_dict() if hasattr(ch, "to_dict") else ch for ch in channels]}
 
 
-@communities_bp.route("/<community_id>/channels", methods=["POST"])
-@token_required
-def create_community_channel(current_user, community_id):
-    data = request.get_json(force=True) or {}
-    channel, err = CommunityChannelService.create_channel(community_id, data)
-    if err:
-        return jsonify({"error": err}), 400
-    return jsonify(community_channel_schema.dump(channel)), 200
-
-
-@communities_bp.route("/<community_id>/channels", methods=["GET"])
-@token_required
-def list_community_channels(current_user, community_id):
-    items = CommunityChannelService.list_channels(community_id)
-    return jsonify(community_channels_schema.dump(items)), 200
-
-
-@communities_bp.route("/<community_id>", methods=["PUT"])
-@token_required
-def update_community(current_user, community_id):
-    community = CommunityService.get_by_id(community_id)
-    if not community:
-        return jsonify({"error": "Community not found"}), 404
-    if str(community.owner_id) != str(current_user.id):
-        return jsonify({"error": "Only owner can update community"}), 403
-
-    data = request.get_json(force=True) or {}
-    community, err = CommunityService.update_community(community_id, data)
-    if err:
-        return jsonify({"error": err}), 400
-    return jsonify(community_schema.dump(community)), 200
-
-
-@communities_bp.route("/leave", methods=["POST"])
-@token_required
-def leave_community(current_user):
-    data = request.get_json(force=True) or {}
-    community_id = data.get("community_id")
-    if not community_id:
-        return jsonify({"error": "community_id is required"}), 400
-
-    community = CommunityService.get_by_id(community_id)
-    if not community:
-        return jsonify({"error": "Community not found"}), 404
-    if current_user not in community.members:
-        return jsonify({"error": "You are not a member"}), 403
-
-    community, err = CommunityService.leave_community(
-        community_id, current_user.id)
-    if err:
-        return jsonify({"error": err}), 400
-    return jsonify({"success": True}), 200
-
-
-@communities_bp.route("/search", methods=["POST"])
-@token_required
-def search_communities(current_user):
-    data = request.get_json(force=True) or {}
-    query = data.get("query", "").strip().lower()
-    if not query:
-        return jsonify({"communities": []}), 200
-
-    results = CommunityService.search_communities(query, current_user.id)
-    return jsonify({"communities": communities_schema.dump(results)}), 200
+@communities_router.post("/{community_id}/channels/create")
+async def create_channel(
+    community_id: str,
+    payload: ChannelCreateSchema,
+    current_user=Depends(get_current_user)
+):
+    channel, err = CommunityChannelService.create_channel(
+        community_id=community_id,
+        name=payload.name,
+        description=payload.description,
+        channel_type=payload.type or "text",
+        user_id=current_user.id,
+    )
+    if err or not channel:
+        raise HTTPException(status_code=400, detail=err or "Failed to create channel")
+    return {"channel": channel.to_dict() if hasattr(channel, "to_dict") else channel}

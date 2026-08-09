@@ -1,192 +1,106 @@
-from app.schemas.channel_schema import channel_schema, channels_schema
-from app.schemas.user_schema import users_schema
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
+
+from app.core.deps import get_current_user
 from app.services.channel_service import ChannelService
-from app.utils.decorators import token_required
-from flask import Blueprint, jsonify, request
 
-channels_bp = Blueprint("channels", __name__, url_prefix="/api/v1/channels")
+channels_router = APIRouter(prefix="/api/v1/channels", tags=["Channels"])
 
 
-def validate_channel_input(data, require_name=False):
-    if not data:
-        return None, "Request body is required"
-
-    name = data.get("name")
-    description = data.get("description", "")
-    avatar_url = data.get("avatar_url")
-    channel_type = data.get("type")
-    errors = []
-
-    if require_name and not name:
-        errors.append("Channel name is required")
-    if name is not None:
-        if not isinstance(name, str):
-            errors.append("Channel name must be a string")
-        elif len(name.strip()) == 0:
-            errors.append("Channel name cannot be empty")
-        elif len(name) > 100:
-            errors.append("Channel name must not exceed 100 characters")
-
-    if description and not isinstance(description, str):
-        errors.append("Description must be a string")
-    elif description and len(description) > 500:
-        errors.append("Description must not exceed 500 characters")
-
-    if avatar_url is not None and not isinstance(avatar_url, str):
-        errors.append("avatar_url must be a string")
-
-    if channel_type is not None and channel_type not in ("text", "broadcast"):
-        errors.append("type must be 'text' or 'broadcast'")
-
-    if errors:
-        return None, "; ".join(errors)
-
-    result = {}
-    if name is not None:
-        result["name"] = name.strip()
-    if description is not None:
-        result["description"] = description.strip() if description else None
-    if avatar_url is not None:
-        result["avatar_url"] = avatar_url.strip() if avatar_url else None
-    if channel_type is not None:
-        result["type"] = channel_type
-    return result, None
+class ChannelCreateSchema(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+    avatar_url: Optional[str] = None
+    type: Optional[str] = "text"
 
 
-@channels_bp.route("/", methods=["POST"])
-@token_required
-def create_channel(current_user):
+class ChannelUpdateSchema(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+    avatar_url: Optional[str] = None
+    type: Optional[str] = None
+
+
+@channels_router.post("", status_code=status.HTTP_201_CREATED)
+@channels_router.post("/", status_code=status.HTTP_201_CREATED)
+async def create_channel(
+    payload: ChannelCreateSchema,
+    current_user=Depends(get_current_user)
+):
     try:
-        data = request.get_json()
-
-        validated_data, error = validate_channel_input(data, require_name=True)
-        if error:
-            return jsonify({"error": error, "code": "INVALID_INPUT"}), 400
-
-        channel, error = ChannelService.create_channel(
-            validated_data, current_user.id)
-        if error:
-            if "unique" in error.lower() or "already exists" in error.lower():
-                return jsonify(
-                    {"error": "Channel with this name already exists", "code": "CHANNEL_EXISTS"}), 409
-            if "database" in error.lower() or "sql" in error.lower():
-                return jsonify(
-                    {"error": "Database error. Please try again later", "code": "DATABASE_ERROR"}), 500
-            return jsonify(
-                {"error": error, "code": "CHANNEL_CREATE_FAILED"}), 400
-
-        return jsonify(channel_schema.dump(channel)), 201
-
+        channel = ChannelService.create_channel(
+            owner_id=current_user.id,
+            name=payload.name,
+            description=payload.description,
+            avatar_url=payload.avatar_url,
+            channel_type=payload.type or "text"
+        )
+        return {"channel": channel.to_dict() if hasattr(channel, "to_dict") else channel}
     except Exception as e:
-        return jsonify(
-            {"error": f"Internal server error: {str(e)}", "code": "INTERNAL_ERROR"}), 500
+        raise HTTPException(status_code=400, detail=str(e))
 
 
-@channels_bp.route("/join", methods=["POST"])
-@token_required
-def join_channel(current_user):
-    data = request.get_json() or {}
-    invite_code = data.get("invite_code")
-
-    if not invite_code:
-        return jsonify({"error": "invite_code is required"}), 400
-
-    channel, error = ChannelService.join_channel(invite_code, current_user.id)
-    if error:
-        return jsonify({"error": error}), 400
+@channels_router.get("")
+@channels_router.get("/")
+async def list_channels(current_user=Depends(get_current_user)):
     try:
-        from app.services.fcm_service import FCMService
-        from app.models.channel import Channel
-        ch = Channel.query.get(channel.id) if hasattr(channel, 'id') else None
-        if ch and str(ch.owner_id) != str(current_user.id):
-            FCMService.send_notification(
-                str(ch.owner_id),
-                "Новый подписчик",
-                f"{current_user.username} подписался на канал «{ch.name}»",
-                {"type": "channel_join", "channel_id": str(ch.id)},
-            )
-    except Exception:
-        pass
-    return jsonify(channel_schema.dump(channel)), 200
+        channels = ChannelService.get_user_channels(current_user.id)
+        return {"channels": [c.to_dict() if hasattr(c, "to_dict") else c for c in channels]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@channels_bp.route("/my", methods=["POST"])
-@token_required
-def get_my_channels(current_user):
-    channels = ChannelService.get_user_channels(current_user.id)
-    return jsonify(channels_schema.dump(channels)), 200
+@channels_router.get("/{channel_id}")
+async def get_channel(channel_id: str, current_user=Depends(get_current_user)):
+    try:
+        channel = ChannelService.get_channel_by_id(channel_id)
+        if not channel:
+            raise HTTPException(status_code=404, detail="Channel not found")
+        return {"channel": channel.to_dict() if hasattr(channel, "to_dict") else channel}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@channels_bp.route("/<channel_id>", methods=["POST", "GET"])
-@token_required
-def get_channel_details(current_user, channel_id):
-    channel = ChannelService.get_channel_by_id(channel_id)
-    if not channel:
-        return jsonify({"error": "Channel not found"}), 404
-    if current_user not in channel.participants:
-        return jsonify({"error": "You are not a member of this channel"}), 403
-
-    return jsonify(channel_schema.dump(channel)), 200
-
-
-@channels_bp.route("/<channel_id>", methods=["PUT"])
-@token_required
-def update_channel(current_user, channel_id):
-    channel = ChannelService.get_channel_by_id(channel_id)
-    if not channel:
-        return jsonify({"error": "Channel not found"}), 404
-    if not ChannelService.is_owner(channel_id, current_user.id):
-        return jsonify({"error": "Only owner can update channel"}), 403
-
-    data = request.get_json() or {}
-    validated_data, error = validate_channel_input(data)
-    if error:
-        return jsonify({"error": error}), 400
-
-    channel, error = ChannelService.update_channel(channel_id, validated_data)
-    if error:
-        return jsonify({"error": error}), 400
-    return jsonify(channel_schema.dump(channel)), 200
+@channels_router.put("/{channel_id}")
+async def update_channel(
+    channel_id: str,
+    payload: ChannelUpdateSchema,
+    current_user=Depends(get_current_user)
+):
+    try:
+        data = payload.model_dump(exclude_unset=True)
+        channel = ChannelService.update_channel(channel_id, current_user.id, data)
+        return {"channel": channel.to_dict() if hasattr(channel, "to_dict") else channel}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
-@channels_bp.route("/leave", methods=["POST"])
-@token_required
-def leave_channel(current_user):
-    data = request.get_json() or {}
-    channel_id = data.get("channel_id")
-    if not channel_id:
-        return jsonify({"error": "channel_id is required"}), 400
-
-    channel = ChannelService.get_channel_by_id(channel_id)
-    if not channel:
-        return jsonify({"error": "Channel not found"}), 404
-    if current_user not in channel.participants:
-        return jsonify({"error": "You are not a member of this channel"}), 403
-
-    channel, error = ChannelService.leave_channel(channel_id, current_user.id)
-    if error:
-        return jsonify({"error": error}), 400
-    return jsonify({"success": True}), 200
+@channels_router.delete("/{channel_id}")
+async def delete_channel(channel_id: str, current_user=Depends(get_current_user)):
+    try:
+        ChannelService.delete_channel(channel_id, current_user.id)
+        return {"message": "Channel deleted"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
-@channels_bp.route("/<channel_id>/participants", methods=["GET"])
-@token_required
-def channel_participants(current_user, channel_id):
-    channel = ChannelService.get_channel_by_id(channel_id)
-    if not channel:
-        return jsonify({"error": "Channel not found"}), 404
-    if current_user not in channel.participants:
-        return jsonify({"error": "You are not a member of this channel"}), 403
-    return jsonify(users_schema.dump(channel.participants)), 200
+@channels_router.post("/{channel_id}/join")
+async def join_channel(channel_id: str, current_user=Depends(get_current_user)):
+    try:
+        ChannelService.add_subscriber(channel_id, current_user.id)
+        return {"message": "Joined channel"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
-@channels_bp.route("/search", methods=["POST"])
-@token_required
-def search_channels(current_user):
-    data = request.get_json() or {}
-    query = data.get("query", "").strip().lower()
-    if not query:
-        return jsonify({"channels": []}), 200
-
-    results = ChannelService.search_channels(query, current_user.id)
-    return jsonify({"channels": channels_schema.dump(results)}), 200
+@channels_router.post("/{channel_id}/leave")
+async def leave_channel(channel_id: str, current_user=Depends(get_current_user)):
+    try:
+        ChannelService.remove_subscriber(channel_id, current_user.id)
+        return {"message": "Left channel"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))

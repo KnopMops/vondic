@@ -1,151 +1,92 @@
 import re
 import uuid
+from typing import Optional, List, Dict, Any
 
-from app.core.extensions import db
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
+from sqlalchemy import select
+
+from app.core.database import get_async_db
+from app.core.deps import get_current_user
 from app.models.gift_catalog import GiftCatalog
-from app.utils.decorators import token_required
-from flask import Blueprint, jsonify, request
+from app.models.user import User
 
-gifts_bp = Blueprint("gifts", __name__, url_prefix="/api/v1/gifts")
-
-
-@gifts_bp.route("/", methods=["GET"])
-def list_gifts():
-    try:
-        gifts = GiftCatalog.query.order_by(GiftCatalog.price.asc()).all()
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    return jsonify([g.to_dict() for g in gifts])
+gifts_router = APIRouter(prefix="/api/v1/gifts", tags=["Gifts"])
 
 
-def _generate_gift_id(name: str) -> str:
-    raw = (name or "").strip().lower()
-    base = re.sub(r"\s+", "_", raw)
-    base = re.sub(r"[^a-z0-9_]+", "", base)
-    if not base:
-        base = "gift"
-    if not GiftCatalog.query.get(base):
-        return base
-    suffix = uuid.uuid4().hex[:6]
-    return f"{base}_{suffix}"
+class GiftCreateSchema(BaseModel):
+    name: str
+    price: int = 0
+    icon: Optional[str] = None
+    description: Optional[str] = None
+    image_url: Optional[str] = None
+    total_supply: Optional[int] = None
 
 
-@gifts_bp.route("/admin/create", methods=["POST"])
-@token_required
-def create_gift(current_user):
+class GiftSendSchema(BaseModel):
+    gift_id: str
+    recipient_id: str
+    message: Optional[str] = None
+
+
+@gifts_router.get("")
+@gifts_router.get("/")
+async def list_gifts(db=Depends(get_async_db)):
+    res = await db.execute(select(GiftCatalog).order_by(GiftCatalog.price.asc()))
+    gifts = res.scalars().all()
+    return [g.to_dict() for g in gifts]
+
+
+@gifts_router.post("/admin/create", status_code=status.HTTP_201_CREATED)
+async def create_gift(
+    payload: GiftCreateSchema,
+    current_user=Depends(get_current_user),
+    db=Depends(get_async_db)
+):
     if getattr(current_user, "role", "") != "Admin":
-        return jsonify({"error": "Forbidden"}), 403
-    data = request.get_json() or {}
-    name = (data.get("name") or "").strip()
-    price_val = data.get("price")
-    icon = (data.get("icon") or "").strip() or None
-    description = (data.get("description") or "").strip() or None
-    image_url = (data.get("image_url") or "").strip() or None
-    total_supply = data.get("total_supply")
-    if not name:
-        return jsonify({"error": "name is required"}), 400
-    try:
-        price_int = int(price_val) if price_val is not None else 0
-    except Exception:
-        return jsonify({"error": "price must be integer"}), 400
-    try:
-        supply_value = (
-            int(total_supply)
-            if total_supply is not None and total_supply != ""
-            else None
-        )
-        if supply_value is not None and supply_value <= 0:
-            return jsonify({"error": "total_supply must be positive"}), 400
-    except Exception:
-        return jsonify({"error": "total_supply must be integer"}), 400
-    gid = data.get("id") or _generate_gift_id(name)
-    if GiftCatalog.query.get(gid):
-        return jsonify({"error": "gift with this id already exists"}), 400
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    gid = re.sub(r"\s+", "_", payload.name.strip().lower())
+    gid = re.sub(r"[^a-z0-9_]+", "", gid) or "gift"
+
+    res = await db.execute(select(GiftCatalog).where(GiftCatalog.id == gid))
+    if res.scalar_one_or_none():
+        gid = f"{gid}_{uuid.uuid4().hex[:6]}"
+
     gift = GiftCatalog(
         id=gid,
-        name=name,
-        price=price_int,
-        icon=icon,
-        description=description,
-        image_url=image_url,
-        total_supply=supply_value,
+        name=payload.name.strip(),
+        price=payload.price,
+        icon=payload.icon,
+        description=payload.description,
+        image_url=payload.image_url,
+        total_supply=payload.total_supply,
+        minted_count=0
     )
-    try:
-        db.session.add(gift)
-        db.session.commit()
-        return jsonify({"gift": gift.to_dict()}), 201
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+    db.add(gift)
+    await db.commit()
+    return gift.to_dict()
 
 
-@gifts_bp.route("/admin/update", methods=["POST"])
-@token_required
-def update_gift(current_user):
-    if getattr(current_user, "role", "") != "Admin":
-        return jsonify({"error": "Forbidden"}), 403
-    data = request.get_json() or {}
-    gid = data.get("id")
-    if not gid:
-        return jsonify({"error": "id is required"}), 400
-    gift = GiftCatalog.query.get(gid)
+@gifts_router.post("/send")
+async def send_gift(
+    payload: GiftSendSchema,
+    current_user=Depends(get_current_user),
+    db=Depends(get_async_db)
+):
+    res_g = await db.execute(select(GiftCatalog).where(GiftCatalog.id == payload.gift_id))
+    gift = res_g.scalar_one_or_none()
     if not gift:
-        return jsonify({"error": "Gift not found"}), 404
-    if "name" in data:
-        name = (data.get("name") or "").strip()
-        if name:
-            gift.name = name
-    if "price" in data:
-        try:
-            gift.price = int(data.get("price"))
-        except Exception:
-            return jsonify({"error": "price must be integer"}), 400
-    if "icon" in data:
-        icon = (data.get("icon") or "").strip() or None
-        gift.icon = icon
-    if "description" in data:
-        description = (data.get("description") or "").strip() or None
-        gift.description = description
-    if "image_url" in data:
-        image_url = (data.get("image_url") or "").strip() or None
-        gift.image_url = image_url
-    if "total_supply" in data:
-        total_supply = data.get("total_supply")
-        try:
-            supply_value = (
-                int(total_supply)
-                if total_supply is not None and total_supply != ""
-                else None
-            )
-            if supply_value is not None and supply_value <= 0:
-                return jsonify({"error": "total_supply must be positive"}), 400
-        except Exception:
-            return jsonify({"error": "total_supply must be integer"}), 400
-        gift.total_supply = supply_value
-    try:
-        db.session.commit()
-        return jsonify({"gift": gift.to_dict()}), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+        raise HTTPException(status_code=404, detail="Gift not found")
 
+    res_u = await db.execute(select(User).where(User.id == current_user.id))
+    sender = res_u.scalar_one_or_none()
 
-@gifts_bp.route("/admin/delete", methods=["POST"])
-@token_required
-def delete_gift(current_user):
-    if getattr(current_user, "role", "") != "Admin":
-        return jsonify({"error": "Forbidden"}), 403
-    data = request.get_json() or {}
-    gid = data.get("id")
-    if not gid:
-        return jsonify({"error": "id is required"}), 400
-    gift = GiftCatalog.query.get(gid)
-    if not gift:
-        return jsonify({"error": "Gift not found"}), 404
-    try:
-        db.session.delete(gift)
-        db.session.commit()
-        return jsonify({"success": True}), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+    if (sender.balance or 0.0) < gift.price:
+        raise HTTPException(status_code=400, detail="Insufficient balance")
+
+    sender.balance -= gift.price
+    gift.minted_count = (gift.minted_count or 0) + 1
+    await db.commit()
+
+    return {"success": True, "message": "Gift sent successfully"}

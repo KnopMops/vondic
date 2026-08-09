@@ -1,54 +1,50 @@
-from app.schemas.post_schema import posts_schema
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
+
+from app.core.deps import get_current_user
 from app.services.post_service import PostService
 from app.services.user_service import UserService
-from app.utils.decorators import token_required
-from flask import Blueprint, jsonify, request
 
-search_bp = Blueprint("search", __name__, url_prefix="/api/v1/search")
+search_router = APIRouter(prefix="/api/v1/search", tags=["Search"])
 
 
-@search_bp.route("/", methods=["POST"])
-@token_required
-def global_search(current_user):
-    data = request.get_json() or {}
-    query = data.get("query")
+class SearchQuerySchema(BaseModel):
+    query: str
 
+
+@search_router.post("")
+@search_router.post("/")
+async def global_search(
+    payload: SearchQuerySchema,
+    current_user=Depends(get_current_user)
+):
+    query = payload.query.strip()
     if not query:
-        return jsonify({"error": "query is required"}), 400
-
-    query = query.strip()
-    if not query:
-        return jsonify({"results": [], "type": "empty"}), 200
+        return {"results": [], "type": "empty"}
 
     if query.startswith("@"):
-        search_term = query[1:]
-        if not search_term:
-            return jsonify({"results": [], "type": "users"}), 200
-
-        users = UserService.search_users(search_term)
-        return jsonify(
-            {
-                "type": "users",
-                "results": [
-                    u.to_dict(viewer_id=current_user.id) for u in users
-                ],
-            }
-        ), 200
-
+        term = query[1:].strip()
+        if not term:
+            return {"results": [], "type": "users"}
+        users = UserService.search_users(term)
+        return {
+            "type": "users",
+            "results": [u.to_dict(viewer_id=current_user.id) for u in users]
+        }
     elif query.startswith("#"):
-        search_term = query[1:]
-        if not search_term:
-            return jsonify({"results": [], "type": "posts"}), 200
-
-        posts = PostService.search_posts(search_term)
-        return jsonify(
-            {"type": "posts", "results": posts_schema.dump(posts)}), 200
-
+        term = query[1:].strip()
+        if not term:
+            return {"results": [], "type": "posts"}
+        posts = PostService.search_posts(term)
+        return {
+            "type": "posts",
+            "results": [p.to_dict(viewer_id=current_user.id) for p in posts]
+        }
     else:
-        return jsonify(
-            {
-                "type": "unknown",
-                "message": "Start query with @ for users or # for posts",
-                "results": [],
-            }
-        ), 200
+        return {
+            "type": "unknown",
+            "message": "Start query with @ for users or # for posts",
+            "results": []
+        }

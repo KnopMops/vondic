@@ -1,66 +1,99 @@
-import uuid
-from app.core.extensions import db
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
+from sqlalchemy import select
+
+from app.core.database import get_async_db
+from app.core.deps import get_current_user
 from app.models.group_role import GroupRole
-from app.utils.decorators import token_required
-from flask import Blueprint, jsonify, request
 
-group_roles_bp = Blueprint("group_roles", __name__, url_prefix="/api/v1/group-roles")
+group_roles_router = APIRouter(prefix="/api/v1/group-roles", tags=["Group Roles"])
 
 
-@group_roles_bp.route("", methods=["GET"])
-@token_required
-def list_roles(current_user):
-    group_id = request.args.get("group_id")
-    if not group_id:
-        return jsonify({"error": "group_id required"}), 400
-    roles = GroupRole.query.filter_by(group_id=group_id).all()
-    return jsonify([{
-        "id": r.id, "user_id": r.user_id, "role": r.role
-    } for r in roles])
+class GroupRoleSetSchema(BaseModel):
+    group_id: str
+    user_id: str
+    role: Optional[str] = "member"
 
 
-@group_roles_bp.route("", methods=["POST"])
-@token_required
-def set_role(current_user):
-    data = request.get_json() or {}
-    group_id = data.get("group_id")
-    user_id = data.get("user_id")
-    role = data.get("role", "member")
-    if not group_id or not user_id:
-        return jsonify({"error": "group_id and user_id required"}), 400
-    if role not in ("admin", "moderator", "member"):
-        return jsonify({"error": "role must be admin/moderator/member"}), 400
+class GroupRoleDeleteSchema(BaseModel):
+    group_id: str
+    user_id: str
 
-    existing = GroupRole.query.filter_by(group_id=group_id, user_id=user_id).first()
+
+@group_roles_router.get("")
+@group_roles_router.get("/")
+async def list_roles(
+    group_id: str = Query(...),
+    current_user=Depends(get_current_user),
+    db=Depends(get_async_db)
+):
+    res = await db.execute(select(GroupRole).where(GroupRole.group_id == group_id))
+    roles = res.scalars().all()
+    return [{"id": r.id, "user_id": r.user_id, "role": r.role} for r in roles]
+
+
+@group_roles_router.post("")
+@group_roles_router.post("/")
+async def set_role(
+    payload: GroupRoleSetSchema,
+    current_user=Depends(get_current_user),
+    db=Depends(get_async_db)
+):
+    if payload.role not in ("admin", "moderator", "member"):
+        raise HTTPException(status_code=400, detail="role must be admin/moderator/member")
+
+    res = await db.execute(
+        select(GroupRole).where(
+            GroupRole.group_id == payload.group_id,
+            GroupRole.user_id == payload.user_id
+        )
+    )
+    existing = res.scalar_one_or_none()
     if existing:
-        existing.role = role
+        existing.role = payload.role
     else:
-        db.session.add(GroupRole(group_id=group_id, user_id=user_id, role=role))
-    db.session.commit()
-    return jsonify({"ok": True, "role": role})
+        existing = GroupRole(group_id=payload.group_id, user_id=payload.user_id, role=payload.role)
+        db.add(existing)
+
+    await db.commit()
+    return {"ok": True, "role": payload.role}
 
 
-@group_roles_bp.route("", methods=["DELETE"])
-@token_required
-def remove_role(current_user):
-    data = request.get_json() or {}
-    group_id = data.get("group_id")
-    user_id = data.get("user_id")
-    if not group_id or not user_id:
-        return jsonify({"error": "group_id and user_id required"}), 400
-    role = GroupRole.query.filter_by(group_id=group_id, user_id=user_id).first()
-    if role:
-        db.session.delete(role)
-        db.session.commit()
-    return jsonify({"ok": True})
+@group_roles_router.delete("")
+@group_roles_router.delete("/")
+async def remove_role(
+    payload: GroupRoleDeleteSchema,
+    current_user=Depends(get_current_user),
+    db=Depends(get_async_db)
+):
+    res = await db.execute(
+        select(GroupRole).where(
+            GroupRole.group_id == payload.group_id,
+            GroupRole.user_id == payload.user_id
+        )
+    )
+    role_obj = res.scalar_one_or_none()
+    if role_obj:
+        await db.delete(role_obj)
+        await db.commit()
+    return {"ok": True}
 
 
-@group_roles_bp.route("/check", methods=["GET"])
-@token_required
-def check_role(current_user):
-    group_id = request.args.get("group_id")
-    user_id = request.args.get("user_id", str(current_user.id))
-    if not group_id:
-        return jsonify({"error": "group_id required"}), 400
-    role = GroupRole.query.filter_by(group_id=group_id, user_id=user_id).first()
-    return jsonify({"role": role.role if role else "member"})
+@group_roles_router.get("/check")
+async def check_role(
+    group_id: str = Query(...),
+    user_id: Optional[str] = Query(None),
+    current_user=Depends(get_current_user),
+    db=Depends(get_async_db)
+):
+    target_uid = user_id or str(current_user.id)
+    res = await db.execute(
+        select(GroupRole).where(
+            GroupRole.group_id == group_id,
+            GroupRole.user_id == target_uid
+        )
+    )
+    role_obj = res.scalar_one_or_none()
+    return {"role": role_obj.role if role_obj else "member"}

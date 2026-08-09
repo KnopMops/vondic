@@ -1,36 +1,57 @@
-
 from datetime import datetime
+from typing import Optional, List, Dict, Any
 
-from app.core.extensions import db
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
+from sqlalchemy import select
+
+from app.core.database import get_async_db
+from app.core.deps import get_current_user
 from app.models.message import Message
 from app.services.message_service import MessageService
-from app.utils.decorators import token_required
-from flask import Blueprint, jsonify, request
 
-messages_bp = Blueprint("messages", __name__, url_prefix="/api/v1/messages")
+messages_router = APIRouter(prefix="/api/v1/messages", tags=["Messages"])
 
 
-@messages_bp.route("/<message_id>/reaction", methods=["POST"])
-@token_required
-def add_reaction(current_user, message_id):
-    data = request.get_json() or {}
-    emoji = data.get("emoji")
+class ReactionSchema(BaseModel):
+    emoji: str
 
+
+class MessageEditSchema(BaseModel):
+    content: str
+
+
+class MessageSendSchema(BaseModel):
+    target_user_id: Optional[str] = None
+    channel_id: Optional[str] = None
+    group_id: Optional[str] = None
+    content: str
+    type: Optional[str] = "text"
+    attachments: Optional[List[Dict[str, Any]]] = None
+
+
+@messages_router.post("/{message_id}/reaction")
+async def add_reaction(
+    message_id: str,
+    payload: ReactionSchema,
+    current_user=Depends(get_current_user),
+    db=Depends(get_async_db)
+):
+    emoji = payload.emoji
     if not emoji:
-        return jsonify({"error": "emoji is required"}), 400
+        raise HTTPException(status_code=400, detail="emoji is required")
 
-    message = Message.query.get(message_id)
+    res = await db.execute(select(Message).where(Message.id == message_id))
+    message = res.scalar_one_or_none()
     if not message:
-        return jsonify({"error": "Message not found"}), 404
+        raise HTTPException(status_code=404, detail="Message not found")
 
-    reactions = message.reactions or []
-
-    user_reaction = next((r for r in reactions if r.get(
-        "user_id") == current_user.id and r.get("emoji") == emoji), None)
+    reactions = list(message.reactions or [])
+    user_reaction = next((r for r in reactions if r.get("user_id") == current_user.id and r.get("emoji") == emoji), None)
 
     if user_reaction:
-        reactions = [r for r in reactions if r.get(
-            "user_id") != current_user.id or r.get("emoji") != emoji]
+        reactions = [r for r in reactions if r.get("user_id") != current_user.id or r.get("emoji") != emoji]
+        action = "removed"
     else:
         reactions.append({
             "user_id": current_user.id,
@@ -38,209 +59,78 @@ def add_reaction(current_user, message_id):
             "emoji": emoji,
             "created_at": datetime.utcnow().isoformat()
         })
+        action = "added"
 
-    try:
-        message.reactions = reactions
-        db.session.commit()
-        return jsonify({
-            "success": True,
-            "reactions": reactions,
-            "action": "removed" if user_reaction else "added"
-        }), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+    message.reactions = reactions
+    await db.commit()
+    return {
+        "success": True,
+        "reactions": reactions,
+        "action": action
+    }
 
 
-@messages_bp.route("/<message_id>/edit", methods=["PUT"])
-@token_required
-def edit_message(current_user, message_id):
-    data = request.get_json() or {}
-    new_content = data.get("content")
-
+@messages_router.put("/{message_id}/edit")
+async def edit_message(
+    message_id: str,
+    payload: MessageEditSchema,
+    current_user=Depends(get_current_user),
+    db=Depends(get_async_db)
+):
+    new_content = payload.content
     if not new_content:
-        return jsonify({"error": "content is required"}), 400
+        raise HTTPException(status_code=400, detail="Content is required")
 
-    message = Message.query.get(message_id)
+    res = await db.execute(select(Message).where(Message.id == message_id))
+    message = res.scalar_one_or_none()
     if not message:
-        return jsonify({"error": "Message not found"}), 404
+        raise HTTPException(status_code=404, detail="Message not found")
 
     if message.sender_id != current_user.id:
-        return jsonify({"error": "You can only edit your own messages"}), 403
+        raise HTTPException(status_code=403, detail="Forbidden")
 
-    if (datetime.utcnow() - message.created_at).total_seconds() > 172800:
-        return jsonify(
-            {"error": "Message can only be edited within 48 hours"}), 400
-
-    try:
-        edit_history = message.edit_history or []
-        edit_history.append({
-            "content": message.content,
-            "edited_at": datetime.utcnow().isoformat()
-        })
-
-        message.content = new_content
-        message.is_edited = True
-        message.edit_history = edit_history
-        message.updated_at = datetime.utcnow()
-
-        db.session.commit()
-        return jsonify({
-            "success": True,
-            "message": message.to_dict()
-        }), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+    message.content = new_content
+    message.is_edited = True
+    message.updated_at = datetime.utcnow()
+    await db.commit()
+    return {"success": True, "message": message.to_dict()}
 
 
-@messages_bp.route("/<message_id>/read", methods=["POST"])
-@token_required
-def mark_message_read(current_user, message_id):
-    message = Message.query.get(message_id)
+@messages_router.delete("/{message_id}")
+async def delete_message(
+    message_id: str,
+    for_everyone: bool = Query(True),
+    current_user=Depends(get_current_user),
+    db=Depends(get_async_db)
+):
+    res = await db.execute(select(Message).where(Message.id == message_id))
+    message = res.scalar_one_or_none()
     if not message:
-        return jsonify({"error": "Message not found"}), 404
+        raise HTTPException(status_code=404, detail="Message not found")
 
-    read_by = message.read_by or []
+    if message.sender_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Forbidden")
 
-    if not any(r.get("user_id") == current_user.id for r in read_by):
-        read_by.append({
-            "user_id": current_user.id,
-            "username": current_user.username,
-            "read_at": datetime.utcnow().isoformat()
-        })
-
-    try:
-        message.read_by = read_by
-        db.session.commit()
-        return jsonify({
-            "success": True,
-            "read_by": read_by
-        }), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+    await db.delete(message)
+    await db.commit()
+    return {"success": True, "message": "Message deleted"}
 
 
-@messages_bp.route("/<message_id>/reply", methods=["POST"])
-@token_required
-def reply_to_message(current_user, message_id):
-    data = request.get_json() or {}
-    content = data.get("content")
-
-    if not content:
-        return jsonify({"error": "content is required"}), 400
-
-    parent_message = Message.query.get(message_id)
-    if not parent_message:
-        return jsonify({"error": "Message not found"}), 404
-
-    reply_message = Message(
-        content=content,
+@messages_router.post("", status_code=status.HTTP_201_CREATED)
+@messages_router.post("/", status_code=status.HTTP_201_CREATED)
+async def send_message(
+    payload: MessageSendSchema,
+    current_user=Depends(get_current_user)
+):
+    msg, err = MessageService.send_message(
         sender_id=current_user.id,
-        target_id=parent_message.target_id,
-        group_id=parent_message.group_id,
-        channel_id=parent_message.channel_id,
-        reply_to_id=message_id
+        target_user_id=payload.target_user_id,
+        channel_id=payload.channel_id,
+        group_id=payload.group_id,
+        content=payload.content,
+        msg_type=payload.type or "text",
+        attachments=payload.attachments
     )
-
-    try:
-        db.session.add(reply_message)
-        db.session.commit()
-        return jsonify({
-            "success": True,
-            "message": reply_message.to_dict()
-        }), 201
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
-
-
-@messages_bp.route("/<message_id>/forward", methods=["POST"])
-@token_required
-def forward_message(current_user, message_id):
-    data = request.get_json() or {}
-    target_id = data.get("target_id")
-    group_id = data.get("group_id")
-
-    if not target_id and not group_id:
-        return jsonify({"error": "target_id or group_id is required"}), 400
-
-    original_message = Message.query.get(message_id)
-    if not original_message:
-        return jsonify({"error": "Message not found"}), 404
-
-    forwarded_message = Message(
-        content=original_message.content,
-        attachments=original_message.attachments,
-        sender_id=current_user.id,
-        target_id=target_id,
-        group_id=group_id,
-        forwarded_from_id=message_id,
-        type=original_message.type
-    )
-
-    try:
-        db.session.add(forwarded_message)
-        db.session.commit()
-        return jsonify({
-            "success": True,
-            "message": forwarded_message.to_dict()
-        }), 201
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
-
-
-@messages_bp.route("/<message_id>/delete-for-everyone", methods=["POST"])
-@token_required
-def delete_message_for_everyone(current_user, message_id):
-    message = Message.query.get(message_id)
-    if not message:
-        return jsonify({"error": "Message not found"}), 404
-
-    if message.sender_id != current_user.id and current_user.role != "Admin":
-        return jsonify({"error": "You can only delete your own messages"}), 403
-
-    if (datetime.utcnow() - message.created_at).total_seconds() > 604800:
-        return jsonify(
-            {"error": "Message can only be deleted within 7 days"}), 400
-
-    try:
-        message.is_deleted = True
-        message.content = "Сообщение удалено"
-        message.attachments = []
-        message.updated_at = datetime.utcnow()
-
-        db.session.commit()
-        return jsonify({
-            "success": True,
-            "message": "Message deleted for everyone"
-        }), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
-
-
-@messages_bp.route("/history", methods=["DELETE"])
-@token_required
-def delete_messages_history(current_user):
-    data = request.get_json() or {}
-    target_id = data.get("target_id")
-
-    if not target_id:
-        return jsonify({"error": "Требуется target_id"}), 400
-
-    try:
-        deleted = Message.query.filter(
-            ((Message.sender_id == current_user.id) & (
-                Message.target_id == target_id)) | (
-                (Message.sender_id == target_id) & (
-                    Message.target_id == current_user.id)))
-        deleted_count = deleted.delete(synchronize_session=False)
-        db.session.commit()
-        MessageService.ensure_dm_conversation(current_user.id, target_id)
-        return jsonify({"deleted": deleted_count}), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+    if err or not msg:
+        raise HTTPException(status_code=400, detail=err or "Failed to send message")
+    return {"message": msg.to_dict(), "success": True}

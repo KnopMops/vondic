@@ -1,106 +1,81 @@
-from flask import Blueprint, jsonify, request
+from typing import Optional
 
-from app.schemas.social_community_schema import (
-    social_communities_schema,
-    social_community_schema,
-)
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
+
+from app.core.deps import get_current_user
 from app.services.social_community_service import SocialCommunityService
-from app.utils.decorators import token_required
 
-social_communities_bp = Blueprint(
-    "social_communities",
-    __name__,
-    url_prefix="/api/v1/social-communities",
+social_communities_router = APIRouter(
+    prefix="/api/v1/social-communities",
+    tags=["Social Communities"]
 )
 
 
-@social_communities_bp.route("", methods=["POST"])
-@token_required
-def create_social_community(current_user):
-    data = request.get_json(force=True) or {}
-    community, err = SocialCommunityService.create(data, current_user.id)
-    if err:
-        return jsonify({"error": err}), 400
-    return jsonify(social_community_schema.dump(community)), 201
+class SocialCommunityCreateSchema(BaseModel):
+    name: str
+    description: Optional[str] = None
+    avatar_url: Optional[str] = None
+    cover_url: Optional[str] = None
+    is_public: Optional[bool] = True
 
 
-@social_communities_bp.route("/my", methods=["POST"])
-@token_required
-def my_social_communities(current_user):
+class SocialCommunityJoinSchema(BaseModel):
+    invite_code: str
+
+
+class SocialCommunityLeaveSchema(BaseModel):
+    community_id: str
+
+
+@social_communities_router.post("", status_code=status.HTTP_201_CREATED)
+@social_communities_router.post("/", status_code=status.HTTP_201_CREATED)
+async def create_social_community(
+    payload: SocialCommunityCreateSchema,
+    current_user=Depends(get_current_user)
+):
+    community, err = SocialCommunityService.create(payload.model_dump(), current_user.id)
+    if err or not community:
+        raise HTTPException(status_code=400, detail=err or "Failed to create social community")
+    return {"community": community.to_dict() if hasattr(community, "to_dict") else community}
+
+
+@social_communities_router.post("/my")
+@social_communities_router.get("/my")
+async def my_social_communities(current_user=Depends(get_current_user)):
     items = SocialCommunityService.get_user_communities(current_user.id)
-    return jsonify(social_communities_schema.dump(items)), 200
+    return {"communities": [c.to_dict() if hasattr(c, "to_dict") else c for c in items]}
 
 
-@social_communities_bp.route("/<community_id>", methods=["POST"])
-@token_required
-def social_community_info(current_user, community_id):
+@social_communities_router.post("/join")
+async def join_social_community(
+    payload: SocialCommunityJoinSchema,
+    current_user=Depends(get_current_user)
+):
+    community, err = SocialCommunityService.join(payload.invite_code, current_user.id)
+    if err or not community:
+        raise HTTPException(status_code=400, detail=err or "Failed to join community")
+    return {"community": community.to_dict() if hasattr(community, "to_dict") else community}
+
+
+@social_communities_router.post("/leave")
+async def leave_social_community(
+    payload: SocialCommunityLeaveSchema,
+    current_user=Depends(get_current_user)
+):
+    ok, err = SocialCommunityService.leave(payload.community_id, current_user.id)
+    if not ok:
+        raise HTTPException(status_code=400, detail=err or "Failed to leave community")
+    return {"message": "Left community"}
+
+
+@social_communities_router.post("/{community_id}")
+@social_communities_router.get("/{community_id}")
+async def social_community_info(
+    community_id: str,
+    current_user=Depends(get_current_user)
+):
     community = SocialCommunityService.get_by_id(community_id)
     if not community:
-        return jsonify({"error": "Community not found"}), 404
-    if not SocialCommunityService.user_is_member(community, current_user):
-        if not community.is_public:
-            return jsonify({"error": "Forbidden"}), 403
-    return jsonify(social_community_schema.dump(community)), 200
-
-
-@social_communities_bp.route("/join", methods=["POST"])
-@token_required
-def join_social_community(current_user):
-    data = request.get_json(force=True) or {}
-    invite_code = data.get("invite_code")
-    if not invite_code:
-        return jsonify({"error": "invite_code is required"}), 400
-    community, err = SocialCommunityService.join(invite_code, current_user.id)
-    if err:
-        return jsonify({"error": err}), 400
-    try:
-        from app.services.fcm_service import FCMService
-        from app.models.social_community import SocialCommunity
-        c = SocialCommunity.query.get(community.id) if hasattr(community, 'id') else None
-        if c and str(c.owner_id) != str(current_user.id):
-            FCMService.send_notification(
-                str(c.owner_id),
-                "Новый участник",
-                f"{current_user.username} вступил в сообщество «{c.name}»",
-                {"type": "social_community_join", "community_id": str(c.id)},
-            )
-    except Exception:
-        pass
-    return jsonify(social_community_schema.dump(community)), 200
-
-
-@social_communities_bp.route("/leave", methods=["POST"])
-@token_required
-def leave_social_community(current_user):
-    data = request.get_json(force=True) or {}
-    community_id = data.get("community_id")
-    if not community_id:
-        return jsonify({"error": "community_id is required"}), 400
-    _, err = SocialCommunityService.leave(community_id, current_user.id)
-    if err:
-        return jsonify({"error": err}), 400
-    return jsonify({"success": True}), 200
-
-
-@social_communities_bp.route("/<community_id>", methods=["PUT"])
-@token_required
-def update_social_community(current_user, community_id):
-    data = request.get_json(force=True) or {}
-    community, err = SocialCommunityService.update(
-        community_id, data, current_user.id)
-    if err:
-        status = 403 if "Only owner" in err else 400
-        return jsonify({"error": err}), status
-    return jsonify(social_community_schema.dump(community)), 200
-
-
-@social_communities_bp.route("/search", methods=["POST"])
-@token_required
-def search_social_communities(current_user):
-    data = request.get_json(force=True) or {}
-    query = (data.get("query") or "").strip()
-    if not query:
-        return jsonify({"communities": []}), 200
-    results = SocialCommunityService.search(query, current_user.id)
-    return jsonify(
-        {"communities": social_communities_schema.dump(results)}), 200
+        raise HTTPException(status_code=404, detail="Community not found")
+    return {"community": community.to_dict() if hasattr(community, "to_dict") else community}

@@ -1,229 +1,90 @@
 from datetime import datetime, timedelta
+from typing import Optional, List, Dict, Any
 
 import pytz
 import stripe
-from app.core.config import Config
-from app.core.extensions import db
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel
+from sqlalchemy import select
+
+from app.core.config import settings
+from app.core.database import get_async_db
+from app.core.deps import get_current_user
 from app.models.user import User
-from flask import Blueprint, jsonify, request
 
-payments_bp = Blueprint("payments", __name__, url_prefix="/api/v1/payments")
+payments_router = APIRouter(prefix="/api/v1/payments", tags=["Payments"])
 
-stripe.api_key = Config.STRIPE_SECRET_KEY
+if getattr(settings, "STRIPE_SECRET_KEY", None):
+    stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
-@payments_bp.route("/create-checkout-session", methods=["POST"])
-def create_checkout_session():
-    data = request.get_json()
-    user_id = data.get("user_id")
+class CheckoutSessionSchema(BaseModel):
+    user_id: Optional[str] = None
 
-    if not user_id:
-        return jsonify({"error": "Отсутствует user_id"}), 400
 
-    user = User.query.get(user_id)
+class PaymentSessionSchema(BaseModel):
+    buyer_id: Optional[str] = None
+    items: List[Dict[str, Any]]
+    success_url: Optional[str] = None
+    cancel_url: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+
+@payments_router.post("/create-checkout-session")
+async def create_checkout_session(
+    payload: CheckoutSessionSchema,
+    current_user=Depends(get_current_user),
+    db=Depends(get_async_db)
+):
+    uid = payload.user_id or current_user.id
+    res = await db.execute(select(User).where(User.id == uid))
+    user = res.scalar_one_or_none()
     if not user:
-        return jsonify({"error": "Пользователь не найден"}), 404
+        raise HTTPException(status_code=404, detail="User not found")
 
     try:
+        price_id = getattr(settings, "STRIPE_PRICE_ID", "price_default")
         checkout_session = stripe.checkout.Session.create(
-            client_reference_id=user_id,
+            client_reference_id=uid,
             payment_method_types=["card"],
-            line_items=[
-                {
-                    "price": Config.STRIPE_PRICE_ID,
-                    "quantity": 1,
-                },
-            ],
+            line_items=[{"price": price_id, "quantity": 1}],
             mode="subscription",
-            success_url="http://localhost:3000/premium/success",
-            cancel_url="http://localhost:3000/premium/cancel",
+            success_url=f"{settings.FRONTEND_URL}/premium/success",
+            cancel_url=f"{settings.FRONTEND_URL}/premium/cancel",
         )
-        return jsonify({"url": checkout_session.url})
+        return {"url": checkout_session.url}
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@payments_bp.route("/create-payment-session", methods=["POST"])
-def create_payment_session():
-    data = request.get_json()
-    buyer_id = data.get("buyer_id")
-    items = data.get("items", [])
-    success_url = data.get(
-        "success_url") or "http://localhost:3000/shop/success"
-    cancel_url = data.get("cancel_url") or "http://localhost:3000/shop/cancel"
-    metadata = data.get("metadata") or {}
-
-    if not buyer_id:
-        return jsonify({"error": "Отсутствует buyer_id"}), 400
-    if not isinstance(items, list) or len(items) == 0:
-        return jsonify({"error": "items должен быть непустым массивом"}), 400
-
-    user = User.query.get(buyer_id)
-    if not user:
-        return jsonify({"error": "Пользователь не найден"}), 404
-
+@payments_router.post("/create-payment-session")
+async def create_payment_session(
+    payload: PaymentSessionSchema,
+    current_user=Depends(get_current_user)
+):
     try:
-        line_items = []
-        for it in items:
-            name = it.get("name")
-            amount = it.get("amount")
-            currency = it.get("currency", "rub")
-            quantity = int(it.get("quantity", 1))
-            if not name or not amount or amount <= 0 or quantity <= 0:
-                return jsonify({"error": "Неверный элемент в items"}), 400
-            line_items.append(
-                {
-                    "price_data": {
-                        "currency": currency,
-                        "unit_amount": amount,
-                        "product_data": {"name": name},
+        stripe_items = []
+        for item in payload.items:
+            stripe_items.append({
+                "price_data": {
+                    "currency": item.get("currency", "rub"),
+                    "product_data": {
+                        "name": item.get("name", "Vondic Product"),
                     },
-                    "quantity": quantity,
-                }
-            )
+                    "unit_amount": int(item.get("price", 0) * 100),
+                },
+                "quantity": int(item.get("quantity", 1)),
+            })
 
         checkout_session = stripe.checkout.Session.create(
-            client_reference_id=buyer_id,
+            client_reference_id=payload.buyer_id or current_user.id,
             payment_method_types=["card"],
-            line_items=line_items,
+            line_items=stripe_items,
             mode="payment",
-            success_url=success_url,
-            cancel_url=cancel_url,
-            metadata=metadata,
+            success_url=payload.success_url or f"{settings.FRONTEND_URL}/shop/success",
+            cancel_url=payload.cancel_url or f"{settings.FRONTEND_URL}/shop/cancel",
+            metadata=payload.metadata or {},
         )
-        return jsonify({"url": checkout_session.url})
-    except stripe.error.StripeError as e:
-        return jsonify({"error": str(e)}), 400
+        return {"url": checkout_session.url}
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@payments_bp.route("/create-topup-session", methods=["POST"])
-def create_topup_session():
-    data = request.get_json() or {}
-    buyer_id = data.get("buyer_id")
-    amount_rub = int(data.get("amount") or 0)
-    success_url = data.get(
-        "success_url") or "http://localhost:3000/shop/success"
-    cancel_url = data.get("cancel_url") or "http://localhost:3000/shop/cancel"
-
-    if not buyer_id or amount_rub < 50 or amount_rub > 50000:
-        return jsonify({"error": "Сумма должна быть от 50 до 50000 ₽"}), 400
-
-    user = User.query.get(buyer_id)
-    if not user:
-        return jsonify({"error": "Пользователь не найден"}), 404
-
-    try:
-        checkout_session = stripe.checkout.Session.create(
-            client_reference_id=buyer_id,
-            payment_method_types=["card"],
-            line_items=[
-                {
-                    "price_data": {
-                        "currency": "rub",
-                        "unit_amount": amount_rub * 100,
-                        "product_data": {"name": f"Пополнение баланса — {amount_rub}₽"},
-                    },
-                    "quantity": 1,
-                }
-            ],
-            mode="payment",
-            success_url=success_url,
-            cancel_url=cancel_url,
-            metadata={"type": "topup", "amount": str(amount_rub)},
-        )
-        return jsonify({"url": checkout_session.url})
-    except stripe.error.StripeError as e:
-        return jsonify({"error": str(e)}), 400
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@payments_bp.route("/confirm-topup", methods=["POST"])
-def confirm_topup():
-    data = request.get_json() or {}
-    session_id = data.get("session_id")
-    if not session_id:
-        return jsonify({"error": "Отсутствует session_id"}), 400
-    try:
-        session = stripe.checkout.Session.retrieve(session_id)
-        if not session:
-            return jsonify({"error": "Сессия не найдена"}), 404
-        if session.get("mode") != "payment" or session.get(
-                "payment_status") != "paid":
-            return jsonify({"error": "Платёж не завершён"}), 400
-        buyer_id = session.get("client_reference_id")
-        metadata = session.get("metadata") or {}
-        if metadata.get("type") != "topup":
-            return jsonify({"error": "Неверный тип сессии"}), 400
-        amount_str = metadata.get("amount") or "0"
-        try:
-            amount_val = int(amount_str)
-        except Exception:
-            amount_val = 0
-        if not buyer_id or amount_val <= 0:
-            return jsonify({"error": "Неверные данные сессии"}), 400
-        user = User.query.get(buyer_id)
-        if not user:
-            return jsonify({"error": "Пользователь не найден"}), 404
-        user.balance = (user.balance or 0) + amount_val
-        db.session.commit()
-        return jsonify({"success": True, "balance": user.balance})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@payments_bp.route("/webhook", methods=["POST"])
-def stripe_webhook():
-    payload = request.get_data(as_text=True)
-    sig_header = request.headers.get("Stripe-Signature")
-    endpoint_secret = Config.STRIPE_WEBHOOK_SECRET
-
-    try:
-        event = stripe.Webhook.construct_event(
-            payload, sig_header, endpoint_secret)
-    except ValueError:
-        return "Неверные данные", 400
-    except stripe.error.SignatureVerificationError:
-        return "Неверная подпись", 400
-
-    if event.get("type") == "checkout.session.completed":
-        session = event.get("data", {}).get("object", {})
-        try:
-            handle_checkout_session(session)
-        except Exception as e:
-            print(f"Webhook error: {e}")
-
-    return jsonify(success=True)
-
-
-def handle_checkout_session(session):
-    user_id = session.get("client_reference_id")
-    if not user_id:
-        return
-
-    user = User.query.get(user_id)
-    if not user:
-        return
-
-    mode = session.get("mode")
-    if mode == "subscription":
-        moscow_tz = pytz.timezone("Europe/Moscow")
-        now = datetime.now(moscow_tz)
-        user.premium = 1
-        user.premium_started_at = now
-        user.premium_expired_at = now + timedelta(days=30)
-        db.session.commit()
-        return
-    metadata = session.get("metadata") or {}
-    t = metadata.get("type")
-    if t == "topup":
-        amount_str = metadata.get("amount") or "0"
-        try:
-            amount_val = int(amount_str)
-        except Exception:
-            amount_val = 0
-        if amount_val > 0:
-            user.balance = (user.balance or 0) + amount_val
-            db.session.commit()
+        raise HTTPException(status_code=500, detail=str(e))

@@ -1,37 +1,42 @@
-from app.core.extensions import db
+from typing import Optional, Dict, Any
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+
+from app.core.deps import get_current_user
 from app.services.app_download_service import AppDownloadService
-from app.utils.decorators import token_required
-from flask import Blueprint, jsonify, request
 
-app_downloads_bp = Blueprint(
-    "app_downloads", __name__, url_prefix="/api/v1/app-downloads"
-)
+app_downloads_router = APIRouter(prefix="/api/v1/app-downloads", tags=["App Downloads"])
 
 
-@app_downloads_bp.route("/", methods=["GET"])
-def get_app_downloads():
-    return jsonify({"downloads": AppDownloadService.get_downloads()}), 200
+class AppDownloadsUpdateSchema(BaseModel):
+    downloads: Optional[Dict[str, Any]] = None
 
 
-@app_downloads_bp.route("/admin", methods=["GET"])
-@token_required
-def get_app_downloads_admin(current_user):
+@app_downloads_router.get("")
+@app_downloads_router.get("/")
+async def get_app_downloads():
+    return {"downloads": AppDownloadService.get_downloads()}
+
+
+@app_downloads_router.get("/admin")
+async def get_app_downloads_admin(current_user=Depends(get_current_user)):
     if getattr(current_user, "role", "") != "Admin":
-        return jsonify({"error": "Forbidden"}), 403
-    return jsonify({"downloads": AppDownloadService.get_downloads()}), 200
+        raise HTTPException(status_code=403, detail="Forbidden")
+    return {"downloads": AppDownloadService.get_downloads()}
 
 
-@app_downloads_bp.route("/admin", methods=["PUT"])
-@token_required
-def update_app_downloads_admin(current_user):
+@app_downloads_router.put("/admin")
+async def update_app_downloads_admin(
+    payload: AppDownloadsUpdateSchema,
+    current_user=Depends(get_current_user)
+):
     if getattr(current_user, "role", "") != "Admin":
-        return jsonify({"error": "Forbidden"}), 403
-    data = request.get_json() or {}
-    patch = data.get("downloads") if isinstance(
-        data.get("downloads"), dict) else data
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    patch = payload.downloads or payload.model_dump(exclude_unset=True)
     try:
         merged = AppDownloadService.update_downloads(patch)
-        return jsonify({"downloads": merged}), 200
+        return {"downloads": merged}
     except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))

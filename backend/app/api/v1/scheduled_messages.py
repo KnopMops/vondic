@@ -1,90 +1,91 @@
 import uuid
 from datetime import datetime
+from typing import Optional, List, Dict, Any
 
-from app.core.extensions import db
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
+from sqlalchemy import select
+
+from app.core.database import get_async_db
+from app.core.deps import get_current_user
 from app.models.scheduled_message import ScheduledMessage
-from app.utils.decorators import token_required
-from flask import Blueprint, jsonify, request
 
-scheduled_bp = Blueprint("scheduled", __name__, url_prefix="/api/v1/scheduled-messages")
+scheduled_router = APIRouter(prefix="/api/v1/scheduled-messages", tags=["Scheduled Messages"])
 
 
-@scheduled_bp.route("", methods=["POST"])
-@token_required
-def create_scheduled(current_user):
-    data = request.get_json() or {}
-    content = data.get("content", "").strip()
-    scheduled_at_str = data.get("scheduled_at")
+class ScheduledMessageCreateSchema(BaseModel):
+    content: str
+    scheduled_at: str
+    target_user_id: Optional[str] = None
+    channel_id: Optional[str] = None
+    group_id: Optional[str] = None
+    type: Optional[str] = "text"
+    attachments: Optional[List[Dict[str, Any]]] = None
 
-    if not content or not scheduled_at_str:
-        return jsonify({"error": "content and scheduled_at required"}), 400
 
+@scheduled_router.post("", status_code=status.HTTP_201_CREATED)
+@scheduled_router.post("/", status_code=status.HTTP_201_CREATED)
+async def create_scheduled(
+    payload: ScheduledMessageCreateSchema,
+    current_user=Depends(get_current_user),
+    db=Depends(get_async_db)
+):
     try:
-        scheduled_at = datetime.fromisoformat(scheduled_at_str.replace("Z", "+00:00")).replace(tzinfo=None)
+        dt = datetime.fromisoformat(payload.scheduled_at.replace("Z", "+00:00")).replace(tzinfo=None)
     except Exception:
-        return jsonify({"error": "Invalid scheduled_at format"}), 400
+        raise HTTPException(status_code=400, detail="Invalid scheduled_at format")
 
-    if scheduled_at <= datetime.utcnow():
-        return jsonify({"error": "scheduled_at must be in the future"}), 400
+    if dt <= datetime.utcnow():
+        raise HTTPException(status_code=400, detail="scheduled_at must be in the future")
 
     msg = ScheduledMessage(
         id=uuid.uuid4().hex[:16],
         sender_id=str(current_user.id),
-        target_user_id=data.get("target_user_id"),
-        channel_id=data.get("channel_id"),
-        group_id=data.get("group_id"),
-        content=content,
-        type=data.get("type", "text"),
-        attachments=data.get("attachments"),
-        scheduled_at=scheduled_at,
+        target_user_id=payload.target_user_id,
+        channel_id=payload.channel_id,
+        group_id=payload.group_id,
+        content=payload.content.strip(),
+        type=payload.type or "text",
+        attachments=payload.attachments,
+        scheduled_at=dt,
     )
-    db.session.add(msg)
-    db.session.commit()
-    return jsonify(msg.to_dict()), 201
+    db.add(msg)
+    await db.commit()
+    return msg.to_dict()
 
 
-@scheduled_bp.route("", methods=["GET"])
-@token_required
-def list_scheduled(current_user):
-    msgs = (
-        ScheduledMessage.query
-        .filter_by(sender_id=str(current_user.id), sent_at=None)
+@scheduled_router.get("")
+@scheduled_router.get("/")
+async def list_scheduled(
+    current_user=Depends(get_current_user),
+    db=Depends(get_async_db)
+):
+    res = await db.execute(
+        select(ScheduledMessage)
+        .where(ScheduledMessage.sender_id == str(current_user.id), ScheduledMessage.sent_at == None)
         .order_by(ScheduledMessage.scheduled_at.asc())
-        .all()
     )
-    return jsonify([m.to_dict() for m in msgs])
+    msgs = res.scalars().all()
+    return [m.to_dict() for m in msgs]
 
 
-@scheduled_bp.route("/chat", methods=["POST"])
-@token_required
-def list_scheduled_for_chat(current_user):
-    """Get scheduled messages for a specific chat (to show faded in history)."""
-    data = request.get_json() or {}
-    target_user_id = data.get("target_user_id")
-    channel_id = data.get("channel_id")
-    group_id = data.get("group_id")
-
-    query = ScheduledMessage.query.filter_by(sender_id=str(current_user.id), sent_at=None)
-
-    if target_user_id:
-        query = query.filter_by(target_user_id=target_user_id)
-    elif channel_id:
-        query = query.filter_by(channel_id=channel_id)
-    elif group_id:
-        query = query.filter_by(group_id=group_id)
-
-    msgs = query.order_by(ScheduledMessage.scheduled_at.asc()).all()
-    return jsonify([m.to_dict() for m in msgs])
-
-
-@scheduled_bp.route("/<msg_id>", methods=["DELETE"])
-@token_required
-def cancel_scheduled(current_user, msg_id):
-    msg = ScheduledMessage.query.filter_by(
-        id=msg_id, sender_id=str(current_user.id), sent_at=None
-    ).first()
+@scheduled_router.delete("/{msg_id}")
+async def cancel_scheduled(
+    msg_id: str,
+    current_user=Depends(get_current_user),
+    db=Depends(get_async_db)
+):
+    res = await db.execute(
+        select(ScheduledMessage).where(
+            ScheduledMessage.id == msg_id,
+            ScheduledMessage.sender_id == str(current_user.id),
+            ScheduledMessage.sent_at == None
+        )
+    )
+    msg = res.scalar_one_or_none()
     if not msg:
-        return jsonify({"error": "Not found"}), 404
-    db.session.delete(msg)
-    db.session.commit()
-    return jsonify({"ok": True})
+        raise HTTPException(status_code=404, detail="Scheduled message not found")
+
+    await db.delete(msg)
+    await db.commit()
+    return {"ok": True}

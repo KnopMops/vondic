@@ -1,7 +1,3 @@
-from flask import Blueprint
+from fastapi import APIRouter
 
-from .v1 import public_v1_bp
-
-public_bp = Blueprint("public", __name__)
-
-public_bp.register_blueprint(public_v1_bp, url_prefix="/v1")
+public_router = APIRouter(prefix="/api/public", tags=["Public API"])

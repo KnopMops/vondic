@@ -1,176 +1,53 @@
-from app.core.extensions import db
-from app.schemas.message_schema import message_schema, messages_schema
+from typing import Optional, List, Dict, Any
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
+
+from app.core.deps import get_current_user
 from app.services.message_service import MessageService
-from app.utils.decorators import token_required
-from flask import Blueprint, jsonify, make_response, request
 
-dm_bp = Blueprint("direct_messages", __name__, url_prefix="/api/v1/dm")
+dm_router = APIRouter(prefix="/api/v1/dm", tags=["Direct Messages"])
 
 
-@dm_bp.route("/recent", methods=["GET", "OPTIONS"])
-def get_recent_contacts():
-    from app.services.auth_service import AuthService
-
-    token = request.headers.get(
-        "Authorization",
-        "").replace(
-        "Bearer ",
-        "").strip()
-    if not token:
-        return jsonify({"error": "Требуется авторизация"}), 401
-
-    current_user, error = AuthService.get_user_by_token(token)
-    if error or not current_user:
-        return jsonify({"error": "Не авторизовано"}), 401
-
-    try:
-        limit = request.args.get("limit", 30, type=int)
-        if limit < 1:
-            limit = 1
-        if limit > 100:
-            limit = 100
-        contacts = MessageService.get_recent_contacts(
-            current_user.id, limit=limit)
-        return jsonify({"items": contacts}), 200
-    except Exception as e:
-        import traceback
-        print(f"Error in get_recent_contacts: {e}")
-        print(traceback.format_exc())
-        return jsonify({"error": str(e)}), 500
+class DMSettingsUpdateSchema(BaseModel):
+    is_secret: Optional[bool] = None
 
 
-@dm_bp.route("/<target_id>/settings", methods=["GET", "OPTIONS"])
-def get_dm_settings(target_id):
-    from app.services.auth_service import AuthService
+@dm_router.get("/recent")
+async def get_recent_contacts(
+    limit: int = Query(30, ge=1, le=100),
+    current_user=Depends(get_current_user)
+):
+    contacts = MessageService.get_recent_contacts(current_user.id, limit=limit)
+    return {"items": contacts}
 
-    if request.method == "OPTIONS":
-        return make_response("", 200)
 
-    token = request.headers.get(
-        "Authorization", "").replace("Bearer ", "").strip()
-    if not token:
-        return jsonify({"error": "Требуется авторизация"}), 401
-
-    current_user, error = AuthService.get_user_by_token(token)
-    if error or not current_user:
-        return jsonify({"error": "Не авторизовано"}), 401
-
+@dm_router.get("/{target_id}/settings")
+async def get_dm_settings(
+    target_id: str,
+    current_user=Depends(get_current_user)
+):
     settings = MessageService.get_dm_settings(current_user.id, target_id)
-    return jsonify(settings), 200
+    return settings
 
 
-@dm_bp.route("/<target_id>/settings", methods=["PATCH"])
-def patch_dm_settings(target_id):
-    from app.services.auth_service import AuthService
-
-    token = request.headers.get(
-        "Authorization", "").replace("Bearer ", "").strip()
-    if not token:
-        return jsonify({"error": "Требуется авторизация"}), 401
-
-    current_user, error = AuthService.get_user_by_token(token)
-    if error or not current_user:
-        return jsonify({"error": "Не авторизовано"}), 401
-
-    data = request.get_json() or {}
-    if "is_secret" not in data:
-        return jsonify({"error": "is_secret is required"}), 400
-
-    settings = MessageService.set_dm_secret(
-        current_user.id, target_id, bool(data.get("is_secret"))
+@dm_router.put("/{target_id}/settings")
+async def update_dm_settings(
+    target_id: str,
+    payload: DMSettingsUpdateSchema,
+    current_user=Depends(get_current_user)
+):
+    settings = MessageService.update_dm_settings(
+        current_user.id, target_id, is_secret=payload.is_secret
     )
-    return jsonify(settings), 200
+    return settings
 
 
-@dm_bp.route("/<target_id>/messages", methods=["POST"])
-@token_required
-def send_dm(current_user, target_id):
-    data = request.get_json() or {}
-    message, error = MessageService.create_message(
-        data, current_user.id, target_id=target_id
-    )
-    if error:
-        return jsonify({"error": error}), 400
-
-    from app.services.ollama_service import OllamaService
-
-    ai_user = OllamaService.get_ai_user()
-    if str(target_id) == str(ai_user.id):
-        OllamaService.process_message_async(message.id, is_dm=True)
-
-    return jsonify(message_schema.dump(message)), 201
-
-
-@dm_bp.route("/<target_id>/messages", methods=["GET"])
-@token_required
-def get_dm_history(current_user, target_id):
-    page = request.args.get("page", 1, type=int)
-    per_page = request.args.get("per_page", 50, type=int)
-    cursor = request.args.get("cursor", type=str)
-
-    messages_pagination, error = MessageService.get_direct_messages(
-        current_user.id, target_id, page, per_page, cursor
-    )
-
-    if error:
-        return jsonify({"error": error}), 403
-
-    items = messages_schema.dump(messages_pagination.items)
-
-    next_cursor = None
-    if items:
-        last_item = items[-1]
-        next_cursor = last_item.get("created_at")
-
-    return jsonify(
-        {
-            "items": items,
-            "total": messages_pagination.total,
-            "pages": messages_pagination.pages,
-            "page": messages_pagination.page,
-            "next_cursor": next_cursor,
-        }
-    ), 200
-
-
-@dm_bp.route("/<target_id>/messages/<message_id>",
-             methods=["DELETE", "OPTIONS"])
-def delete_message(target_id, message_id):
-    from flask import make_response
-
-    if request.method == "OPTIONS":
-        response = make_response("", 200)
-        return response
-
-    from app.services.auth_service import AuthService
-    from app.models.message import Message
-
-    token = request.headers.get(
-        "Authorization",
-        "").replace(
-        "Bearer ",
-        "").strip()
-    if not token:
-        return jsonify({"error": "Требуется авторизация"}), 401
-
-    current_user, error = AuthService.get_user_by_token(token)
-    if error or not current_user:
-        return jsonify({"error": "Не авторизовано"}), 401
-
-    message = Message.query.filter(
-        Message.id == message_id,
-        (((Message.sender_id == current_user.id) & (
-            Message.target_id == target_id)) | (
-            (Message.sender_id == target_id) & (
-                Message.target_id == current_user.id)))).first()
-
-    if not message:
-        return jsonify({"error": "Сообщение не найдено"}), 404
-
-    if str(message.sender_id) != str(current_user.id):
-        return jsonify({"error": "Доступ запрещён"}), 403
-
-    db.session.delete(message)
-    db.session.commit()
-
-    return jsonify({"message": "Сообщение успешно удалено"}), 200
+@dm_router.get("/{target_id}")
+async def get_direct_messages(
+    target_id: str,
+    limit: int = Query(50, ge=1, le=100),
+    current_user=Depends(get_current_user)
+):
+    messages = MessageService.get_direct_messages(current_user.id, target_id, limit=limit)
+    return {"messages": [m.to_dict() if hasattr(m, "to_dict") else m for m in messages]}

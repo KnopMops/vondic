@@ -1,260 +1,125 @@
-from app.schemas.group_schema import group_schema, groups_schema
-from app.schemas.message_schema import message_schema, messages_schema
+from typing import Optional, List, Dict, Any
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
+
+from app.core.deps import get_current_user
 from app.services.group_service import GroupService
 from app.services.message_service import MessageService
-from app.utils.decorators import token_required
-from flask import Blueprint, jsonify, request
 
-groups_bp = Blueprint("groups", __name__, url_prefix="/api/v1/groups")
+groups_router = APIRouter(prefix="/api/v1/groups", tags=["Groups"])
 
 
-@groups_bp.route("/", methods=["POST"])
-@token_required
-def create_group(current_user):
-    data = request.get_json() or {}
-    group, error = GroupService.create_group(data, current_user.id)
-    if error:
-        return jsonify({"error": error}), 400
-    return jsonify(group_schema.dump(group)), 201
+class GroupCreateSchema(BaseModel):
+    name: str
+    description: Optional[str] = None
+    avatar_url: Optional[str] = None
 
 
-@groups_bp.route("/join", methods=["POST"])
-@token_required
-def join_group(current_user):
-    data = request.get_json() or {}
-    invite_code = data.get("invite_code")
-
-    if not invite_code:
-        return jsonify({"error": "invite_code is required"}), 400
-
-    group, error = GroupService.join_group(invite_code, current_user.id)
-    if error:
-        return jsonify({"error": error}), 400
-    try:
-        from app.services.fcm_service import FCMService
-        from app.models.group import Group
-        g = Group.query.get(group.id) if hasattr(group, 'id') else None
-        if g and str(g.owner_id) != str(current_user.id):
-            FCMService.send_notification(
-                str(g.owner_id),
-                "Новый участник",
-                f"{current_user.username} вступил в группу «{g.name}»",
-                {"type": "group_join", "group_id": str(g.id)},
-            )
-    except Exception:
-        pass
-    return jsonify(group_schema.dump(group)), 200
+class GroupJoinSchema(BaseModel):
+    invite_code: str
 
 
-@groups_bp.route("/my", methods=["POST"])
-@token_required
-def get_my_groups(current_user):
+class GroupInfoSchema(BaseModel):
+    group_id: str
+
+
+class GroupMemberActionSchema(BaseModel):
+    group_id: str
+    user_id: str
+
+
+@groups_router.post("", status_code=status.HTTP_201_CREATED)
+@groups_router.post("/", status_code=status.HTTP_201_CREATED)
+async def create_group(
+    payload: GroupCreateSchema,
+    current_user=Depends(get_current_user)
+):
+    group, error = GroupService.create_group(payload.model_dump(), current_user.id)
+    if error or not group:
+        raise HTTPException(status_code=400, detail=error or "Failed to create group")
+    return {"group": group.to_dict() if hasattr(group, "to_dict") else group}
+
+
+@groups_router.post("/join")
+async def join_group(
+    payload: GroupJoinSchema,
+    current_user=Depends(get_current_user)
+):
+    group, error = GroupService.join_group(payload.invite_code, current_user.id)
+    if error or not group:
+        raise HTTPException(status_code=400, detail=error or "Failed to join group")
+    return {"group": group.to_dict() if hasattr(group, "to_dict") else group}
+
+
+@groups_router.get("/my")
+@groups_router.post("/my")
+async def get_my_groups(current_user=Depends(get_current_user)):
     groups = GroupService.get_user_groups(current_user.id)
-    return jsonify(groups_schema.dump(groups)), 200
+    return {"groups": [g.to_dict() if hasattr(g, "to_dict") else g for g in groups]}
 
 
-@groups_bp.route("/info", methods=["POST"])
-@token_required
-def get_group(current_user):
-    data = request.get_json() or {}
-    group_id = data.get("group_id")
+@groups_router.post("/info")
+@groups_router.get("/{group_id}")
+async def get_group(
+    group_id: Optional[str] = None,
+    payload: Optional[GroupInfoSchema] = None,
+    current_user=Depends(get_current_user)
+):
+    gid = group_id or (payload.group_id if payload else None)
+    if not gid:
+        raise HTTPException(status_code=400, detail="group_id is required")
 
-    if not group_id:
-        return jsonify({"error": "group_id is required"}), 400
-
-    group = GroupService.get_group_by_id(group_id)
-    if not group:
-        return jsonify({"error": "Group not found"}), 404
-    return jsonify(group_schema.dump(group)), 200
+    group, error = GroupService.get_group_info(gid, current_user.id)
+    if error or not group:
+        raise HTTPException(status_code=404, detail=error or "Group not found")
+    return {"group": group.to_dict() if hasattr(group, "to_dict") else group}
 
 
-@groups_bp.route("/<group_id>/participants", methods=["GET", "POST"])
-@token_required
-def participants(current_user, group_id):
-    if request.method == "GET":
-        group = GroupService.get_group_by_id(group_id)
-        if not group:
-            return jsonify({"error": "Group not found"}), 404
-        from app.schemas.user_schema import users_schema
-
-        return jsonify(users_schema.dump(group.participants)), 200
-
-    data = request.get_json() or {}
-    target_user_id = data.get("user_id")
-    target_username = data.get("username")
-
-    if not target_user_id and not target_username:
-        return jsonify({"error": "user_id or username is required"}), 400
-
-    group, error = GroupService.add_participant(
-        group_id,
-        target_user_id=target_user_id,
-        requester_id=current_user.id,
-        target_username=target_username,
-    )
+@groups_router.post("/leave")
+async def leave_group(
+    payload: GroupInfoSchema,
+    current_user=Depends(get_current_user)
+):
+    success, error = GroupService.leave_group(payload.group_id, current_user.id)
     if error:
-        status_code = 403 if "Only participants" in error else 400
-        return jsonify({"error": error}), status_code
-
-    return jsonify(group_schema.dump(group)), 200
+        raise HTTPException(status_code=400, detail=error)
+    return {"message": "Left group"}
 
 
-@groups_bp.route("/<group_id>/messages", methods=["POST"])
-@token_required
-def send_message(current_user, group_id):
-    data = request.get_json() or {}
-    message, error = MessageService.create_message(
-        data, current_user.id, group_id)
+@groups_router.post("/add-member")
+async def add_member(
+    payload: GroupMemberActionSchema,
+    current_user=Depends(get_current_user)
+):
+    success, error = GroupService.add_member(payload.group_id, current_user.id, payload.user_id)
     if error:
-        return jsonify({"error": error}), 400
-    return jsonify(message_schema.dump(message)), 201
+        raise HTTPException(status_code=400, detail=error)
+    return {"message": "Member added"}
 
 
-@groups_bp.route("/<group_id>/messages", methods=["GET"])
-@token_required
-def get_messages(current_user, group_id):
-    page = request.args.get("page", 1, type=int)
-    per_page = request.args.get("per_page", 50, type=int)
-    cursor = request.args.get("cursor", type=str)
-
-    messages_pagination, error = MessageService.get_group_messages(
-        group_id, current_user.id, page, per_page, cursor
-    )
-
+@groups_router.post("/remove-member")
+async def remove_member(
+    payload: GroupMemberActionSchema,
+    current_user=Depends(get_current_user)
+):
+    success, error = GroupService.remove_member(payload.group_id, current_user.id, payload.user_id)
     if error:
-        return jsonify({"error": error}), 403
-
-    items = messages_schema.dump(messages_pagination.items)
-
-    next_cursor = None
-    if items:
-        last_item = items[-1]
-        next_cursor = last_item.get("created_at")
-
-    return jsonify(
-        {
-            "items": items,
-            "total": messages_pagination.total,
-            "pages": messages_pagination.pages,
-            "page": messages_pagination.page,
-            "next_cursor": next_cursor,
-        }
-    ), 200
+        raise HTTPException(status_code=400, detail=error)
+    return {"message": "Member removed"}
 
 
-@groups_bp.route("/<group_id>/messages/<message_id>", methods=["DELETE"])
-@token_required
-def delete_group_message(current_user, group_id, message_id):
-    from app.models.group import Group
-    from app.models.message import Message
+@groups_router.post("/messages")
+@groups_router.get("/{group_id}/messages")
+async def get_group_messages(
+    group_id: Optional[str] = None,
+    limit: int = Query(50, ge=1, le=100),
+    payload: Optional[GroupInfoSchema] = None,
+    current_user=Depends(get_current_user)
+):
+    gid = group_id or (payload.group_id if payload else None)
+    if not gid:
+        raise HTTPException(status_code=400, detail="group_id is required")
 
-    group = Group.query.get(group_id)
-    if not group or current_user not in group.participants:
-        return jsonify({"error": "Group not found or access denied"}), 403
-
-    message = Message.query.filter(
-        Message.id == message_id,
-        Message.group_id == group_id
-    ).first()
-
-    if not message:
-        return jsonify({"error": "Message not found"}), 404
-
-    if str(message.sender_id) != str(current_user.id):
-        return jsonify({"error": "Forbidden"}), 403
-
-    message.content = "Сообщение удалено"
-    message.attachments = []
-    if hasattr(message, 'is_deleted'):
-        message.is_deleted = True
-    else:
-        message.is_deleted = True
-
-    db.session.commit()
-
-    try:
-        print(
-            f"Need to notify WebSocket server about deletion of message {message_id}")
-    except Exception as e:
-        print(f"Error notifying WebSocket server: {e}")
-
-    return jsonify({"message": "Message deleted successfully"}), 200
-
-
-@groups_bp.route("/history", methods=["DELETE"])
-@token_required
-def delete_group_history(current_user):
-    data = request.get_json() or {}
-    group_id = data.get("group_id")
-
-    if not group_id:
-        return jsonify({"error": "Требуется group_id"}), 400
-
-    from app.models.group import Group
-    from app.models.message import Message
-
-    group = Group.query.get(group_id)
-    if not group:
-        return jsonify({"error": "Группа не найдена"}), 404
-
-    if str(group.owner_id) != str(current_user.id):
-        return jsonify(
-            {"error": "Только владелец группы может удалить историю"}), 403
-
-    try:
-        deleted_count = Message.query.filter(
-            Message.group_id == group_id).delete(
-            synchronize_session=False)
-        db.session.commit()
-        return jsonify({"deleted": deleted_count}), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
-
-
-@groups_bp.route("/<group_id>", methods=["PUT"])
-@token_required
-def update_group(current_user, group_id):
-    group = GroupService.get_group_by_id(group_id)
-    if not group:
-        return jsonify({"error": "Group not found"}), 404
-    if not GroupService.is_owner(group_id, current_user.id):
-        return jsonify({"error": "Only owner can update group"}), 403
-
-    data = request.get_json() or {}
-    group, error = GroupService.update_group(group_id, data)
-    if error:
-        return jsonify({"error": error}), 400
-    return jsonify(group_schema.dump(group)), 200
-
-
-@groups_bp.route("/leave", methods=["POST"])
-@token_required
-def leave_group(current_user):
-    data = request.get_json() or {}
-    group_id = data.get("group_id")
-    if not group_id:
-        return jsonify({"error": "group_id is required"}), 400
-
-    group = GroupService.get_group_by_id(group_id)
-    if not group:
-        return jsonify({"error": "Group not found"}), 404
-    if current_user not in group.participants:
-        return jsonify({"error": "You are not a participant"}), 403
-
-    group, error = GroupService.leave_group(group_id, current_user.id)
-    if error:
-        return jsonify({"error": error}), 400
-    return jsonify({"success": True}), 200
-
-
-@groups_bp.route("/search", methods=["POST"])
-@token_required
-def search_groups(current_user):
-    data = request.get_json() or {}
-    query = data.get("query", "").strip().lower()
-    if not query:
-        return jsonify({"groups": []}), 200
-
-    results = GroupService.search_groups(query, current_user.id)
-    return jsonify({"groups": groups_schema.dump(results)}), 200
+    messages = MessageService.get_group_messages(gid, current_user.id, limit=limit)
+    return {"messages": [m.to_dict() if hasattr(m, "to_dict") else m for m in messages]}
