@@ -1,6 +1,6 @@
 /* Vondic PWA Service Worker — Web Push Notifications & iOS Standalone Support */
 
-const CACHE_NAME = 'vondic-pwa-v1';
+const CACHE_NAME = 'vondic-pwa-v2';
 const STATIC_ASSETS = [
   '/',
   '/manifest.webmanifest',
