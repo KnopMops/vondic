@@ -10,6 +10,7 @@ aioboto3>=12.3.0
 python-multipart>=0.0.9
 Pillow>=10.2.0
 pyjwt>=2.8.0
+werkzeug
 aiogram
 bcrypt
 python-dotenv
@@ -31,4 +32,3 @@ google-api-python-client
 firebase-admin==6.5.0
 pywebpush
 py-vapid
-
