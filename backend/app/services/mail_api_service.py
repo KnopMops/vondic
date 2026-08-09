@@ -7,8 +7,9 @@ from typing import Any
 from app.services.mail_imap_service import MailImapService
 from app.services.mailbox_service import MailboxService
 from app.models.user import User
-from flask import current_app
+from app.core.config import settings
 from werkzeug.security import check_password_hash
+
 
 DEFAULT_MAIL_API_PERMISSIONS: dict[str, bool] = {
     "send": False,
@@ -82,14 +83,14 @@ def send_via_user_mailbox(
 
 def _noreply_smtp_password() -> str | None:
     return (
-        current_app.config.get("MAIL_NOREPLY_SMTP_PASSWORD")
-        or current_app.config.get("MAIL_PASSWORD")
+        getattr(settings, "MAIL_NOREPLY_SMTP_PASSWORD", None)
+        or getattr(settings, "MAIL_PASSWORD", None)
     )
 
 
 def _noreply_api_password() -> str | None:
     return (
-        current_app.config.get("MAIL_NOREPLY_API_PASSWORD")
+        getattr(settings, "MAIL_NOREPLY_API_PASSWORD", None)
         or _noreply_smtp_password()
     )
 
@@ -98,7 +99,7 @@ def verify_noreply_api_password(password: str) -> bool:
     expected = _noreply_api_password()
     if not expected:
         return False
-    stored_hash = current_app.config.get("MAIL_NOREPLY_API_PASSWORD_HASH")
+    stored_hash = getattr(settings, "MAIL_NOREPLY_API_PASSWORD_HASH", None)
     if stored_hash:
         return check_password_hash(stored_hash, password)
     return password == expected
@@ -112,7 +113,7 @@ def send_noreply_message(
     body_html: str | None = None,
 ) -> None:
     address = (
-        current_app.config.get("MAIL_NOREPLY_ADDRESS") or "noreply@vondic.ru"
+        getattr(settings, "MAIL_NOREPLY_ADDRESS", None) or "noreply@vondic.ru"
     ).strip()
     password = _noreply_smtp_password()
     if not password:

@@ -4,7 +4,7 @@ import logging
 import os
 
 from cryptography.fernet import Fernet, InvalidToken
-from flask import current_app
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +14,7 @@ _KEY_FILE = ".mail_credentials_key"
 
 def _uploads_dir() -> str:
     return (
-        current_app.config.get("UPLOADS_DIR")
+        getattr(settings, "UPLOADS_DIR", None)
         or os.environ.get("UPLOADS_DIR")
         or "/app/uploads"
     )
@@ -81,10 +81,10 @@ def _key_candidates() -> list[bytes]:
             seen.add(key)
             ordered.append(key)
 
-    add(current_app.config.get("MAIL_CREDENTIALS_KEY"))
+    add(getattr(settings, "MAIL_CREDENTIALS_KEY", None))
     add(_read_persistent_key())
 
-    secret = current_app.config.get("SECRET_KEY") or ""
+    secret = getattr(settings, "SECRET_KEY", "") or ""
     if secret:
         add(_secret_derived_key(secret))
     add(_secret_derived_key(_DEFAULT_SECRET))
@@ -93,7 +93,7 @@ def _key_candidates() -> list[bytes]:
 
 
 def _primary_key() -> bytes:
-    env_key = _normalize_key(current_app.config.get("MAIL_CREDENTIALS_KEY"))
+    env_key = _normalize_key(getattr(settings, "MAIL_CREDENTIALS_KEY", None))
     if env_key:
         return env_key
     return _ensure_persistent_key()

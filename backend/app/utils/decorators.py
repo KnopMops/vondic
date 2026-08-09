@@ -6,7 +6,8 @@ from threading import Lock
 
 from app.services.auth_service import AuthService
 from app.services.user_service import UserService
-from flask import jsonify, request
+from fastapi.responses import JSONResponse
+
 
 _RATE_BUCKETS = defaultdict(deque)
 _RATE_LOCK = Lock()

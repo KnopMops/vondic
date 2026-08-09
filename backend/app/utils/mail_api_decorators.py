@@ -3,7 +3,8 @@ from functools import wraps
 
 from app.services.mail_api_service import user_has_mail_permission
 from app.services.user_service import UserService
-from flask import jsonify, request
+from fastapi.responses import JSONResponse
+
 
 
 def _check_mail_premium(user):

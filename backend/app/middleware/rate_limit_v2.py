@@ -4,7 +4,8 @@ import logging
 from functools import wraps
 from collections import defaultdict, deque
 from threading import Lock
-from flask import request, g
+
+
 
 logger = logging.getLogger(__name__)
 

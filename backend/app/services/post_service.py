@@ -11,7 +11,8 @@ from app.models.social_community import SocialCommunity
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.services.social_community_service import SocialCommunityService
-from flask import current_app
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 
 
 class PostService:
@@ -238,7 +239,7 @@ class PostService:
                 size = int(a.get("size") or 0)
                 if url and isinstance(url, str):
                     abs_path = os.path.join(
-                        current_app.root_path, url.lstrip("/"))
+                        BASE_DIR, url.lstrip("/"))
                     if os.path.exists(abs_path):
                         try:
                             os.remove(abs_path)
@@ -278,7 +279,7 @@ class PostService:
                 size = int(a.get("size") or 0)
                 if url and isinstance(url, str):
                     abs_path = os.path.join(
-                        current_app.root_path, url.lstrip("/"))
+                        BASE_DIR, url.lstrip("/"))
                     if os.path.exists(abs_path):
                         try:
                             os.remove(abs_path)

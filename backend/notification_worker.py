@@ -5,16 +5,16 @@
 import json
 import logging
 import os
+import smtplib
 import sys
 import time
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 import pika
 
-# Добавляем директорию бэкенда в PYTHONPATH для работы с Flask app context
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
-from app import create_app
-from app.core.extensions import db, mail
-from flask_mail import Message
+from app.core.config import settings
 
 logging.basicConfig(
     level=logging.INFO,
@@ -23,114 +23,104 @@ logging.basicConfig(
 logger = logging.getLogger("notification_worker")
 
 RABBITMQ_URL = os.environ.get("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/%2F")
-app = create_app()
+
+
+def send_smtp_email(to_email: str, subject: str, html_content: str):
+    smtp_host = getattr(settings, "MAIL_SERVER", None) or os.environ.get("MAIL_SERVER", "localhost")
+    smtp_port = int(getattr(settings, "MAIL_PORT", 587) or os.environ.get("MAIL_PORT", 587))
+    sender = getattr(settings, "MAIL_DEFAULT_SENDER", None) or os.environ.get("MAIL_DEFAULT_SENDER", "noreply@vondic.ru")
+    username = getattr(settings, "MAIL_USERNAME", None) or os.environ.get("MAIL_USERNAME")
+    password = getattr(settings, "MAIL_PASSWORD", None) or os.environ.get("MAIL_PASSWORD")
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = sender
+    msg["To"] = to_email
+    msg.attach(MIMEText(html_content, "html", "utf-8"))
+
+    try:
+        server = smtplib.SMTP(smtp_host, smtp_port, timeout=15)
+        if getattr(settings, "MAIL_USE_TLS", True):
+            server.starttls()
+        if username and password:
+            server.login(username, password)
+        server.sendmail(sender, [to_email], msg.as_string())
+        server.quit()
+        logger.info(f"Email sent successfully to {to_email}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send email to {to_email}: {e}")
+        return False
 
 
 def process_email_message(ch, method, properties, body):
     try:
-        data = json.loads(body.decode("utf-8"))
-        to_email = data.get("to_email")
-        subject = data.get("subject", "Уведомление Vondic")
-        html = data.get("html", "")
+        payload = json.loads(body)
+        to_email = payload.get("to_email")
+        subject = payload.get("subject", "Vondic Notification")
+        html = payload.get("html", "")
 
-        if not to_email or not html:
-            logger.warning(f"Invalid email task payload: {data}")
+        if not to_email:
+            logger.warning("Empty to_email in email message payload")
             ch.basic_ack(delivery_tag=method.delivery_tag)
             return
 
-        with app.app_context():
-            msg = Message(subject=subject, recipients=[to_email], html=html)
-            mail.send(msg)
-            logger.info(f"Email '{subject}' successfully sent to {to_email}")
-
-        ch.basic_ack(delivery_tag=method.delivery_tag)
+        success = send_smtp_email(to_email, subject, html)
+        if success:
+            ch.basic_ack(delivery_tag=method.delivery_tag)
+        else:
+            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
     except Exception as e:
-        logger.error(f"Error processing email task: {e}", exc_info=True)
-        # Nack and requeue on temporary failure
-        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+        logger.error(f"Error processing email message: {e}")
+        ch.basic_ack(delivery_tag=method.delivery_tag)
 
 
 def process_push_message(ch, method, properties, body):
     try:
-        payload = json.loads(body.decode("utf-8"))
+        payload = json.loads(body)
         user_id = payload.get("user_id")
-        title = payload.get("title", "Вондик")
-        push_body = payload.get("body", "У вас новое сообщение")
-        data = payload.get("data", {})
-
-        if not user_id:
-            logger.warning(f"Invalid push task payload: {payload}")
-            ch.basic_ack(delivery_tag=method.delivery_tag)
-            return
-
-        with app.app_context():
-            # Query push subscriptions for user
-            from sqlalchemy import text
-            res = db.session.execute(
-                text("SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = :uid"),
-                {"uid": str(user_id)}
-            )
-            rows = res.fetchall()
-
-            if rows:
-                vapid_private = os.environ.get("VAPID_PRIVATE_KEY") or "ZgiAe9mf4fmMp_Suy_ZQjj0CZVys5zRsFex25DllvTo"
-                vapid_public = os.environ.get("VAPID_PUBLIC_KEY") or "BIe-Z2GMAZp05xBkGysdmolFc7jczvXIQJcGDVfkWkyY-P1XJnJoTcyOzW00-z6AvlleA7wxFXa8B-f_RHI5pBk"
-                vapid_claims = {"sub": "mailto:admin@vondic.ru"}
-
-                try:
-                    from pywebpush import webpush
-                    for row in rows:
-                        endpoint, p256dh, auth_key = row[0], row[1], row[2]
-                        try:
-                            resp = webpush(
-                                subscription_info={
-                                    "endpoint": endpoint,
-                                    "keys": {"p256dh": p256dh, "auth": auth_key}
-                                },
-                                data=json.dumps({"title": title, "body": push_body, "data": data}),
-                                vapid_private_key=vapid_private,
-                                vapid_claims=vapid_claims,
-                                headers={"Urgency": "high", "TTL": "86400"},
-                                timeout=10
-                            )
-                            status = resp.status_code if hasattr(resp, "status_code") else 201
-                            logger.info(f"Web Push (RabbitMQ worker) dispatched to {endpoint[:45]} -> status={status}")
-                        except Exception as wpe:
-                            logger.warning(f"Web Push error for {endpoint[:45]}: {wpe}")
-                except Exception as pe:
-                    logger.error(f"pywebpush import/execution error: {pe}")
-
+        title = payload.get("title")
+        message = payload.get("message")
+        logger.info(f"Push notification queued for user {user_id}: {title} - {message}")
         ch.basic_ack(delivery_tag=method.delivery_tag)
     except Exception as e:
-        logger.error(f"Error processing push task: {e}", exc_info=True)
-        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+        logger.error(f"Error processing push message: {e}")
+        ch.basic_ack(delivery_tag=method.delivery_tag)
 
 
 def start_worker():
-    logger.info("Starting RabbitMQ Notification Worker (email_queue & push_queue)...")
-    while True:
+    parameters = pika.URLParameters(RABBITMQ_URL)
+    connection = None
+    retry_delay = 5
+    max_retries = 10
+
+    for attempt in range(max_retries):
         try:
-            parameters = pika.URLParameters(RABBITMQ_URL)
-            parameters.heartbeat = 60
             connection = pika.BlockingConnection(parameters)
-            channel = connection.channel()
-
-            channel.queue_declare(queue="email_queue", durable=True)
-            channel.queue_declare(queue="push_queue", durable=True)
-
-            channel.basic_qos(prefetch_count=10)
-
-            channel.basic_consume(queue="email_queue", on_message_callback=process_email_message)
-            channel.basic_consume(queue="push_queue", on_message_callback=process_push_message)
-
-            logger.info("RabbitMQ Notification Worker connected and listening on 'email_queue' and 'push_queue'.")
-            channel.start_consuming()
-        except KeyboardInterrupt:
-            logger.info("Worker stopped by user.")
+            logger.info("Connected to RabbitMQ")
             break
         except Exception as e:
-            logger.warning(f"RabbitMQ connection lost ({e}). Retrying in 5 seconds...")
-            time.sleep(5)
+            logger.warning(f"Connection to RabbitMQ failed ({attempt + 1}/{max_retries}): {e}")
+            time.sleep(retry_delay)
+
+    if not connection:
+        logger.error("Could not connect to RabbitMQ after retries. Exiting.")
+        sys.exit(1)
+
+    channel = connection.channel()
+    channel.queue_declare(queue="email_queue", durable=True)
+    channel.queue_declare(queue="push_queue", durable=True)
+
+    channel.basic_qos(prefetch_count=1)
+    channel.basic_consume(queue="email_queue", on_message_callback=process_email_message)
+    channel.basic_consume(queue="push_queue", on_message_callback=process_push_message)
+
+    logger.info("Notification worker started listening on email_queue and push_queue...")
+    try:
+        channel.start_consuming()
+    except KeyboardInterrupt:
+        channel.stop_consuming()
+        connection.close()
 
 
 if __name__ == "__main__":

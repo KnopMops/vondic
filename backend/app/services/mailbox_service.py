@@ -13,7 +13,8 @@ from app.models.mailbox import Mailbox, MailboxCredential
 from app.models.user import User
 from app.services.mail_imap_service import MailImapService
 from app.utils.mail_crypto import decrypt_mail_password, encrypt_mail_password
-from flask import current_app
+from app.core.config import settings
+
 
 _LOCAL_PART_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{1,62}[a-z0-9]$", re.I)
 _DOMAIN = "vondic.ru"
@@ -137,17 +138,15 @@ class MailboxService:
     def _provision_on_mailserver(
         address: str, password: str, quota_mb: int
     ) -> str | None:
-        if not current_app.config.get("MAIL_PROVISION_ENABLED"):
+        if not getattr(settings, "MAIL_PROVISION_ENABLED", False):
             return (
                 "Создание ящиков отключено (MAIL_PROVISION_ENABLED=0). "
                 f"Обратитесь к администратору или: ./mail/scripts/add-mailbox.sh {address} '...' {quota_mb}"
             )
 
-        container = current_app.config.get(
-            "MAIL_DOCKER_CONTAINER") or "mailserver"
+        container = getattr(settings, "MAIL_CONTAINER_NAME", "mailserver")
+        socket_path = getattr(settings, "DOCKER_SOCKET", "/var/run/docker.sock")
         cmd = ["setup", "email", "add", address, password, str(quota_mb)]
-        socket_path = current_app.config.get(
-            "MAIL_DOCKER_SOCKET") or "/var/run/docker.sock"
 
         exit_code, out = MailboxService._run_in_mailserver(
             container, cmd, socket_path=socket_path
@@ -168,7 +167,7 @@ class MailboxService:
 
     @staticmethod
     def _resolve_docker_bin() -> str | None:
-        configured = current_app.config.get("MAIL_DOCKER_BIN")
+        configured = getattr(settings, "MAIL_DOCKER_BIN", None)
         candidates = [
             configured,
             "/usr/bin/docker",

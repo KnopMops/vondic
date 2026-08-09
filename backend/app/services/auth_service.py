@@ -120,13 +120,9 @@ class AuthService:
             new_user = User(email=email, username=username, is_verified=0, balance=0.0, bonus_balance=50.0)
             new_user.set_password(password)
 
-            from flask import request
-            if request:
-                forwarded = request.headers.get("X-Forwarded-For", "")
-                if forwarded:
-                    new_user.registration_ip = forwarded.split(",")[0].strip()
-                else:
-                    new_user.registration_ip = request.remote_addr or ""
+            if ip_address:
+                new_user.registration_ip = ip_address
+
 
             db.session.add(new_user)
             db.session.flush()

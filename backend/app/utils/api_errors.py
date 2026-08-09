@@ -1,6 +1,6 @@
-from flask import jsonify
+from fastapi.responses import JSONResponse
 
 
 def api_error(code: str, status: int):
     """Return a standardized JSON error response."""
-    return jsonify({"error": code}), status
+    return JSONResponse(status_code=status, content={"error": code})

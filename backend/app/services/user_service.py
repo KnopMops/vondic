@@ -21,8 +21,9 @@ from app.models.subscription import Subscription
 from app.models.support_chat_message import SupportChatMessage
 from app.models.escalation import Escalation
 from app.models.user import User
-from flask import current_app
 from sqlalchemy import or_
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -320,7 +321,7 @@ class UserService:
                     return
                 if url.startswith("http://") or url.startswith("https://"):
                     return
-                abs_path = os.path.join(current_app.root_path, url.lstrip("/"))
+                abs_path = os.path.join(BASE_DIR, url.lstrip("/"))
                 if os.path.exists(abs_path):
                     try:
                         os.remove(abs_path)
@@ -439,7 +440,7 @@ class UserService:
                         url = a.get("url")
                         if url and isinstance(url, str):
                             abs_path = os.path.join(
-                                current_app.root_path, url.lstrip("/")
+                                BASE_DIR, url.lstrip("/")
                             )
                             if os.path.exists(abs_path):
                                 try:
