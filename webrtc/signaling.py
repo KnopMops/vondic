@@ -93,6 +93,7 @@ class SignalingService:
                 )
                 rows = res.fetchall()
 
+            logger.info(f"Web Push query: found {len(rows)} subscription(s) for user_id={user_id}")
             if not rows:
                 return
 
@@ -109,9 +110,10 @@ class SignalingService:
             for row in rows:
                 endpoint, p256dh, auth = row[0], row[1], row[2]
                 try:
-                    self._web_push_send(endpoint, p256dh, auth, payload, vapid_private, vapid_public, vapid_claims)
+                    status = self._web_push_send(endpoint, p256dh, auth, payload, vapid_private, vapid_public, vapid_claims)
+                    logger.info(f"Web Push dispatched to {endpoint[:45]} -> status={status}")
                 except Exception as e:
-                    logger.warning(f"Web Push to {endpoint[:40]} failed: {e}")
+                    logger.warning(f"Web Push to {endpoint[:45]} failed: {e}")
                     try:
                         async with self.broker.repo._session() as session:
                             await session.execute(
@@ -211,7 +213,11 @@ class SignalingService:
                 method="POST",
             )
             resp = urllib.request.urlopen(req, timeout=10)
+            logger.info(f"Web Push endpoint HTTP status: {resp.status}")
             return resp.status
+        except urllib.error.HTTPError as he:
+            logger.error(f"Web Push HTTP error status={he.code} body={he.read().decode('utf-8', errors='ignore')}")
+            return he.code
         except Exception as e:
             logger.error("Web Push send failed: %s", e)
             return None
