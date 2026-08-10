@@ -118,13 +118,25 @@ async def create_post(
 async def get_feed(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_optional_current_user),
     db=Depends(get_async_db)
 ):
-    items, total, cpage, pages = PostService.get_feed_paginated(
-        current_user.id, page, per_page
-    )
-    dicts = [p.to_dict(viewer_id=current_user.id) for p in items]
+    user_id = current_user.id if current_user else None
+    if user_id:
+        items, total, cpage, pages = PostService.get_feed_paginated(
+            user_id, page, per_page
+        )
+    else:
+        items, total, cpage, pages = PostService.get_posts_paginated(
+            page, per_page
+        )
+
+    if not items and user_id and page == 1:
+        items, total, cpage, pages = PostService.get_posts_paginated(
+            page, per_page, viewer_id=user_id
+        )
+
+    dicts = [p.to_dict(viewer_id=user_id) for p in items]
     await _attach_authors_to_posts_async(db, dicts)
     return {
         "posts": dicts,
@@ -132,6 +144,7 @@ async def get_feed(
         "page": cpage,
         "pages": pages,
     }
+
 
 
 @posts_router.get("/{post_id}", response_model=Dict[str, Any])

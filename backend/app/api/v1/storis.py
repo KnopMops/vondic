@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import select
 
@@ -57,6 +57,45 @@ async def friends_stories(
     db=Depends(get_async_db)
 ):
     return await list_stories(current_user=current_user, db=db)
+
+
+@storis_router.get("/user")
+@storis_router.post("/user")
+@storis_router.get("/user/{user_id}")
+@storis_router.post("/user/{user_id}")
+async def user_stories(
+    user_id: Optional[str] = None,
+    payload: Optional[Dict[str, Any]] = None,
+    current_user: Optional[User] = Depends(get_optional_current_user),
+    db=Depends(get_async_db)
+):
+    target_id = user_id
+    if not target_id and payload:
+        target_id = payload.get("user_id") or payload.get("id")
+    if not target_id and current_user:
+        target_id = current_user.id
+
+    if not target_id:
+        return {"stories": []}
+
+    res = await db.execute(select(User).where(User.id == target_id))
+    u = res.scalar_one_or_none()
+    if not u:
+        return {"stories": []}
+
+    storis = u.storis or []
+    active_storis = []
+    for s in storis:
+        if isinstance(s, dict):
+            active_storis.append(s)
+
+    return {
+        "user_id": u.id,
+        "username": u.username,
+        "avatar_url": u.avatar_url,
+        "storis": active_storis,
+        "stories": active_storis
+    }
 
 
 @storis_router.post("", status_code=status.HTTP_201_CREATED)
