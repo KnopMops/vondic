@@ -107,7 +107,7 @@ async def get_notification_updates(
         return {"unread_count": 0, "updates": []}
     res = await db.execute(
         select(Notification)
-        .where(Notification.user_id == current_user.id, Notification.is_read == False)
+        .where(Notification.user_id == current_user.id, Notification.is_read == 0)
         .limit(20)
     )
     items = res.scalars().all()
