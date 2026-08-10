@@ -27,6 +27,25 @@ class CommentService:
         )
 
     @staticmethod
+    def get_comments_for_post(post_id, page=1, per_page=50, viewer_id=None):
+        from sqlalchemy import or_
+        query = Comment.query.filter_by(post_id=post_id).filter(
+            or_(Comment.deleted.is_(False), Comment.deleted.is_(None))
+        )
+        p = int(page or 1)
+        if p < 1:
+            p = 1
+        pp = int(per_page or 50)
+        if pp < 1:
+            pp = 50
+
+        total = query.count()
+        pages = (total + pp - 1) // pp if total > 0 else 1
+        items = query.order_by(Comment.created_at.asc()).offset((p - 1) * pp).limit(pp).all()
+        return items, total, p, pages
+
+
+    @staticmethod
     def get_comment_by_id(comment_id):
         return Comment.query.filter_by(id=comment_id, deleted=False).first()
 

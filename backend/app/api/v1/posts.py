@@ -189,14 +189,17 @@ async def get_comments(
     post_id: str,
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=100),
-    current_user: Optional[User] = Depends(get_optional_current_user)
+    current_user: Optional[User] = Depends(get_optional_current_user),
+    db=Depends(get_async_db)
 ):
     viewer_id = current_user.id if current_user else None
     items, total, cpage, pages = CommentService.get_comments_for_post(
         post_id, page=page, per_page=per_page, viewer_id=viewer_id
     )
+    dicts = [c.to_dict() for c in items]
+    await _attach_authors_to_posts_async(db, dicts)
     return {
-        "comments": [c.to_dict() for c in items],
+        "comments": dicts,
         "total": total,
         "page": cpage,
         "pages": pages,
@@ -207,14 +210,18 @@ async def get_comments(
 async def create_comment(
     post_id: str,
     payload: CommentCreateSchema,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db=Depends(get_async_db)
 ):
-    comment, err = CommentService.create_comment(
-        posted_by=current_user.id,
-        post_id=post_id,
-        content=payload.content,
-        parent_id=payload.parent_id,
-    )
-    if err or not comment:
-        raise HTTPException(status_code=400, detail=err or "Failed to add comment")
-    return {"comment": comment.to_dict(), "message": "Comment added"}
+    try:
+        comment = CommentService.create_comment(
+            data={"content": payload.content, "parent_id": payload.parent_id},
+            user_id=current_user.id,
+            post_id=post_id,
+        )
+        cdict = comment.to_dict()
+        await _attach_author_to_post_async(db, cdict)
+        return {"comment": cdict, "message": "Comment added"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
