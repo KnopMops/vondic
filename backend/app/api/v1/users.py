@@ -150,6 +150,39 @@ async def update_storage_rules(
     return {"ok": True, "rules": rules}
 
 
+@users_router.post("/internal/push-subscribe")
+async def push_subscribe(
+    payload: Dict[str, Any],
+    db: AsyncSession = Depends(get_async_session),
+):
+    user_id = payload.get("user_id")
+    endpoint = payload.get("endpoint")
+    p256dh = payload.get("p256dh") or payload.get("keys", {}).get("p256dh")
+    auth = payload.get("auth") or payload.get("keys", {}).get("auth")
+    platform = payload.get("platform", "web")
+
+    if not user_id or not endpoint:
+        raise HTTPException(status_code=400, detail="user_id and endpoint required")
+
+    try:
+        await db.execute(text(
+            "CREATE TABLE IF NOT EXISTS push_subscriptions ("
+            "id SERIAL PRIMARY KEY, user_id TEXT NOT NULL, endpoint TEXT NOT NULL, "
+            "p256dh TEXT NOT NULL, auth TEXT NOT NULL, platform TEXT DEFAULT 'web', "
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+            "CONSTRAINT uq_push_sub_user_ep UNIQUE (user_id, endpoint))"
+        ))
+        await db.execute(text(
+            "INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, platform) "
+            "VALUES (:uid, :ep, :p256, :auth, :plat) "
+            "ON CONFLICT (user_id, endpoint) DO UPDATE SET p256dh = :p256, auth = :auth, platform = :plat"
+        ), {"uid": user_id, "ep": endpoint, "p256": p256dh or "", "auth": auth or "", "plat": platform})
+        await db.commit()
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @users_router.post("/internal/push-unsubscribe")
 async def push_unsubscribe(
     payload: Dict[str, Any],

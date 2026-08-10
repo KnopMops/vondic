@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from app.core.database import get_async_db
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, get_optional_current_user
 from app.models.escalation import Escalation
 from app.models.notification import Notification
 from app.models.post_report import PostReport
@@ -96,3 +96,19 @@ async def answer_escalation(
     db.add(msg)
     await db.commit()
     return {"message": "Escalation answered"}
+
+
+@support_router.get("/notifications/updates")
+async def get_notification_updates(
+    current_user: Optional[User] = Depends(get_optional_current_user),
+    db=Depends(get_async_db)
+):
+    if not current_user:
+        return {"unread_count": 0, "updates": []}
+    res = await db.execute(
+        select(Notification)
+        .where(Notification.user_id == current_user.id, Notification.is_read == False)
+        .limit(20)
+    )
+    items = res.scalars().all()
+    return {"unread_count": len(items), "updates": [n.to_dict() if hasattr(n, "to_dict") else {"id": n.id} for n in items]}
