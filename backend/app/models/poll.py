@@ -13,15 +13,22 @@ class Poll(Base):
     multiple_choice = Column(Boolean, default=False)
     expires_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
-    votes = relationship("PollVote", backref="poll", cascade="all, delete-orphan")
+    votes = relationship("PollVote", backref="poll", cascade="all, delete-orphan", lazy="selectin")
 
     def to_dict(self):
         counts = {}
         voter_ids = {}
-        for v in (self.votes or []):
+        votes_list = []
+        try:
+            votes_list = list(self.votes or [])
+        except Exception:
+            votes_list = []
+
+        for v in votes_list:
             counts[v.option_id] = counts.get(v.option_id, 0) + 1
             if not self.is_anonymous:
                 voter_ids.setdefault(v.option_id, []).append(v.user_id)
+
         result = {
             "id": self.id,
             "question": self.question,
@@ -30,7 +37,7 @@ class Poll(Base):
             "multiple_choice": self.multiple_choice,
             "expires_at": self.expires_at.isoformat() if self.expires_at else None,
             "votes": counts,
-            "total_votes": len(self.votes or []),
+            "total_votes": len(votes_list),
         }
         if not self.is_anonymous:
             result["voter_ids"] = voter_ids
