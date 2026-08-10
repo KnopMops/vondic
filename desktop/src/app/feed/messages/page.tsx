@@ -1836,7 +1836,6 @@ export default function MessengerPage() {
 						setSelectedCommunityId(list[0].id)
 					}
 				}
-				}
 			} catch (e) {
 				console.error('Failed to load communities', e)
 			}
