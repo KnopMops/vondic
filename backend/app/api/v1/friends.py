@@ -24,10 +24,16 @@ class FriendActionSchema(BaseModel):
 @friends_router.post("/list")
 @friends_router.get("/list")
 async def get_friends(
-    payload: Optional[FriendListSchema] = None,
+    user_id: Optional[str] = Query(None),
+    payload: Optional[Dict[str, Any]] = None,
     current_user=Depends(get_current_user)
 ):
-    target_user_id = payload.user_id if (payload and payload.user_id) else current_user.id
+    target_user_id = user_id
+    if not target_user_id and payload:
+        target_user_id = payload.get("user_id") or payload.get("id")
+    if not target_user_id:
+        target_user_id = current_user.id
+
     friends = FriendshipService.get_friends(target_user_id)
     return {"friends": friends}
 
@@ -35,12 +41,19 @@ async def get_friends(
 @friends_router.post("/requests")
 @friends_router.get("/requests")
 async def get_requests(
-    payload: Optional[FriendListSchema] = None,
+    user_id: Optional[str] = Query(None),
+    payload: Optional[Dict[str, Any]] = None,
     current_user=Depends(get_current_user)
 ):
-    uid = payload.user_id if (payload and payload.user_id) else current_user.id
-    requests = FriendshipService.get_pending_requests(uid)
+    target_user_id = user_id
+    if not target_user_id and payload:
+        target_user_id = payload.get("user_id") or payload.get("id")
+    if not target_user_id:
+        target_user_id = current_user.id
+
+    requests = FriendshipService.get_pending_requests(target_user_id)
     return {"requests": requests}
+
 
 
 @friends_router.post("/request", status_code=status.HTTP_201_CREATED)

@@ -61,15 +61,15 @@ class PostService:
             social_community_id: str | None = None,
             viewer_id=None,
             community_id=None):
-        if viewer_id and not user_id:
-            user_id = viewer_id
         if community_id and not social_community_id:
             social_community_id = community_id
 
+        from sqlalchemy import or_
+
         query = Post.query.join(User, Post.posted_by == User.id).filter(
-            Post.deleted.is_(False),
-            User.is_blocked == 0,
-            Post.is_blog.is_(True) if is_blog else Post.is_blog.is_(False),
+            or_(Post.deleted.is_(False), Post.deleted == 0, Post.deleted.is_(None)),
+            or_(User.is_blocked == 0, User.is_blocked.is_(False), User.is_blocked.is_(None)),
+            or_(Post.is_blog.is_(True) if is_blog else Post.is_blog.is_(False), Post.is_blog == (1 if is_blog else 0), Post.is_blog.is_(None)),
         )
 
         if social_community_id:
@@ -77,11 +77,10 @@ class PostService:
                 Post.social_community_id == social_community_id
             )
         elif filter_mode == "subscriptions" and user_id:
-            from sqlalchemy import or_
             subscriptions = Subscription.query.filter_by(
                 subscriber_id=user_id
             ).all()
-            target_ids = [sub.target_id for sub in subscriptions]
+            target_ids = [sub.target_id for sub in subscriptions] + [user_id]
             user_community_ids = [
                 c.id for c in SocialCommunity.query.filter(
                     SocialCommunity.members.any(User.id == user_id)
@@ -97,12 +96,13 @@ class PostService:
             else:
                 return _paginate_query(Post.query.filter(Post.id.is_(None)), page=page, per_page=per_page)
         else:
-            query = query.filter(Post.social_community_id.is_(None))
+            query = query.filter(or_(Post.social_community_id.is_(None), Post.social_community_id == ""))
 
         if user_id and filter_mode != "subscriptions":
             query = query.filter(User.id == user_id)
 
         return _paginate_query(query.order_by(Post.created_at.desc()), page=page, per_page=per_page)
+
 
     @staticmethod
     def get_feed_paginated(user_id, page=1, per_page=20):
