@@ -5,7 +5,7 @@ import logging
 from functools import wraps
 from typing import Any, Optional
 
-from app.core.database import Base
+from app.core.database import Base, SyncScopedSession
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +47,15 @@ class DummyDB:
     Model = Base
     Column = None
     relationship = None
+
+    @property
+    def session(self):
+        return SyncScopedSession
+
+    @property
+    def func(self):
+        from sqlalchemy import func
+        return func
 
 
 db = DummyDB()

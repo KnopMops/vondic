@@ -768,3 +768,28 @@ class AuthService:
             return False
         except Exception:
             return False
+
+    @staticmethod
+    async def register_user_async(data, db=None, ip_address=None):
+        return AuthService.register_user(data, ip_address=ip_address)
+
+    @staticmethod
+    async def login_user_async(data, db=None, ip_address=None):
+        return AuthService.login_user(data, ip_address=ip_address)
+
+    @staticmethod
+    async def refresh_with_refresh_token_async(refresh_token: str | None, db=None, device_type: str | None = None, ip_address: str | None = None):
+        return AuthService.refresh_with_refresh_token(refresh_token, device_type=device_type, ip_address=ip_address)
+
+    @staticmethod
+    async def request_password_reset_async(email: str, db=None):
+        return AuthService.request_password_reset(email)
+
+    @staticmethod
+    async def reset_password_async(token: str, new_password: str, db=None):
+        return AuthService.reset_password(token, new_password)
+
+    @staticmethod
+    async def verify_email_async(token: str, db=None):
+        return AuthService.verify_email(token)
+

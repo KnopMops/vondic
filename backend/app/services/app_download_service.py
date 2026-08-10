@@ -46,7 +46,10 @@ def _deep_merge(base: dict, patch: dict) -> dict:
 class AppDownloadService:
     @staticmethod
     def get_downloads() -> dict:
-        row = AppSetting.query.get(APP_DOWNLOADS_KEY)
+        try:
+            row = db.session.get(AppSetting, APP_DOWNLOADS_KEY)
+        except Exception:
+            row = None
         if not row or not row.value_json:
             return copy.deepcopy(DEFAULT_APP_DOWNLOADS)
         return _deep_merge(DEFAULT_APP_DOWNLOADS, row.value_json)
@@ -55,7 +58,10 @@ class AppDownloadService:
     def update_downloads(patch: dict) -> dict:
         current = AppDownloadService.get_downloads()
         merged = _deep_merge(current, patch or {})
-        row = AppSetting.query.get(APP_DOWNLOADS_KEY)
+        try:
+            row = db.session.get(AppSetting, APP_DOWNLOADS_KEY)
+        except Exception:
+            row = None
         if not row:
             row = AppSetting(key=APP_DOWNLOADS_KEY, value_json=merged)
             db.session.add(row)
