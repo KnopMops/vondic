@@ -35,10 +35,18 @@ class CommunityChannelService:
             db.session.rollback()
 
     @staticmethod
-    def create_channel(community_id, data):
-        name = data.get("name")
-        description = data.get("description")
-        type_ = (data.get("type") or "text").lower()
+    def create_channel(community_id, data=None, name=None, description=None, channel_type=None, user_id=None):
+        if isinstance(data, dict):
+            payload = data
+        else:
+            payload = {
+                "name": name,
+                "description": description,
+                "type": channel_type or "text",
+            }
+        name = payload.get("name")
+        description = payload.get("description")
+        type_ = (payload.get("type") or payload.get("channel_type") or "text").lower()
         if type_ not in ("text", "voice"):
             return None, "Invalid channel type"
         if not name:
@@ -79,3 +87,8 @@ class CommunityChannelService:
             return []
         CommunityChannelService.sync_channel_participants(community)
         return community.channels
+
+    @staticmethod
+    def get_channels_by_community(community_id):
+        return CommunityChannelService.list_channels(community_id)
+
