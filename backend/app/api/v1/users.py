@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_async_session
@@ -150,68 +150,43 @@ async def update_storage_rules(
     return {"ok": True, "rules": rules}
 
 
-    try:
-        from sqlalchemy import text
-        db.session.execute(text(
-            "CREATE TABLE IF NOT EXISTS push_subscriptions ("
-            "id SERIAL PRIMARY KEY, user_id TEXT NOT NULL, endpoint TEXT NOT NULL, "
-            "p256dh TEXT NOT NULL, auth TEXT NOT NULL, platform TEXT DEFAULT 'web', "
-            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
-            "CONSTRAINT uq_push_sub_user_ep UNIQUE (user_id, endpoint))"
-        ))
-        db.session.execute(text(
-            "INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, platform) "
-            "VALUES (:uid, :ep, :p256, :auth, :plat) "
-            "ON CONFLICT (user_id, endpoint) DO UPDATE SET p256dh = :p256, auth = :auth, platform = :plat"
-        ), {"uid": user_id, "ep": endpoint, "p256": p256dh, "auth": auth, "plat": platform})
-        db.session.commit()
-        return jsonify({"ok": True})
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
-
-
-@users_bp.route("/internal/push-unsubscribe", methods=["POST"])
-def push_unsubscribe():
-    """Remove PWA push subscription."""
-    data = request.get_json() or {}
-    user_id = data.get("user_id")
-    endpoint = data.get("endpoint")
+@users_router.post("/internal/push-unsubscribe")
+async def push_unsubscribe(
+    payload: Dict[str, Any],
+    db: AsyncSession = Depends(get_async_session),
+):
+    user_id = payload.get("user_id")
+    endpoint = payload.get("endpoint")
 
     if not user_id or not endpoint:
-        return jsonify({"error": "user_id and endpoint required"}), 400
+        raise HTTPException(status_code=400, detail="user_id and endpoint required")
 
     try:
-        from sqlalchemy import text
-        db.session.execute(text(
-            "DELETE FROM push_subscriptions WHERE user_id = :uid AND endpoint = :ep"
-        ), {"uid": user_id, "ep": endpoint})
-        db.session.commit()
-        return jsonify({"ok": True})
+        await db.execute(
+            text("DELETE FROM push_subscriptions WHERE user_id = :uid AND endpoint = :ep"),
+            {"uid": user_id, "ep": endpoint}
+        )
+        await db.commit()
+        return {"ok": True}
     except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-
-@users_bp.route("/avatars", methods=["GET"])
-def get_avatars():
-    """Get avatar URLs for a list of user IDs."""
-    ids_str = request.args.get("ids", "")
-    if not ids_str:
-        return jsonify({})
-    ids = [i.strip() for i in ids_str.split(",") if i.strip()]
+@users_router.get("/avatars")
+async def get_avatars(
+    ids: str = Query(""),
+    db: AsyncSession = Depends(get_async_session),
+):
     if not ids:
-        return jsonify({})
+        return {}
+    id_list = [i.strip() for i in ids.split(",") if i.strip()]
+    if not id_list:
+        return {}
     try:
-        from sqlalchemy import text
-        rows = db.session.execute(
-            text("SELECT id, username, avatar_url FROM users WHERE id IN :ids"),
-            {"ids": tuple(ids)}
-        ).fetchall()
-        return jsonify({
-            row[0]: {"username": row[1], "avatar_url": row[2]}
-            for row in rows
-        })
-    except Exception:
-        return jsonify({})
+        res = await db.execute(
+            select(User.id, User.username, User.avatar_url).where(User.id.in_(id_list))
+        )
+        rows = res.all()
+        return {r[0]: {"username": r[1], "avatar_url": r[2]} for r in rows}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
