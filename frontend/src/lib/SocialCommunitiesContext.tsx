@@ -10,7 +10,19 @@ import {
 	type ReactNode,
 } from 'react'
 import { useAuth } from '@/lib/AuthContext'
-import type { SocialCommunity } from '@/lib/hooks/useSocialCommunities'
+
+export interface SocialCommunity {
+	id: string
+	name: string
+	description?: string
+	avatar_url?: string | null
+	cover_url?: string | null
+	owner_id?: string
+	invite_code?: string
+	is_public?: boolean
+	members_count?: number
+	is_member?: boolean
+}
 
 async function apiPost<T>(url: string, body: Record<string, unknown> = {}): Promise<T> {
 	const res = await fetch(url, {
@@ -22,7 +34,9 @@ async function apiPost<T>(url: string, body: Record<string, unknown> = {}): Prom
 	if (!res.ok) {
 		const err = await res.json().catch(() => ({}))
 		throw new Error(
-			(typeof err.error === 'string' && err.error) || 'Ошибка запроса',
+			(typeof err.error === 'string' && err.error) ||
+			(typeof err.detail === 'string' && err.detail) ||
+			'Ошибка запроса',
 		)
 	}
 	return res.json() as Promise<T>
@@ -33,8 +47,9 @@ type ContextValue = {
 	isLoading: boolean
 	error: string | null
 	fetchMyCommunities: () => Promise<void>
+	searchCommunities: (query?: string) => Promise<SocialCommunity[]>
 	createCommunity: (name: string, description?: string) => Promise<SocialCommunity>
-	joinCommunity: (inviteCode: string) => Promise<SocialCommunity>
+	joinCommunity: (inviteCodeOrId: string) => Promise<SocialCommunity>
 	updateCommunity: (
 		communityId: string,
 		data: {
@@ -61,17 +76,31 @@ export function SocialCommunitiesProvider({ children }: { children: ReactNode })
 		setIsLoading(true)
 		setError(null)
 		try {
-			const data = await apiPost<SocialCommunity[]>(
+			const data = await apiPost<any>(
 				'/api/v1/social-communities/my',
 				{},
 			)
-			setCommunities(Array.isArray(data) ? data : [])
+			const list = Array.isArray(data) ? data : (data?.communities || [])
+			setCommunities(list)
 		} catch (e: unknown) {
 			setError(e instanceof Error ? e.message : 'Error')
 		} finally {
 			setIsLoading(false)
 		}
 	}, [user])
+
+	const searchCommunities = useCallback(async (query: string = '') => {
+		try {
+			const data = await apiPost<any>(
+				'/api/v1/social-communities/search',
+				{ query },
+			)
+			return Array.isArray(data) ? data : (data?.communities || [])
+		} catch (e) {
+			console.error(e)
+			return []
+		}
+	}, [])
 
 	useEffect(() => {
 		if (authReady && user) {
@@ -84,26 +113,28 @@ export function SocialCommunitiesProvider({ children }: { children: ReactNode })
 
 	const createCommunity = useCallback(
 		async (name: string, description?: string) => {
-			const data = await apiPost<SocialCommunity>(
+			const res = await apiPost<any>(
 				'/api/v1/social-communities',
 				{ name, description },
 			)
+			const created = res?.community || res
 			await fetchMyCommunities()
-			return data
+			return created
 		},
 		[fetchMyCommunities],
 	)
 
-	const joinCommunity = useCallback(async (inviteCode: string) => {
-		const data = await apiPost<SocialCommunity>(
+	const joinCommunity = useCallback(async (inviteCodeOrId: string) => {
+		const res = await apiPost<any>(
 			'/api/v1/social-communities/join',
-			{ invite_code: inviteCode },
+			{ invite_code: inviteCodeOrId, community_id: inviteCodeOrId, id: inviteCodeOrId },
 		)
+		const joined = res?.community || res
 		setCommunities(prev => {
-			if (prev.some(c => c.id === data.id)) return prev
-			return [data, ...prev]
+			if (prev.some(c => c.id === joined.id)) return prev
+			return [joined, ...prev]
 		})
-		return data
+		return joined
 	}, [])
 
 	const updateCommunity = useCallback(
@@ -127,7 +158,8 @@ export function SocialCommunitiesProvider({ children }: { children: ReactNode })
 				const err = await res.json().catch(() => ({}))
 				throw new Error(err.error || 'Не удалось обновить сообщество')
 			}
-			const updated = (await res.json()) as SocialCommunity
+			const data = await res.json()
+			const updated = data?.community || data
 			setCommunities(prev =>
 				prev.map(c => (c.id === communityId ? updated : c)),
 			)
@@ -142,6 +174,7 @@ export function SocialCommunitiesProvider({ children }: { children: ReactNode })
 			isLoading,
 			error,
 			fetchMyCommunities,
+			searchCommunities,
 			createCommunity,
 			joinCommunity,
 			updateCommunity,
@@ -151,6 +184,7 @@ export function SocialCommunitiesProvider({ children }: { children: ReactNode })
 			isLoading,
 			error,
 			fetchMyCommunities,
+			searchCommunities,
 			createCommunity,
 			joinCommunity,
 			updateCommunity,

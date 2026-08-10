@@ -67,7 +67,7 @@ class SocialCommunityService:
     def join(invite_code, user_id):
         community = SocialCommunityService.resolve(invite_code)
         if not community:
-            return None, "Invalid invite code"
+            return None, "Invalid invite code or community ID"
         user = User.query.get(user_id)
         if not user:
             return None, "User not found"
@@ -130,10 +130,16 @@ class SocialCommunityService:
         user = User.query.get(user_id)
         if not user:
             return []
-        q = f"%{query}%"
-        results = SocialCommunity.query.filter(
-            SocialCommunity.is_public.is_(True),
-            (SocialCommunity.name.ilike(q))
-            | (SocialCommunity.description.ilike(q)),
-        ).all()
+        if not query or not str(query).strip():
+            results = SocialCommunity.query.filter(
+                SocialCommunity.is_public.is_(True)
+            ).all()
+        else:
+            q = f"%{str(query).strip()}%"
+            results = SocialCommunity.query.filter(
+                SocialCommunity.is_public.is_(True),
+                (SocialCommunity.name.ilike(q))
+                | (SocialCommunity.description.ilike(q)),
+            ).all()
         return [c for c in results if user not in c.members]
+

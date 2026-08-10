@@ -21,7 +21,9 @@ class SocialCommunityCreateSchema(BaseModel):
 
 
 class SocialCommunityJoinSchema(BaseModel):
-    invite_code: str
+    invite_code: Optional[str] = None
+    community_id: Optional[str] = None
+    id: Optional[str] = None
 
 
 class SocialCommunityLeaveSchema(BaseModel):
@@ -47,15 +49,29 @@ async def my_social_communities(current_user=Depends(get_current_user)):
     return {"communities": [c.to_dict() if hasattr(c, "to_dict") else c for c in items]}
 
 
+@social_communities_router.post("/search")
+@social_communities_router.get("/search")
+async def search_social_communities(
+    query: Optional[str] = None,
+    current_user=Depends(get_current_user)
+):
+    items = SocialCommunityService.search(query or "", current_user.id)
+    return {"communities": [c.to_dict() if hasattr(c, "to_dict") else c for c in items]}
+
+
 @social_communities_router.post("/join")
 async def join_social_community(
     payload: SocialCommunityJoinSchema,
     current_user=Depends(get_current_user)
 ):
-    community, err = SocialCommunityService.join(payload.invite_code, current_user.id)
+    code = payload.invite_code or payload.community_id or payload.id or ""
+    if not code:
+        raise HTTPException(status_code=400, detail="invite_code or community_id required")
+    community, err = SocialCommunityService.join(code, current_user.id)
     if err or not community:
         raise HTTPException(status_code=400, detail=err or "Failed to join community")
     return {"community": community.to_dict() if hasattr(community, "to_dict") else community}
+
 
 
 @social_communities_router.post("/leave")
