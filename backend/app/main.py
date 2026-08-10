@@ -1,10 +1,15 @@
 import logging
-from fastapi import FastAPI, HTTPException, Request, status
+from typing import Any, Dict, Optional
+from fastapi import FastAPI, HTTPException, Request, status, Depends
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.database import get_async_db
+from app.models.user import User
 
 # Import API Routers
 from app.api.v1.auth import auth_router
@@ -82,6 +87,24 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def alias_path_middleware(request: Request, call_next):
+    """
+    Middleware to route legacy `/api/...` paths to `/api/v1/...`.
+    E.g. `/api/auth/me` -> `/api/v1/auth/me`.
+    """
+    path = request.url.path
+    if (
+        path.startswith("/api/")
+        and not path.startswith("/api/v1/")
+        and not path.startswith("/api/v2/")
+        and not path.startswith("/api/public/")
+    ):
+        new_path = "/api/v1/" + path[5:]
+        request.scope["path"] = new_path
+    return await call_next(request)
+
+
 @app.exception_handler(HTTPException)
 async def custom_http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(
@@ -105,6 +128,48 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 @app.get("/api/v1/healthz", tags=["Health"])
 async def healthz():
     return {"status": "ok", "service": "vondic-backend"}
+
+
+@app.get("/api/v1/online-users", tags=["Users"])
+@app.get("/api/online-users", tags=["Users"])
+async def get_online_users(db: AsyncSession = Depends(get_async_db)):
+    res = await db.execute(select(User).where(User.status == "online"))
+    users = res.scalars().all()
+    return {"count": len(users), "users": [u.to_dict() for u in users]}
+
+
+@app.post("/api/v1/push/subscribe", tags=["Users"])
+@app.post("/api/push/subscribe", tags=["Users"])
+async def push_subscribe_global(
+    payload: Dict[str, Any],
+    db: AsyncSession = Depends(get_async_db),
+):
+    user_id = payload.get("user_id")
+    endpoint = payload.get("endpoint")
+    p256dh = payload.get("p256dh") or payload.get("keys", {}).get("p256dh")
+    auth = payload.get("auth") or payload.get("keys", {}).get("auth")
+    platform = payload.get("platform", "web")
+
+    if not user_id or not endpoint:
+        return {"ok": True, "message": "Ignored missing user_id or endpoint"}
+
+    try:
+        await db.execute(text(
+            "CREATE TABLE IF NOT EXISTS push_subscriptions ("
+            "id SERIAL PRIMARY KEY, user_id TEXT NOT NULL, endpoint TEXT NOT NULL, "
+            "p256dh TEXT NOT NULL, auth TEXT NOT NULL, platform TEXT DEFAULT 'web', "
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+            "CONSTRAINT uq_push_sub_user_ep UNIQUE (user_id, endpoint))"
+        ))
+        await db.execute(text(
+            "INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, platform) "
+            "VALUES (:uid, :ep, :p256, :auth, :plat) "
+            "ON CONFLICT (user_id, endpoint) DO UPDATE SET p256dh = :p256, auth = :auth, platform = :plat"
+        ), {"uid": user_id, "ep": endpoint, "p256": p256dh or "", "auth": auth or "", "plat": platform})
+        await db.commit()
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 
 # Mount all FastAPI APIRouters
