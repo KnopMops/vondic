@@ -3,7 +3,7 @@ from typing import Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, get_current_admin_user
 from app.services.app_download_service import AppDownloadService
 
 app_downloads_router = APIRouter(prefix="/api/v1/app-downloads", tags=["App Downloads"])
@@ -20,20 +20,15 @@ async def get_app_downloads():
 
 
 @app_downloads_router.get("/admin")
-async def get_app_downloads_admin(current_user=Depends(get_current_user)):
-    if getattr(current_user, "role", "") != "Admin":
-        raise HTTPException(status_code=403, detail="Forbidden")
+async def get_app_downloads_admin(admin_user=Depends(get_current_admin_user)):
     return {"downloads": AppDownloadService.get_downloads()}
 
 
 @app_downloads_router.put("/admin")
 async def update_app_downloads_admin(
     payload: AppDownloadsUpdateSchema,
-    current_user=Depends(get_current_user)
+    admin_user=Depends(get_current_admin_user)
 ):
-    if getattr(current_user, "role", "") != "Admin":
-        raise HTTPException(status_code=403, detail="Forbidden")
-
     patch = payload.downloads or payload.model_dump(exclude_unset=True)
     try:
         merged = AppDownloadService.update_downloads(patch)

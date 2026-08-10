@@ -3,7 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, get_current_admin_user
 from app.services.comment_service import CommentService
 
 comments_router = APIRouter(prefix="/api/v1/comments", tags=["Comments"])
@@ -49,13 +49,10 @@ async def delete_comment(
 @comments_router.delete("/admin", response_model=dict)
 async def delete_comment_admin(
     payload: CommentDeleteSchema,
-    current_user=Depends(get_current_user)
+    admin_user=Depends(get_current_admin_user)
 ):
-    if getattr(current_user, "role", "") != "Admin":
-        raise HTTPException(status_code=403, detail="Неавторизовано")
-
     if not payload.reason:
         raise HTTPException(status_code=400, detail="Reason is required")
 
-    CommentService.delete_comment_by_admin(payload.comment_id, current_user.id, payload.reason)
+    CommentService.delete_comment_by_admin(payload.comment_id, admin_user.id, payload.reason)
     return {"message": "Комментарий успешно удалён админом"}

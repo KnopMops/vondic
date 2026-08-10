@@ -6,8 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
 
-from app.core.database import get_async_db
-from app.core.deps import get_current_user
+from app.core.deps import get_async_db, get_current_user, get_current_admin_user
 from app.models.gift_catalog import GiftCatalog
 from app.models.user import User
 
@@ -40,12 +39,9 @@ async def list_gifts(db=Depends(get_async_db)):
 @gifts_router.post("/admin/create", status_code=status.HTTP_201_CREATED)
 async def create_gift(
     payload: GiftCreateSchema,
-    current_user=Depends(get_current_user),
+    admin_user=Depends(get_current_admin_user),
     db=Depends(get_async_db)
 ):
-    if getattr(current_user, "role", "") != "Admin":
-        raise HTTPException(status_code=403, detail="Forbidden")
-
     gid = re.sub(r"\s+", "_", payload.name.strip().lower())
     gid = re.sub(r"[^a-z0-9_]+", "", gid) or "gift"
 
