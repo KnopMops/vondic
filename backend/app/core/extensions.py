@@ -2,7 +2,9 @@
 Core extensions module replacing Flask extensions with FastAPI / SQLAlchemy / Redis equivalents.
 """
 import logging
+from functools import wraps
 from typing import Any, Optional
+
 from app.core.database import Base
 
 logger = logging.getLogger(__name__)
@@ -20,6 +22,25 @@ class DummyCache:
 
     def delete(self, key: str) -> None:
         self._memory_store.pop(key, None)
+
+    def memoize(self, timeout: Optional[int] = None, make_name: Optional[Any] = None, unless: Optional[Any] = None):
+        def decorator(f):
+            @wraps(f)
+            def wrapper(*args, **kwargs):
+                return f(*args, **kwargs)
+            return wrapper
+        return decorator
+
+    def cached(self, timeout: Optional[int] = None, key_prefix: Optional[str] = None, unless: Optional[Any] = None):
+        def decorator(f):
+            @wraps(f)
+            def wrapper(*args, **kwargs):
+                return f(*args, **kwargs)
+            return wrapper
+        return decorator
+
+    def delete_memoized(self, f, *args, **kwargs):
+        pass
 
 
 class DummyDB:

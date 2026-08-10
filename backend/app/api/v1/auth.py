@@ -265,7 +265,9 @@ def terminate_session(current_user):
     )
     updated = [s for s in sessions if isinstance(
         s, dict) and s.get("session_id") != session_id]
-    ttl = int(current_app.config.get("SESSION_TTL_SECONDS", 2592000))
+    from app.core.config import settings
+    ttl = int(getattr(settings, "SESSION_TTL_SECONDS", 2592000))
+
     cache.set(key, updated, timeout=ttl)
     cache.set(
         f"sessions_json:{current_user.id}",
