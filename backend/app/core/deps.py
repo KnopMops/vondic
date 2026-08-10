@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_async_session
 from app.models.user import User
+from app.services.auth_service import AuthService
 
 security_bearer = HTTPBearer(auto_error=False)
 
@@ -47,7 +48,7 @@ async def get_token_from_request(
     return None
 
 
-# 3. Current User Dependency
+# 3. Current User Dependency using AuthService
 async def get_current_user(
     token: Optional[str] = Depends(get_token_from_request),
     db: AsyncSession = Depends(get_async_db),
@@ -58,17 +59,11 @@ async def get_current_user(
             detail="access_token is missing",
         )
 
-    # Find user by access_token or access_token_lookup
-    stmt = select(User).where(
-        (User.access_token == token) | (User.access_token_lookup == token)
-    )
-    result = await db.execute(stmt)
-    user = result.scalars().first()
-
-    if not user:
+    user, error = AuthService.get_user_by_token(token)
+    if error or not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
+            detail=error or "Invalid or expired token",
         )
 
     if getattr(user, "is_blocked", 0):
