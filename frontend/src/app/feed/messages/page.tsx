@@ -2043,9 +2043,8 @@ export default function MessengerPage() {
 					})
 					if (res.ok) {
 						const data = await res.json()
-						if (Array.isArray(data)) {
-							setMyCommunities(data)
-						}
+						const list = Array.isArray(data) ? data : (data?.communities || [])
+						setMyCommunities(list)
 					}
 				} catch (e) {
 					console.error('Failed to load communities', e)
@@ -2066,12 +2065,12 @@ export default function MessengerPage() {
 				})
 				if (res.ok) {
 					const data = await res.json()
-					if (Array.isArray(data)) {
-						setMyCommunities(data)
-						if (data.length > 0) {
-							setSelectedCommunityId(data[0].id)
-						}
+					const list = Array.isArray(data) ? data : (data?.communities || [])
+					setMyCommunities(list)
+					if (list.length > 0) {
+						setSelectedCommunityId(list[0].id)
 					}
+				}
 				}
 			} catch (e) {
 				console.error('Failed to load communities', e)
@@ -3579,9 +3578,8 @@ export default function MessengerPage() {
 						method: 'POST',
 						headers: { 'Content-Type': 'application/json' },
 					})
-					if (!res.ok) return
-					const data = await res.json().catch(() => [])
-					const communities = Array.isArray(data) ? data : []
+					const data = await res.json().catch(() => ({}))
+					const communities = Array.isArray(data) ? data : (data?.communities || [])
 					const community = communities.find(
 						(item: any) => String(item?.id) === String(serverId),
 					)

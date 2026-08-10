@@ -44,12 +44,17 @@ async def create_channel(
 
 @channels_router.get("")
 @channels_router.get("/")
+@channels_router.post("")
+@channels_router.post("/")
+@channels_router.get("/my")
+@channels_router.post("/my")
 async def list_channels(current_user=Depends(get_current_user)):
     try:
         channels = ChannelService.get_user_channels(current_user.id)
         return {"channels": [c.to_dict() if hasattr(c, "to_dict") else c for c in channels]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 
 @channels_router.get("/{channel_id}")

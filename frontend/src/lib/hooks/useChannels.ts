@@ -26,9 +26,9 @@ export const useChannels = () => {
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ access_token: token }),
 			})
-			if (!res.ok) throw new Error('Failed to fetch channels')
 			const data = await res.json()
-			setChannels(Array.isArray(data) ? data : [])
+			const list = Array.isArray(data) ? data : (data?.channels || [])
+			setChannels(list)
 		} catch (err: any) {
 			setError({ message: err.message || 'Failed to fetch channels' })
 		} finally {
