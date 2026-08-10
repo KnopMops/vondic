@@ -67,9 +67,9 @@ class PostService:
         from sqlalchemy import or_
 
         query = Post.query.join(User, Post.posted_by == User.id).filter(
-            or_(Post.deleted.is_(False), Post.deleted == 0, Post.deleted.is_(None)),
-            or_(User.is_blocked == 0, User.is_blocked.is_(False), User.is_blocked.is_(None)),
-            or_(Post.is_blog.is_(True) if is_blog else Post.is_blog.is_(False), Post.is_blog == (1 if is_blog else 0), Post.is_blog.is_(None)),
+            or_(Post.deleted.is_(False), Post.deleted.is_(None)),
+            or_(User.is_blocked == 0, User.is_blocked.is_(None)),
+            Post.is_blog.is_(True) if is_blog else or_(Post.is_blog.is_(False), Post.is_blog.is_(None)),
         )
 
         if social_community_id:
