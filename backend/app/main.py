@@ -92,6 +92,7 @@ async def alias_path_middleware(request: Request, call_next):
     """
     Middleware to route legacy `/api/...` paths to `/api/v1/...`.
     E.g. `/api/auth/me` -> `/api/v1/auth/me`.
+    Also aliases `/api/v1/stories` to `/api/v1/storis`.
     """
     path = request.url.path
     if (
@@ -100,9 +101,16 @@ async def alias_path_middleware(request: Request, call_next):
         and not path.startswith("/api/v2/")
         and not path.startswith("/api/public/")
     ):
-        new_path = "/api/v1/" + path[5:]
-        request.scope["path"] = new_path
+        path = "/api/v1/" + path[5:]
+
+    if path.startswith("/api/v1/stories/"):
+        path = "/api/v1/storis/" + path[16:]
+    elif path == "/api/v1/stories":
+        path = "/api/v1/storis"
+
+    request.scope["path"] = path
     return await call_next(request)
+
 
 
 @app.exception_handler(HTTPException)

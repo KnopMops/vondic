@@ -15,6 +15,20 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 
 
 
+def _paginate_query(query, page=1, per_page=20):
+    p = int(page or 1)
+    if p < 1:
+        p = 1
+    pp = int(per_page or 20)
+    if pp < 1:
+        pp = 20
+
+    total = query.count()
+    pages = (total + pp - 1) // pp if total > 0 else 1
+    items = query.offset((p - 1) * pp).limit(pp).all()
+    return items, total, p, pages
+
+
 class PostService:
     @staticmethod
     def _sanitize_text(value):
@@ -44,7 +58,14 @@ class PostService:
             user_id=None,
             is_blog: bool | None = False,
             filter_mode: str | None = None,
-            social_community_id: str | None = None):
+            social_community_id: str | None = None,
+            viewer_id=None,
+            community_id=None):
+        if viewer_id and not user_id:
+            user_id = viewer_id
+        if community_id and not social_community_id:
+            social_community_id = community_id
+
         query = Post.query.join(User, Post.posted_by == User.id).filter(
             Post.deleted.is_(False),
             User.is_blocked == 0,
@@ -74,18 +95,21 @@ class PostService:
             if or_conditions:
                 query = query.filter(or_(*or_conditions))
             else:
-                return Post.query.filter(Post.id.is_(None)).paginate(
-                    page=page, per_page=per_page, error_out=False
-                )
+                return _paginate_query(Post.query.filter(Post.id.is_(None)), page=page, per_page=per_page)
         else:
             query = query.filter(Post.social_community_id.is_(None))
 
         if user_id and filter_mode != "subscriptions":
             query = query.filter(User.id == user_id)
 
-        return query.order_by(Post.created_at.desc()).paginate(
-            page=page, per_page=per_page, error_out=False
+        return _paginate_query(query.order_by(Post.created_at.desc()), page=page, per_page=per_page)
+
+    @staticmethod
+    def get_feed_paginated(user_id, page=1, per_page=20):
+        return PostService.get_posts_paginated(
+            page=page, per_page=per_page, user_id=user_id, filter_mode="subscriptions"
         )
+
 
     @staticmethod
     def get_post_by_id(post_id):
