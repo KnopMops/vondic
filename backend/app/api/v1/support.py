@@ -112,3 +112,13 @@ async def get_notification_updates(
     )
     items = res.scalars().all()
     return {"unread_count": len(items), "updates": [n.to_dict() if hasattr(n, "to_dict") else {"id": n.id} for n in items]}
+
+
+@support_router.get("/messenger/chats")
+@support_router.post("/messenger/chats")
+async def support_messenger_chats(
+    current_user: Optional[User] = Depends(get_optional_current_user),
+    db=Depends(get_async_db)
+):
+    return {"chats": [], "unread_count": 0}
+

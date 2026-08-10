@@ -149,6 +149,22 @@ async def me(
     }
 
 
+@auth_router.get("/ai-user")
+@auth_router.post("/ai-user")
+async def get_ai_user(
+    current_user: Optional[User] = Depends(get_optional_current_user),
+):
+    return {
+        "ai_user": {
+            "id": "ai-assistant",
+            "username": "AI Assistant",
+            "avatar_url": "/static/avatars/ai.png",
+            "is_bot": True,
+        }
+    }
+
+
+
 @auth_router.post("/forgot-password")
 async def forgot_password(
     payload: Dict[str, Any],

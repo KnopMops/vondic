@@ -56,7 +56,12 @@ async def create_scheduled(
 
 @scheduled_router.get("")
 @scheduled_router.get("/")
+@scheduled_router.get("/chat")
+@scheduled_router.post("/chat")
+@scheduled_router.get("/chat/{chat_id}")
+@scheduled_router.post("/chat/{chat_id}")
 async def list_scheduled(
+    chat_id: Optional[str] = None,
     current_user=Depends(get_current_user),
     db=Depends(get_async_db)
 ):
@@ -66,7 +71,9 @@ async def list_scheduled(
         .order_by(ScheduledMessage.scheduled_at.asc())
     )
     msgs = res.scalars().all()
-    return [m.to_dict() for m in msgs]
+    items = [m.to_dict() for m in msgs]
+    return {"scheduled_messages": items, "messages": items} if isinstance(items, list) else items
+
 
 
 @scheduled_router.delete("/{msg_id}")

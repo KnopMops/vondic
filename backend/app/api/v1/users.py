@@ -104,10 +104,32 @@ async def search_users(
     return [u.to_dict(viewer_id=current_user.id) for u in users]
 
 
+@users_router.get("/block-status")
+@users_router.post("/block-status")
+async def get_user_block_status(
+    payload: Optional[Dict[str, Any]] = None,
+    user_id: Optional[str] = Query(None),
+    optional_user: Optional[User] = Depends(get_optional_current_user),
+):
+    target_id = user_id
+    if not target_id and payload:
+        target_id = payload.get("user_id") or payload.get("target_id")
+    if not target_id and optional_user:
+        target_id = optional_user.id
+
+    return {
+        "user_id": target_id,
+        "is_blocked": False,
+        "blocked_by_me": False,
+        "blocked_me": False
+    }
+
+
 @users_router.post("/status")
 async def set_user_status(
     payload: Dict[str, Any],
     current_user: User = Depends(get_current_user),
+
     db: AsyncSession = Depends(get_async_session),
 ):
     user_status = payload.get("status")

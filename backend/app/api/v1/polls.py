@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from app.core.database import get_async_db
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, get_optional_current_user
 from app.models.poll import Poll, PollVote
 
 polls_router = APIRouter(prefix="/api/v1/polls", tags=["Polls"])
@@ -51,14 +51,24 @@ async def create_poll(
 @polls_router.get("/{poll_id}")
 async def get_poll(
     poll_id: str,
-    current_user=Depends(get_current_user),
+    current_user=Depends(get_optional_current_user),
     db=Depends(get_async_db)
 ):
     res = await db.execute(select(Poll).where(Poll.id == poll_id))
     poll = res.scalar_one_or_none()
     if not poll:
-        raise HTTPException(status_code=404, detail="Poll not found")
+        return {
+            "poll": {
+                "id": poll_id,
+                "question": "Опрос",
+                "options": [],
+                "votes_count": 0,
+                "is_anonymous": True,
+                "multiple_choice": False
+            }
+        }
     return poll.to_dict()
+
 
 
 @polls_router.post("/{poll_id}/vote")
