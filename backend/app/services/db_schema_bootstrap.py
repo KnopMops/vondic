@@ -191,6 +191,11 @@ def ensure_channels_type_column(engine) -> None:
     if dialect == "postgresql":
         run("ALTER TABLE channels ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'text'")
         run("UPDATE channels SET type = 'text' WHERE type IS NULL")
+        try:
+            run("ALTER TABLE channels DROP CONSTRAINT IF EXISTS ck_channel_type")
+            run("ALTER TABLE channels ADD CONSTRAINT ck_channel_type CHECK (type IN ('text', 'voice', 'broadcast'))")
+        except Exception:
+            pass
     else:
         run("ALTER TABLE channels ADD COLUMN type TEXT DEFAULT 'text'")
 

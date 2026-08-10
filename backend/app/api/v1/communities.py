@@ -68,9 +68,10 @@ async def community_info(
     return {"community": community.to_dict() if hasattr(community, "to_dict") else community}
 
 
-@communities_router.post("/{community_id}/channels")
+@communities_router.post("/{community_id}/channels/list")
+@communities_router.get("/{community_id}/channels/list")
 @communities_router.get("/{community_id}/channels")
-async def list_channels(
+async def list_community_channels(
     community_id: str,
     current_user=Depends(get_current_user)
 ):
@@ -102,8 +103,9 @@ async def update_community(
     return {"community": updated.to_dict() if hasattr(updated, "to_dict") else updated}
 
 
+@communities_router.post("/{community_id}/channels")
 @communities_router.post("/{community_id}/channels/create")
-async def create_channel(
+async def create_community_channel(
     community_id: str,
     payload: ChannelCreateSchema,
     current_user=Depends(get_current_user)
@@ -118,4 +120,5 @@ async def create_channel(
     if err or not channel:
         raise HTTPException(status_code=400, detail=err or "Failed to create channel")
     return {"channel": channel.to_dict() if hasattr(channel, "to_dict") else channel}
+
 

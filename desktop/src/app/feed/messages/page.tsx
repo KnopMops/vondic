@@ -2044,7 +2044,8 @@ export default function MessengerPage() {
 				throw new Error(text || 'Failed to create channel')
 			}
 			const created = await res.json()
-			setCommunityChannels(prev => [created, ...prev])
+			const channelObj = created.channel || created
+			setCommunityChannels(prev => [channelObj, ...prev])
 			setIsCreateCommChannelOpen(false)
 			setCommChannelName('')
 			setCommChannelDesc('')
@@ -2069,7 +2070,8 @@ export default function MessengerPage() {
 			)
 			if (res.ok) {
 				const data = await res.json()
-				setCommunityChannels(Array.isArray(data) ? data : [])
+				const list = Array.isArray(data) ? data : (data?.channels || [])
+				setCommunityChannels(list)
 			}
 		} catch (e) {
 			console.error('Failed to load community channels', e)
@@ -5841,7 +5843,7 @@ export default function MessengerPage() {
 																				: 'ring-gray-950'
 																		}`}
 																	>
-																		<HashIcon className='w-6 h-6 text-sky-300' />
+																		<RadioIcon className='w-6 h-6 text-sky-300' />
 																	</div>
 																)}
 																<div className='flex flex-col flex-1 min-w-0'>

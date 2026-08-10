@@ -33,7 +33,7 @@ class Channel(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "type IN ('text','broadcast')",
+            "type IN ('text','voice','broadcast')",
             name="ck_channel_type"),
     )
 

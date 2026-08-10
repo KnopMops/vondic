@@ -7,6 +7,7 @@ import { useToast } from '../../lib/ToastContext'
 import ActiveCall from './ActiveCall'
 import ActiveGroupCall from './ActiveGroupCall'
 import ActiveVoiceChannel from './ActiveVoiceChannel'
+import DiscordCallModal from './DiscordCallModal'
 import { FloatingCallBar } from './FloatingCallBar'
 import IncomingCallModal from './IncomingCallModal'
 
@@ -101,51 +102,88 @@ export const GlobalCallUI: React.FC = () => {
 
 			
 			{activeGroupCallId && (
-				<ActiveGroupCall
-					callId={activeGroupCallId}
-					participants={Array.from(activeCalls.values()).filter(
-						c => c.isGroupCall && c.callId === activeGroupCallId,
-					)}
+				<DiscordCallModal
+					title="Групповой звонок"
+					subtitle="Vondic Group Call"
+					participants={Array.from(activeCalls.values())
+						.filter(c => c.isGroupCall && c.callId === activeGroupCallId)
+						.map(c => ({
+							id: c.userId || c.socketId,
+							name: c.userName || 'Участник',
+							avatar: c.avatarUrl,
+							socketId: c.socketId,
+							isMuted: false,
+						}))}
 					localStream={localStream}
 					videoStream={webRTCService?.getVideoStream() || null}
 					screenStream={screenStream}
 					remoteStreams={remoteStreams}
-					onEndCall={handleLeaveGroupCall}
-					onMuteToggle={handleMuteToggle}
-					onVideoToggle={handleVideoToggle}
 					isMuted={isMuted}
 					isVideoEnabled={isVideoEnabled()}
-					onScreenShareToggle={toggleScreenShare}
 					isScreenSharing={isScreenSharing}
 					isScreenShareSupported={isScreenShareSupported}
+					onMuteToggle={handleMuteToggle}
+					onVideoToggle={handleVideoToggle}
+					onScreenShareToggle={toggleScreenShare}
+					onDisconnect={() => handleLeaveGroupCall(activeGroupCallId)}
 				/>
 			)}
 
 			{activeVoiceChannelId && (
-				<ActiveVoiceChannel
-					channelId={activeVoiceChannelId}
-					participants={voiceChannelParticipants[activeVoiceChannelId] || []}
+				<DiscordCallModal
+					title="Голосовой канал"
+					subtitle="Сервер Vondic"
+					participants={(voiceChannelParticipants[activeVoiceChannelId] || []).map(p => ({
+						id: p.userId,
+						name: p.username,
+						avatar: p.avatarUrl,
+						socketId: p.socketId,
+						isMuted: isMuted && p.userId === webRTCService?.userId,
+					}))}
+					localStream={localStream}
+					videoStream={webRTCService?.getVideoStream() || null}
+					screenStream={screenStream}
+					remoteStreams={remoteStreams}
 					isMuted={isMuted}
+					isVideoEnabled={isVideoEnabled()}
+					isScreenSharing={isScreenSharing}
+					isScreenShareSupported={isScreenShareSupported}
 					onMuteToggle={handleMuteToggle}
-					onLeave={handleLeaveVoiceChannel}
+					onVideoToggle={handleVideoToggle}
+					onScreenShareToggle={toggleScreenShare}
+					onDisconnect={handleLeaveVoiceChannel}
 				/>
 			)}
 
-			{activeDirectCall && !activeGroupCallId && !activeVoiceChannelId && !isMessagesPage && (
-				<ActiveCall
-					callInfo={activeDirectCall}
+			{activeDirectCall && !activeGroupCallId && !activeVoiceChannelId && (
+				<DiscordCallModal
+					title={`Звонок с ${activeDirectCall.userName || 'пользователем'}`}
+					subtitle="Прямой звонок"
+					participants={[
+						{
+							id: 'me',
+							name: 'Вы',
+							isMuted: isMuted,
+						},
+						{
+							id: activeDirectCall.userId,
+							name: activeDirectCall.userName || 'Собеседник',
+							avatar: activeDirectCall.avatarUrl,
+							socketId: activeDirectCall.socketId,
+						},
+					]}
 					localStream={localStream}
-					screenStream={screenStream}
-					remoteStream={remoteStreams.get(activeDirectCall.socketId) || null}
 					videoStream={webRTCService?.getVideoStream() || null}
-					onEndCall={endCall}
-					onMuteToggle={handleMuteToggle}
-					onScreenShareToggle={toggleScreenShare}
-					onVideoToggle={handleVideoToggle}
+					screenStream={screenStream}
+					remoteStreams={remoteStreams}
 					isMuted={isMuted}
-					isScreenSharing={isScreenSharing}
 					isVideoEnabled={isVideoEnabled()}
+					isScreenSharing={isScreenSharing}
 					isScreenShareSupported={isScreenShareSupported}
+					onMuteToggle={handleMuteToggle}
+					onVideoToggle={handleVideoToggle}
+					onScreenShareToggle={toggleScreenShare}
+					onDisconnect={() => endCall(activeDirectCall.socketId)}
 				/>
 			)}
 

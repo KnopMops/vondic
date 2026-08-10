@@ -332,10 +332,10 @@ export class WebRTCService {
 			}
 			if (track.kind === 'video') {
 				if (this.isSharingScreen && this.screenStream?.getVideoTracks()[0] === track) {
-					// Discord-like screen share: high resolution needs high bitrate.
-					params.encodings[0].maxBitrate = 8_000_000
-					params.encodings[0].degradationPreference = 'maintain-framerate'
-					console.log('[WebRTC] Applied screen share bitrate limit: 8 Mbps')
+					// High quality screen share (14 Mbps, crisp text resolution)
+					params.encodings[0].maxBitrate = 14_000_000
+					params.encodings[0].degradationPreference = 'maintain-resolution'
+					console.log('[WebRTC] Applied High Quality Screen Share bitrate limit: 14 Mbps (maintain-resolution)')
 				} else {
 					// 720p/1080p camera quality.
 					params.encodings[0].maxBitrate = 2_500_000
