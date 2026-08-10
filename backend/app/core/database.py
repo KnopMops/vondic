@@ -10,7 +10,6 @@ from app.core.config import settings
 # Engine with PgBouncer transaction mode compatibility
 engine = create_async_engine(
     settings.ASYNC_DATABASE_URL,
-
     echo=False,
     pool_pre_ping=True,
     pool_recycle=120,
@@ -38,3 +37,7 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
             yield session
         finally:
             await session.close()
+
+
+# Alias for dependency injection
+get_async_db = get_async_session
