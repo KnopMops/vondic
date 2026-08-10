@@ -78,6 +78,30 @@ async def list_channels(
     return {"channels": [ch.to_dict() if hasattr(ch, "to_dict") else ch for ch in channels]}
 
 
+class CommunityUpdateSchema(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    avatar_url: Optional[str] = None
+
+
+@communities_router.put("/{community_id}")
+@communities_router.post("/{community_id}/update")
+async def update_community(
+    community_id: str,
+    payload: CommunityUpdateSchema,
+    current_user=Depends(get_current_user)
+):
+    community = CommunityService.get_by_id(community_id)
+    if not community:
+        raise HTTPException(status_code=404, detail="Community not found")
+    if str(community.owner_id) != str(current_user.id):
+        raise HTTPException(status_code=403, detail="Only server owner can edit server")
+    updated, err = CommunityService.update_community(community_id, payload.model_dump(exclude_unset=True))
+    if err or not updated:
+        raise HTTPException(status_code=400, detail=err or "Failed to update community")
+    return {"community": updated.to_dict() if hasattr(updated, "to_dict") else updated}
+
+
 @communities_router.post("/{community_id}/channels/create")
 async def create_channel(
     community_id: str,
@@ -94,3 +118,4 @@ async def create_channel(
     if err or not channel:
         raise HTTPException(status_code=400, detail=err or "Failed to create channel")
     return {"channel": channel.to_dict() if hasattr(channel, "to_dict") else channel}
+

@@ -204,6 +204,13 @@ class BotMethodsMixin:
     async def promote_chat_member(self, chat_id: str, user_id: str, **kwargs) -> dict:
         return await self._send_action("promote_chat_member", {"chat_id": chat_id, "user_id": user_id, **kwargs})
 
+    async def approve_join_request(self, chat_id: str, user_id: str) -> dict:
+        return await self._send_action("approve_join_request", {"chat_id": chat_id, "user_id": user_id})
+
+    async def decline_join_request(self, chat_id: str, user_id: str) -> dict:
+        return await self._send_action("decline_join_request", {"chat_id": chat_id, "user_id": user_id})
+
+
     async def set_chat_permissions(self, chat_id: str, permissions: dict) -> dict:
         return await self._send_action("set_chat_permissions", {
             "chat_id": chat_id, "permissions": permissions,

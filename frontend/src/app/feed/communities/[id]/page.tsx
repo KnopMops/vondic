@@ -41,9 +41,10 @@ type CommunityPost = {
 	attachments?: Attachment[]
 }
 
-function coverGradient(name: string) {
+function coverGradient(name: string = '') {
+	const strName = String(name || '')
 	let hash = 0
-	for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash)
+	for (let i = 0; i < strName.length; i++) hash = strName.charCodeAt(i) + ((hash << 5) - hash)
 	const hue = Math.abs(hash) % 360
 	return `linear-gradient(135deg, hsl(${hue} 45% 28%) 0%, hsl(${(hue + 40) % 360} 50% 18%) 100%)`
 }
@@ -77,7 +78,8 @@ export default function CommunityPage() {
 			body: JSON.stringify({}),
 		})
 		if (!res.ok) throw new Error('Сообщество не найдено')
-		setCommunity(await res.json())
+		const data = await res.json()
+		setCommunity(data?.community || data)
 	}, [communityId])
 
 	const loadPosts = useCallback(async () => {

@@ -263,7 +263,7 @@ export default function SmartChatInput({
   const showPopup = suggestionType && suggestions.length > 0
 
   return (
-    <div className="relative flex-1">
+    <div className="relative flex-1 w-full min-w-0">
       <textarea
         ref={textareaRef}
         value={value}
@@ -273,7 +273,7 @@ export default function SmartChatInput({
         rows={1}
         disabled={disabled}
         className={
-          className ||
+          (className ? `${className} w-full` : '') ||
           'w-full flex-1 bg-transparent border-none text-white placeholder-gray-500 focus:ring-0 resize-none py-2.5 max-h-32 min-h-[44px] custom-scrollbar'
         }
         placeholder={placeholder}
