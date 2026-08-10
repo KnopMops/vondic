@@ -863,36 +863,7 @@ export default function MessengerPage() {
 		}
 	}, [selectedFriend?.id, user?.id])
 
-	useEffect(() => {
-		let active = true
-		const loadAiUser = async () => {
-			try {
-				const res = await fetch('/api/v1/auth/ai-user')
-				const text = await res.text()
-				let data: any = {}
-				try {
-					data = JSON.parse(text)
-				} catch {
-					return
-				}
-				if (!active || !res.ok || !data?.id) return
-				setAiUser(prev => ({
-					...prev,
-					...data,
-					username: data.username || prev.username,
-					email: data.email || prev.email,
-					avatar_url: data.avatar_url ?? prev.avatar_url,
-					role: data.role || prev.role,
-					status: data.status || prev.status,
-					premium: !!data.premium,
-				}))
-			} catch {}
-		}
-		loadAiUser()
-		return () => {
-			active = false
-		}
-	}, [])
+
 
 	useEffect(() => {
 		if (!selectedFriend) return
@@ -5827,58 +5798,7 @@ export default function MessengerPage() {
 				<div className='flex-1 overflow-y-auto custom-scrollbar px-2 space-y-1 pb-4'>
 					{activeTab === 'direct' && (
 						<>
-							{aiFriend && !searchQuery && !showArchivedChats && (
-								<div
-									onClick={() => {
-										setSelectedFriend(aiFriend)
-										setSelectedChannel(null)
-										setSelectedGroup(null)
-										setIsChatSearchOpen(false)
-										setChatSearchQuery('')
-										setFoundMessages([])
-									}}
-									className={`group p-3 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-200 border border-transparent ${
-										selectedFriend?.id === aiFriend.id
-											? `bg-white/8 ${currentBackground.borderColor} shadow-sm`
-											: 'hover:bg-white/5 border-transparent'
-									}`}
-								>
-									<div className='relative'>
-										<img
-											src={getAvatarUrl(aiFriend.avatar_url)}
-											alt={aiFriend.username}
-											className={`w-12 h-12 rounded-full object-cover bg-white/5 ring-2 transition-all duration-300 ${
-												selectedFriend?.id === aiFriend.id
-													? currentBackground.accentColor.replace(
-															'text-',
-															'ring-',
-														)
-													: 'ring-[var(--app-bg)]'
-											}`}
-										/>
-										<div className='absolute bottom-0 right-0 w-3.5 h-3.5 bg-[var(--app-bg)] rounded-full flex items-center justify-center'>
-											<div className='w-2.5 h-2.5 rounded-full bg-[var(--app-accent)]' />
-										</div>
-									</div>
-									<div className='flex flex-col flex-1 min-w-0'>
-										<div className='flex justify-between items-baseline'>
-											<span
-												className={`font-semibold truncate transition-colors duration-300 ${
-													selectedFriend?.id === aiFriend.id
-														? currentBackground.accentColor
-														: 'text-[var(--app-fg)] group-hover:text-[var(--app-fg)]'
-												}`}
-											>
-												Вондик AI
-											</span>
-											<span className='text-[10px] text-[var(--app-muted)]'>AI</span>
-										</div>
-										<span className='text-xs text-[var(--app-muted)] truncate group-hover:text-[var(--app-muted)] transition-colors'>
-											Всегда онлайн
-										</span>
-									</div>
-								</div>
-							)}
+
 							{botFriend && showBotInHistory && !showArchivedChats && (
 								<div
 									onClick={() => {
