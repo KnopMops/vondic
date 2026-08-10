@@ -1,6 +1,6 @@
-from typing import Optional
+from typing import Optional, Dict, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
 from app.core.deps import get_current_user
