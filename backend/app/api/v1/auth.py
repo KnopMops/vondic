@@ -2,6 +2,7 @@ import hashlib
 import json
 import secrets
 import uuid
+import requests
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
@@ -333,6 +334,45 @@ async def qr_scan(
     return {"ok": True}
 
 
+@auth_router.get("/yandex/login")
+@auth_router.post("/yandex/login")
+async def yandex_login(
+    login_hint: Optional[str] = Query(None),
+    request: Request = None,
+):
+    url, error = AuthService.get_yandex_auth_url(login_hint=login_hint)
+    if error or not url:
+        raise HTTPException(status_code=500, detail=error or "Yandex OAuth не настроен")
+    return {"auth_url": url}
+
+
+@auth_router.get("/yandex/callback")
+@auth_router.post("/yandex/callback")
+async def yandex_callback(
+    code: Optional[str] = Query(None),
+    payload: Optional[Dict[str, Any]] = None,
+    request: Request = None,
+):
+    auth_code = code
+    if not auth_code and payload:
+        auth_code = payload.get("code")
+
+    if not auth_code:
+        raise HTTPException(status_code=400, detail="Требуется код авторизации")
+
+    ip = _get_client_ip(request) if request else None
+    result, error = AuthService.login_yandex_user(auth_code, ip_address=ip)
+    if error or not result:
+        raise HTTPException(status_code=400, detail=error or "Ошибка авторизации через Yandex")
+
+    return {
+        "message": "Вход через Yandex выполнен успешно",
+        "access_token": result["access_token"],
+        "refresh_token": result["refresh_token"],
+        "user": result["user"].to_dict(),
+    }
+
+
 @auth_router.get("/yandex/link")
 async def yandex_link(
     current_user: User = Depends(get_current_user),
@@ -352,6 +392,63 @@ async def yandex_link(
     }
     auth_url = f"https://oauth.yandex.ru/authorize?{urlencode(params)}"
     return {"auth_url": auth_url}
+
+
+@auth_router.get("/yandex/link-callback")
+async def yandex_link_callback(
+    code: Optional[str] = Query(None),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    if not code:
+        raise HTTPException(status_code=400, detail="Authorization code is required")
+
+    client_id = getattr(settings, "YANDEX_CLIENT_ID", "")
+    client_secret = getattr(settings, "YANDEX_CLIENT_SECRET", "")
+    redirect_uri = getattr(settings, "YANDEX_REDIRECT_URI", "")
+
+    if not client_id or not client_secret:
+        raise HTTPException(status_code=500, detail="Yandex OAuth не настроен")
+
+    token_url = "https://oauth.yandex.ru/token"
+    data = {
+        "grant_type": "authorization_code",
+        "code": code,
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "redirect_uri": redirect_uri,
+    }
+
+    try:
+        response = requests.post(token_url, data=data)
+        response.raise_for_status()
+        token_data = response.json()
+        access_token_yandex = token_data.get("access_token")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get token: {str(e)}")
+
+    info_url = "https://login.yandex.ru/info"
+    headers = {"Authorization": f"OAuth {access_token_yandex}"}
+
+    try:
+        info_response = requests.get(info_url, headers=headers)
+        info_response.raise_for_status()
+        user_info = info_response.json()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get user info: {str(e)}")
+
+    new_yandex_id = str(user_info.get("id"))
+
+    stmt = select(User).where(User.yandex_id == new_yandex_id, User.id != current_user.id)
+    res = await db.execute(stmt)
+    if res.scalars().first():
+        raise HTTPException(status_code=400, detail="Этот Yandex аккаунт уже привязан к другому пользователю")
+
+    current_user.yandex_id = new_yandex_id
+    current_user.yandex_token = access_token_yandex
+    await db.commit()
+
+    return {"ok": True, "yandex_id": new_yandex_id, "yandex_disk_connected": True}
 
 
 @auth_router.delete("/yandex/unlink")
