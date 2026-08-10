@@ -29,8 +29,8 @@ class Post(Base):
 
     comments = relationship("Comment", backref="post", lazy="selectin")
 
-    def to_dict(self):
-        return {
+    def to_dict(self, viewer_id=None, **kwargs):
+        data = {
             "id": self.id,
             "content": self.content,
             "attachments": self.attachments,
@@ -45,4 +45,6 @@ class Post(Base):
             if self.comments
             else 0,
         }
-
+        if viewer_id:
+            data["is_owner"] = (self.posted_by == str(viewer_id))
+        return data
