@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy.orm import declarative_base, query_property, scoped_session, sessionmaker
+from sqlalchemy.orm import declarative_base, scoped_session, sessionmaker
 from app.core.config import settings
 
 # Engine with PgBouncer transaction mode compatibility (Async)
@@ -48,7 +48,7 @@ SyncSessionLocal = sessionmaker(
 SyncScopedSession = scoped_session(SyncSessionLocal)
 
 Base = declarative_base()
-Base.query = query_property(SyncScopedSession)
+Base.query = SyncScopedSession.query_property()
 
 
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
