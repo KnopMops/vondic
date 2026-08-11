@@ -862,7 +862,7 @@ export class WebRTCService {
 								console.error('ICE restart failed:', e)
 							)
 						}
-					}, 3000) // Wait 3 seconds before attempting restart
+					}, 12000) // Wait 12 seconds before attempting restart
 					this.iceDisconnectTimeouts.set(targetSocketId, timeout)
 				}
 
