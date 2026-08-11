@@ -182,6 +182,19 @@ async def push_subscribe_global(
         return {"ok": False, "error": str(e)}
 
 
+@app.on_event("startup")
+async def startup_db_migrations():
+    try:
+        from app.core.database import async_engine
+        async with async_engine.begin() as conn:
+            await conn.execute(text("ALTER TABLE channels ADD COLUMN IF NOT EXISTS require_approval BOOLEAN DEFAULT FALSE"))
+            await conn.execute(text("ALTER TABLE communities ADD COLUMN IF NOT EXISTS require_approval BOOLEAN DEFAULT FALSE"))
+            await conn.execute(text("ALTER TABLE groups ADD COLUMN IF NOT EXISTS require_approval BOOLEAN DEFAULT FALSE"))
+            await conn.execute(text("CREATE TABLE IF NOT EXISTS join_requests (id TEXT PRIMARY KEY, target_type TEXT NOT NULL, target_id TEXT NOT NULL, user_id TEXT NOT NULL, status TEXT DEFAULT 'pending', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"))
+    except Exception as e:
+        logger.warning(f"Startup DB migration warning: {e}")
+
+
 # Mount all FastAPI APIRouters
 app.include_router(auth_router)
 app.include_router(upload_router)
