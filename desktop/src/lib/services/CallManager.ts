@@ -325,16 +325,17 @@ export class CallManager {
 			console.log('Voice channel participant joined:', data)
 			const { channel_id, user_id, socket_id, username, avatar_url } = data
 			if (!channel_id || !socket_id) return
-			if (socket_id === this.socket.id) return
 
 			if (this.onVoiceChannelParticipantJoined) {
 				this.onVoiceChannelParticipantJoined(channel_id, {
-					userId: user_id,
-					username: username || 'Unknown',
+					userId: user_id || (socket_id === this.socket?.id ? this.currentUserId : ''),
+					username: username || (socket_id === this.socket?.id ? 'Вы' : 'Unknown'),
 					avatarUrl: avatar_url,
 					socketId: socket_id,
 				})
 			}
+
+			if (socket_id === this.socket.id) return
 
 			// Check if we already have a connection to this participant
 			const existingPc = this.webRTCService.peerConnections.get(socket_id)

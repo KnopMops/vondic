@@ -336,7 +336,7 @@ const MessageBubble = memo(
 					className={`relative max-w-[min(72%,480px)] px-4 py-2.5 text-[15px] leading-relaxed transition-colors duration-300 ${bubbleRadius} ${
 						msg.isOwn ? ownBubbleClass : 'chat-bubble-other'
 					} ${
-						isSelectionMode && msg.isOwn
+						isSelectionMode
 							? isSelected
 								? 'ring-2 ring-emerald-400'
 								: 'opacity-60'
@@ -349,7 +349,7 @@ const MessageBubble = memo(
 							msg.isOwn ? 'left-2' : 'right-2'
 						} flex items-center gap-1 z-20`}
 					>
-						{isSelectionMode && msg.isOwn && (
+						{isSelectionMode && (
 							<button
 								onClick={e => {
 									e.stopPropagation()

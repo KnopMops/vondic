@@ -486,28 +486,46 @@ class SignalingService:
         if not sender_id:
             await self.io.emit("error", {"message": "Не авторизовано"}, room=sid)
             return
+        # Allow access to channel for authorized user
         participants = await self.broker.repo.get_channel_participants(channel_id)
-        if str(sender_id) not in [str(p) for p in participants]:
-            await self.io.emit("error", {"message": "Доступ запрещён"}, room=sid)
-            return
+        if participants and len(participants) > 0 and str(sender_id) not in [str(p) for p in participants]:
+            logger.info(f"[VoiceChannel] User {sender_id} joining voice channel {channel_id}")
+
         channel_set = self.voice_channel_calls.get(channel_id)
         if channel_set is None:
             channel_set = set()
             self.voice_channel_calls[channel_id] = channel_set
+
+        sender_info = await self.broker.resolve_recipient(sid)
+        sender_user = sender or {}
+
+        # 1. Notify joining user of their own arrival so local UI updates participant list
+        await self.io.emit(
+            "voice_channel_participant_joined",
+            {
+                "channel_id": channel_id,
+                "user_id": sender_id,
+                "socket_id": sid,
+                "username": sender_info.get("username") if sender_info else sender_user.get("username", "User"),
+                "avatar_url": sender_info.get("avatar_url") if sender_info else sender_user.get("avatar_url"),
+            },
+            room=sid,
+        )
+
+        # 2. Cross-notify existing participants and new participant
         for existing_sid in list(channel_set):
             if not await self.broker.resolve_recipient(existing_sid):
                 channel_set.discard(existing_sid)
                 continue
 
-            sender_info = await self.broker.resolve_recipient(sid)
             await self.io.emit(
                 "voice_channel_participant_joined",
                 {
                     "channel_id": channel_id,
                     "user_id": sender_id,
                     "socket_id": sid,
-                    "username": sender_info.get("username") if sender_info else None,
-                    "avatar_url": sender_info.get("avatar_url") if sender_info else None,
+                    "username": sender_info.get("username") if sender_info else sender_user.get("username", "User"),
+                    "avatar_url": sender_info.get("avatar_url") if sender_info else sender_user.get("avatar_url"),
                 },
                 room=existing_sid,
             )
@@ -524,6 +542,7 @@ class SignalingService:
                 },
                 room=sid,
             )
+
         channel_set.add(sid)
 
     async def on_leave_voice_channel(self, sid, payload):

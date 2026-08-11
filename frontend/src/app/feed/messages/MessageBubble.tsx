@@ -376,7 +376,7 @@ const MessageBubble = memo(
 		const renderFormattedContent = (content: string) =>
 			renderRichFormattedContent(content, msg.isOwn)
 
-		const ownBubbleClass = theme?.ownMessageBg || 'chat-bubble-own'
+		const ownBubbleClass = 'chat-bubble-own'
 
 		return (
 			<div
