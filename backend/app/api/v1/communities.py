@@ -44,7 +44,7 @@ async def create_community(
 @communities_router.get("/my")
 async def my_communities(current_user=Depends(get_current_user)):
     items = CommunityService.get_user_communities(current_user.id)
-    return {"communities": [c.to_dict() if hasattr(c, "to_dict") else c for c in items]}
+    return {"communities": [c if isinstance(c, dict) else (c.to_dict() if hasattr(c, "to_dict") else c) for c in items]}
 
 
 @communities_router.post("/join")

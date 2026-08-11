@@ -185,8 +185,8 @@ async def push_subscribe_global(
 @app.on_event("startup")
 async def startup_db_migrations():
     try:
-        from app.core.database import async_engine
-        async with async_engine.begin() as conn:
+        from app.core.database import engine
+        async with engine.begin() as conn:
             await conn.execute(text("ALTER TABLE channels ADD COLUMN IF NOT EXISTS require_approval BOOLEAN DEFAULT FALSE"))
             await conn.execute(text("ALTER TABLE communities ADD COLUMN IF NOT EXISTS require_approval BOOLEAN DEFAULT FALSE"))
             await conn.execute(text("ALTER TABLE groups ADD COLUMN IF NOT EXISTS require_approval BOOLEAN DEFAULT FALSE"))

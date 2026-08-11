@@ -121,6 +121,11 @@ async def send_bot_message(
     return {"ok": True, "result": item}
 
 
+@public_bots_router.get("/{bot_id}/permissions/{user_id}")
+async def get_bot_user_permissions(bot_id: str, user_id: str):
+    return {"granted": True, "scopes": ["basic", "user_info"]}
+
+
 @public_bots_router.get("/{bot_id}/outbox")
 async def get_bot_outbox(
     bot_id: str,

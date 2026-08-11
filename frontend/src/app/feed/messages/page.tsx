@@ -2219,6 +2219,10 @@ export default function MessengerPage() {
 
 	const openStandaloneChannel = useCallback(
 		(channel: Channel) => {
+			if ((channel as any)?.is_pending_approval) {
+				showToast('Заявка на вступление ожидает одобрения администратора', 'info')
+				return
+			}
 			setSelectedChannel(channel)
 			setSelectedFriend(null)
 			setSelectedGroup(null)
@@ -2235,7 +2239,7 @@ export default function MessengerPage() {
 				}
 			})
 		},
-		[getChannelInfo],
+		[getChannelInfo, showToast],
 	)
 
 	const handleCreateChannel = async (e: React.FormEvent) => {
@@ -6241,7 +6245,7 @@ export default function MessengerPage() {
 															<div
 																key={channel.id}
 																onClick={() => openStandaloneChannel(channel)}
-																className={`group p-3 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-200 border border-transparent ${
+																className={`group p-3 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-200 border border-transparent ${(channel as any).is_pending_approval ? 'opacity-50 grayscale' : ''} ${
 																	selectedChannel?.id === channel.id
 																		? `bg-gray-800/50 ${currentBackground.borderColor} shadow-sm`
 																		: 'hover:bg-gray-900 border-transparent'
@@ -6291,8 +6295,12 @@ export default function MessengerPage() {
 																			</span>
 																		)}
 																	</div>
-																	<span className='text-xs text-gray-500 truncate'>
-																		Публичный канал
+																	<span className='text-xs text-gray-500 truncate flex items-center gap-1.5'>
+																		{(channel as any).is_pending_approval ? (
+																			<span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-medium border border-amber-500/30">⏳ В процессе заявки</span>
+																		) : (
+																			'Публичный канал'
+																		)}
 																	</span>
 																</div>
 															</div>

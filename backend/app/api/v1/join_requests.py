@@ -23,6 +23,71 @@ class JoinRequestActionSchema(BaseModel):
     request_id: str
 
 
+import time
+
+def push_join_request_bot_message(req_id: str, owner_id: str, target_name: str, target_type: str, applicant_user: User):
+    if not owner_id:
+        return
+    try:
+        from app.api.public.v1.bots import OUTBOX_QUEUES
+        BOT_ID = "7e140ffc-5549-418a-8bad-525c02193812"
+        target_type_ru = "канал" if target_type == "channel" else ("сервер" if target_type == "community" else "группу")
+        applicant_name = getattr(applicant_user, "username", None) or getattr(applicant_user, "name", None) or applicant_user.id
+        text = (
+            f"📩 Новая заявка на вступление!\n\n"
+            f"Пользователь @{applicant_name} хочет вступить в {target_type_ru} «{target_name}».\n\n"
+            f"Нажмите кнопку ниже, чтобы принять или отклонить заявку:"
+        )
+        reply_markup = {
+            "inline_keyboard": [
+                [
+                    {"text": "✅ Принять", "callback_data": f"join_approve:{req_id}"},
+                    {"text": "❌ Отклонить", "callback_data": f"join_decline:{req_id}"}
+                ]
+            ]
+        }
+        item = {
+            "bot_id": BOT_ID,
+            "chat_id": str(owner_id),
+            "text": text,
+            "reply_markup": reply_markup,
+            "created_at": time.time(),
+        }
+        OUTBOX_QUEUES[f"{BOT_ID}:{owner_id}"].append(item)
+    except Exception:
+        pass
+
+
+def push_join_request_decision_message(req: JoinRequest, target_name: str):
+    try:
+        from app.api.public.v1.bots import OUTBOX_QUEUES
+        BOT_ID = "7e140ffc-5549-418a-8bad-525c02193812"
+        if req.status == "approved":
+            text = f"🎉 Ваша заявка на вступление в «{target_name}» была одобрена! Вы успешно добавлены."
+        else:
+            text = f"❌ Ваша заявка на вступление в «{target_name}» была отклонена администратором."
+
+        item = {
+            "bot_id": BOT_ID,
+            "chat_id": str(req.user_id),
+            "text": text,
+            "created_at": time.time(),
+        }
+        OUTBOX_QUEUES[f"{BOT_ID}:{req.user_id}"].append(item)
+    except Exception:
+        pass
+
+
+@join_requests_router.get("/my")
+async def get_my_join_requests(
+    current_user=Depends(get_current_user),
+    db=Depends(get_async_db)
+):
+    res = await db.execute(select(JoinRequest).where(JoinRequest.user_id == current_user.id))
+    requests = res.scalars().all()
+    return {"requests": [r.to_dict() for r in requests]}
+
+
 @join_requests_router.post("/create", status_code=status.HTTP_201_CREATED)
 async def create_join_request(
     payload: JoinRequestCreateSchema,
@@ -61,6 +126,8 @@ async def create_join_request(
     await db.commit()
     await db.refresh(req)
 
+    push_join_request_bot_message(req.id, owner_id, target_name, payload.target_type, current_user)
+
     return {
         "message": "Заявка отправлена администраторам",
         "request": req.to_dict(),
@@ -88,19 +155,30 @@ async def approve_join_request(
         raise HTTPException(status_code=404, detail="Заявка не найдена")
 
     req.status = "approved"
-    
+    target_name = "Чат"
+
     # Add user to target group / channel / community
     if req.target_type == "group":
         from app.services.group_service import GroupService
+        g = GroupService.get_group_by_id(req.target_id)
+        if g:
+            target_name = g.name
         GroupService.add_participant(req.target_id, target_user_id=req.user_id, requester_id=current_user.id)
     elif req.target_type == "channel":
         from app.services.channel_service import ChannelService
+        ch = ChannelService.get_channel_by_id(req.target_id)
+        if ch:
+            target_name = ch.name
         ChannelService.add_subscriber(req.target_id, req.user_id)
     elif req.target_type == "community":
         from app.services.community_service import CommunityService
+        c = CommunityService.get_by_id(req.target_id)
+        if c:
+            target_name = c.name
         CommunityService.join_community(req.target_id, req.user_id)
 
     await db.commit()
+    push_join_request_decision_message(req, target_name)
     return {"message": "Заявка одобрена, пользователь добавлен", "request": req.to_dict()}
 
 
@@ -116,5 +194,23 @@ async def decline_join_request(
         raise HTTPException(status_code=404, detail="Заявка не найдена")
 
     req.status = "declined"
+    target_name = "Чат"
+    if req.target_type == "group":
+        from app.services.group_service import GroupService
+        g = GroupService.get_group_by_id(req.target_id)
+        if g:
+            target_name = g.name
+    elif req.target_type == "channel":
+        from app.services.channel_service import ChannelService
+        ch = ChannelService.get_channel_by_id(req.target_id)
+        if ch:
+            target_name = ch.name
+    elif req.target_type == "community":
+        from app.services.community_service import CommunityService
+        c = CommunityService.get_by_id(req.target_id)
+        if c:
+            target_name = c.name
+
     await db.commit()
+    push_join_request_decision_message(req, target_name)
     return {"message": "Заявка отклонена", "request": req.to_dict()}

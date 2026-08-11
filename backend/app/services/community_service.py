@@ -28,7 +28,31 @@ class CommunityService:
         user = User.query.get(user_id)
         if not user:
             return []
-        return user.communities
+
+        communities_list = []
+        joined_ids = set()
+        for c in user.communities:
+            d = c.to_dict() if hasattr(c, "to_dict") else c
+            d["is_pending_approval"] = False
+            communities_list.append(d)
+            joined_ids.add(str(c.id))
+
+        try:
+            from app.models.join_request import JoinRequest
+            pending_reqs = JoinRequest.query.filter_by(user_id=user_id, target_type="community", status="pending").all()
+            for req in pending_reqs:
+                if str(req.target_id) not in joined_ids:
+                    c = Community.query.get(req.target_id)
+                    if c:
+                        d = c.to_dict() if hasattr(c, "to_dict") else c
+                        d["is_pending_approval"] = True
+                        d["join_request_id"] = req.id
+                        communities_list.append(d)
+                        joined_ids.add(str(c.id))
+        except Exception:
+            pass
+
+        return communities_list
 
     @staticmethod
     def get_by_id(community_id):
@@ -82,6 +106,11 @@ class CommunityService:
                 )
                 db.session.add(req)
                 db.session.commit()
+                try:
+                    from app.api.v1.join_requests import push_join_request_bot_message
+                    push_join_request_bot_message(req.id, community.owner_id, community.name, "community", user)
+                except Exception:
+                    pass
             return community, "pending_approval"
 
         try:

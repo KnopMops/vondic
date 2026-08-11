@@ -1963,6 +1963,10 @@ export default function MessengerPage() {
 
 	const openStandaloneChannel = useCallback(
 		(channel: Channel) => {
+			if ((channel as any)?.is_pending_approval) {
+				showToast('Заявка на вступление ожидает одобрения администратора', 'info')
+				return
+			}
 			setSelectedChannel(channel)
 			setSelectedFriend(null)
 			setSelectedGroup(null)
@@ -1979,7 +1983,7 @@ export default function MessengerPage() {
 				}
 			})
 		},
-		[getChannelInfo],
+		[getChannelInfo, showToast],
 	)
 
 	const handleCreateChannel = async (e: React.FormEvent) => {

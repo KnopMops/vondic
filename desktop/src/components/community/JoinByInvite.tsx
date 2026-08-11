@@ -73,8 +73,8 @@ export default function JoinByInvite({ kind, code }: Props) {
 					}
 					const data = await res.json()
 					if (data.status === 'pending_approval' || data.message?.includes('Заявка')) {
-						showToast('Заявка на вступление отправлена администраторам!', 'info')
-						setMessage('Заявка отправлена администраторам и ожидает одобрения.')
+						showToast('Вы отправили заявку на вступление', 'info')
+						setMessage('Вы отправили заявку на вступление. Ожидайте решения администратора.')
 						setStatus('done')
 						setTimeout(() => router.replace('/feed/messages'), 2500)
 						return
@@ -101,8 +101,8 @@ export default function JoinByInvite({ kind, code }: Props) {
 					}
 					const data = await res.json()
 					if (data.status === 'pending_approval' || data.message?.includes('Заявка')) {
-						showToast('Заявка на вступление отправлена администраторам!', 'info')
-						setMessage('Заявка отправлена администраторам и ожидает одобрения.')
+						showToast('Вы отправили заявку на вступление', 'info')
+						setMessage('Вы отправили заявку на вступление. Ожидайте решения администратора.')
 						setStatus('done')
 						setTimeout(() => router.replace('/feed/messages'), 2500)
 						return
@@ -128,8 +128,8 @@ export default function JoinByInvite({ kind, code }: Props) {
 				}
 				const data = await res.json()
 				if (data.status === 'pending_approval' || data.message?.includes('Заявка')) {
-					showToast('Заявка на вступление отправлена администраторам!', 'info')
-					setMessage('Заявка отправлена администраторам и ожидает одобрения.')
+					showToast('Вы отправили заявку на вступление', 'info')
+					setMessage('Вы отправили заявку на вступление. Ожидайте решения администратора.')
 					setStatus('done')
 					setTimeout(() => router.replace('/feed/messages'), 2500)
 					return

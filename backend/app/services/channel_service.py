@@ -92,6 +92,11 @@ class ChannelService:
                 )
                 db.session.add(req)
                 db.session.commit()
+                try:
+                    from app.api.v1.join_requests import push_join_request_bot_message
+                    push_join_request_bot_message(req.id, channel.owner_id, channel.name, "channel", user)
+                except Exception:
+                    pass
             return channel, "pending_approval"
 
         try:
@@ -111,7 +116,31 @@ class ChannelService:
         user = User.query.get(user_id)
         if not user:
             return []
-        return user.channels
+
+        channels_list = []
+        joined_ids = set()
+        for ch in user.channels:
+            d = ch.to_dict() if hasattr(ch, "to_dict") else ch
+            d["is_pending_approval"] = False
+            channels_list.append(d)
+            joined_ids.add(str(ch.id))
+
+        try:
+            from app.models.join_request import JoinRequest
+            pending_reqs = JoinRequest.query.filter_by(user_id=user_id, target_type="channel", status="pending").all()
+            for req in pending_reqs:
+                if str(req.target_id) not in joined_ids:
+                    ch = Channel.query.get(req.target_id)
+                    if ch:
+                        d = ch.to_dict() if hasattr(ch, "to_dict") else ch
+                        d["is_pending_approval"] = True
+                        d["join_request_id"] = req.id
+                        channels_list.append(d)
+                        joined_ids.add(str(ch.id))
+        except Exception:
+            pass
+
+        return channels_list
 
     @staticmethod
     def is_owner(channel_id, user_id):

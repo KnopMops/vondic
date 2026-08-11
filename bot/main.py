@@ -369,6 +369,31 @@ async def game_play(callback: CallbackQuery, bot: Bot, state: FSMContext):
     await safe_answer(bot, callback.id)
 
 
+# ── Join Requests ─────────────────────────────────────────────
+
+@dp.callback_query(lambda c: c.data and (c.data.startswith("join_approve:") or c.data.startswith("join_decline:")))
+async def handle_join_request_action(callback: CallbackQuery, bot: Bot):
+    action, req_id = callback.data.split(":", 1)
+    endpoint = f"{BACKEND_URL}/api/v1/join-requests/approve" if action == "join_approve" else f"{BACKEND_URL}/api/v1/join-requests/decline"
+    try:
+        resp = await http_post(
+            endpoint,
+            json={"request_id": req_id},
+            timeout=5,
+            headers=_bot_headers(),
+        )
+        if resp.status_code == 200:
+            msg = "✅ Заявка пользователя успешно одобрена!" if action == "join_approve" else "❌ Заявка пользователя отклонена."
+            await bot.send_message(str(callback.message.chat.id), msg)
+            await safe_answer(bot, callback.id, text=msg)
+        else:
+            err = resp.json().get("detail") if resp.status_code != 500 else "Ошибка обработки"
+            await safe_answer(bot, callback.id, text=f"⚠️ {err or 'Ошибка'}", show_alert=True)
+    except Exception as e:
+        logger.error("Error processing join request callback: %s", e)
+        await safe_answer(bot, callback.id, text="❌ Ошибка связи с сервером", show_alert=True)
+
+
 # ── Link Yandex ───────────────────────────────────────────────
 
 @dp.callback_query(lambda c: c.data == "link_yandex")

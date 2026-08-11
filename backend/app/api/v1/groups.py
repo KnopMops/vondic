@@ -56,7 +56,7 @@ async def join_group(
 @groups_router.post("/my")
 async def get_my_groups(current_user=Depends(get_current_user)):
     groups = GroupService.get_user_groups(current_user.id)
-    return {"groups": [g.to_dict() if hasattr(g, "to_dict") else g for g in groups]}
+    return {"groups": [g if isinstance(g, dict) else (g.to_dict() if hasattr(g, "to_dict") else g) for g in groups]}
 
 
 class GroupUpdateSchema(BaseModel):

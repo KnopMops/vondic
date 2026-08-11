@@ -51,6 +51,11 @@ class GroupService:
                 )
                 db.session.add(req)
                 db.session.commit()
+                try:
+                    from app.api.v1.join_requests import push_join_request_bot_message
+                    push_join_request_bot_message(req.id, group.owner_id, group.name, "group", user)
+                except Exception:
+                    pass
             return group, "pending_approval"
 
         try:
@@ -78,7 +83,30 @@ class GroupService:
         except Exception as e:
             print(f"Error ensuring AI chat: {e}")
 
-        return user.groups
+        groups_list = []
+        joined_ids = set()
+        for g in user.groups:
+            d = g.to_dict() if hasattr(g, "to_dict") else g
+            d["is_pending_approval"] = False
+            groups_list.append(d)
+            joined_ids.add(str(g.id))
+
+        try:
+            from app.models.join_request import JoinRequest
+            pending_reqs = JoinRequest.query.filter_by(user_id=user_id, target_type="group", status="pending").all()
+            for req in pending_reqs:
+                if str(req.target_id) not in joined_ids:
+                    g = Group.query.get(req.target_id)
+                    if g:
+                        d = g.to_dict() if hasattr(g, "to_dict") else g
+                        d["is_pending_approval"] = True
+                        d["join_request_id"] = req.id
+                        groups_list.append(d)
+                        joined_ids.add(str(g.id))
+        except Exception:
+            pass
+
+        return groups_list
 
     @staticmethod
     def add_participant(
