@@ -878,15 +878,26 @@ export class WebRTCService {
 		targetSocketId: string,
 		policy: 'all' | 'relay' = 'all',
 	): RTCPeerConnection {
-		// Always include public STUN servers so srflx candidates are gathered for external users
-		const publicStunServers: RTCIceServer[] = [
-			{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302', 'stun:webrtc.vondic.ru:3478', 'stun:vondic.ru:3478'] },
-		]
+		let iceServers = this.configuration.iceServers
 
-		let iceServers = [...publicStunServers, ...this.configuration.iceServers]
+		if (this.useInternalTurnOnly) {
+			iceServers = this.configuration.iceServers.filter(server => {
+				const urls = Array.isArray(server.urls) ? server.urls : [server.urls]
+				return urls.some(url =>
+					String(url).includes('turn:') || String(url).includes('turns:'),
+				)
+			})
+		} else {
+			const publicStunServers: RTCIceServer[] = [
+				{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302', 'stun:webrtc.vondic.ru:3478', 'stun:vondic.ru:3478', 'stun:95.165.96.208:3478'] },
+			]
+			iceServers = [...publicStunServers, ...this.configuration.iceServers]
+		}
 
 		const baseConfig: any = { iceServers }
-		if (policy === 'relay') baseConfig.iceTransportPolicy = 'relay'
+		if (policy === 'relay' || this.useInternalTurnOnly || this.forceRelay) {
+			baseConfig.iceTransportPolicy = 'relay'
+		}
 		const pc = new RTCPeerConnection(baseConfig)
 
 		// Add local AUDIO stream tracks (microphone)
@@ -920,7 +931,7 @@ export class WebRTCService {
 	createPeerConnection(targetSocketId: string): RTCPeerConnection {
 		return this.createPeerConnectionWithPolicy(
 			targetSocketId,
-			this.forceRelay ? 'relay' : 'all',
+			(this.forceRelay || this.useInternalTurnOnly) ? 'relay' : 'all',
 		)
 	}
 
@@ -1720,13 +1731,14 @@ export class WebRTCService {
 				console.error('[WebRTC] Error starting ICE test:', e)
 			}
 
-			// If no relay candidate after 3 seconds, continue with all configured ICE servers
+			// If no relay candidate after 3 seconds, set useInternalTurnOnly to force TURN relay via 192.168.140.11
 			setTimeout(() => {
 				if (!resolved) {
 					cleanup()
 					console.warn(
-						`[WebRTC] Таймаут TURN теста (3с), продолжение работы со всеми ICE серверами`,
+						`[WebRTC] Переключение на принудительный TURN relay (${this.internalTurnHostResolved})`,
 					)
+					this.useInternalTurnOnly = true
 					resolve()
 				}
 			}, 3000)
