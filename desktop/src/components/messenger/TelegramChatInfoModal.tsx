@@ -7,7 +7,7 @@ import {
 	LuBellOff as BellOffIcon,
 	LuSearch as SearchIcon,
 	LuPhone as PhoneIcon,
-	LuEdit3 as EditIcon,
+	LuPencil as EditIcon,
 	LuCopy as CopyIcon,
 	LuCheck as CheckIcon,
 	LuUsers as UsersIcon,
