@@ -3,6 +3,8 @@ import { getDiscordLikeAudioConstraints } from './AudioProcessor'
 
 /** Внутренний coturn (LAN). Переопределение: NEXT_PUBLIC_INTERNAL_TURN_HOST */
 const DEFAULT_INTERNAL_TURN_HOST = '192.168.140.11'
+const DEFAULT_TURN_USERNAME = 'vondic'
+const DEFAULT_TURN_PASSWORD = 'Dim4566212Len'
 
 export interface WebRTCConfig {
 	iceServers: RTCIceServer[]
@@ -22,8 +24,9 @@ export interface CallState {
 }
 
 export class WebRTCService {
-	private socket: Socket
-	private userId: string
+	public socket: Socket
+	public userId: string
+	public configuration: WebRTCConfig
 	private localStream: MediaStream | null = null
 	private videoStream: MediaStream | null = null
 	private screenStream: MediaStream | null = null
@@ -33,7 +36,6 @@ export class WebRTCService {
 	public peerConnections: Map<string, RTCPeerConnection> = new Map()
 	private iceCandidateQueue: Map<string, RTCIceCandidate[]> = new Map()
 	private incomingIceQueue: Map<string, RTCIceCandidateInit[]> = new Map()
-	private configuration: WebRTCConfig
 	private hasTurn: boolean = false
 	private forceRelay: boolean = false
 	private turnTested: boolean = false
@@ -59,134 +61,54 @@ export class WebRTCService {
 	constructor(socket: Socket, userId: string) {
 		this.socket = socket
 		this.userId = userId
+
+		const turnUser = (
+			typeof process !== 'undefined'
+				? (process.env.NEXT_PUBLIC_TURN_USERNAME as string | undefined)
+				: undefined
+		) || DEFAULT_TURN_USERNAME
+
+		const turnPass = (
+			typeof process !== 'undefined'
+				? (process.env.NEXT_PUBLIC_TURN_PASSWORD as string | undefined)
+				: undefined
+		) || DEFAULT_TURN_PASSWORD
+
+		const internalTurnHost = (
+			typeof process !== 'undefined'
+				? (process.env.NEXT_PUBLIC_INTERNAL_TURN_HOST as string | undefined)
+				: undefined
+		) || DEFAULT_INTERNAL_TURN_HOST
+
+		this.internalTurnHostResolved = internalTurnHost.trim()
+
+		// Always populate iceServers with STUN and TURN relay credentials so NAT traversal works for non-VPN users
 		this.configuration = {
 			iceServers: [
-				{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:webrtc.vondic.ru:3478', 'stun:vondic.ru:3478', 'stun:192.168.140.11:3478'] },
-			],
-		}
-		try {
-			console.log('[WebRTC] Проверка доступа к TURN…')
-			let turnUrl =
-				typeof process !== 'undefined'
-					? (process.env.NEXT_PUBLIC_TURN_URL as string | undefined)
-					: undefined
-			const turnUrlsEnv =
-				typeof process !== 'undefined'
-					? (process.env.NEXT_PUBLIC_TURN_URLS as string | undefined)
-					: undefined
-			const turnUser =
-				typeof process !== 'undefined'
-					? (process.env.NEXT_PUBLIC_TURN_USERNAME as string | undefined)
-					: undefined
-			const turnPass =
-				typeof process !== 'undefined'
-					? (process.env.NEXT_PUBLIC_TURN_PASSWORD as string | undefined)
-					: undefined
-
-			
-			const internalTurnHost =
-				typeof process !== 'undefined'
-					? (process.env.NEXT_PUBLIC_INTERNAL_TURN_HOST as string | undefined)
-					: undefined
-			this.internalTurnHostResolved = (
-				internalTurnHost ||
-				DEFAULT_INTERNAL_TURN_HOST
-			).trim()
-			const internalTurnUrls = [
-				`turn:${this.internalTurnHostResolved}:3478?transport=udp`,
-				`turn:${this.internalTurnHostResolved}:3478?transport=tcp`,
-			]
-			
-			const turnRawList: string[] = []
-			if (turnUrl) turnRawList.push(turnUrl)
-			if (turnUrlsEnv)
-				turnRawList.push(
-					...turnUrlsEnv
-						.split(/[,\s]+/)
-						.map(s => s.trim())
-						.filter(Boolean),
-				)
-			
-			// Add internal TURN as fallback
-			if (turnRawList.length && turnUser && turnPass) {
-				const urls: string[] = []
-				for (let u of turnRawList) {
-					u = u.trim()
-					if (!u) continue
-					if (u.startsWith('turn://')) u = 'turn:' + u.slice(7)
-					else if (u.startsWith('turns://')) u = 'turns:' + u.slice(8)
-					// Convert turns: on 3478 to plain turn: (port 3478 is raw TCP/UDP, 5349 is TLS)
-					if (u.startsWith('turns:') && u.includes(':3478')) {
-						u = 'turn:' + u.slice(6)
-					}
-					const hasTransport = /\?transport=(udp|tcp)$/i.test(u)
-					if (u.startsWith('turns:')) {
-						const v = hasTransport ? u : `${u}?transport=tcp`
-						urls.push(v)
-					} else {
-						if (hasTransport) {
-							urls.push(u)
-						} else {
-							const base = u.replace(/\?transport=(udp|tcp)$/i, '')
-							urls.push(`${base}?transport=udp`, `${base}?transport=tcp`)
-						}
-					}
-				}
-
-				// Always add domain TURN fallbacks as well
-				urls.push('turn:vondic.ru:3478?transport=udp', 'turn:vondic.ru:3478?transport=tcp')
-				urls.push('turn:webrtc.vondic.ru:3478?transport=udp', 'turn:webrtc.vondic.ru:3478?transport=tcp')
-
-				if (urls.length) {
-					// Add external TURN servers first
-					;(this.configuration.iceServers as RTCIceServer[]).push({
-						urls,
-						username: turnUser,
-						credential: turnPass,
-					} as any)
-					this.hasTurn = true
-					
-					// Add internal TURN (LAN) as fallback
-					;(this.configuration.iceServers as RTCIceServer[]).push({
-						urls: internalTurnUrls,
-						username: turnUser,
-						credential: turnPass,
-					} as any)
-
-					console.log(
-						`[WebRTC] TURN: внешний + internal fallback (${this.internalTurnHostResolved})`,
-					)
-				}
-			} else if (turnUser && turnPass) {
-				// Only internal TURN if no external configured
-				;(this.configuration.iceServers as RTCIceServer[]).push({
+				{
+					urls: [
+						'stun:stun.l.google.com:19302',
+						'stun:stun1.l.google.com:19302',
+						'stun:webrtc.vondic.ru:3478',
+						'stun:vondic.ru:3478',
+						`stun:${this.internalTurnHostResolved}:3478`,
+					],
+				},
+				{
 					urls: [
 						'turn:vondic.ru:3478?transport=udp',
 						'turn:vondic.ru:3478?transport=tcp',
-						...internalTurnUrls,
+						'turn:webrtc.vondic.ru:3478?transport=udp',
+						'turn:webrtc.vondic.ru:3478?transport=tcp',
+						`turn:${this.internalTurnHostResolved}:3478?transport=udp`,
+						`turn:${this.internalTurnHostResolved}:3478?transport=tcp`,
 					],
 					username: turnUser,
 					credential: turnPass,
-				} as any)
-				this.hasTurn = true
-				console.log(
-					`[WebRTC] Подключено к TURN (${this.internalTurnHostResolved})`,
-				)
-			}
-
-			const useExternalTurn =
-				turnRawList.length > 0 && Boolean(turnUser) && Boolean(turnPass)
-			if (useExternalTurn && this.hasTurn) {
-				queueMicrotask(() => {
-					void this.testTurnAndFallback().then(() => {
-						if (this.useInternalTurnOnly) {
-							console.log(
-								`[WebRTC] Подключено к internal TURN (${this.internalTurnHostResolved})`,
-							)
-						}
-					})
-				})
-			}			
+				},
+			],
+		}
+		this.hasTurn = true			
 			const fr =
 				typeof process !== 'undefined'
 					? (process.env.NEXT_PUBLIC_FORCE_RELAY as string | undefined)
