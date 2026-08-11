@@ -23,6 +23,10 @@ class ChannelUpdateSchema(BaseModel):
     type: Optional[str] = None
 
 
+class ChannelJoinSchema(BaseModel):
+    invite_code: str
+
+
 @channels_router.post("", status_code=status.HTTP_201_CREATED)
 @channels_router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_channel(
@@ -30,14 +34,20 @@ async def create_channel(
     current_user=Depends(get_current_user)
 ):
     try:
-        channel = ChannelService.create_channel(
-            owner_id=current_user.id,
-            name=payload.name,
-            description=payload.description,
-            avatar_url=payload.avatar_url,
-            channel_type=payload.type or "text"
+        channel, err = ChannelService.create_channel(
+            {
+                "name": payload.name,
+                "description": payload.description,
+                "avatar_url": payload.avatar_url,
+                "type": payload.type or "text",
+            },
+            current_user.id
         )
+        if err or not channel:
+            raise HTTPException(status_code=400, detail=err or "Failed to create channel")
         return {"channel": channel.to_dict() if hasattr(channel, "to_dict") else channel}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -56,6 +66,21 @@ async def list_channels(current_user=Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@channels_router.post("/join")
+async def join_channel_by_code(
+    payload: ChannelJoinSchema,
+    current_user=Depends(get_current_user)
+):
+    try:
+        channel, err = ChannelService.join_channel(payload.invite_code, current_user.id)
+        if err or not channel:
+            raise HTTPException(status_code=400, detail=err or "Failed to join channel")
+        return channel.to_dict() if hasattr(channel, "to_dict") else channel
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 
 @channels_router.get("/{channel_id}")
 @channels_router.post("/{channel_id}")
@@ -65,6 +90,20 @@ async def get_channel(channel_id: str, current_user=Depends(get_current_user)):
         if not channel:
             raise HTTPException(status_code=404, detail="Channel not found")
         return {"channel": channel.to_dict() if hasattr(channel, "to_dict") else channel}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@channels_router.get("/{channel_id}/invite")
+@channels_router.post("/{channel_id}/invite")
+async def get_channel_invite(channel_id: str, current_user=Depends(get_current_user)):
+    try:
+        invite_code, err = ChannelService.get_invite_code(channel_id)
+        if err or not invite_code:
+            raise HTTPException(status_code=404, detail=err or "Channel not found")
+        return {"invite_code": invite_code}
     except HTTPException:
         raise
     except Exception as e:
@@ -94,8 +133,12 @@ async def update_channel(
 ):
     try:
         data = payload.model_dump(exclude_unset=True)
-        channel = ChannelService.update_channel(channel_id, current_user.id, data)
+        channel, err = ChannelService.update_channel(channel_id, data)
+        if err or not channel:
+            raise HTTPException(status_code=400, detail=err or "Failed to update channel")
         return {"channel": channel.to_dict() if hasattr(channel, "to_dict") else channel}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -103,17 +146,25 @@ async def update_channel(
 @channels_router.delete("/{channel_id}")
 async def delete_channel(channel_id: str, current_user=Depends(get_current_user)):
     try:
-        ChannelService.delete_channel(channel_id, current_user.id)
+        _, err = ChannelService.delete_channel(channel_id, current_user.id)
+        if err:
+            raise HTTPException(status_code=400, detail=err)
         return {"message": "Channel deleted"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @channels_router.post("/{channel_id}/join")
-async def join_channel(channel_id: str, current_user=Depends(get_current_user)):
+async def join_channel_by_id(channel_id: str, current_user=Depends(get_current_user)):
     try:
-        ChannelService.add_subscriber(channel_id, current_user.id)
+        channel, err = ChannelService.join_channel(channel_id, current_user.id)
+        if err or not channel:
+            raise HTTPException(status_code=400, detail=err or "Failed to join channel")
         return {"message": "Joined channel"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -121,7 +172,11 @@ async def join_channel(channel_id: str, current_user=Depends(get_current_user)):
 @channels_router.post("/{channel_id}/leave")
 async def leave_channel(channel_id: str, current_user=Depends(get_current_user)):
     try:
-        ChannelService.remove_subscriber(channel_id, current_user.id)
+        channel, err = ChannelService.leave_channel(channel_id, current_user.id)
+        if err:
+            raise HTTPException(status_code=400, detail=err)
         return {"message": "Left channel"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

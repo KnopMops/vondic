@@ -17,7 +17,9 @@ class CommunityCreateSchema(BaseModel):
 
 
 class CommunityJoinSchema(BaseModel):
-    invite_code: str
+    invite_code: Optional[str] = None
+    code: Optional[str] = None
+    id: Optional[str] = None
 
 
 class ChannelCreateSchema(BaseModel):
@@ -50,7 +52,10 @@ async def join_community(
     payload: CommunityJoinSchema,
     current_user=Depends(get_current_user)
 ):
-    community, err = CommunityService.join_community(payload.invite_code, current_user.id)
+    code = payload.invite_code or payload.code or payload.id
+    if not code:
+        raise HTTPException(status_code=400, detail="invite_code is required")
+    community, err = CommunityService.join_community(code, current_user.id)
     if err or not community:
         raise HTTPException(status_code=400, detail=err or "Failed to join community")
     return {"community": community.to_dict() if hasattr(community, "to_dict") else community}
@@ -66,6 +71,18 @@ async def community_info(
     if not community:
         raise HTTPException(status_code=404, detail="Community not found")
     return {"community": community.to_dict() if hasattr(community, "to_dict") else community}
+
+
+@communities_router.get("/{community_id}/invite")
+@communities_router.post("/{community_id}/invite")
+async def get_community_invite(
+    community_id: str,
+    current_user=Depends(get_current_user)
+):
+    invite_code, err = CommunityService.get_invite_code(community_id)
+    if err or not invite_code:
+        raise HTTPException(status_code=404, detail=err or "Community not found")
+    return {"invite_code": invite_code}
 
 
 @communities_router.post("/{community_id}/channels/list")

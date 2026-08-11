@@ -144,7 +144,7 @@ export default function TelegramChatInfoModal({
 
 	const getInviteLink = () => {
 		if (chatType === 'direct') return null
-		const codeOrId = data?.invite_code || data?.code || data?.id
+		const codeOrId = data?.invite_code || data?.inviteCode || data?.code || data?.id
 		if (!codeOrId || codeOrId === 'undefined') return null
 
 		if (chatType === 'community') {

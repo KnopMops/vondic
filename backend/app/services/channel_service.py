@@ -55,6 +55,20 @@ class ChannelService:
         return channel
 
     @staticmethod
+    def get_invite_code(channel_id):
+        channel = Channel.query.get(channel_id)
+        if not channel:
+            return None, "Channel not found"
+        if not channel.invite_code:
+            import uuid
+            channel.invite_code = str(uuid.uuid4())[:8]
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+        return channel.invite_code, None
+
+    @staticmethod
     def join_channel(invite_code, user_id):
         channel = ChannelService.resolve_channel(invite_code)
         if not channel:

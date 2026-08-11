@@ -45,6 +45,20 @@ class CommunityService:
         return community
 
     @staticmethod
+    def get_invite_code(community_id):
+        community = Community.query.get(community_id)
+        if not community:
+            return None, "Community not found"
+        if not community.invite_code:
+            import uuid
+            community.invite_code = str(uuid.uuid4())[:8]
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+        return community.invite_code, None
+
+    @staticmethod
     def join_community(invite_code, user_id):
         community = CommunityService.resolve_community(invite_code)
         if not community:
