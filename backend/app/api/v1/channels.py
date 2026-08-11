@@ -58,12 +58,28 @@ async def list_channels(current_user=Depends(get_current_user)):
 
 
 @channels_router.get("/{channel_id}")
+@channels_router.post("/{channel_id}")
 async def get_channel(channel_id: str, current_user=Depends(get_current_user)):
     try:
         channel = ChannelService.get_channel_by_id(channel_id)
         if not channel:
             raise HTTPException(status_code=404, detail="Channel not found")
         return {"channel": channel.to_dict() if hasattr(channel, "to_dict") else channel}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@channels_router.get("/{channel_id}/participants")
+@channels_router.post("/{channel_id}/participants")
+async def get_channel_participants(channel_id: str, current_user=Depends(get_current_user)):
+    try:
+        channel = ChannelService.get_channel_by_id(channel_id)
+        if not channel:
+            raise HTTPException(status_code=404, detail="Channel not found")
+        participants = getattr(channel, "participants", [])
+        return [p.to_dict() if hasattr(p, "to_dict") else p for p in participants]
     except HTTPException:
         raise
     except Exception as e:

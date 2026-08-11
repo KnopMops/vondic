@@ -200,6 +200,32 @@ export const useChannels = () => {
 		[token],
 	)
 
+	const leaveChannel = useCallback(
+		async (channelId: string) => {
+			if (!token) return
+			setIsLoading(true)
+			setError(null)
+			try {
+				const res = await fetch(`/api/v1/channels/${channelId}/leave`, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						'Authorization': `Bearer ${token}`,
+					},
+					body: JSON.stringify({ access_token: token }),
+				})
+				if (!res.ok) throw new Error('Failed to leave channel')
+				setChannels(prev => prev.filter(c => c.id !== channelId))
+			} catch (err: any) {
+				setError(err.message)
+				throw err
+			} finally {
+				setIsLoading(false)
+			}
+		},
+		[token],
+	)
+
 	return {
 		channels,
 		isLoading,
@@ -211,5 +237,6 @@ export const useChannels = () => {
 		getChannelParticipants,
 		searchChannels,
 		updateChannel,
+		leaveChannel,
 	}
 }

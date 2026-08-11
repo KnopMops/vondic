@@ -1214,6 +1214,7 @@ export default function MessengerPage() {
 		getChannelParticipants,
 		searchChannels,
 		updateChannel,
+		leaveChannel,
 	} = useChannels()
 	const { showToast } = useToast()
 	const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null)
