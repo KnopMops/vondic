@@ -1097,6 +1097,7 @@ export default function MessengerPage() {
 		groups,
 		fetchMyGroups,
 		createGroup,
+		updateGroup,
 		addParticipant,
 		getGroupParticipants,
 		getGroupDetails,
