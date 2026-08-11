@@ -98,3 +98,28 @@ async def verify_bot(
     await db.commit()
     return {"ok": True, "is_verified": bot.is_verified}
 
+
+from app.api.public.v1.bots import (
+    push_bot_update,
+    get_bot_updates,
+    send_bot_message,
+    get_bot_outbox,
+)
+
+@bots_router.post("/{bot_id}/updates/push")
+async def push_update_alias(bot_id: str, payload: dict):
+    return await push_bot_update(bot_id, payload)
+
+@bots_router.get("/{bot_id}/updates")
+async def get_updates_alias(bot_id: str, offset: int = Query(0), limit: int = Query(100), timeout: int = Query(2)):
+    return await get_bot_updates(bot_id, offset, limit, timeout)
+
+@bots_router.post("/{bot_id}/send_message")
+@bots_router.post("/{bot_id}/send-message")
+async def send_message_alias(bot_id: str, payload: dict):
+    return await send_bot_message(bot_id, payload)
+
+@bots_router.get("/{bot_id}/outbox")
+async def get_outbox_alias(bot_id: str, chat_id: str = Query(...)):
+    return await get_bot_outbox(bot_id, chat_id)
+

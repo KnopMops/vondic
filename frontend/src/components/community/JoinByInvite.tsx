@@ -71,7 +71,15 @@ export default function JoinByInvite({ kind, code }: Props) {
 						const err = await res.json().catch(() => ({}))
 						throw new Error(err.error || 'Не удалось вступить в сервер')
 					}
-					const community = await res.json()
+					const data = await res.json()
+					if (data.status === 'pending_approval' || data.message?.includes('Заявка')) {
+						showToast('Заявка на вступление отправлена администраторам!', 'info')
+						setMessage('Заявка отправлена администраторам и ожидает одобрения.')
+						setStatus('done')
+						setTimeout(() => router.replace('/feed/messages'), 2500)
+						return
+					}
+					const community = data.community || data
 					showToast('Добро пожаловать на сервер!', 'success')
 					router.replace(messengerServerPath(community.id))
 					setStatus('done')
@@ -91,7 +99,15 @@ export default function JoinByInvite({ kind, code }: Props) {
 						const err = await res.json().catch(() => ({}))
 						throw new Error(err.error || 'Не удалось вступить в группу')
 					}
-					const group = await res.json()
+					const data = await res.json()
+					if (data.status === 'pending_approval' || data.message?.includes('Заявка')) {
+						showToast('Заявка на вступление отправлена администраторам!', 'info')
+						setMessage('Заявка отправлена администраторам и ожидает одобрения.')
+						setStatus('done')
+						setTimeout(() => router.replace('/feed/messages'), 2500)
+						return
+					}
+					const group = data.group || data
 					showToast('Вы вступили в группу', 'success')
 					router.replace(messengerGroupPath(group.id))
 					setStatus('done')
@@ -110,7 +126,15 @@ export default function JoinByInvite({ kind, code }: Props) {
 					const err = await res.json().catch(() => ({}))
 					throw new Error(err.error || 'Не удалось вступить в канал')
 				}
-				const channel = await res.json()
+				const data = await res.json()
+				if (data.status === 'pending_approval' || data.message?.includes('Заявка')) {
+					showToast('Заявка на вступление отправлена администраторам!', 'info')
+					setMessage('Заявка отправлена администраторам и ожидает одобрения.')
+					setStatus('done')
+					setTimeout(() => router.replace('/feed/messages'), 2500)
+					return
+				}
+				const channel = data.channel || data
 				showToast('Вы вступили в канал', 'success')
 				router.replace(messengerChannelPath(channel.id))
 				setStatus('done')

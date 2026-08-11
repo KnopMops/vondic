@@ -29,6 +29,8 @@ class GroupService:
     def join_group(invite_code, user_id):
         group = Group.query.filter_by(invite_code=invite_code).first()
         if not group:
+            group = Group.query.get(invite_code)
+        if not group:
             return None, "Invalid invite code"
 
         user = User.query.get(user_id)
@@ -36,7 +38,20 @@ class GroupService:
             return None, "User not found"
 
         if user in group.participants:
-            return None, "Already a participant"
+            return group, None
+
+        if getattr(group, "require_approval", False) and str(group.owner_id) != str(user_id):
+            from app.models.join_request import JoinRequest
+            existing = JoinRequest.query.filter_by(
+                target_type="group", target_id=group.id, user_id=user_id, status="pending"
+            ).first()
+            if not existing:
+                req = JoinRequest(
+                    target_type="group", target_id=group.id, user_id=user_id, status="pending"
+                )
+                db.session.add(req)
+                db.session.commit()
+            return group, "pending_approval"
 
         try:
             group.participants.append(user)

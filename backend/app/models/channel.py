@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Table, Column, ForeignKey, TEXT, TIMESTAMP, CheckConstraint
+from sqlalchemy import Table, Column, ForeignKey, TEXT, TIMESTAMP, CheckConstraint, Boolean
 from sqlalchemy.orm import relationship, backref
 
 from app.core.database import Base
@@ -26,6 +26,7 @@ class Channel(Base):
         TEXT, unique=True, default=lambda: str(uuid.uuid4())[:8])
     owner_id = Column(TEXT, ForeignKey("users.id"), nullable=False)
     type = Column(TEXT, nullable=False, default="text")
+    require_approval = Column(Boolean, default=False)
 
     created_at = Column(TIMESTAMP, default=datetime.utcnow)
     updated_at = Column(
@@ -62,6 +63,7 @@ class Channel(Base):
             "invite_code": self.invite_code,
             "owner_id": self.owner_id,
             "type": self.type,
+            "require_approval": bool(getattr(self, "require_approval", False)),
             "community_id": self.community_channel.community_id if self.community_channel else None,
             "participants_count": len(self.participants or []),
             "created_at": self.created_at.isoformat() if self.created_at else None,

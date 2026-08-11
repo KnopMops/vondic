@@ -81,6 +81,19 @@ class ChannelService:
         if user in channel.participants:
             return channel, None
 
+        if getattr(channel, "require_approval", False) and str(channel.owner_id) != str(user_id):
+            from app.models.join_request import JoinRequest
+            existing = JoinRequest.query.filter_by(
+                target_type="channel", target_id=channel.id, user_id=user_id, status="pending"
+            ).first()
+            if not existing:
+                req = JoinRequest(
+                    target_type="channel", target_id=channel.id, user_id=user_id, status="pending"
+                )
+                db.session.add(req)
+                db.session.commit()
+            return channel, "pending_approval"
+
         try:
             channel.participants.append(user)
             db.session.commit()
@@ -120,6 +133,8 @@ class ChannelService:
             channel.avatar_url = data["avatar_url"]
         if data.get("type") is not None:
             channel.type = data["type"]
+        if data.get("require_approval") is not None:
+            channel.require_approval = bool(data["require_approval"])
         try:
             db.session.commit()
             return channel, None

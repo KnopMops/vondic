@@ -71,6 +71,19 @@ class CommunityService:
         if user in community.members:
             return community, None
 
+        if getattr(community, "require_approval", False) and str(community.owner_id) != str(user_id):
+            from app.models.join_request import JoinRequest
+            existing = JoinRequest.query.filter_by(
+                target_type="community", target_id=community.id, user_id=user_id, status="pending"
+            ).first()
+            if not existing:
+                req = JoinRequest(
+                    target_type="community", target_id=community.id, user_id=user_id, status="pending"
+                )
+                db.session.add(req)
+                db.session.commit()
+            return community, "pending_approval"
+
         try:
             community.members.append(user)
             db.session.flush()
@@ -95,6 +108,8 @@ class CommunityService:
             community.description = data["description"]
         if data.get("avatar_url") is not None:
             community.avatar_url = data["avatar_url"]
+        if data.get("require_approval") is not None:
+            community.require_approval = bool(data["require_approval"])
         try:
             db.session.commit()
             return community, None
