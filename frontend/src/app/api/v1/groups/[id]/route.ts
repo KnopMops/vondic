@@ -13,7 +13,7 @@ async function handleProxy(req: NextRequest, { params }: { params: Promise<{ id:
     } catch (e) {}
 
     return await withAccessTokenRefresh(req, async token => {
-      const response = await fetch(`${backendUrl}/api/v1/communities/${id}`, {
+      const response = await fetch(`${backendUrl}/api/v1/groups/${id}`, {
         method: req.method,
         headers: {
           'Content-Type': 'application/json',
@@ -25,7 +25,7 @@ async function handleProxy(req: NextRequest, { params }: { params: Promise<{ id:
       if (!response.ok) {
         const errorText = await response.text()
         return NextResponse.json(
-          { error: 'Failed community operation', details: errorText },
+          { error: 'Failed group operation', details: errorText },
           { status: response.status },
         )
       }
@@ -34,7 +34,7 @@ async function handleProxy(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json(data)
     })
   } catch (error) {
-    console.error('Community proxy error:', error)
+    console.error('Group proxy error:', error)
     return NextResponse.json(
       { error: 'Internal Server Error' },
       { status: 500 },

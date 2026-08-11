@@ -468,12 +468,44 @@ export default function TelegramChatInfoModal({
 											<div className="text-sm font-medium text-[#2481cc] truncate">
 												{getInviteLink()}
 											</div>
-											<div className="text-xs text-gray-500">Ссылка для приглашения</div>
+											<div className="text-xs text-gray-500">Пригласительная ссылка</div>
 										</div>
 										{copiedField === 'ссылку' ? (
 											<CheckIcon className="w-4 h-4 text-emerald-400 shrink-0" />
 										) : (
 											<CopyIcon className="w-4 h-4 text-gray-500 hover:text-gray-300 shrink-0" />
+										)}
+									</div>
+								)}
+
+								{(chatType === 'group' || chatType === 'channel' || chatType === 'community') && (
+									<div className="p-3.5 bg-[#0e1621]/60 rounded-2xl border border-white/5 flex items-center justify-between">
+										<div className="flex items-center gap-3">
+											<div className="p-2 rounded-xl bg-[#2481cc]/15 text-[#2481cc]">
+												<LockIcon className="w-4 h-4" />
+											</div>
+											<div>
+												<div className="text-sm font-medium text-gray-200">Вход по заявке</div>
+												<div className="text-xs text-gray-500">
+													{data?.require_approval ? 'Включен (админ одобряет заявки)' : 'Выключен (вход по ссылке)'}
+												</div>
+											</div>
+										</div>
+										{isOwner && onUpdateChat && (
+											<input
+												type="checkbox"
+												checked={!!data?.require_approval}
+												onChange={async (e) => {
+													const checked = e.target.checked
+													try {
+														await onUpdateChat({ require_approval: checked })
+														showToast(checked ? 'Вход по заявке включен' : 'Вход по заявке выключен', 'success')
+													} catch (err: any) {
+														showToast(err.message || 'Ошибка сохранения', 'error')
+													}
+												}}
+												className="w-5 h-5 accent-[#2481cc] rounded cursor-pointer"
+											/>
 										)}
 									</div>
 								)}

@@ -8608,6 +8608,8 @@ export default function MessengerPage() {
 								await updateChannel(telegramChatInfoData.data.id, updatedData)
 							} else if (telegramChatInfoData.type === 'community') {
 								await updateCommunity(telegramChatInfoData.data.id, updatedData)
+							} else if (telegramChatInfoData.type === 'group') {
+								await updateGroup(telegramChatInfoData.data.id, updatedData)
 							}
 						}}
 						onLeaveChat={() => {

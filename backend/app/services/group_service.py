@@ -37,10 +37,7 @@ class GroupService:
         if not user:
             return None, "User not found"
 
-        if user in group.participants:
-            return group, None
-
-        if getattr(group, "require_approval", False) and str(group.owner_id) != str(user_id):
+        if bool(getattr(group, "require_approval", False)) and str(group.owner_id) != str(user_id):
             from app.models.join_request import JoinRequest
             existing = JoinRequest.query.filter_by(
                 target_type="group", target_id=group.id, user_id=user_id, status="pending"
@@ -57,6 +54,9 @@ class GroupService:
                 except Exception:
                     pass
             return group, "pending_approval"
+
+        if user in group.participants:
+            return group, None
 
         try:
             group.participants.append(user)

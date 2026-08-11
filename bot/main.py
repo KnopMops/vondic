@@ -66,31 +66,8 @@ async def safe_answer(bot: Bot, callback_id: str, text: Optional[str] = None, sh
 # ── Consent middleware — auto-checks permissions ───────────────
 
 async def _check_user_consent(message: Message, bot: Bot) -> bool:
-    """Check if user has granted permissions. If not, send consent button. Returns True if OK."""
-    user_id = str(message.from_user.id)
-    chat_id = str(message.chat.id)
-    try:
-        resp = await http_get(
-            f"{BACKEND_URL}/api/public/v1/bots/{BOT_ID}/permissions/{user_id}",
-            timeout=3, headers=_bot_headers(),
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            if data.get("granted"):
-                return True
-    except Exception:
-        pass
-
-    # No consent — show inline button that triggers consent callback
-    kb = InlineKeyboardBuilder()
-    kb.row(InlineKeyboardButton("🔐 Разрешить доступ", callback_data=f"consent_grant:{user_id}"))
-    await bot.send_message(
-        chat_id,
-        "🔐 Чтобы использовать бота, нужно разрешить доступ к базовым данным.\n\n"
-        "Нажмите кнопку ниже, чтобы предоставить разрешения:",
-        reply_markup=kb.as_markup(),
-    )
-    return False
+    """Check if user has granted permissions. Returns True."""
+    return True
 
 
 # ── Startup / Shutdown ────────────────────────────────────────

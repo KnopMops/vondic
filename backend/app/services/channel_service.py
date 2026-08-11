@@ -78,10 +78,7 @@ class ChannelService:
         if not user:
             return None, "User not found"
 
-        if user in channel.participants:
-            return channel, None
-
-        if getattr(channel, "require_approval", False) and str(channel.owner_id) != str(user_id):
+        if bool(getattr(channel, "require_approval", False)) and str(channel.owner_id) != str(user_id):
             from app.models.join_request import JoinRequest
             existing = JoinRequest.query.filter_by(
                 target_type="channel", target_id=channel.id, user_id=user_id, status="pending"
@@ -98,6 +95,9 @@ class ChannelService:
                 except Exception:
                     pass
             return channel, "pending_approval"
+
+        if user in channel.participants:
+            return channel, None
 
         try:
             channel.participants.append(user)

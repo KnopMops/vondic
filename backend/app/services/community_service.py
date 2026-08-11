@@ -92,10 +92,7 @@ class CommunityService:
         if not user:
             return None, "User not found"
 
-        if user in community.members:
-            return community, None
-
-        if getattr(community, "require_approval", False) and str(community.owner_id) != str(user_id):
+        if bool(getattr(community, "require_approval", False)) and str(community.owner_id) != str(user_id):
             from app.models.join_request import JoinRequest
             existing = JoinRequest.query.filter_by(
                 target_type="community", target_id=community.id, user_id=user_id, status="pending"
@@ -112,6 +109,9 @@ class CommunityService:
                 except Exception:
                     pass
             return community, "pending_approval"
+
+        if user in community.members:
+            return community, None
 
         try:
             community.members.append(user)

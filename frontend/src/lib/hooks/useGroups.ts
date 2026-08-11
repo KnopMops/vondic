@@ -173,6 +173,7 @@ export const useGroups = () => {
 		error,
 		fetchMyGroups,
 		createGroup,
+		updateGroup,
 		addParticipant,
 		getGroupParticipants,
 		getGroupDetails,
