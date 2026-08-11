@@ -132,6 +132,32 @@ class ChannelService:
             return None, str(e)
 
     @staticmethod
+    def delete_channel(channel_id, user_id):
+        channel = Channel.query.get(channel_id)
+        if not channel:
+            return None, "Channel not found"
+        user = User.query.get(user_id)
+        if not user:
+            return None, "User not found"
+        if str(channel.owner_id) != str(user_id):
+            return None, "Unauthorized"
+        try:
+            db.session.delete(channel)
+            db.session.commit()
+            return True, None
+        except Exception as e:
+            db.session.rollback()
+            return None, str(e)
+
+    @staticmethod
+    def add_subscriber(channel_id_or_code, user_id):
+        return ChannelService.join_channel(channel_id_or_code, user_id)
+
+    @staticmethod
+    def remove_subscriber(channel_id, user_id):
+        return ChannelService.leave_channel(channel_id, user_id)
+
+    @staticmethod
     def search_channels(query, user_id):
         user = User.query.get(user_id)
         if not user:

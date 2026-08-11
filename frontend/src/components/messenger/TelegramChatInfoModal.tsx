@@ -148,9 +148,19 @@ export default function TelegramChatInfoModal({
 
 	const getInviteLink = () => {
 		if (chatType === 'direct') return null
-		if (data?.invite_code) return `https://vondic.ru/join/${data.invite_code}`
-		if (data?.id) return `https://vondic.ru/join/${data.id}`
-		return null
+		const codeOrId = data?.invite_code || data?.code || data?.id
+		if (!codeOrId || codeOrId === 'undefined') return null
+
+		if (chatType === 'community') {
+			return `https://vondic.ru/feed/communities/join/${codeOrId}`
+		}
+		if (chatType === 'channel') {
+			return `https://vondic.ru/feed/messages/join/channel/${codeOrId}`
+		}
+		if (chatType === 'group') {
+			return `https://vondic.ru/feed/messages/join/group/${codeOrId}`
+		}
+		return `https://vondic.ru/feed/messages/join/${codeOrId}`
 	}
 
 	// Filter Media Items (Images/Videos)
