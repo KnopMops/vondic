@@ -108,18 +108,17 @@ export class WebRTCService {
 				},
 			],
 		}
-		this.hasTurn = true			
-			const fr =
-				typeof process !== 'undefined'
-					? (process.env.NEXT_PUBLIC_FORCE_RELAY as string | undefined)
-					: undefined
-			this.forceRelay = fr === 'true'
-			if (this.forceRelay && !this.hasTurn) {
-				console.warn(
-					'[WebRTC] FORCE_RELAY enabled but no TURN credentials provided; ICE may stay in "new"',
-				)
-			}
-		} catch {}
+		this.hasTurn = true
+		const fr =
+			typeof process !== 'undefined'
+				? (process.env.NEXT_PUBLIC_FORCE_RELAY as string | undefined)
+				: undefined
+		this.forceRelay = fr === 'true'
+		if (this.forceRelay && !this.hasTurn) {
+			console.warn(
+				'[WebRTC] FORCE_RELAY enabled but no TURN credentials provided; ICE may stay in "new"',
+			)
+		}
 	}
 
 	async initializeLocalStream(): Promise<MediaStream> {
