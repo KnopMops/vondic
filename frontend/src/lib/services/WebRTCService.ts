@@ -955,21 +955,12 @@ export class WebRTCService {
 		targetSocketId: string,
 		policy: 'all' | 'relay' = 'all',
 	): RTCPeerConnection {
-		// Use internal TURN only if external failed
-		let iceServers = this.configuration.iceServers
+		// Always include public STUN servers so srflx candidates are gathered for external users
+		const publicStunServers: RTCIceServer[] = [
+			{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302', 'stun:webrtc.vondic.ru:3478', 'stun:vondic.ru:3478'] },
+		]
 
-		if (this.useInternalTurnOnly) {
-			// Только internal TURN (LAN)
-			iceServers = this.configuration.iceServers.filter(server => {
-				const urls = Array.isArray(server.urls) ? server.urls : [server.urls]
-				return urls.some(url =>
-					String(url).includes(this.internalTurnHostResolved),
-				)
-			})
-			console.log(
-				`[WebRTC] Используется только internal TURN (${this.internalTurnHostResolved})`,
-			)
-		}
+		let iceServers = [...publicStunServers, ...this.configuration.iceServers]
 
 		const baseConfig: any = { iceServers }
 		if (policy === 'relay') baseConfig.iceTransportPolicy = 'relay'
