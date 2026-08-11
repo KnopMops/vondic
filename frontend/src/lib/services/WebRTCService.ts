@@ -115,6 +115,10 @@ export class WebRTCService {
 					if (!u) continue
 					if (u.startsWith('turn://')) u = 'turn:' + u.slice(7)
 					else if (u.startsWith('turns://')) u = 'turns:' + u.slice(8)
+					// Convert turns: on 3478 to plain turn: (port 3478 is raw TCP/UDP, 5349 is TLS)
+					if (u.startsWith('turns:') && u.includes(':3478')) {
+						u = 'turn:' + u.slice(6)
+					}
 					const hasTransport = /\?transport=(udp|tcp)$/i.test(u)
 					if (u.startsWith('turns:')) {
 						const v = hasTransport ? u : `${u}?transport=tcp`
@@ -128,6 +132,11 @@ export class WebRTCService {
 						}
 					}
 				}
+
+				// Always add domain TURN fallbacks as well
+				urls.push('turn:vondic.ru:3478?transport=udp', 'turn:vondic.ru:3478?transport=tcp')
+				urls.push('turn:webrtc.vondic.ru:3478?transport=udp', 'turn:webrtc.vondic.ru:3478?transport=tcp')
+
 				if (urls.length) {
 					// Add external TURN servers first
 					;(this.configuration.iceServers as RTCIceServer[]).push({
@@ -151,13 +160,17 @@ export class WebRTCService {
 			} else if (turnUser && turnPass) {
 				// Only internal TURN if no external configured
 				;(this.configuration.iceServers as RTCIceServer[]).push({
-					urls: internalTurnUrls,
+					urls: [
+						'turn:vondic.ru:3478?transport=udp',
+						'turn:vondic.ru:3478?transport=tcp',
+						...internalTurnUrls,
+					],
 					username: turnUser,
 					credential: turnPass,
 				} as any)
 				this.hasTurn = true
 				console.log(
-					`[WebRTC] Подключено к internal TURN (${this.internalTurnHostResolved})`,
+					`[WebRTC] Подключено к TURN (${this.internalTurnHostResolved})`,
 				)
 			}
 
@@ -1788,9 +1801,8 @@ export class WebRTCService {
 					if (!relayGathered && !resolved) {
 						cleanup()
 						console.warn(
-							`[WebRTC] Внешний TURN недоступен (нет relay-кандидатов), переключение на internal (${this.internalTurnHostResolved})`,
+							`[WebRTC] Внешний TURN тест завершен`,
 						)
-						this.useInternalTurnOnly = true
 						resolve()
 					}
 				}
@@ -1808,14 +1820,13 @@ export class WebRTCService {
 				console.error('[WebRTC] Error starting ICE test:', e)
 			}
 
-			// If no relay candidate after 3 seconds, fallback to internal TURN
+			// If no relay candidate after 3 seconds, continue with all configured ICE servers
 			setTimeout(() => {
 				if (!resolved) {
 					cleanup()
 					console.warn(
-						`[WebRTC] Таймаут TURN (3с), переключение на internal (${this.internalTurnHostResolved})`,
+						`[WebRTC] Таймаут TURN теста (3с), продолжение работы со всеми ICE серверами`,
 					)
-					this.useInternalTurnOnly = true
 					resolve()
 				}
 			}, 3000)
