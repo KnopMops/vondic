@@ -106,6 +106,7 @@ import {
 	LuSearch as Search,
 	LuSend as Send,
 	LuServer as Server,
+	LuRadio as RadioIcon,
 	LuSmile as Smile,
 	LuSticker as Sticker,
 	LuSquare as Stop,
@@ -128,6 +129,7 @@ import MessageBubble from './MessageBubble'
 import ScheduleMessageModal from './ScheduleMessageModal'
 import GroupInfoPanel from './GroupInfoPanel'
 import ProfileModal from '@/components/messenger/ProfileModal'
+import TelegramChatInfoModal from '@/components/messenger/TelegramChatInfoModal'
 
 const formatLastSeen = (
 	lastSeen?: string | Date,
@@ -760,6 +762,8 @@ export default function MessengerPage() {
 	const [selectedUserForModal, setSelectedUserForModal] = useState<User | null>(
 		null,
 	)
+	const [isTelegramChatInfoOpen, setIsTelegramChatInfoOpen] = useState(false)
+	const [telegramChatInfoData, setTelegramChatInfoData] = useState<{ type: 'direct' | 'group' | 'channel' | 'community'; data: any } | null>(null)
 	const [ragMessages, setRagMessages] = useState<
 		{
 			id: number
@@ -6911,8 +6915,8 @@ export default function MessengerPage() {
 													<div
 														className='relative cursor-pointer hover:opacity-80 transition-opacity'
 														onClick={() => {
-															setSelectedUserForModal(selectedFriend)
-															setIsUserProfileModalOpen(true)
+															setTelegramChatInfoData({ type: 'direct', data: selectedFriend })
+															setIsTelegramChatInfoOpen(true)
 														}}
 													>
 														<img
@@ -6927,11 +6931,11 @@ export default function MessengerPage() {
 													</div>
 													<button
 														onClick={() => {
-															setSelectedUserForModal(selectedFriend)
-															setIsUserProfileModalOpen(true)
+															setTelegramChatInfoData({ type: 'direct', data: selectedFriend })
+															setIsTelegramChatInfoOpen(true)
 														}}
 														className='flex flex-col text-left hover:bg-white/5 rounded-lg p-2 -ml-2 transition-colors'
-														title='Профиль'
+														title='Информация о чате'
 													>
 														<span className='font-bold text-[var(--app-fg)] text-base leading-tight flex items-center gap-2'>
 															{selectedFriend.username}
@@ -6982,11 +6986,10 @@ export default function MessengerPage() {
 												<>
 													<div
 														className='relative cursor-pointer hover:opacity-80 transition-opacity'
-														onClick={() =>
-															isStandaloneChannel
-																? setIsChannelInfoOpen(true)
-																: undefined
-														}
+														onClick={() => {
+															setTelegramChatInfoData({ type: 'channel', data: selectedChannel })
+															setIsTelegramChatInfoOpen(true)
+														}}
 													>
 														{isStandaloneChannel && selectedChannel.avatar_url ? (
 															<img
@@ -6996,14 +6999,17 @@ export default function MessengerPage() {
 															/>
 														) : (
 															<div className='w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center ring-2 ring-gray-800/50'>
-																<HashIcon className='w-5 h-5 text-gray-400' />
+																<RadioIcon className='w-5 h-5 text-sky-400' />
 															</div>
 														)}
 													</div>
 													<button
-														onClick={() => setIsSettingsOpen(true)}
+														onClick={() => {
+															setTelegramChatInfoData({ type: 'channel', data: selectedChannel })
+															setIsTelegramChatInfoOpen(true)
+														}}
 														className='flex flex-col text-left hover:bg-gray-800/50 rounded-lg p-2 -ml-2 transition-colors'
-														title='Настройки чата'
+														title='Информация о канале'
 													>
 														<span className='font-bold text-white text-base leading-tight flex items-center gap-2'>
 															{selectedChannel.name}
@@ -7018,21 +7024,15 @@ export default function MessengerPage() {
 																: 'Канал сервера'}
 														</span>
 													</button>
-													{isStandaloneChannel && (
-														<button
-															onClick={() => setIsChannelInfoOpen(true)}
-															className='ml-2 p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors'
-															title='Информация о канале'
-														>
-															<InfoIcon className='w-4 h-4' />
-														</button>
-													)}
 												</>
 											) : selectedGroup ? (
 												<>
 													<div
 														className='relative cursor-pointer hover:opacity-80 transition-opacity'
-														onClick={() => setIsGroupInfoOpen(prev => !prev)}
+														onClick={() => {
+															setTelegramChatInfoData({ type: 'group', data: selectedGroup })
+															setIsTelegramChatInfoOpen(true)
+														}}
 													>
 														{selectedGroup.avatar_url ? (
 															<img
@@ -7047,9 +7047,12 @@ export default function MessengerPage() {
 														)}
 													</div>
 													<button
-														onClick={() => setIsSettingsOpen(true)}
+														onClick={() => {
+															setTelegramChatInfoData({ type: 'group', data: selectedGroup })
+															setIsTelegramChatInfoOpen(true)
+														}}
 														className='flex flex-col text-left hover:bg-gray-800/50 rounded-lg p-2 -ml-2 transition-colors'
-														title='Настройки чата'
+														title='Информация о группе'
 													>
 														<span className='font-bold text-white text-base leading-tight flex items-center gap-2'>
 															{selectedGroup.name}
@@ -9205,6 +9208,42 @@ export default function MessengerPage() {
 					onOpenSettings={() => { setIsUserProfileModalOpen(false); setIsSettingsOpen(true) }}
 					onDeleteHistory={() => { setIsUserProfileModalOpen(false); setDeleteHistoryModalOpen(true) }}
 					onDiscovery={() => { setIsUserProfileModalOpen(false); setIsDiscoveryOpen(true) }}
+				/>
+			)}
+
+			{isTelegramChatInfoOpen && telegramChatInfoData && (
+				<TelegramChatInfoModal
+					chatType={telegramChatInfoData.type}
+					data={telegramChatInfoData.data}
+					currentUserId={user?.id}
+					onClose={() => setIsTelegramChatInfoOpen(false)}
+					onOpenSearch={() => {
+						setIsTelegramChatInfoOpen(false)
+						setIsChatSearchOpen(true)
+					}}
+					onStartCall={() => {
+						setIsTelegramChatInfoOpen(false)
+						if (telegramChatInfoData.type === 'direct') {
+							initiateCall(telegramChatInfoData.data.id, telegramChatInfoData.data.username, telegramChatInfoData.data.avatar_url)
+						} else if (telegramChatInfoData.type === 'group') {
+							initiateGroupCall(telegramChatInfoData.data.id)
+						}
+					}}
+					onUpdateChat={async (updatedData) => {
+						if (telegramChatInfoData.type === 'channel') {
+							await updateChannel(telegramChatInfoData.data.id, updatedData)
+						} else if (telegramChatInfoData.type === 'community') {
+							await updateCommunity(telegramChatInfoData.data.id, updatedData)
+						}
+					}}
+					onLeaveChat={() => {
+						setIsTelegramChatInfoOpen(false)
+						if (telegramChatInfoData.type === 'group') {
+							leaveGroup({ group_id: telegramChatInfoData.data.id })
+						} else if (telegramChatInfoData.type === 'channel') {
+							leaveChannel(telegramChatInfoData.data.id)
+						}
+					}}
 				/>
 			)}
 
