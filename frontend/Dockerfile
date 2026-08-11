@@ -2,11 +2,13 @@ FROM node:20-alpine
 
 WORKDIR /app
 
+COPY package*.json ./
+
+RUN npm ci --fetch-retries=5 --fetch-retry-maxtimeout=120000 || npm i --fetch-retries=5 --fetch-retry-maxtimeout=120000
+
 COPY . .
 
-WORKDIR /app/frontend
-
-RUN rm -rf .next && npm i && npm run build
+RUN rm -rf .next && npm run build
 
 EXPOSE 3000
 
