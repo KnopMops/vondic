@@ -167,12 +167,42 @@ export const useGroups = () => {
 		[token],
 	)
 
+	const updateGroup = useCallback(
+		async (groupId: string, data: { name?: string; description?: string; avatar_url?: string }) => {
+			if (!token) throw new Error('Unauthorized')
+			setIsLoading(true)
+			setError(null)
+			try {
+				const res = await fetch(`/api/v1/groups/${groupId}`, {
+					method: 'PUT',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ ...data, access_token: token }),
+				})
+				if (!res.ok) {
+					const err = await res.json().catch(() => ({}))
+					throw new Error(err.error || 'Failed to update group')
+				}
+				const updated = await res.json()
+				const updatedGroup = updated.group || updated
+				setGroups(prev => prev.map(g => (g.id === groupId ? updatedGroup : g)))
+				return updatedGroup
+			} catch (err: any) {
+				setError(err.message)
+				throw err
+			} finally {
+				setIsLoading(false)
+			}
+		},
+		[token],
+	)
+
 	return {
 		groups,
 		isLoading,
 		error,
 		fetchMyGroups,
 		createGroup,
+		updateGroup,
 		addParticipant,
 		getGroupParticipants,
 		getGroupDetails,

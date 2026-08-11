@@ -159,6 +159,34 @@ class MessageService:
                     OllamaService.process_message_async(
                         new_message.id, is_dm=True)
 
+                try:
+                    target_user = User.query.get(target_id)
+                    if target_user and (getattr(target_user, "is_bot", False) or str(target_id) == "7e140ffc-5549-418a-8bad-525c02193812"):
+                        import time
+                        from app.api.public.v1.bots import UPDATE_QUEUES
+                        sender = User.query.get(user_id)
+                        sender_name = getattr(sender, "username", None) or getattr(sender, "name", "User")
+                        bot_update = {
+                            "update_id": int(time.time() * 1000),
+                            "message": {
+                                "message_id": new_message.id,
+                                "from": {
+                                    "id": str(user_id),
+                                    "username": sender_name,
+                                    "first_name": sender_name,
+                                },
+                                "chat": {
+                                    "id": str(user_id),
+                                    "type": "private",
+                                },
+                                "text": new_message.content or "",
+                                "date": int(time.time()),
+                            }
+                        }
+                        UPDATE_QUEUES[str(target_id)].append(bot_update)
+                except Exception as e:
+                    print(f"Error pushing update to bot: {e}")
+
                 for a, b in ((user_id, target_id), (target_id, user_id)):
                     exists = UserConversation.query.filter_by(
                         user_id=str(a), partner_id=str(b)

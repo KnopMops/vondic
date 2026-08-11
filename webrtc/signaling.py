@@ -1301,6 +1301,31 @@ class SignalingService:
                 logger.error(f"Push notification error for DM: {e}", exc_info=True)
 
             try:
+                import aiohttp
+                bot_url = f"{Config.BACKEND_INTERNAL_URL}/api/v1/bots/{target_user_id}/updates/push"
+                bot_payload = {
+                    "update_id": int(datetime.utcnow().timestamp() * 1000),
+                    "message": {
+                        "message_id": message_id,
+                        "from": {
+                            "id": str(sender_id),
+                            "username": sender_name,
+                            "first_name": sender_name,
+                        },
+                        "chat": {
+                            "id": str(sender_id),
+                            "type": "private",
+                        },
+                        "text": content or "",
+                        "date": int(datetime.utcnow().timestamp()),
+                    }
+                }
+                async with aiohttp.ClientSession() as session:
+                    await session.post(bot_url, json=bot_payload, timeout=2)
+            except Exception:
+                pass
+
+            try:
                 import httpx
                 backend_url = f"{Config.BACKEND_INTERNAL_URL}/api/v1/users/internal/process_message"
                 async with httpx.AsyncClient(timeout=1) as client:
