@@ -8583,6 +8583,7 @@ export default function MessengerPage() {
 					<TelegramChatInfoModal
 						chatType={telegramChatInfoData.type}
 						data={telegramChatInfoData.data}
+						messages={messages}
 						currentUserId={user?.id}
 						onClose={() => setIsTelegramChatInfoOpen(false)}
 						onOpenSearch={() => {

@@ -1,6 +1,7 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import {
 	LuX as XIcon,
 	LuBell as BellIcon,
@@ -22,12 +23,15 @@ import {
 	LuSettings as SettingsIcon,
 	LuLock as LockIcon,
 	LuGlobe as GlobeIcon,
+	LuDownload as DownloadIcon,
+	LuExternalLink as ExternalLinkIcon,
 } from 'react-icons/lu'
-import { getAvatarUrl, formatMskDateTime } from '@/lib/utils'
+import { getAvatarUrl, getAttachmentUrl, formatMskDateTime } from '@/lib/utils'
 
 interface TelegramChatInfoModalProps {
 	chatType: 'direct' | 'group' | 'channel' | 'community'
 	data: any
+	messages?: any[]
 	currentUserId?: string
 	onClose: () => void
 	onOpenSearch?: () => void
@@ -40,6 +44,7 @@ interface TelegramChatInfoModalProps {
 export default function TelegramChatInfoModal({
 	chatType,
 	data,
+	messages = [],
 	currentUserId,
 	onClose,
 	onOpenSearch,
@@ -48,7 +53,8 @@ export default function TelegramChatInfoModal({
 	onLeaveChat,
 	onDeleteHistory,
 }: TelegramChatInfoModalProps) {
-	const [activeTab, setActiveTab] = useState<'info' | 'members' | 'media' | 'files' | 'links'>('info')
+	const router = useRouter()
+	const [activeTab, setActiveTab] = useState<'info' | 'members' | 'media' | 'files'>('info')
 	const [isEditing, setIsEditing] = useState(false)
 	const [notificationsMuted, setNotificationsMuted] = useState(false)
 	const [copiedField, setCopiedField] = useState<string | null>(null)
@@ -82,6 +88,14 @@ export default function TelegramChatInfoModal({
 		navigator.clipboard.writeText(text)
 		setCopiedField(label)
 		setTimeout(() => setCopiedField(null), 2000)
+	}
+
+	const handleUsernameClick = () => {
+		if (chatType === 'direct' && (data?.id || data?.user_id)) {
+			onClose()
+			const targetId = data.id || data.user_id
+			router.push(`/feed/profile/${targetId}`)
+		}
 	}
 
 	const handleSaveSettings = async () => {
@@ -129,10 +143,74 @@ export default function TelegramChatInfoModal({
 	}
 
 	const getInviteLink = () => {
+		if (chatType === 'direct') return null
 		if (data?.invite_code) return `https://vondic.ru/join/${data.invite_code}`
 		if (data?.id) return `https://vondic.ru/join/${data.id}`
 		return null
 	}
+
+	// Filter Media Items (Images/Videos)
+	const mediaItems = useMemo(() => {
+		if (!messages || !Array.isArray(messages)) return []
+		const list: { id: string; url: string; isVideo?: boolean }[] = []
+		for (const m of messages) {
+			if (m.attachments && Array.isArray(m.attachments)) {
+				for (const a of m.attachments) {
+					const url = a.url || a.file_url || a.path
+					if (url && (url.match(/\.(jpg|jpeg|png|gif|webp|mp4|webm)$/i) || a.type === 'image' || a.type === 'video')) {
+						list.push({
+							id: m.id || String(Math.random()),
+							url: getAttachmentUrl(url),
+							isVideo: !!(url.match(/\.(mp4|webm)$/i) || a.type === 'video'),
+						})
+					}
+				}
+			}
+			if (m.attachment_url) {
+				const url = m.attachment_url
+				if (url.match(/\.(jpg|jpeg|png|gif|webp|mp4|webm)$/i) || m.type === 'image' || m.type === 'video') {
+					list.push({
+						id: m.id,
+						url: getAttachmentUrl(url),
+						isVideo: !!(url.match(/\.(mp4|webm)$/i) || m.type === 'video'),
+					})
+				}
+			}
+		}
+		return list
+	}, [messages])
+
+	// Filter Document/File Items
+	const fileItems = useMemo(() => {
+		if (!messages || !Array.isArray(messages)) return []
+		const list: { id: string; name: string; url: string; size?: string }[] = []
+		for (const m of messages) {
+			if (m.attachments && Array.isArray(m.attachments)) {
+				for (const a of m.attachments) {
+					const url = a.url || a.file_url || a.path
+					if (url && !(url.match(/\.(jpg|jpeg|png|gif|webp|mp4|webm)$/i) || a.type === 'image' || a.type === 'video')) {
+						list.push({
+							id: m.id || String(Math.random()),
+							name: a.name || a.filename || 'Файл',
+							url: getAttachmentUrl(url),
+							size: a.size ? `${Math.round(a.size / 1024)} KB` : undefined,
+						})
+					}
+				}
+			}
+			if (m.attachment_url) {
+				const url = m.attachment_url
+				if (!(url.match(/\.(jpg|jpeg|png|gif|webp|mp4|webm)$/i) || m.type === 'image' || m.type === 'video')) {
+					list.push({
+						id: m.id,
+						name: m.attachment_name || 'Файл',
+						url: getAttachmentUrl(url),
+					})
+				}
+			}
+		}
+		return list
+	}, [messages])
 
 	return (
 		<div className="fixed inset-0 z-[100] flex justify-end" onClick={onClose}>
@@ -247,15 +325,22 @@ export default function TelegramChatInfoModal({
 						<div>
 							{/* Hero Header */}
 							<div className="flex flex-col items-center pt-8 pb-6 px-6 bg-gradient-to-b from-white/[0.03] to-transparent">
-								<img
-									src={getAvatarUrl(data?.avatar_url)}
-									alt={getTitle()}
-									className="w-28 h-28 rounded-full object-cover ring-4 ring-[#2481cc]/20 shadow-2xl mb-4"
-								/>
-								<h2 className="text-2xl font-bold text-gray-100 text-center leading-tight flex items-center justify-center gap-2">
-									{getTitle()}
-									{data?.premium && <span className="text-amber-400 text-lg">★</span>}
-								</h2>
+								<div
+									onClick={handleUsernameClick}
+									className={chatType === 'direct' ? 'cursor-pointer group flex flex-col items-center' : 'flex flex-col items-center'}
+								>
+									<img
+										src={getAvatarUrl(data?.avatar_url)}
+										alt={getTitle()}
+										className={`w-28 h-28 rounded-full object-cover ring-4 ring-[#2481cc]/20 shadow-2xl mb-4 transition-transform ${
+											chatType === 'direct' ? 'group-hover:scale-105' : ''
+										}`}
+									/>
+									<h2 className="text-2xl font-bold text-gray-100 text-center leading-tight flex items-center justify-center gap-2">
+										{getTitle()}
+										{data?.premium && <span className="text-amber-400 text-lg">★</span>}
+									</h2>
+								</div>
 								<p className="text-xs text-[#2481cc] mt-1.5 font-medium">{getSubtitle()}</p>
 
 								{/* Telegram Quick Action Circles Bar */}
@@ -325,17 +410,30 @@ export default function TelegramChatInfoModal({
 
 								{data?.username && (
 									<div
-										onClick={() => copyToClipboard(`@${data.username}`, 'username')}
+										onClick={() => {
+											if (chatType === 'direct') {
+												handleUsernameClick()
+											} else {
+												copyToClipboard(`@${data.username}`, 'username')
+											}
+										}}
 										className="p-3.5 bg-[#0e1621]/60 hover:bg-[#0e1621] rounded-2xl border border-white/5 flex items-center justify-between cursor-pointer transition-colors"
 									>
 										<div>
-											<div className="text-sm font-medium text-gray-200">@{data.username}</div>
-											<div className="text-xs text-gray-500">Имя пользователя</div>
+											<div className="text-sm font-medium text-[#2481cc] hover:underline flex items-center gap-1">
+												@{data.username}
+												{chatType === 'direct' && <ExternalLinkIcon className="w-3.5 h-3.5" />}
+											</div>
+											<div className="text-xs text-gray-500">
+												{chatType === 'direct' ? 'Перейти в профиль пользователя' : 'Имя пользователя'}
+											</div>
 										</div>
-										{copiedField === 'username' ? (
-											<CheckIcon className="w-4 h-4 text-emerald-400" />
-										) : (
-											<CopyIcon className="w-4 h-4 text-gray-500 hover:text-gray-300" />
+										{chatType !== 'direct' && (
+											copiedField === 'username' ? (
+												<CheckIcon className="w-4 h-4 text-emerald-400" />
+											) : (
+												<CopyIcon className="w-4 h-4 text-gray-500 hover:text-gray-300" />
+											)
 										)}
 									</div>
 								)}
@@ -382,7 +480,7 @@ export default function TelegramChatInfoModal({
 											: 'border-transparent text-gray-400 hover:text-gray-200'
 									}`}
 								>
-									Медиа
+									Медиа ({mediaItems.length})
 								</button>
 								<button
 									onClick={() => setActiveTab('files')}
@@ -392,7 +490,7 @@ export default function TelegramChatInfoModal({
 											: 'border-transparent text-gray-400 hover:text-gray-200'
 									}`}
 								>
-									Файлы
+									Файлы ({fileItems.length})
 								</button>
 							</div>
 
@@ -403,7 +501,13 @@ export default function TelegramChatInfoModal({
 										{members.map((m: any, idx: number) => (
 											<div
 												key={m.id || idx}
-												className="p-2.5 rounded-xl hover:bg-[#0e1621] flex items-center justify-between group transition-colors"
+												className="p-2.5 rounded-xl hover:bg-[#0e1621] flex items-center justify-between group transition-colors cursor-pointer"
+												onClick={() => {
+													if (m.id) {
+														onClose()
+														router.push(`/feed/profile/${m.id}`)
+													}
+												}}
 											>
 												<div className="flex items-center gap-3 min-w-0">
 													<img
@@ -432,9 +536,67 @@ export default function TelegramChatInfoModal({
 									</div>
 								)}
 
-								{(activeTab === 'media' || activeTab === 'files') && (
-									<div className="py-8 text-center text-gray-500 text-xs">
-										Раздел пуст
+								{activeTab === 'media' && (
+									<div>
+										{mediaItems.length > 0 ? (
+											<div className="grid grid-cols-3 gap-2">
+												{mediaItems.map(item => (
+													<a
+														key={item.id}
+														href={item.url}
+														target="_blank"
+														rel="noreferrer"
+														className="relative aspect-square rounded-xl overflow-hidden bg-[#0e1621] border border-white/5 hover:opacity-90 transition-opacity group"
+													>
+														{item.isVideo ? (
+															<video src={item.url} className="w-full h-full object-cover" />
+														) : (
+															<img src={item.url} alt="Media" className="w-full h-full object-cover" />
+														)}
+													</a>
+												))}
+											</div>
+										) : (
+											<div className="py-8 text-center text-gray-500 text-xs">
+												Раздел медиа пуст
+											</div>
+										)}
+									</div>
+								)}
+
+								{activeTab === 'files' && (
+									<div>
+										{fileItems.length > 0 ? (
+											<div className="space-y-2">
+												{fileItems.map(file => (
+													<a
+														key={file.id}
+														href={file.url}
+														target="_blank"
+														rel="noreferrer"
+														download
+														className="p-3 bg-[#0e1621] hover:bg-[#0e1621]/80 rounded-xl border border-white/5 flex items-center justify-between transition-colors group"
+													>
+														<div className="flex items-center gap-3 min-w-0 pr-2">
+															<div className="w-9 h-9 rounded-lg bg-[#2481cc]/20 text-[#2481cc] flex items-center justify-center shrink-0">
+																<FileIcon className="w-5 h-5" />
+															</div>
+															<div className="flex flex-col min-w-0">
+																<span className="text-xs font-medium text-gray-200 truncate group-hover:text-[#2481cc] transition-colors">
+																	{file.name}
+																</span>
+																{file.size && <span className="text-[10px] text-gray-500">{file.size}</span>}
+															</div>
+														</div>
+														<DownloadIcon className="w-4 h-4 text-gray-500 group-hover:text-white shrink-0" />
+													</a>
+												))}
+											</div>
+										) : (
+											<div className="py-8 text-center text-gray-500 text-xs">
+												Раздел файлов пуст
+											</div>
+										)}
 									</div>
 								)}
 							</div>
