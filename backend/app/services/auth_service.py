@@ -236,15 +236,21 @@ class AuthService:
                     db.session.rollback()
                 user = legacy
         if not user:
-
-            from app.api.oauth import OAuthAccessToken, OAuthClient
-            oauth_token = OAuthAccessToken.query.filter_by(token=token).first()
-            if oauth_token and not oauth_token.is_expired():
-                client = OAuthClient.query.filter_by(
-                    client_id=oauth_token.client_id, is_active=1
-                ).first()
-                if client:
-                    user = User.query.get(oauth_token.user_id)
+            try:
+                from app.models.oauth_client import OAuthClient
+                try:
+                    from app.models.oauth_token import OAuthAccessToken
+                    oauth_token = OAuthAccessToken.query.filter_by(token=token).first()
+                    if oauth_token and hasattr(oauth_token, "is_expired") and not oauth_token.is_expired():
+                        client = OAuthClient.query.filter_by(
+                            client_id=oauth_token.client_id, is_active=1
+                        ).first()
+                        if client:
+                            user = User.query.get(oauth_token.user_id)
+                except Exception:
+                    pass
+            except Exception:
+                pass
         if not user:
             return None, "Invalid or expired token"
         fp = AuthService._hash_token(token)
