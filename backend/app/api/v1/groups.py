@@ -59,6 +59,31 @@ async def get_my_groups(current_user=Depends(get_current_user)):
     return {"groups": [g.to_dict() if hasattr(g, "to_dict") else g for g in groups]}
 
 
+class GroupUpdateSchema(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    avatar_url: Optional[str] = None
+    require_approval: Optional[bool] = None
+
+
+@groups_router.put("/{group_id}")
+@groups_router.put("/{group_id}/")
+@groups_router.patch("/{group_id}")
+@groups_router.patch("/{group_id}/")
+@groups_router.post("/{group_id}/update")
+async def update_group(
+    group_id: str,
+    payload: GroupUpdateSchema,
+    current_user=Depends(get_current_user)
+):
+    if not GroupService.is_owner(group_id, current_user.id):
+        raise HTTPException(status_code=403, detail="Only owner can update group")
+    group, err = GroupService.update_group(group_id, payload.model_dump(exclude_unset=True))
+    if err or not group:
+        raise HTTPException(status_code=400, detail=err or "Failed to update group")
+    return {"group": group.to_dict() if hasattr(group, "to_dict") else group}
+
+
 @groups_router.post("/info")
 @groups_router.get("/{group_id}")
 async def get_group(
@@ -73,60 +98,6 @@ async def get_group(
     group, error = GroupService.get_group_info(gid, current_user.id)
     if error or not group:
         raise HTTPException(status_code=404, detail=error or "Group not found")
-    return {"group": group.to_dict() if hasattr(group, "to_dict") else group}
-
-
-@groups_router.post("/leave")
-async def leave_group(
-    payload: GroupInfoSchema,
-    current_user=Depends(get_current_user)
-):
-    success, error = GroupService.leave_group(payload.group_id, current_user.id)
-    if error:
-        raise HTTPException(status_code=400, detail=error)
-    return {"message": "Left group"}
-
-
-@groups_router.post("/add-member")
-async def add_member(
-    payload: GroupMemberActionSchema,
-    current_user=Depends(get_current_user)
-):
-    success, error = GroupService.add_member(payload.group_id, current_user.id, payload.user_id)
-    if error:
-        raise HTTPException(status_code=400, detail=error)
-    return {"message": "Member added"}
-
-
-@groups_router.post("/remove-member")
-async def remove_member(
-    payload: GroupMemberActionSchema,
-    current_user=Depends(get_current_user)
-):
-    success, error = GroupService.remove_member(payload.group_id, current_user.id, payload.user_id)
-    if error:
-        raise HTTPException(status_code=400, detail=error)
-    return {"message": "Member removed"}
-
-
-class GroupUpdateSchema(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    avatar_url: Optional[str] = None
-
-
-@groups_router.put("/{group_id}")
-@groups_router.post("/{group_id}/update")
-async def update_group(
-    group_id: str,
-    payload: GroupUpdateSchema,
-    current_user=Depends(get_current_user)
-):
-    if not GroupService.is_owner(group_id, current_user.id):
-        raise HTTPException(status_code=403, detail="Only owner can update group")
-    group, err = GroupService.update_group(group_id, payload.model_dump(exclude_unset=True))
-    if err or not group:
-        raise HTTPException(status_code=400, detail=err or "Failed to update group")
     return {"group": group.to_dict() if hasattr(group, "to_dict") else group}
 
 

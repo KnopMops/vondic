@@ -83,6 +83,28 @@ async def join_channel_by_code(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@channels_router.put("/{channel_id}")
+@channels_router.put("/{channel_id}/")
+@channels_router.patch("/{channel_id}")
+@channels_router.patch("/{channel_id}/")
+@channels_router.post("/{channel_id}/update")
+async def update_channel(
+    channel_id: str,
+    payload: ChannelUpdateSchema,
+    current_user=Depends(get_current_user)
+):
+    try:
+        data = payload.model_dump(exclude_unset=True)
+        channel, err = ChannelService.update_channel(channel_id, data)
+        if err or not channel:
+            raise HTTPException(status_code=400, detail=err or "Failed to update channel")
+        return {"channel": channel.to_dict() if hasattr(channel, "to_dict") else channel}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @channels_router.get("/{channel_id}")
 @channels_router.post("/{channel_id}")
 async def get_channel(channel_id: str, current_user=Depends(get_current_user)):
@@ -124,28 +146,6 @@ async def get_channel_participants(channel_id: str, current_user=Depends(get_cur
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
-@channels_router.put("/{channel_id}")
-@channels_router.put("/{channel_id}/")
-@channels_router.patch("/{channel_id}")
-@channels_router.patch("/{channel_id}/")
-@channels_router.post("/{channel_id}/update")
-async def update_channel(
-    channel_id: str,
-    payload: ChannelUpdateSchema,
-    current_user=Depends(get_current_user)
-):
-    try:
-        data = payload.model_dump(exclude_unset=True)
-        channel, err = ChannelService.update_channel(channel_id, data)
-        if err or not channel:
-            raise HTTPException(status_code=400, detail=err or "Failed to update channel")
-        return {"channel": channel.to_dict() if hasattr(channel, "to_dict") else channel}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
 
 
 @channels_router.delete("/{channel_id}")
