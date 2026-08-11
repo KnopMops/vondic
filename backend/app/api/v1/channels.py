@@ -21,6 +21,7 @@ class ChannelUpdateSchema(BaseModel):
     description: Optional[str] = Field(None, max_length=500)
     avatar_url: Optional[str] = None
     type: Optional[str] = None
+    require_approval: Optional[bool] = None
 
 
 class ChannelJoinSchema(BaseModel):
@@ -126,6 +127,10 @@ async def get_channel_participants(channel_id: str, current_user=Depends(get_cur
 
 
 @channels_router.put("/{channel_id}")
+@channels_router.put("/{channel_id}/")
+@channels_router.patch("/{channel_id}")
+@channels_router.patch("/{channel_id}/")
+@channels_router.post("/{channel_id}/update")
 async def update_channel(
     channel_id: str,
     payload: ChannelUpdateSchema,

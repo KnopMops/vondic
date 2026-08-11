@@ -33,6 +33,7 @@ interface TelegramChatInfoModalProps {
 	data: any
 	messages?: any[]
 	currentUserId?: string
+	initialTab?: 'info' | 'members' | 'media' | 'files'
 	onClose: () => void
 	onOpenSearch?: () => void
 	onStartCall?: () => void
@@ -46,6 +47,7 @@ export default function TelegramChatInfoModal({
 	data,
 	messages = [],
 	currentUserId,
+	initialTab = 'media',
 	onClose,
 	onOpenSearch,
 	onStartCall,
@@ -54,7 +56,7 @@ export default function TelegramChatInfoModal({
 	onDeleteHistory,
 }: TelegramChatInfoModalProps) {
 	const router = useRouter()
-	const [activeTab, setActiveTab] = useState<'info' | 'members' | 'media' | 'files'>('info')
+	const [activeTab, setActiveTab] = useState<'info' | 'members' | 'media' | 'files'>(initialTab)
 	const [isEditing, setIsEditing] = useState(false)
 	const [notificationsMuted, setNotificationsMuted] = useState(false)
 	const [copiedField, setCopiedField] = useState<string | null>(null)
@@ -75,7 +77,8 @@ export default function TelegramChatInfoModal({
 		setEditAvatarUrl(data?.avatar_url || '')
 		setEditRequireApproval(!!data?.require_approval)
 		setMembers(data?.participants || data?.members || [])
-	}, [data])
+		setActiveTab(initialTab || 'media')
+	}, [data, initialTab])
 
 	const isOwner =
 		data?.owner_id && currentUserId
