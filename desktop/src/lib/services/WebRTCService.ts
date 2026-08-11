@@ -61,8 +61,7 @@ export class WebRTCService {
 		this.userId = userId
 		this.configuration = {
 			iceServers: [
-				{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
-				{ urls: 'stun:192.168.140.11:3478' },
+				{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:webrtc.vondic.ru:3478', 'stun:vondic.ru:3478', 'stun:192.168.140.11:3478'] },
 			],
 		}
 		try {
