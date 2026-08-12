@@ -159,25 +159,31 @@ async def approve_join_request(
 
     requester_id = current_user.id if current_user else "bot"
 
-    # Add user to target group / channel / community
+    # Directly add user to target group / channel / community
+    from app.models.user import User
+    u = User.query.get(req.user_id)
+
     if req.target_type == "group":
-        from app.services.group_service import GroupService
-        g = GroupService.get_group_by_id(req.target_id)
+        from app.models.group import Group
+        g = Group.query.get(req.target_id)
         if g:
             target_name = g.name
-        GroupService.add_participant(req.target_id, target_user_id=req.user_id, requester_id=requester_id)
+            if u and u not in g.participants:
+                g.participants.append(u)
     elif req.target_type == "channel":
-        from app.services.channel_service import ChannelService
-        ch = ChannelService.get_channel_by_id(req.target_id)
+        from app.models.channel import Channel
+        ch = Channel.query.get(req.target_id)
         if ch:
             target_name = ch.name
-        ChannelService.add_subscriber(req.target_id, req.user_id)
+            if u and u not in ch.participants:
+                ch.participants.append(u)
     elif req.target_type == "community":
-        from app.services.community_service import CommunityService
-        c = CommunityService.get_by_id(req.target_id)
+        from app.models.community import Community
+        c = Community.query.get(req.target_id)
         if c:
             target_name = c.name
-        CommunityService.join_community(req.target_id, req.user_id)
+            if u and u not in c.members:
+                c.members.append(u)
 
     await db.commit()
     push_join_request_decision_message(req, target_name)

@@ -135,6 +135,11 @@ async def callback_alias(bot_id: str, payload: dict):
 async def answer_callback_alias(bot_id: str, payload: dict):
     return await answer_bot_callback_query(bot_id, payload)
 
+@bots_router.get("/{bot_id}/permissions")
+@bots_router.get("/{bot_id}/permissions/{user_id}")
+async def get_permissions_alias(bot_id: str, user_id: Optional[str] = None):
+    return {"granted": True, "scopes": ["basic", "user_info", "send_messages"]}
+
 @bots_router.get("/{bot_id}/outbox")
 async def get_outbox_alias(bot_id: str, chat_id: str = Query(...)):
     return await get_bot_outbox(bot_id, chat_id)

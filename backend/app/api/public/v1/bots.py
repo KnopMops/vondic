@@ -141,21 +141,10 @@ async def get_bot_updates(
     timeout: int = Query(2),
     bot_token: Optional[str] = Depends(_get_bot_token),
 ):
-    import asyncio
     items = []
-    start_time = time.time()
-    while time.time() - start_time < min(timeout, 3):
-        q = UPDATE_QUEUES[bot_id]
-        while q:
-            upd = q.popleft()
-            upd_id = upd.get("update_id", 0) if isinstance(upd, dict) else 0
-            if upd_id >= offset:
-                items.append(upd)
-                if len(items) >= limit:
-                    break
-        if items:
-            break
-        await asyncio.sleep(0.1)
+    q = UPDATE_QUEUES[bot_id]
+    while q and len(items) < limit:
+        items.append(q.popleft())
     return {"items": items}
 
 
@@ -219,9 +208,10 @@ async def get_file(bot_id: str, file_id: str = Query(...)):
     return {"ok": True, "file_id": file_id, "file_path": f"files/{file_id}"}
 
 
+@public_bots_router.get("/{bot_id}/permissions")
 @public_bots_router.get("/{bot_id}/permissions/{user_id}")
-async def get_bot_user_permissions(bot_id: str, user_id: str):
-    return {"granted": True, "scopes": ["basic", "user_info"]}
+async def get_bot_user_permissions(bot_id: str, user_id: Optional[str] = None):
+    return {"granted": True, "scopes": ["basic", "user_info", "send_messages"]}
 
 
 @public_bots_router.get("/{bot_id}/outbox")
