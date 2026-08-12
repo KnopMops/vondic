@@ -104,6 +104,8 @@ from app.api.public.v1.bots import (
     get_bot_updates,
     send_bot_message,
     get_bot_outbox,
+    handle_bot_callback,
+    answer_bot_callback_query,
 )
 
 @bots_router.post("/{bot_id}/updates/push")
@@ -118,6 +120,17 @@ async def get_updates_alias(bot_id: str, offset: int = Query(0), limit: int = Qu
 @bots_router.post("/{bot_id}/send-message")
 async def send_message_alias(bot_id: str, payload: dict):
     return await send_bot_message(bot_id, payload)
+
+@bots_router.post("/{bot_id}/callback")
+@bots_router.post("/{bot_id}/callback_query")
+@bots_router.post("/{bot_id}/callback-query")
+async def callback_alias(bot_id: str, payload: dict):
+    return await handle_bot_callback(bot_id, payload)
+
+@bots_router.post("/{bot_id}/answer_callback_query")
+@bots_router.post("/{bot_id}/answer-callback-query")
+async def answer_callback_alias(bot_id: str, payload: dict):
+    return await answer_bot_callback_query(bot_id, payload)
 
 @bots_router.get("/{bot_id}/outbox")
 async def get_outbox_alias(bot_id: str, chat_id: str = Query(...)):

@@ -71,6 +71,67 @@ async def push_bot_update(bot_id: str, payload: dict):
     return {"ok": True, "outbox": outbox, "items": outbox}
 
 
+def _extract_user_id(payload: dict) -> str:
+    user_id = str(payload.get("user_id") or payload.get("from_user_id") or "")
+    if user_id:
+        return user_id
+    token = payload.get("access_token")
+    if token:
+        try:
+            from app.core.security import decode_access_token
+            data = decode_access_token(token)
+            if data and data.get("sub"):
+                return str(data["sub"])
+        except Exception:
+            pass
+    return "unknown"
+
+
+@public_bots_router.post("/{bot_id}/callback")
+@public_bots_router.post("/{bot_id}/callback_query")
+@public_bots_router.post("/{bot_id}/callback-query")
+async def handle_bot_callback(bot_id: str, payload: dict):
+    user_id = _extract_user_id(payload)
+    cb_data = payload.get("data") or payload.get("callback_data") or ""
+    msg_id = str(payload.get("message_id") or "1")
+    cb_id = f"cb_{int(time.time() * 1000)}"
+
+    raw_update = {
+        "update_id": int(time.time() * 1000),
+        "callback_query": {
+            "id": cb_id,
+            "from": {
+                "id": user_id,
+                "username": "user",
+                "first_name": "user",
+            },
+            "message": {
+                "message_id": msg_id,
+                "chat": {
+                    "id": user_id,
+                    "type": "private",
+                },
+            },
+            "data": cb_data,
+        },
+    }
+    UPDATE_QUEUES[bot_id].append(raw_update)
+
+    outbox = []
+    if user_id and user_id != "unknown":
+        outbox_key = f"{bot_id}:{user_id}"
+        while OUTBOX_QUEUES[outbox_key]:
+            outbox.append(OUTBOX_QUEUES[outbox_key].popleft())
+
+    return {"ok": True, "callback_id": cb_id, "outbox": outbox, "items": outbox}
+
+
+@public_bots_router.post("/{bot_id}/answer_callback_query")
+@public_bots_router.post("/{bot_id}/answer-callback-query")
+async def answer_bot_callback_query(bot_id: str, payload: dict):
+    return {"ok": True, "result": True}
+
+
 @public_bots_router.get("/{bot_id}/updates")
 async def get_bot_updates(
     bot_id: str,

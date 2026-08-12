@@ -146,7 +146,7 @@ async def create_join_request(
 @join_requests_router.post("/approve")
 async def approve_join_request(
     payload: JoinRequestActionSchema,
-    current_user=Depends(get_current_user),
+    current_user=Depends(get_optional_current_user),
     db=Depends(get_async_db)
 ):
     res = await db.execute(select(JoinRequest).where(JoinRequest.id == payload.request_id))
@@ -157,13 +157,15 @@ async def approve_join_request(
     req.status = "approved"
     target_name = "Чат"
 
+    requester_id = current_user.id if current_user else "bot"
+
     # Add user to target group / channel / community
     if req.target_type == "group":
         from app.services.group_service import GroupService
         g = GroupService.get_group_by_id(req.target_id)
         if g:
             target_name = g.name
-        GroupService.add_participant(req.target_id, target_user_id=req.user_id, requester_id=current_user.id)
+        GroupService.add_participant(req.target_id, target_user_id=req.user_id, requester_id=requester_id)
     elif req.target_type == "channel":
         from app.services.channel_service import ChannelService
         ch = ChannelService.get_channel_by_id(req.target_id)
@@ -185,7 +187,7 @@ async def approve_join_request(
 @join_requests_router.post("/decline")
 async def decline_join_request(
     payload: JoinRequestActionSchema,
-    current_user=Depends(get_current_user),
+    current_user=Depends(get_optional_current_user),
     db=Depends(get_async_db)
 ):
     res = await db.execute(select(JoinRequest).where(JoinRequest.id == payload.request_id))
