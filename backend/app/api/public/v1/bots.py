@@ -50,9 +50,20 @@ async def get_public_bot_by_name(name: str):
 
 @public_bots_router.post("/{bot_id}/updates/push")
 async def push_bot_update(bot_id: str, payload: dict):
-    raw_update = payload.get("update") or payload.get("message") or payload
+    if "message" in payload and "update_id" in payload:
+        raw_update = payload
+    elif "update" in payload:
+        raw_update = payload["update"]
+    elif "message" in payload:
+        raw_update = {"update_id": int(time.time() * 1000), "message": payload["message"]}
+    elif "text" in payload or "message_id" in payload:
+        raw_update = {"update_id": int(time.time() * 1000), "message": payload}
+    else:
+        raw_update = payload
+
     if isinstance(raw_update, dict) and "update_id" not in raw_update:
         raw_update["update_id"] = int(time.time() * 1000)
+
     UPDATE_QUEUES[bot_id].append(raw_update)
 
     chat_id = None

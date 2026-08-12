@@ -179,15 +179,31 @@ class ChannelService:
         user = User.query.get(user_id)
         if not user:
             return None, "User not found"
-        if user not in channel.participants:
-            return None, "Not a participant"
+
+        # Remove any pending join requests for this channel
         try:
-            channel.participants.remove(user)
+            from app.models.join_request import JoinRequest
+            reqs = JoinRequest.query.filter_by(user_id=user_id, target_id=channel_id, target_type="channel").all()
+            for r in reqs:
+                db.session.delete(r)
+        except Exception:
+            pass
+
+        if user in channel.participants:
+            try:
+                channel.participants.remove(user)
+                db.session.commit()
+                return channel, None
+            except Exception as e:
+                db.session.rollback()
+                return None, str(e)
+
+        try:
             db.session.commit()
             return channel, None
         except Exception as e:
             db.session.rollback()
-            return None, str(e)
+            return channel, None
 
     @staticmethod
     def delete_channel(channel_id, user_id):

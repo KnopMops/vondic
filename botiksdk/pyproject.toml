@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "botiksdk"
-version = "0.5.1"
-description = "Python SDK for Vontic Bot Platform — full aiogram-style API with WebSocket support"
+version = "0.5.2"
+description = "Python SDK для Vontic Bot Platform — с поддержкой aiogram-style API. Подробная документация: https://vondic.ru/api-docs"
 readme = "README.md"
 authors = [
   { name = "Vondic", email = "support@vondic.com" },
