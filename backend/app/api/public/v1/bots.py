@@ -219,7 +219,8 @@ async def send_bot_message(
                 "is_read": 0,
             }
         }
-        requests.post(f"{webrtc_url}/internal/broadcast_message", json=broadcast_payload, timeout=2)
+        import asyncio
+        await asyncio.to_thread(requests.post, f"{webrtc_url}/internal/broadcast_message", json=broadcast_payload, timeout=2)
     except Exception as e:
         logger.warning("Error broadcasting bot message to WebRTC: %s", e)
 

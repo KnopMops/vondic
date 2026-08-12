@@ -310,6 +310,7 @@ def create_app():
         if group_id:
             participants = await user_repo.get_group_participants(group_id)
             for pid in participants:
+                await sio.emit("receive_message", payload, room=str(pid))
                 pid_socket = await broker.get_user_socket(pid)
                 if pid_socket:
                     await sio.emit("receive_message", payload, room=pid_socket)
@@ -320,10 +321,12 @@ def create_app():
                 if owner_id:
                     participants = [owner_id]
             for pid in participants:
+                await sio.emit("receive_message", payload, room=str(pid))
                 pid_socket = await broker.get_user_socket(pid)
                 if pid_socket:
                     await sio.emit("receive_message", payload, room=pid_socket)
         elif target_id:
+            await sio.emit("receive_message", payload, room=str(target_id))
             target_socket = await broker.get_user_socket(target_id)
             if target_socket:
                 await sio.emit("receive_message", payload, room=target_socket)
