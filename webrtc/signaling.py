@@ -1302,7 +1302,10 @@ class SignalingService:
 
             try:
                 import aiohttp
-                bot_url = f"{Config.BACKEND_INTERNAL_URL}/api/v1/bots/{target_user_id}/updates/push"
+                backend_base = Config.BACKEND_INTERNAL_URL
+                if "127.0.0.1" in backend_base or "localhost" in backend_base:
+                    backend_base = "http://backend:5050"
+                bot_url = f"{backend_base}/api/v1/bots/{target_user_id}/updates/push"
                 bot_payload = {
                     "update_id": int(datetime.utcnow().timestamp() * 1000),
                     "message": {
@@ -1322,8 +1325,8 @@ class SignalingService:
                 }
                 async with aiohttp.ClientSession() as session:
                     await session.post(bot_url, json=bot_payload, timeout=2)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Error pushing bot update from WebRTC: {e}")
 
             try:
                 import httpx

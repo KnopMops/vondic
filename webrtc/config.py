@@ -39,7 +39,7 @@ class Config:
     PORT = int(os.environ.get("PORT", 5000))
 
     BACKEND_INTERNAL_URL = (
-        os.environ.get("BACKEND_INTERNAL_URL") or "http://127.0.0.1:5050"
+        os.environ.get("BACKEND_INTERNAL_URL") or "http://backend:5050"
     )
     MESSAGE_ENCRYPTION_KEY = (
         os.environ.get("MESSAGE_ENCRYPTION_KEY")

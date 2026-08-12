@@ -54,6 +54,39 @@ def push_join_request_bot_message(req_id: str, owner_id: str, target_name: str, 
             "created_at": time.time(),
         }
         OUTBOX_QUEUES[f"{BOT_ID}:{owner_id}"].append(item)
+
+        try:
+            import os
+            import requests
+            from datetime import datetime
+            from app.services.message_service import MessageService
+
+            msg_obj, _ = MessageService.create_message(
+                {"content": text, "type": "text"},
+                user_id=BOT_ID,
+                target_id=str(owner_id),
+            )
+
+            msg_id = getattr(msg_obj, "id", None) if msg_obj else f"join_req_{int(time.time()*1000)}"
+            iso_time = datetime.utcnow().isoformat() + "Z"
+
+            webrtc_url = os.getenv("WEBRTC_INTERNAL_URL", "http://webrtc:5000")
+            broadcast_payload = {
+                "target_id": str(owner_id),
+                "payload": {
+                    "id": msg_id,
+                    "sender_id": BOT_ID,
+                    "target_id": str(owner_id),
+                    "content": text,
+                    "reply_markup": reply_markup,
+                    "type": "text",
+                    "timestamp": iso_time,
+                    "is_read": 0,
+                }
+            }
+            requests.post(f"{webrtc_url}/internal/broadcast_message", json=broadcast_payload, timeout=2)
+        except Exception as e:
+            print(f"Error broadcasting join request message: {e}")
     except Exception:
         pass
 

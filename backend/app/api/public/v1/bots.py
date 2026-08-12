@@ -173,15 +173,44 @@ async def send_bot_message(
     outbox_key = f"{bot_id}:{chat_id}"
     OUTBOX_QUEUES[outbox_key].append(item)
 
+    msg_id = None
+    iso_time = datetime.utcnow().isoformat() + "Z"
     try:
         from app.services.message_service import MessageService
-        MessageService.create_message(
+        msg_obj, _ = MessageService.create_message(
             {"content": text, "type": "text"},
             user_id=bot_id,
             target_id=chat_id,
         )
+        if msg_obj:
+            msg_id = getattr(msg_obj, "id", None)
+            ts = getattr(msg_obj, "timestamp", None) or getattr(msg_obj, "created_at", None)
+            if ts and hasattr(ts, "isoformat"):
+                iso_time = ts.isoformat() + "Z"
     except Exception as e:
         logger.warning("Error saving bot response to DB: %s", e)
+
+    try:
+        import os
+        import httpx
+        webrtc_url = os.getenv("WEBRTC_INTERNAL_URL", "http://webrtc:5000")
+        broadcast_payload = {
+            "target_id": chat_id,
+            "payload": {
+                "id": msg_id or f"bot_msg_{int(time.time()*1000)}",
+                "sender_id": bot_id,
+                "target_id": chat_id,
+                "content": text,
+                "reply_markup": payload.get("reply_markup"),
+                "type": "text",
+                "timestamp": iso_time,
+                "is_read": 0,
+            }
+        }
+        async with httpx.AsyncClient(timeout=2) as client:
+            await client.post(f"{webrtc_url}/internal/broadcast_message", json=broadcast_payload)
+    except Exception as e:
+        logger.warning("Error broadcasting bot message to WebRTC: %s", e)
 
     return {"ok": True, "result": item}
 
