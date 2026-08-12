@@ -126,38 +126,15 @@ async def handle_bot_callback(bot_id: str, payload: dict):
     return {"ok": True, "callback_id": cb_id, "outbox": outbox, "items": outbox}
 
 
+@public_bots_router.post("/{bot_id}/answerCallbackQuery")
 @public_bots_router.post("/{bot_id}/answer_callback_query")
 @public_bots_router.post("/{bot_id}/answer-callback-query")
 async def answer_bot_callback_query(bot_id: str, payload: dict):
     return {"ok": True, "result": True}
 
 
-@public_bots_router.get("/{bot_id}/updates")
-async def get_bot_updates(
-    bot_id: str,
-    offset: int = Query(0),
-    limit: int = Query(100),
-    timeout: int = Query(2),
-    bot_token: Optional[str] = Depends(_get_bot_token),
-):
-    import asyncio
-    items = []
-    start_time = time.time()
-    while time.time() - start_time < min(timeout, 3):
-        q = UPDATE_QUEUES[bot_id]
-        while q:
-            upd = q.popleft()
-            upd_id = upd.get("update_id", 0) if isinstance(upd, dict) else 0
-            if upd_id >= offset:
-                items.append(upd)
-                if len(items) >= limit:
-                    break
-        if items:
-            break
-        await asyncio.sleep(0.1)
-    return {"items": items}
-
-
+@public_bots_router.post("/{bot_id}/send")
+@public_bots_router.post("/{bot_id}/sendMessage")
 @public_bots_router.post("/{bot_id}/send_message")
 @public_bots_router.post("/{bot_id}/send-message")
 async def send_bot_message(
@@ -168,10 +145,11 @@ async def send_bot_message(
     if not chat_id:
         raise HTTPException(status_code=400, detail="chat_id required")
 
+    text = payload.get("text") or ""
     item = {
         "bot_id": bot_id,
         "chat_id": chat_id,
-        "text": payload.get("text") or "",
+        "text": text,
         "reply_markup": payload.get("reply_markup"),
         "parse_mode": payload.get("parse_mode"),
         "game": payload.get("game"),
@@ -179,7 +157,40 @@ async def send_bot_message(
     }
     outbox_key = f"{bot_id}:{chat_id}"
     OUTBOX_QUEUES[outbox_key].append(item)
+
+    try:
+        from app.services.message_service import MessageService
+        MessageService.create_message(
+            {"content": text, "type": "text"},
+            user_id=bot_id,
+            target_id=chat_id,
+        )
+    except Exception as e:
+        logger.warning("Error saving bot response to DB: %s", e)
+
     return {"ok": True, "result": item}
+
+
+@public_bots_router.post("/{bot_id}/permissions/grant")
+async def grant_bot_permissions(bot_id: str, payload: dict):
+    return {"ok": True, "granted": True, "scopes": payload.get("scopes", "basic")}
+
+
+@public_bots_router.post("/{bot_id}/token")
+async def generate_bot_token_public(bot_id: str):
+    return {"ok": True, "token": f"bot_token_{bot_id}"}
+
+
+@public_bots_router.get("/{bot_id}/getUserProfilePhotos")
+@public_bots_router.get("/{bot_id}/get_user_profile_photos")
+async def get_user_profile_photos(bot_id: str, user_id: str = Query(...), offset: int = Query(0), limit: int = Query(1)):
+    return {"ok": True, "total_count": 0, "photos": []}
+
+
+@public_bots_router.get("/{bot_id}/getFile")
+@public_bots_router.get("/{bot_id}/get_file")
+async def get_file(bot_id: str, file_id: str = Query(...)):
+    return {"ok": True, "file_id": file_id, "file_path": f"files/{file_id}"}
 
 
 @public_bots_router.get("/{bot_id}/permissions/{user_id}")
