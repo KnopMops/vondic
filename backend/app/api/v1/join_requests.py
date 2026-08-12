@@ -57,7 +57,9 @@ def push_join_request_bot_message(req_id: str, owner_id: str, target_name: str, 
 
         try:
             import os
-            import requests
+            import json
+            import urllib.request
+            import threading
             from datetime import datetime
             from app.services.message_service import MessageService
 
@@ -84,7 +86,22 @@ def push_join_request_bot_message(req_id: str, owner_id: str, target_name: str, 
                     "is_read": 0,
                 }
             }
-            requests.post(f"{webrtc_url}/internal/broadcast_message", json=broadcast_payload, timeout=2)
+
+            def _send_join_req_sync():
+                try:
+                    data = json.dumps(broadcast_payload).encode("utf-8")
+                    req = urllib.request.Request(
+                        f"{webrtc_url}/internal/broadcast_message",
+                        data=data,
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    with urllib.request.urlopen(req, timeout=2) as resp:
+                        resp.read()
+                except Exception:
+                    pass
+
+            threading.Thread(target=_send_join_req_sync, daemon=True).start()
         except Exception as e:
             print(f"Error broadcasting join request message: {e}")
     except Exception:

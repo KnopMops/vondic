@@ -1301,7 +1301,8 @@ class SignalingService:
                 logger.error(f"Push notification error for DM: {e}", exc_info=True)
 
             try:
-                import aiohttp
+                import json
+                import urllib.request
                 backend_base = Config.BACKEND_INTERNAL_URL
                 if "127.0.0.1" in backend_base or "localhost" in backend_base:
                     backend_base = "http://backend:5050"
@@ -1323,8 +1324,15 @@ class SignalingService:
                         "date": int(datetime.utcnow().timestamp()),
                     }
                 }
-                async with aiohttp.ClientSession() as session:
-                    await session.post(bot_url, json=bot_payload, timeout=2)
+                req_data = json.dumps(bot_payload).encode("utf-8")
+                req = urllib.request.Request(
+                    bot_url,
+                    data=req_data,
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with urllib.request.urlopen(req, timeout=2) as resp:
+                    resp.read()
             except Exception as e:
                 logger.warning(f"Error pushing bot update from WebRTC: {e}")
 

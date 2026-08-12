@@ -160,6 +160,23 @@ async def get_bot_updates(
     return {"items": items}
 
 
+def _send_webrtc_broadcast_sync(webrtc_url: str, broadcast_payload: dict):
+    import json
+    import urllib.request
+    try:
+        data = json.dumps(broadcast_payload).encode("utf-8")
+        req = urllib.request.Request(
+            f"{webrtc_url}/internal/broadcast_message",
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            resp.read()
+    except Exception as e:
+        logger.warning("Error broadcasting bot message to WebRTC: %s", e)
+
+
 @public_bots_router.post("/{bot_id}/send")
 @public_bots_router.post("/{bot_id}/sendMessage")
 @public_bots_router.post("/{bot_id}/send_message")
@@ -204,7 +221,7 @@ async def send_bot_message(
 
     try:
         import os
-        import requests
+        import asyncio
         webrtc_url = os.getenv("WEBRTC_INTERNAL_URL", "http://webrtc:5000")
         broadcast_payload = {
             "target_id": chat_id,
@@ -219,10 +236,9 @@ async def send_bot_message(
                 "is_read": 0,
             }
         }
-        import asyncio
-        await asyncio.to_thread(requests.post, f"{webrtc_url}/internal/broadcast_message", json=broadcast_payload, timeout=2)
+        await asyncio.to_thread(_send_webrtc_broadcast_sync, webrtc_url, broadcast_payload)
     except Exception as e:
-        logger.warning("Error broadcasting bot message to WebRTC: %s", e)
+        logger.warning("Error scheduling bot message broadcast: %s", e)
 
     return {"ok": True, "result": item}
 
