@@ -204,7 +204,7 @@ async def send_bot_message(
 
     try:
         import os
-        import httpx
+        import requests
         webrtc_url = os.getenv("WEBRTC_INTERNAL_URL", "http://webrtc:5000")
         broadcast_payload = {
             "target_id": chat_id,
@@ -219,8 +219,7 @@ async def send_bot_message(
                 "is_read": 0,
             }
         }
-        async with httpx.AsyncClient(timeout=2) as client:
-            await client.post(f"{webrtc_url}/internal/broadcast_message", json=broadcast_payload)
+        requests.post(f"{webrtc_url}/internal/broadcast_message", json=broadcast_payload, timeout=2)
     except Exception as e:
         logger.warning("Error broadcasting bot message to WebRTC: %s", e)
 
