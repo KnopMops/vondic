@@ -133,6 +133,32 @@ async def answer_bot_callback_query(bot_id: str, payload: dict):
     return {"ok": True, "result": True}
 
 
+@public_bots_router.get("/{bot_id}/updates")
+async def get_bot_updates(
+    bot_id: str,
+    offset: int = Query(0),
+    limit: int = Query(100),
+    timeout: int = Query(2),
+    bot_token: Optional[str] = Depends(_get_bot_token),
+):
+    import asyncio
+    items = []
+    start_time = time.time()
+    while time.time() - start_time < min(timeout, 3):
+        q = UPDATE_QUEUES[bot_id]
+        while q:
+            upd = q.popleft()
+            upd_id = upd.get("update_id", 0) if isinstance(upd, dict) else 0
+            if upd_id >= offset:
+                items.append(upd)
+                if len(items) >= limit:
+                    break
+        if items:
+            break
+        await asyncio.sleep(0.1)
+    return {"items": items}
+
+
 @public_bots_router.post("/{bot_id}/send")
 @public_bots_router.post("/{bot_id}/sendMessage")
 @public_bots_router.post("/{bot_id}/send_message")
