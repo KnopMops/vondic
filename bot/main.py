@@ -66,8 +66,33 @@ async def safe_answer(bot: Bot, callback_id: str, text: Optional[str] = None, sh
 # ── Consent middleware — auto-checks permissions ───────────────
 
 async def _check_user_consent(message: Message, bot: Bot) -> bool:
-    """Check if user has granted permissions. Returns True."""
-    return True
+    """Check if user has granted permissions. If not, send consent request message."""
+    user_id = str(message.from_user.id)
+    chat_id = str(message.chat.id)
+    try:
+        resp = await http_get(
+            f"{BACKEND_URL}/api/public/v1/bots/{BOT_ID}/permissions/{user_id}",
+            timeout=3,
+            headers=_bot_headers(),
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get("granted"):
+                return True
+    except Exception:
+        pass
+
+    # No consent — show inline button that triggers consent callback
+    kb = InlineKeyboardBuilder()
+    kb.row(InlineKeyboardButton("🔐 Разрешить доступ", callback_data=f"consent_grant:{user_id}"))
+    await bot.send_message(
+        chat_id,
+        "🔐 **Запрос разрешений**\n\n"
+        "Чтобы использовать функции бота, необходимо разрешить доступ к базовым данным профиля и отправке сообщений.\n\n"
+        "Нажмите кнопку ниже для подтверждения доступа:",
+        reply_markup=kb.as_markup(),
+    )
+    return False
 
 
 # ── Startup / Shutdown ────────────────────────────────────────
@@ -346,7 +371,27 @@ async def game_play(callback: CallbackQuery, bot: Bot, state: FSMContext):
     await safe_answer(bot, callback.id)
 
 
-# ── Join Requests ─────────────────────────────────────────────
+# ── Join Requests & Consent ───────────────────────────────────
+
+@dp.callback_query(lambda c: c.data and c.data.startswith("consent_grant:"))
+async def handle_consent_grant(callback: CallbackQuery, bot: Bot):
+    user_id = callback.data.split(":", 1)[1]
+    try:
+        resp = await http_post(
+            f"{BACKEND_URL}/api/public/v1/bots/{BOT_ID}/permissions/grant",
+            json={"user_id": user_id, "scopes": "basic_profile,send_messages"},
+            timeout=5,
+            headers=_bot_headers(),
+        )
+        if resp.status_code == 200:
+            await bot.send_message(str(callback.message.chat.id), "✅ Разрешения успешно предоставлены! Теперь вы можете полноценно использовать бота.")
+            await safe_answer(bot, callback.id, text="Доступ разрешен!")
+        else:
+            await safe_answer(bot, callback.id, text="Ошибка при сохранении прав", show_alert=True)
+    except Exception as e:
+        logger.error("Error granting consent: %s", e)
+        await safe_answer(bot, callback.id, text="Ошибка соединения", show_alert=True)
+
 
 @dp.callback_query(lambda c: c.data and (c.data.startswith("join_approve:") or c.data.startswith("join_decline:")))
 async def handle_join_request_action(callback: CallbackQuery, bot: Bot):
@@ -360,7 +405,7 @@ async def handle_join_request_action(callback: CallbackQuery, bot: Bot):
             headers=_bot_headers(),
         )
         if resp.status_code == 200:
-            msg = "✅ Заявка пользователя успешно одобрена!" if action == "join_approve" else "❌ Заявка пользователя отклонена."
+            msg = "✅ Вы приняли заявку на вступление." if action == "join_approve" else "❌ Вы отклонили заявку на вступление."
             await bot.send_message(str(callback.message.chat.id), msg)
             await safe_answer(bot, callback.id, text=msg)
         else:

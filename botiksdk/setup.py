@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name="botiksdk",
-    version="0.3.0",
+    version="0.5.1",
     description="Python SDK for Vontic Bot Platform (aiogram-style API)",
     packages=["botiksdk"],
     install_requires=[
