@@ -24,7 +24,5 @@ export const sidebarItems: SidebarItem[] = [
 	{ label: 'Мессенджер', icon: MessageCircle, href: '/feed/messages' },
 	{ label: 'Почта', icon: Mail, href: '/feed/mail' },
 	{ label: 'Друзья', icon: Users, href: '/friends' },
-	{ label: 'Магазин', icon: ShoppingBag, href: '/shop' },
-	{ label: 'VМьюзик', icon: Music, href: '/feed/music' },
 	{ label: 'Настройки', icon: Settings, href: '/feed/settings' },
 ]

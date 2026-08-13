@@ -18,7 +18,6 @@ import {
 const navItems = [
 	{ label: 'Лента', icon: Newspaper, href: '/feed' },
 	{ label: 'Чаты', icon: MessageCircle, href: '/feed/messages' },
-	{ label: 'Музыка', icon: Music, href: '/feed/music' },
 	{ label: 'Видео', icon: Clapperboard, href: '/video' },
 ]
 

@@ -230,10 +230,14 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 
 			{/* Participant Avatars / Webcams List */}
 			<div className='mt-3 max-h-36 overflow-y-auto'>
-				<div className='grid grid-cols-4 sm:grid-cols-6 gap-2'>
-					{/* Local User Card */}
-					<div className='text-center group relative bg-white/5 p-2 rounded-xl border border-white/10'>
-						<div className='mx-auto mb-1 h-10 w-10 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-semibold overflow-hidden relative'>
+				<div className='flex gap-2 overflow-x-auto custom-scrollbar py-1'>
+					{/* Local User Tile */}
+					<div
+						className='text-center bg-white/5 p-2 rounded-xl border border-white/10 relative cursor-pointer hover:border-violet-500/50 transition-all'
+						onClick={() => videoStream?.getVideoTracks().length && toggleWatchStream('local-webcam')}
+						title='Нажмите, чтобы показать/скрыть веб-камеру в основном окне'
+					>
+						<div className='mx-auto mb-1 h-12 w-12 rounded-full bg-gray-700 flex items-center justify-center text-xs font-semibold overflow-hidden relative ring-2 ring-violet-500/40'>
 							{videoStream?.getVideoTracks().length ? (
 								<video
 									autoPlay
@@ -251,8 +255,15 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 						<p className='text-[10px] font-medium truncate'>Вы</p>
 						{videoStream?.getVideoTracks().length ? (
 							<button
-								onClick={() => toggleWatchStream('local-webcam')}
-								className='mt-1 text-[9px] px-1.5 py-0.5 rounded bg-violet-600/60 hover:bg-violet-600 text-white w-full truncate'
+								onClick={(e) => {
+									e.stopPropagation()
+									toggleWatchStream('local-webcam')
+								}}
+								className={`mt-1 text-[9px] px-1.5 py-0.5 rounded text-white w-full truncate transition-colors ${
+									watchedStreamIds.has('local-webcam')
+										? 'bg-amber-600 hover:bg-amber-500'
+										: 'bg-violet-600 hover:bg-violet-500'
+								}`}
 							>
 								{watchedStreamIds.has('local-webcam') ? 'Открепить' : 'Смотреть'}
 							</button>
@@ -269,9 +280,11 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 						return (
 							<div
 								key={participant.socketId}
-								className='text-center bg-white/5 p-2 rounded-xl border border-white/10 relative'
+								className='text-center bg-white/5 p-2 rounded-xl border border-white/10 relative cursor-pointer hover:border-violet-500/50 transition-all'
+								onClick={() => hasVideo && toggleWatchStream(streamId)}
+								title={hasVideo ? 'Нажмите, чтобы показать/скрыть видео участника' : undefined}
 							>
-								<div className='mx-auto mb-1 h-10 w-10 rounded-full bg-gray-700 flex items-center justify-center text-xs font-semibold overflow-hidden relative'>
+								<div className='mx-auto mb-1 h-12 w-12 rounded-full bg-gray-700 flex items-center justify-center text-xs font-semibold overflow-hidden relative ring-2 ring-white/10'>
 									{hasVideo ? (
 										<video
 											autoPlay
@@ -298,7 +311,10 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 
 								{hasVideo && (
 									<button
-										onClick={() => toggleWatchStream(streamId)}
+										onClick={(e) => {
+											e.stopPropagation()
+											toggleWatchStream(streamId)
+										}}
 										className={`mt-1 text-[9px] px-1.5 py-0.5 rounded text-white w-full truncate transition-colors ${
 											isWatched
 												? 'bg-amber-600 hover:bg-amber-500'

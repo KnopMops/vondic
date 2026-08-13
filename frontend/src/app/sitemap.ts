@@ -23,12 +23,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 			priority: 0.8,
 		},
 		{
-			url: `${baseUrl}/feed/music`,
-			lastModified: new Date(),
-			changeFrequency: 'daily',
-			priority: 0.6,
-		},
-		{
 			url: `${baseUrl}/feed/mail`,
 			lastModified: new Date(),
 			changeFrequency: 'daily',

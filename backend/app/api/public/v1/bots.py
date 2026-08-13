@@ -195,6 +195,21 @@ async def get_bot_updates(
     return {"items": items}
 
 
+@public_bots_router.get("/{bot_id}/games")
+async def get_public_bot_games(
+    bot_id: str,
+    q: Optional[str] = Query(None),
+    bot_token: Optional[str] = Depends(_get_bot_token),
+):
+    bot_id = _resolve_bot_id(bot_id)
+    from app.services.bot_game_service import BotGameService
+    bot = BotGameService.get_bot(bot_id)
+    if not bot:
+        return {"games": [], "bot_id": bot_id}
+    games = BotGameService.list_games(bot_id, query=q, published_only=True)
+    return {"games": [BotGameService.serialize(g) for g in games], "bot_id": bot_id}
+
+
 def _send_webrtc_broadcast_sync(webrtc_url: str, broadcast_payload: dict):
     import json
     import urllib.request
