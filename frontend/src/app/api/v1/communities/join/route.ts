@@ -12,6 +12,8 @@ export async function POST(req: NextRequest) {
       console.log('Token available:', !!token)
 
       
+      const code = body.invite_code || body.code || body.id || body.community_id || body.communityId || body.inviteCode
+
       const response = await fetch(`${backendUrl}/api/v1/communities/join`, {
         method: 'POST',
         headers: {
@@ -19,7 +21,10 @@ export async function POST(req: NextRequest) {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ 
-          invite_code: body.invite_code
+          invite_code: code,
+          code: code,
+          id: code,
+          community_id: code,
         }),
       })
 

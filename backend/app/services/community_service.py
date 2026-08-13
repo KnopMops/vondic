@@ -63,6 +63,13 @@ class CommunityService:
         if not code_or_id:
             return None
         key = str(code_or_id).strip()
+        if "/join/" in key:
+            key = key.split("/join/")[-1].strip()
+        if "?" in key:
+            key = key.split("?")[0].strip()
+        key = key.strip("/")
+        if not key:
+            return None
         community = Community.query.filter_by(invite_code=key).first()
         if not community:
             community = Community.query.get(key)

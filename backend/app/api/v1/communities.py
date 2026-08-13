@@ -20,6 +20,9 @@ class CommunityJoinSchema(BaseModel):
     invite_code: Optional[str] = None
     code: Optional[str] = None
     id: Optional[str] = None
+    community_id: Optional[str] = None
+    communityId: Optional[str] = None
+    inviteCode: Optional[str] = None
 
 
 class ChannelCreateSchema(BaseModel):
@@ -52,13 +55,29 @@ async def join_community(
     payload: CommunityJoinSchema,
     current_user=Depends(get_current_user)
 ):
-    code = payload.invite_code or payload.code or payload.id
+    code = (
+        payload.invite_code
+        or payload.code
+        or payload.id
+        or payload.community_id
+        or payload.communityId
+        or payload.inviteCode
+    )
     if not code:
         raise HTTPException(status_code=400, detail="invite_code is required")
     community, err = CommunityService.join_community(code, current_user.id)
-    if err or not community:
+    if not community:
         raise HTTPException(status_code=400, detail=err or "Failed to join community")
-    return {"community": community.to_dict() if hasattr(community, "to_dict") else community}
+
+    res_dict = community.to_dict() if hasattr(community, "to_dict") else community
+    if err == "pending_approval":
+        res_dict["status"] = "pending_approval"
+        res_dict["message"] = "Join request sent for approval"
+        return {"community": res_dict, "status": "pending_approval", "message": "Join request sent for approval"}
+    elif err:
+        raise HTTPException(status_code=400, detail=err)
+
+    return {"community": res_dict, "status": "joined"}
 
 
 class CommunityUpdateSchema(BaseModel):
