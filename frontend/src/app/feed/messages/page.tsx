@@ -737,19 +737,43 @@ export default function MessengerPage() {
 		status: 'Online',
 		premium: false,
 	})
-	const botUser = useMemo<User>(
-		() => ({
-			id: 'botik',
-			email: 'botik@вондик.local',
-			username: 'Botik',
-			role: 'Bot',
-			is_bot: true,
-			avatar_url: '/static/botik.png',
-			status: 'Online',
-			premium: false,
-		}),
-		[],
-	)
+	const [botUser, setBotUser] = useState<User>({
+		id: '7e140ffc-5549-418a-8bad-525c02193812',
+		email: 'botik@вондик.local',
+		username: 'Вондик BOT',
+		role: 'Bot',
+		is_bot: true,
+		avatar_url: '/static/botik.png',
+		status: 'Online',
+		premium: false,
+	})
+	useEffect(() => {
+		const loadPublicBots = async () => {
+			try {
+				const res = await fetch('/api/public/v1/bots')
+				if (res.ok) {
+					const data = await res.json()
+					const bots = Array.isArray(data?.bots) ? data.bots : []
+					if (bots.length > 0) {
+						const primary = bots[0]
+						setBotUser({
+							id: String(primary.id || primary.bot_id || '7e140ffc-5549-418a-8bad-525c02193812'),
+							email: 'botik@вондик.local',
+							username: primary.name || primary.username || 'Вондик BOT',
+							role: 'Bot',
+							is_bot: true,
+							avatar_url: primary.avatar_url || '/static/botik.png',
+							status: 'Online',
+							premium: false,
+						})
+					}
+				}
+			} catch (e) {
+				console.error('[PublicBots] Fetch error:', e)
+			}
+		}
+		loadPublicBots()
+	}, [])
 	const [friends, setFriends] = useState<User[]>([])
 	const [recentContacts, setRecentContacts] = useState<User[]>([])
 	const [previewRevision, setPreviewRevision] = useState(0)

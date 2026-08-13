@@ -27,6 +27,15 @@ def _get_bot_token(authorization: Optional[str] = Header(None), x_bot_token: Opt
     return None
 
 
+def _resolve_bot_id(bot_id: str) -> str:
+    if not bot_id or bot_id in ("botik", "default", "vondic_bot"):
+        bots = BotService.get_active_bots()
+        if bots:
+            return str(bots[0].id)
+        return "7e140ffc-5549-418a-8bad-525c02193812"
+    return bot_id
+
+
 @public_bots_router.get("")
 @public_bots_router.get("/")
 async def list_public_bots():
@@ -36,6 +45,7 @@ async def list_public_bots():
 
 @public_bots_router.get("/{bot_id}")
 async def get_public_bot(bot_id: str):
+    bot_id = _resolve_bot_id(bot_id)
     bot = BotService.get_active_bot_by_id(bot_id)
     if not bot:
         raise HTTPException(status_code=404, detail="Bot not found")
@@ -52,6 +62,7 @@ async def get_public_bot_by_name(name: str):
 
 @public_bots_router.post("/{bot_id}/updates/push")
 async def push_bot_update(bot_id: str, payload: dict):
+    bot_id = _resolve_bot_id(bot_id)
     if "message" in payload and "update_id" in payload:
         raw_update = payload
     elif "update" in payload:
@@ -104,6 +115,7 @@ def _extract_user_id(payload: dict) -> str:
 @public_bots_router.post("/{bot_id}/callback_query")
 @public_bots_router.post("/{bot_id}/callback-query")
 async def handle_bot_callback(bot_id: str, payload: dict):
+    bot_id = _resolve_bot_id(bot_id)
     user_id = _extract_user_id(payload)
     cb_data = payload.get("data") or payload.get("callback_data") or ""
     msg_id = str(payload.get("message_id") or "1")
@@ -154,6 +166,7 @@ async def get_bot_updates(
     timeout: int = Query(2),
     bot_token: Optional[str] = Depends(_get_bot_token),
 ):
+    bot_id = _resolve_bot_id(bot_id)
     start = time.time()
     max_wait = min(max(timeout, 0), 5)
     q = UPDATE_QUEUES[bot_id]
@@ -192,6 +205,7 @@ async def send_bot_message(
     bot_id: str,
     payload: dict,
 ):
+    bot_id = _resolve_bot_id(bot_id)
     chat_id = str(payload.get("chat_id") or "")
     if not chat_id:
         raise HTTPException(status_code=400, detail="chat_id required")
