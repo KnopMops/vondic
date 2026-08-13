@@ -4044,8 +4044,8 @@ export default function MessengerPage() {
 		}
 	}
 
-	const sendBotMessage = async () => {
-		const text = input.trim()
+	const sendBotMessage = async (textOverride?: string) => {
+		const text = (textOverride !== undefined ? textOverride : input).trim()
 		if (!text) return
 		if (files.length > 0) {
 			showToast('В этом чате доступны только текстовые сообщения', 'info')
@@ -8093,31 +8093,9 @@ export default function MessengerPage() {
 											<button
 												key={`rk-${rowIndex}-${btnIndex}`}
 												onClick={() => {
-													setActiveReplyKeyboard(null)
-													const btnText = btn.text
-													setInput('')
-													const userMsg: Message = {
-														id: `kb-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
-														sender_id: user?.id || 'me',
-														content: btnText,
-														timestamp: new Date().toISOString(),
-														isOwn: true,
-														is_read: true,
-														type: 'text',
-													}
-													setBotMessages(prev => [...prev, userMsg])
-													forceScrollToBottomRef.current = true
-													try {
-														const token = localStorage.getItem('access_token')
-														const botId = selectedFriend?.id
-														if (!botId) return
-														fetch(`/api/public/v1/bots/${botId}/callback`, {
-															method: 'POST',
-															headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-															body: JSON.stringify({ user_id: user?.id || '', text: btnText }),
-														})
-													} catch (err) {
-														console.error('[ReplyKeyboard] Error:', err)
+													const btnText = typeof btn === 'string' ? btn : (btn?.text || '')
+													if (btnText) {
+														sendBotMessage(btnText)
 													}
 												}}
 												className='bg-gray-700/60 hover:bg-gray-600/60 text-white font-medium py-2 px-4 rounded-lg transition-colors text-sm cursor-pointer border border-white/10'
