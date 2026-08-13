@@ -1306,7 +1306,7 @@ class SignalingService:
                 backend_base = Config.BACKEND_INTERNAL_URL
                 if "127.0.0.1" in backend_base or "localhost" in backend_base:
                     backend_base = "http://backend:5050"
-                bot_url = f"{backend_base}/api/v1/bots/{target_user_id}/updates/push"
+                bot_url = f"{backend_base}/api/public/v1/bots/{target_user_id}/updates/push"
                 bot_payload = {
                     "update_id": int(datetime.utcnow().timestamp() * 1000),
                     "message": {
@@ -1324,15 +1324,21 @@ class SignalingService:
                         "date": int(datetime.utcnow().timestamp()),
                     }
                 }
-                req_data = json.dumps(bot_payload).encode("utf-8")
-                req = urllib.request.Request(
-                    bot_url,
-                    data=req_data,
-                    headers={"Content-Type": "application/json"},
-                    method="POST",
-                )
-                with urllib.request.urlopen(req, timeout=2) as resp:
-                    resp.read()
+                def _push_update_sync():
+                    try:
+                        req_data = json.dumps(bot_payload).encode("utf-8")
+                        req = urllib.request.Request(
+                            bot_url,
+                            data=req_data,
+                            headers={"Content-Type": "application/json"},
+                            method="POST",
+                        )
+                        with urllib.request.urlopen(req, timeout=2) as resp:
+                            resp.read()
+                    except Exception as err:
+                        logger.warning(f"Error pushing bot update to {bot_url}: {err}")
+
+                await asyncio.to_thread(_push_update_sync)
             except Exception as e:
                 logger.warning(f"Error pushing bot update from WebRTC: {e}")
 

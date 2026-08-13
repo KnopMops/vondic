@@ -6,7 +6,8 @@ default:
   image: node:20-alpine
 
 variables:
-  NEXT_TELEMETRY_DISABLED: "1"
+  NEXT_TELEMETRY_DISABLED: '1'
+  DOCKER_HOST: unix:///var/run/docker.sock
 
 frontend_build_test:
   stage: build

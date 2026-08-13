@@ -109,6 +109,14 @@ async def alias_path_middleware(request: Request, call_next):
         path = "/api/v1/storis/" + path[16:]
     elif path == "/api/v1/stories":
         path = "/api/v1/storis"
+    elif path.startswith("/api/v1/bots/"):
+        path = "/api/public/v1/bots/" + path[13:]
+    elif path == "/api/v1/bots":
+        path = "/api/public/v1/bots"
+    elif path.startswith("/api/bots/"):
+        path = "/api/public/v1/bots/" + path[10:]
+    elif path == "/api/bots":
+        path = "/api/public/v1/bots"
 
     request.scope["path"] = path
     return await call_next(request)
