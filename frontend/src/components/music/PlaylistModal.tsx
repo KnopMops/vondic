@@ -47,6 +47,7 @@ export default function PlaylistModal() {
 	} = useMusicPlayerStore()
 
 	const fileInputRef = useRef<HTMLInputElement>(null)
+	const [isUploading, setIsUploading] = useState(false)
 
 	if (!isPlaylistModalOpen) return null
 
@@ -56,8 +57,6 @@ export default function PlaylistModal() {
 		const s = Math.floor(secs % 60)
 		return `${m}:${s < 10 ? '0' : ''}${s}`
 	}
-
-	const [isUploading, setIsUploading] = useState(false)
 
 	const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
 		const files = e.target.files
