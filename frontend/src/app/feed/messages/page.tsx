@@ -4221,7 +4221,6 @@ export default function MessengerPage() {
 			setInput('')
 			setReplyToMessage(null)
 			return
-		}
 		if (text.startsWith('/')) {
 			const raw = text.slice(1).trim()
 			const [cmdRaw, ...rest] = raw.split(' ')
