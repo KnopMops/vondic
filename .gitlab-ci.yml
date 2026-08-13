@@ -1,0 +1,25 @@
+stages:
+  - test
+  - build
+
+default:
+  image: node:20-alpine
+
+variables:
+  NEXT_TELEMETRY_DISABLED: "1"
+
+frontend_build_test:
+  stage: build
+  script:
+    - cd frontend
+    - npm ci || npm install
+    - npm run build
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+      - frontend/.next/cache/
+      - frontend/node_modules/
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH

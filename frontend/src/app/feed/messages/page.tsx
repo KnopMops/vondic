@@ -2543,20 +2543,15 @@ export default function MessengerPage() {
 			setActiveReplyKeyboard(null)
 			return
 		}
-		// Find the most recent user text message index
-		let lastUserMsgIdx = -1
+		// Find the most recent bot message that specified a reply keyboard or explicit removal
 		for (let i = botMessages.length - 1; i >= 0; i--) {
-			if (botMessages[i].isOwn) {
-				lastUserMsgIdx = i
-				break
-			}
-		}
-		// Only show keyboard from bot messages AFTER the last user message
-		const startIdx = lastUserMsgIdx >= 0 ? lastUserMsgIdx + 1 : 0
-		for (let i = botMessages.length - 1; i >= startIdx; i--) {
 			const msg = botMessages[i]
-			if (msg.reply_markup?.is_keyboard && Array.isArray(msg.reply_markup.keyboard)) {
+			if (!msg.isOwn && msg.reply_markup?.is_keyboard && Array.isArray(msg.reply_markup.keyboard)) {
 				setActiveReplyKeyboard(msg.reply_markup.keyboard)
+				return
+			}
+			if (!msg.isOwn && msg.reply_markup?.remove_keyboard) {
+				setActiveReplyKeyboard(null)
 				return
 			}
 		}

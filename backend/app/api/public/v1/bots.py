@@ -153,8 +153,14 @@ async def get_bot_updates(
     timeout: int = Query(2),
     bot_token: Optional[str] = Depends(_get_bot_token),
 ):
-    items = []
+    start = time.time()
+    max_wait = min(max(timeout, 0), 5)
     q = UPDATE_QUEUES[bot_id]
+
+    while not q and (time.time() - start < max_wait):
+        await asyncio.sleep(0.1)
+
+    items = []
     while q and len(items) < limit:
         items.append(q.popleft())
     return {"items": items}
