@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { audioManager } from '@/lib/services/musicPlayer'
 
-interface Track {
+export interface Track {
   id: string
   title: string
   artist: string
@@ -22,6 +22,9 @@ interface MusicPlayerState {
   repeatMode: 'none' | 'all' | 'one'
   queue: Track[]
   queuePosition: number
+  isPlaylistModalOpen: boolean
+  myPlaylist: Track[]
+  pinnedProfileTrack: Track | null
 
   // Actions
   setCurrentTrack: (track: Track | null) => void
@@ -34,6 +37,10 @@ interface MusicPlayerState {
   setRepeatMode: (mode: 'none' | 'all' | 'one') => void
   setQueue: (queue: Track[]) => void
   setQueuePosition: (position: number) => void
+  setIsPlaylistModalOpen: (open: boolean) => void
+  addToMyPlaylist: (track: Track) => void
+  removeFromMyPlaylist: (trackId: string) => void
+  setPinnedProfileTrack: (track: Track | null) => void
 
   // Helper actions
   playTrack: (track: Track, queue?: Track[]) => void
@@ -45,6 +52,27 @@ interface MusicPlayerState {
   seek: (time: number) => void
   toggleMute: () => void
   reset: () => void
+}
+
+const loadInitialPlaylist = (): Track[] => {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = localStorage.getItem('vondic_my_music')
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) return parsed
+    }
+  } catch {}
+  return []
+}
+
+const loadInitialPinnedTrack = (): Track | null => {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = localStorage.getItem('vondic_profile_pinned_track')
+    if (raw) return JSON.parse(raw)
+  } catch {}
+  return null
 }
 
 function getAudio(): HTMLAudioElement {
@@ -61,8 +89,11 @@ export const useMusicPlayerStore = create<MusicPlayerState>((set, get) => ({
   isMuted: false,
   isShuffled: false,
   repeatMode: 'none',
-  queue: [],
+  queue: loadInitialPlaylist(),
   queuePosition: -1,
+  isPlaylistModalOpen: false,
+  myPlaylist: loadInitialPlaylist(),
+  pinnedProfileTrack: loadInitialPinnedTrack(),
 
   // Actions
   setCurrentTrack: (track) => set({ currentTrack: track }),
@@ -93,6 +124,28 @@ export const useMusicPlayerStore = create<MusicPlayerState>((set, get) => ({
   setRepeatMode: (mode) => set({ repeatMode: mode }),
   setQueue: (queue) => set({ queue }),
   setQueuePosition: (position) => set({ queuePosition: position }),
+  setIsPlaylistModalOpen: (open) => set({ isPlaylistModalOpen: open }),
+
+  addToMyPlaylist: (track) => set((state) => {
+    if (state.myPlaylist.some(t => t.id === track.id || t.url === track.url)) return state
+    const next = [track, ...state.myPlaylist]
+    try { localStorage.setItem('vondic_my_music', JSON.stringify(next)) } catch {}
+    return { myPlaylist: next, queue: next }
+  }),
+
+  removeFromMyPlaylist: (trackId) => set((state) => {
+    const next = state.myPlaylist.filter(t => t.id !== trackId)
+    try { localStorage.setItem('vondic_my_music', JSON.stringify(next)) } catch {}
+    return { myPlaylist: next, queue: next }
+  }),
+
+  setPinnedProfileTrack: (track) => set(() => {
+    try {
+      if (track) localStorage.setItem('vondic_profile_pinned_track', JSON.stringify(track))
+      else localStorage.removeItem('vondic_profile_pinned_track')
+    } catch {}
+    return { pinnedProfileTrack: track }
+  }),
 
   // Helper actions
   playTrack: (track, queue) => set((state) => {

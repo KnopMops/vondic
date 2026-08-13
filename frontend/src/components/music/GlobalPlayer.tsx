@@ -19,9 +19,10 @@ import {
 } from 'react-icons/fi'
 import Link from 'next/link'
 
+import PlaylistModal from '@/components/music/PlaylistModal'
+
 export default function GlobalPlayer() {
   const pathname = usePathname()
-  const isOnMusicPage = pathname === '/feed/music'
 
   const {
     currentTrack,
@@ -51,8 +52,6 @@ export default function GlobalPlayer() {
 
   // Initialize audio element
   useEffect(() => {
-    if (isOnMusicPage) return
-
     if (!audioRef.current) {
       audioRef.current = audioManager.getAudio()
     }
@@ -80,11 +79,10 @@ export default function GlobalPlayer() {
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata)
       audio.removeEventListener('ended', handleEnded)
     }
-  }, [isOnMusicPage, repeatMode, nextTrack, setCurrentTime, setDuration, setIsPlaying, volume, isMuted])
+  }, [repeatMode, nextTrack, setCurrentTime, setDuration, setIsPlaying, volume, isMuted])
 
   // Handle track change
   useEffect(() => {
-    if (isOnMusicPage) return
     if (!audioRef.current || !currentTrack) return
 
     if (audioRef.current.src !== currentTrack.url) {
@@ -93,11 +91,10 @@ export default function GlobalPlayer() {
     if (isPlaying) {
       audioRef.current.play().catch(() => setIsPlaying(false))
     }
-  }, [isOnMusicPage, currentTrack, isPlaying, setIsPlaying])
+  }, [currentTrack, isPlaying, setIsPlaying])
 
   // Handle play/pause
   useEffect(() => {
-    if (isOnMusicPage) return
     if (!audioRef.current || !currentTrack) return
 
     if (isPlaying) {
@@ -105,11 +102,10 @@ export default function GlobalPlayer() {
     } else {
       audioRef.current.pause()
     }
-  }, [isOnMusicPage, isPlaying, currentTrack, setIsPlaying])
+  }, [isPlaying, currentTrack, setIsPlaying])
 
   // Handle volume change
   useEffect(() => {
-    if (isOnMusicPage) return
     if (!audioRef.current) return
     audioRef.current.volume = isMuted ? 0 : volume
   }, [volume, isMuted])
@@ -146,20 +142,11 @@ export default function GlobalPlayer() {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`
   }
 
-  if (!currentTrack) {
-    return null
-  }
-
-  if (isOnMusicPage) {
-    return null
-  }
-
-  if (!pathname?.startsWith('/feed/music')) {
-    return null
-  }
-
   return (
-    <div className='fixed top-0 left-0 right-0 z-50 bg-gray-950/90 backdrop-blur-xl border-b border-gray-800/50 shadow-[0_4px_20px_rgba(0,0,0,0.4)]'>
+    <>
+      <PlaylistModal />
+      {!currentTrack ? null : (
+        <div className='fixed top-0 left-0 right-0 z-50 bg-gray-950/90 backdrop-blur-xl border-b border-gray-800/50 shadow-[0_4px_20px_rgba(0,0,0,0.4)]'>
       <div className='max-w-[1600px] mx-auto px-2 sm:px-4 py-2'>
         <div className='flex items-center gap-2 sm:gap-4 flex-wrap sm:flex-nowrap'>
           {/* Track Info */}
@@ -302,17 +289,19 @@ export default function GlobalPlayer() {
               />
             </div>
 
-            {/* Link to music page */}
-            <Link
-              href='/feed/music'
+            {/* Open playlist modal */}
+            <button
+              onClick={() => setIsPlaylistModalOpen(true)}
               className='p-1.5 text-gray-400 hover:text-white transition-all hover:scale-110'
-              title='Открыть плеер'
+              title='Открыть плейлист'
             >
               <Maximize2 className='w-4 h-4' />
-            </Link>
+            </button>
           </div>
         </div>
       </div>
     </div>
+      )}
+    </>
   )
 }

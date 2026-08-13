@@ -57,12 +57,16 @@ interface Playlist {
 }
 
 export default function MusicPage() {
-	const { user, isLoading: isAuthLoading, isInitialized } = useAuth()
 	const router = useRouter()
-	const { showToast } = useToast()
-	const { playTrack: playTrackGlobal, setIsPlaying: setIsPlayingGlobal } = useMusicPlayerStore()
+	const { setIsPlaylistModalOpen } = useMusicPlayerStore()
 
-	const [tracks, setTracks] = useState<Track[]>([])
+	useEffect(() => {
+		setIsPlaylistModalOpen(true)
+		router.replace('/feed/messages')
+	}, [router, setIsPlaylistModalOpen])
+
+	return null
+}
 	const [playlists, setPlaylists] = useState<Playlist[]>([])
 	const [currentTrackId, setCurrentTrackId] = useState<string | null>(null)
 	const [isPlaying, setIsPlaying] = useState(false)

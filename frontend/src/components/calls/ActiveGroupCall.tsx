@@ -167,124 +167,43 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 	
 	
 	
-	useEffect(() => {
-		const startTime = Date.now()
-		const interval = setInterval(() => {
-			setDuration(Math.floor((Date.now() - startTime) / 1000))
-		}, 1000)
-		return () => clearInterval(interval)
-	}, [])
+	const [watchedStreamIds, setWatchedStreamIds] = useState<Set<string>>(new Set())
+	const [fullscreenStreamId, setFullscreenStreamId] = useState<string | null>(null)
 
-	const formatDuration = (seconds: number): string => {
-		const mins = Math.floor(seconds / 60)
-		const secs = seconds % 60
-		return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+	const toggleWatchStream = (id: string) => {
+		setWatchedStreamIds(prev => {
+			const next = new Set(prev)
+			if (next.has(id)) next.delete(id)
+			else next.add(id)
+			return next
+		})
 	}
 
-	const toggleMinimize = () => {
-		setIsMinimized(!isMinimized)
-	}
-	const hasScreenVideo =
-		!!screenStream?.getVideoTracks().length ||
-		!!videoStream?.getVideoTracks().length ||
-		Array.from(remoteStreams.values()).some(
-			stream => stream.getVideoTracks().length > 0,
-		)
-	const screenShareDisabled = !isScreenShareSupported
+	const availableStreams: Array<{ id: string; title: string; stream: MediaStream; isLocal?: boolean }> = []
 
-	const getPrimaryVideo = () => {
-		if (screenShareVideoRef.current) return screenShareVideoRef.current
-		if (primaryVideoRef.current) return primaryVideoRef.current
-		return null
+	if (screenStream?.getVideoTracks().length) {
+		availableStreams.push({ id: 'local-screen', title: 'Ваш экран', stream: screenStream, isLocal: true })
 	}
-
-	const togglePictureInPicture = async () => {
-		const video = getPrimaryVideo()
-		if (!video) return
-		if (
-			'pictureInPictureEnabled' in document &&
-			document.pictureInPictureEnabled
-		) {
-			if (document.pictureInPictureElement) {
-				await document.exitPictureInPicture()
-				setIsScreenPip(false)
-				return
-			}
-			try {
-				await (video as any).requestPictureInPicture()
-				setIsScreenPip(true)
-			} catch {}
+	if (videoStream?.getVideoTracks().length) {
+		availableStreams.push({ id: 'local-webcam', title: 'Ваша камера', stream: videoStream, isLocal: true })
+	}
+	participants.forEach(p => {
+		const remoteStream = remoteStreams.get(p.socketId)
+		if (remoteStream && remoteStream.getVideoTracks().length > 0) {
+			availableStreams.push({
+				id: `remote-${p.socketId}`,
+				title: p.userName || 'Участник',
+				stream: remoteStream,
+			})
 		}
-	}
+	})
 
-	const toggleFullscreen = async () => {
-		const root = document.documentElement
-		if (document.fullscreenElement) {
-			await document.exitFullscreen()
-			return
-		}
-		try {
-			await root.requestFullscreen()
-		} catch {}
-	}
-	useEffect(() => {
-		const handleFullscreenChange = () => {
-			setIsScreenFullscreen(!!document.fullscreenElement)
-		}
-		document.addEventListener('fullscreenchange', handleFullscreenChange)
-		return () => {
-			document.removeEventListener('fullscreenchange', handleFullscreenChange)
-		}
-	}, [])
-
-	if (isMinimized) {
-		return (
-			<div className='fixed left-1/2 top-4 z-40 w-[min(92vw,760px)] -translate-x-1/2 rounded-3xl border border-white/10 bg-gradient-to-br from-black/90 via-black/80 to-zinc-900/80 px-4 py-3 text-white shadow-2xl backdrop-blur'>
-				<div className='flex items-center justify-between gap-3'>
-					<button
-						onClick={toggleMinimize}
-						className='flex items-center gap-3 text-left'
-						aria-label='Развернуть'
-					>
-						<div className='h-9 w-9 overflow-hidden rounded-2xl bg-white/10 flex items-center justify-center text-sm font-semibold'>
-							<Users className='h-5 w-5 text-white/80' />
-						</div>
-						<div>
-							<p className='text-xs font-semibold text-white truncate'>
-								Групповой звонок
-							</p>
-							<p className='text-[10px] text-white/60'>
-								{formatDuration(duration)} · {participants.length + 1} уч.
-							</p>
-						</div>
-					</button>
-					<div className='flex items-center gap-2'>
-						<button
-							onClick={onMuteToggle}
-							className={`rounded-xl border px-2 py-1 text-white transition ${
-								isMuted
-									? 'border-rose-500/40 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20'
-									: 'border-white/10 bg-white/5 hover:bg-white/10'
-							}`}
-							title={isMuted ? 'Включить микрофон' : 'Выключить микрофон'}
-						>
-							{isMuted ? <MicOff className='h-4 w-4' /> : <Mic className='h-4 w-4' />}
-						</button>
-						<button
-							onClick={() => onEndCall(callId)}
-							className='rounded-xl border border-rose-500/40 bg-rose-500/10 px-2 py-1 text-rose-200 transition hover:bg-rose-500/20'
-							title='Покинуть группу'
-						>
-							<PhoneOff className='h-4 w-4' />
-						</button>
-					</div>
-				</div>
-			</div>
-		)
-	}
+	const activeWatchedStreams = availableStreams.filter(
+		s => watchedStreamIds.has(s.id) || (watchedStreamIds.size === 0 && availableStreams.length > 0)
+	)
 
 	return (
-		<div className='fixed left-1/2 top-4 z-40 w-[min(92vw,900px)] -translate-x-1/2 rounded-3xl border border-white/10 bg-gradient-to-br from-black/90 via-black/80 to-zinc-900/80 p-4 text-white shadow-2xl backdrop-blur'>
+		<div className='fixed left-1/2 top-4 z-40 w-[min(94vw,1000px)] -translate-x-1/2 rounded-3xl border border-white/10 bg-gradient-to-br from-black/95 via-black/90 to-zinc-900/90 p-4 text-white shadow-2xl backdrop-blur-xl transition-all'>
 			<div className='flex items-start justify-between gap-3'>
 				<div className='flex items-center gap-3 min-w-0'>
 					<div className='h-10 w-10 overflow-hidden rounded-2xl bg-white/10 flex items-center justify-center text-sm font-semibold'>
@@ -309,246 +228,248 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 				</button>
 			</div>
 
-			
-			<div className='mt-3 max-h-32 overflow-y-auto'>
-				<div className='grid grid-cols-6 gap-2'>
-					
-					<div className='text-center'>
-						<div className='mx-auto mb-1 h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-semibold'>
-							{localStream ? <Mic className='h-4 w-4' /> : <MicOff className='h-4 w-4' />}
-						</div>
-						<p className='text-[8px] truncate'>Вы</p>
-					</div>
-					
-					{participants.map(participant => (
-						<div key={participant.socketId} className='text-center'>
-							<div className='mx-auto mb-1 h-8 w-8 rounded-full bg-gray-700 flex items-center justify-center text-xs font-semibold'>
-								{participant.avatarUrl ? (
-									<img
-										src={participant.avatarUrl}
-										alt={participant.userName || 'Участник'}
-										className='h-full w-full rounded-full object-cover'
-									/>
-								) : (
-									<span>{participant.userName?.charAt(0) || '?'}</span>
-								)}
-							</div>
-							<p className='text-[8px] truncate'>
-								{participant.userName || 'Unknown'}
-							</p>
-						</div>
-					))}
-				</div>
-			</div>
-
-			<div className={`mt-3 grid gap-3 ${isScreenZoomed ? 'zoomed' : ''}`}>
-				{screenStream?.getVideoTracks().length ? (
-					<div className='rounded-2xl border border-white/10 bg-white/5 p-2'>
-						<video
-							ref={ref => {
-								if (ref && screenStream) {
-									ref.srcObject = screenStream
-									ref.muted = true
-									const p = ref.play()
-									if (p && typeof p.catch === 'function') p.catch(() => {})
-								}
-								if (ref) {
-									screenShareVideoRef.current = ref
-									primaryVideoRef.current = ref
-								}
-							}}
-							autoPlay
-							playsInline
-							muted
-							className={`h-44 w-full rounded-xl bg-black object-cover ${
-								isScreenZoomed ? 'scale-105' : ''
-							}`}
-						/>
-						<span className='mt-2 block text-xs text-white/70'>Ваш экран</span>
-					</div>
-				) : null}
-				{videoStream?.getVideoTracks().length ? (
-					<div className='rounded-2xl border border-white/10 bg-white/5 p-2'>
-						<video
-							autoPlay
-							playsInline
-							muted
-							ref={ref => {
-								if (ref) {
-									ref.srcObject = videoStream
-									const p = ref.play()
-									if (p && typeof p.catch === 'function') p.catch(() => {})
-								}
-							}}
-							className='h-44 w-full rounded-xl bg-black object-cover'
-						/>
-						<span className='mt-2 block text-xs text-white/70'>Ваше видео</span>
-					</div>
-				) : null}
-				<div className='rounded-2xl border border-white/10 bg-white/5 p-4 text-center'>
-					<p className='text-xs text-white/60'>
-						Вы {isMuted ? <MicOff className='inline h-4 w-4' /> : <Mic className='inline h-4 w-4' />}
-					</p>
-					<audio
-						ref={ref => {
-							if (ref && localStream) {
-								ref.srcObject = localStream
-								// Apply audio quality settings
-								const audioTracks = localStream.getAudioTracks()
-								audioTracks.forEach(track => {
-									try {
-										const settings: any = {
-											echoCancellation: true,
-											noiseSuppression: true,
-											autoGainControl: true,
-											noiseSuppressionLevel: 'high',
-											echoCancellationLevel: 'high',
-										}
-										track.applyConstraints({ advanced: [settings] }).catch(() => {})
-									} catch (e) {
-										console.log('[GroupCall] Could not apply local audio constraints:', e)
-									}
-								})
-							}
-							if (ref) {
-								ref.muted = true
-								const p = ref.play()
-								if (p && typeof p.catch === 'function') p.catch(() => {})
-							}
-						}}
-						autoPlay
-						playsInline
-						muted // Always mute local audio to prevent echo
-					/>
-				</div>
-
-				{participants.map(participant => (
-					<div
-						key={participant.socketId}
-						className='rounded-2xl border border-white/10 bg-white/5 p-3 text-center'
-					>
-						<div className='mx-auto mb-2 h-10 w-10 overflow-hidden rounded-2xl bg-white/10 flex items-center justify-center text-sm font-semibold'>
-							{participant.avatarUrl ? (
-								<img
-									src={participant.avatarUrl}
-									alt={participant.userName || 'Участник'}
+			{/* Participant Avatars / Webcams List */}
+			<div className='mt-3 max-h-36 overflow-y-auto'>
+				<div className='grid grid-cols-4 sm:grid-cols-6 gap-2'>
+					{/* Local User Card */}
+					<div className='text-center group relative bg-white/5 p-2 rounded-xl border border-white/10'>
+						<div className='mx-auto mb-1 h-10 w-10 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-semibold overflow-hidden relative'>
+							{videoStream?.getVideoTracks().length ? (
+								<video
+									autoPlay
+									playsInline
+									muted
+									ref={ref => {
+										if (ref) ref.srcObject = videoStream
+									}}
 									className='h-full w-full object-cover'
 								/>
 							) : (
-								<span>{participant.userName?.charAt(0) || '?'}</span>
+								localStream ? <Mic className='h-4 w-4' /> : <MicOff className='h-4 w-4' />
 							)}
 						</div>
-						<p className='text-xs text-white/80'>
-							{participant.userName || 'Unknown'}{' '}
-							{participant.status === 'connected' ? '🔊' : '...'}
-						</p>
-						<GroupParticipantAudio
-							status={participant.status}
-							stream={remoteStreams.get(participant.socketId)}
-						/>
-						<GroupParticipantVideo
-							stream={remoteStreams.get(participant.socketId)}
-							isScreenZoomed={isScreenZoomed}
-							onVideoRef={ref => {
-								if (ref && !screenStream && !primaryVideoRef.current) {
-									primaryVideoRef.current = ref
-								}
-							}}
-						/>
+						<p className='text-[10px] font-medium truncate'>Вы</p>
+						{videoStream?.getVideoTracks().length ? (
+							<button
+								onClick={() => toggleWatchStream('local-webcam')}
+								className='mt-1 text-[9px] px-1.5 py-0.5 rounded bg-violet-600/60 hover:bg-violet-600 text-white w-full truncate'
+							>
+								{watchedStreamIds.has('local-webcam') ? 'Открепить' : 'Смотреть'}
+							</button>
+						) : null}
 					</div>
-				))}
+
+					{/* Remote Participants */}
+					{participants.map(participant => {
+						const remoteStream = remoteStreams.get(participant.socketId)
+						const hasVideo = !!remoteStream?.getVideoTracks().length
+						const streamId = `remote-${participant.socketId}`
+						const isWatched = watchedStreamIds.has(streamId)
+
+						return (
+							<div
+								key={participant.socketId}
+								className='text-center bg-white/5 p-2 rounded-xl border border-white/10 relative'
+							>
+								<div className='mx-auto mb-1 h-10 w-10 rounded-full bg-gray-700 flex items-center justify-center text-xs font-semibold overflow-hidden relative'>
+									{hasVideo ? (
+										<video
+											autoPlay
+											playsInline
+											muted
+											ref={ref => {
+												if (ref && remoteStream) ref.srcObject = remoteStream
+											}}
+											className='h-full w-full object-cover'
+										/>
+									) : participant.avatarUrl ? (
+										<img
+											src={participant.avatarUrl}
+											alt={participant.userName || 'Участник'}
+											className='h-full w-full object-cover'
+										/>
+									) : (
+										<span>{participant.userName?.charAt(0) || '?'}</span>
+									)}
+								</div>
+								<p className='text-[10px] font-medium truncate'>
+									{participant.userName || 'Unknown'}
+								</p>
+
+								{hasVideo && (
+									<button
+										onClick={() => toggleWatchStream(streamId)}
+										className={`mt-1 text-[9px] px-1.5 py-0.5 rounded text-white w-full truncate transition-colors ${
+											isWatched
+												? 'bg-amber-600 hover:bg-amber-500'
+												: 'bg-violet-600 hover:bg-violet-500'
+										}`}
+									>
+										{isWatched ? 'Открепить' : 'Смотреть трансляцию'}
+									</button>
+								)}
+
+								<GroupParticipantAudio
+									status={participant.status}
+									stream={remoteStream}
+								/>
+							</div>
+						)
+					})}
+				</div>
 			</div>
 
-			<div className='mt-3 flex flex-wrap items-center justify-center gap-2'>
+			{/* Main Video Viewport (Split Grid & Fullscreen) */}
+			{availableStreams.length > 0 && (
+				<div className='mt-3 space-y-2'>
+					<div className='flex items-center justify-between px-1 text-xs text-gray-400'>
+						<span className='font-semibold text-white/90'>
+							{fullscreenStreamId
+								? 'Полноэкранный режим'
+								: activeWatchedStreams.length > 1
+								? `Разделенный экран (${activeWatchedStreams.length} трансляций)`
+								: 'Трансляция'}
+						</span>
+						{fullscreenStreamId && (
+							<button
+								onClick={() => setFullscreenStreamId(null)}
+								className='px-2.5 py-1 text-[11px] bg-white/10 hover:bg-white/20 rounded-lg text-white font-medium transition-colors'
+							>
+								Выйти в разделенный режим
+							</button>
+						)}
+					</div>
+
+					{/* Streams Grid */}
+					<div
+						className={`grid gap-3 ${
+							fullscreenStreamId
+								? 'grid-cols-1'
+								: activeWatchedStreams.length > 1
+								? 'grid-cols-1 sm:grid-cols-2'
+								: 'grid-cols-1'
+						}`}
+					>
+						{(fullscreenStreamId
+							? availableStreams.filter(s => s.id === fullscreenStreamId)
+							: activeWatchedStreams
+						).map(item => (
+							<div
+								key={item.id}
+								className={`relative rounded-2xl border border-white/15 bg-black/60 overflow-hidden shadow-lg group ${
+									fullscreenStreamId ? 'h-80 sm:h-96' : 'h-48 sm:h-64'
+								}`}
+							>
+								<video
+									autoPlay
+									playsInline
+									muted={item.isLocal}
+									ref={ref => {
+										if (ref && item.stream) {
+											ref.srcObject = item.stream
+											const p = ref.play()
+											if (p && typeof p.catch === 'function') p.catch(() => {})
+										}
+									}}
+									className='h-full w-full object-contain bg-black'
+								/>
+
+								<div className='absolute bottom-2 left-2 right-2 flex items-center justify-between px-3 py-1.5 bg-black/70 backdrop-blur-md rounded-xl text-xs text-white'>
+									<span className='font-semibold truncate max-w-[60%]'>{item.title}</span>
+									<div className='flex items-center gap-2'>
+										<button
+											onClick={() =>
+												setFullscreenStreamId(fullscreenStreamId === item.id ? null : item.id)
+											}
+											className='px-2 py-0.5 bg-white/15 hover:bg-white/25 rounded text-[11px] font-medium transition-colors'
+											title={fullscreenStreamId === item.id ? 'Свернуть' : 'На весь экран'}
+										>
+											{fullscreenStreamId === item.id ? 'Свернуть' : 'Во весь экран'}
+										</button>
+										{!fullscreenStreamId && activeWatchedStreams.length > 1 && (
+											<button
+												onClick={() => toggleWatchStream(item.id)}
+												className='px-2 py-0.5 bg-red-600/60 hover:bg-red-600 rounded text-[11px] font-medium transition-colors'
+											>
+												Закрыть
+											</button>
+										)}
+									</div>
+								</div>
+							</div>
+						))}
+					</div>
+				</div>
+			)}
+
+			{/* Audio Local Container */}
+			<div className='hidden'>
+				<audio
+					ref={ref => {
+						if (ref && localStream) {
+							ref.srcObject = localStream
+						}
+					}}
+					autoPlay
+					playsInline
+					muted
+				/>
+			</div>
+
+			{/* Controls Toolbar */}
+			<div className='mt-4 flex flex-wrap items-center justify-center gap-3 border-t border-white/10 pt-3'>
 				<button
 					onClick={onMuteToggle}
-					className={`rounded-2xl border px-4 py-2 text-white transition ${
+					className={`rounded-2xl border px-4 py-2 text-white font-medium text-xs transition ${
 						isMuted
-							? 'border-rose-500/40 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20'
+							? 'border-rose-500/40 bg-rose-500/20 text-rose-200 hover:bg-rose-500/30'
 							: 'border-white/10 bg-white/5 hover:bg-white/10'
 					}`}
 					title={isMuted ? 'Включить микрофон' : 'Выключить микрофон'}
 				>
-					{isMuted ? <MicOff className='h-4 w-4' /> : <Mic className='h-4 w-4' />}
+					{isMuted ? <MicOff className='h-4 w-4 inline mr-1.5' /> : <Mic className='h-4 w-4 inline mr-1.5' />}
+					{isMuted ? 'Выкл. микр.' : 'Микрофон'}
 				</button>
-				{hasScreenVideo && (
-					<>
-						<button
-							onClick={togglePictureInPicture}
-							className={`rounded-2xl border px-4 py-2 text-white transition ${
-								isScreenPip
-									? 'border-indigo-500/40 bg-indigo-500/10 text-indigo-200 hover:bg-indigo-500/20'
-									: 'border-white/10 bg-white/5 hover:bg-white/10'
-							}`}
-							title={isScreenPip ? 'Скрыть окно' : 'Вынести в окно'}
-						>
-							🗔
-						</button>
-						<button
-							onClick={toggleFullscreen}
-							className={`rounded-2xl border px-4 py-2 text-white transition ${
-								isScreenFullscreen
-									? 'border-indigo-500/40 bg-indigo-500/10 text-indigo-200 hover:bg-indigo-500/20'
-									: 'border-white/10 bg-white/5 hover:bg-white/10'
-							}`}
-							title={
-								isScreenFullscreen ? 'Выйти из полноэкранного' : 'Во весь экран'
-							}
-						>
-							⛶
-						</button>
-						<button
-							onClick={() => setIsScreenZoomed(prev => !prev)}
-							className={`rounded-2xl border px-4 py-2 text-white transition ${
-								isScreenZoomed
-									? 'border-indigo-500/40 bg-indigo-500/10 text-indigo-200 hover:bg-indigo-500/20'
-									: 'border-white/10 bg-white/5 hover:bg-white/10'
-							}`}
-							title={isScreenZoomed ? 'Обычный размер' : 'Увеличить'}
-						>
-							🔍
-						</button>
-					</>
-				)}
 
 				<button
 					onClick={onVideoToggle}
-					className={`rounded-2xl border px-4 py-2 text-white transition ${
+					className={`rounded-2xl border px-4 py-2 text-white font-medium text-xs transition ${
 						isVideoEnabled
-							? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20'
+							? 'border-emerald-500/40 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30'
 							: 'border-white/10 bg-white/5 hover:bg-white/10'
 					}`}
 					title={isVideoEnabled ? 'Выключить камеру' : 'Включить камеру'}
 				>
-					{isVideoEnabled ? '📹' : '📷'}
+					{isVideoEnabled ? '📹 Камера вкл.' : '📷 Вкл. камеру'}
 				</button>
+
 				<button
 					onClick={onScreenShareToggle}
 					disabled={screenShareDisabled}
-					className={`rounded-2xl border px-4 py-2 text-white transition ${
+					className={`rounded-2xl border px-4 py-2 text-white font-medium text-xs transition ${
 						screenShareDisabled
 							? 'border-white/10 bg-white/5 opacity-60'
 							: isScreenSharing
-								? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20'
+								? 'border-emerald-500/40 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30'
 								: 'border-white/10 bg-white/5 hover:bg-white/10'
 					}`}
 					title={
 						screenShareDisabled
-							? 'Демонстрация экрана недоступна на этом устройстве'
+							? 'Демонстрация недоступна'
 							: isScreenSharing
 								? 'Остановить демонстрацию'
 								: 'Демонстрация экрана'
 					}
 				>
-					🖥️
+					🖥️ {isScreenSharing ? 'Стоп демка' : 'Демка экрана'}
 				</button>
 
 				<button
 					onClick={() => onEndCall(callId)}
-					className='rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-rose-200 transition hover:bg-rose-500/20'
+					className='rounded-2xl border border-rose-500/40 bg-rose-500/20 px-4 py-2 text-rose-200 font-medium text-xs transition hover:bg-rose-500/30'
 					title='Покинуть звонок'
 				>
-					<PhoneOff className='h-4 w-4' />
+					<PhoneOff className='h-4 w-4 inline mr-1.5' /> Выйти
 				</button>
 			</div>
 		</div>

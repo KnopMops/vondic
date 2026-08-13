@@ -43,6 +43,15 @@ async def list_public_bots():
     return {"bots": [b.to_dict() if hasattr(b, "to_dict") else b for b in bots]}
 
 
+@public_bots_router.get("/search")
+@public_bots_router.post("/search")
+async def search_public_bots(payload: Optional[dict] = None, q: Optional[str] = Query(None)):
+    query_str = q or (payload.get("query") if payload else "") or (payload.get("q") if payload else "") or ""
+    bots = BotService.search_active_bots(query_str) if query_str else BotService.get_active_bots()
+    items = [b.to_dict() if hasattr(b, "to_dict") else b for b in bots]
+    return {"bots": items, "items": items}
+
+
 @public_bots_router.get("/{bot_id}")
 async def get_public_bot(bot_id: str):
     bot_id = _resolve_bot_id(bot_id)

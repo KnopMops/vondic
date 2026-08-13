@@ -28,17 +28,19 @@ async def get_bots(
     return [{"id": b.id, "name": b.name, "description": b.description, "avatar_url": b.avatar_url, "is_verified": bool(b.is_verified)} for b in bots]
 
 
+@bots_router.get("/search")
 @bots_router.post("/search")
 async def search_bots(
-    payload: Dict[str, Any],
+    payload: Optional[Dict[str, Any]] = None,
+    query: Optional[str] = Query(None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
 ):
-    query = payload.get("query", "").strip()
-    if not query:
-        raise HTTPException(status_code=400, detail="query is required")
-
-    stmt = select(Bot).where(Bot.name.ilike(f"%{query}%"), Bot.is_active == 1)
+    query_str = (query or (payload.get("query") if payload else "") or "").strip()
+    if not query_str:
+        stmt = select(Bot).where(Bot.is_active == 1)
+    else:
+        stmt = select(Bot).where(Bot.name.ilike(f"%{query_str}%"), Bot.is_active == 1)
     res = await db.execute(stmt)
     bots = res.scalars().all()
     return [{"id": b.id, "name": b.name, "description": b.description, "avatar_url": b.avatar_url, "is_verified": bool(b.is_verified)} for b in bots]

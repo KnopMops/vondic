@@ -43,6 +43,7 @@ export default function RightPanel() {
 		nextTrack,
 		previousTrack,
 		seek,
+		setIsPlaylistModalOpen,
 	} = useMusicPlayerStore()
 
 	useEffect(() => {
@@ -74,16 +75,18 @@ export default function RightPanel() {
 		<aside className='space-y-6'>
 			{/* Vondic Music Player Widget */}
 			<div className='glass-panel p-4 relative overflow-hidden'>
-				<span className='text-xs font-semibold text-accent uppercase tracking-widest flex items-center gap-1.5'>
-					<Music className='w-3.5 h-3.5' /> Вондик Музыка
-				</span>
-				{isPlaying && (
-					<span className='flex gap-0.5 items-end h-3 mt-1'>
-						<span className='w-0.5 bg-[var(--app-accent)] rounded-full animate-bounce h-2' style={{ animationDelay: '0.1s' }} />
-						<span className='w-0.5 bg-[var(--app-accent)] rounded-full animate-bounce h-3' style={{ animationDelay: '0.3s' }} />
-						<span className='w-0.5 bg-[var(--app-accent)] rounded-full animate-bounce h-1.5' style={{ animationDelay: '0.5s' }} />
+				<div className='flex items-center justify-between mb-2'>
+					<span className='text-xs font-semibold text-accent uppercase tracking-widest flex items-center gap-1.5'>
+						<Music className='w-3.5 h-3.5' /> Вондик Музыка
 					</span>
-				)}
+					{isPlaying && (
+						<span className='flex gap-0.5 items-end h-3'>
+							<span className='w-0.5 bg-[var(--app-accent)] rounded-full animate-bounce h-2' style={{ animationDelay: '0.1s' }} />
+							<span className='w-0.5 bg-[var(--app-accent)] rounded-full animate-bounce h-3' style={{ animationDelay: '0.3s' }} />
+							<span className='w-0.5 bg-[var(--app-accent)] rounded-full animate-bounce h-1.5' style={{ animationDelay: '0.5s' }} />
+						</span>
+					)}
+				</div>
 
 				<div className='relative z-10'>
 					{currentTrack ? (
@@ -122,9 +125,9 @@ export default function RightPanel() {
 								>
 									<SkipBack className='w-5 h-5 fill-current' />
 								</button>
-							<button
-								onClick={togglePlay}
-								className='w-9 h-9 rounded-full btn-accent flex items-center justify-center transition-all shadow-lg active:scale-95'
+								<button
+									onClick={togglePlay}
+									className='w-9 h-9 rounded-full btn-accent flex items-center justify-center transition-all shadow-lg active:scale-95'
 								>
 									{isPlaying ? (
 										<Pause className='w-4.5 h-4.5 fill-current' />
@@ -142,13 +145,20 @@ export default function RightPanel() {
 							</div>
 						</div>
 					) : (
-						<div className='py-4 text-center space-y-2'>
-							<div className='w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mx-auto text-gray-400'>
-								<Music className='w-5 h-5' />
+						<div className='py-3 text-center space-y-2'>
+							<div className='w-9 h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mx-auto text-gray-400'>
+								<Music className='w-4 h-4' />
 							</div>
-							<p className='text-xs text-gray-400'>Выберите музыку в разделе VMьюзик</p>
+							<p className='text-xs text-gray-400'>Ваш музыкальный плеер</p>
 						</div>
 					)}
+
+					<button
+						onClick={() => setIsPlaylistModalOpen(true)}
+						className='mt-3 w-full py-1.5 px-3 bg-violet-600/20 hover:bg-violet-600/30 border border-violet-500/30 text-violet-300 text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5 active:scale-[0.98]'
+					>
+						<Music className='w-3.5 h-3.5' /> Открыть плейлист
+					</button>
 				</div>
 			</div>
 

@@ -5,7 +5,8 @@ import { setUser } from '@/lib/features/authSlice'
 import { useAppDispatch } from '@/lib/hooks'
 import { User } from '@/lib/types'
 import { getAttachmentUrl, getAvatarUrl, formatMskDateTime } from '@/lib/utils'
-import { AnimatePresence, motion } from 'framer-motion'
+import { useMusicPlayerStore } from '@/lib/stores/musicPlayerStore'
+import { FiPlay, FiPause } from 'react-icons/fi'
 import {
 	LuBan as Ban,
 	LuBell as Bell,
@@ -135,6 +136,8 @@ export default function UserProfile({ user, currentUser }: Props) {
 		partner_badge: 'Наш партнёр',
 		gold_star: 'Золотая звезда',
 	}
+
+	const { pinnedProfileTrack, playTrack, currentTrack, isPlaying } = useMusicPlayerStore()
 
 	const [isEditModalOpen, setIsEditModalOpen] = useState(false)
 	const [avatarUrl, setAvatarUrl] = useState(user.avatar_url || '')
@@ -1213,6 +1216,24 @@ export default function UserProfile({ user, currentUser }: Props) {
 							(!isMe && user.privacy_settings?.show_email === true && user.email) ? (
 								<p className='text-sm text-gray-400'>{user.email}</p>
 							) : null}
+							{pinnedProfileTrack && (
+								<div className='mt-2.5 flex items-center gap-2.5 px-3 py-1.5 bg-violet-950/40 border border-violet-500/30 rounded-xl w-fit text-xs text-violet-300 shadow-md backdrop-blur-sm'>
+									<button
+										onClick={() => playTrack(pinnedProfileTrack)}
+										className='w-7 h-7 rounded-full bg-violet-600 flex items-center justify-center text-white hover:bg-violet-500 transition-colors shrink-0 shadow'
+									>
+										{currentTrack?.id === pinnedProfileTrack.id && isPlaying ? (
+											<FiPause className='w-3.5 h-3.5 fill-current' />
+										) : (
+											<FiPlay className='w-3.5 h-3.5 fill-current ml-0.5' />
+										)}
+									</button>
+									<div className='min-w-0 max-w-[220px]'>
+										<span className='font-semibold text-white truncate block text-xs leading-tight'>{pinnedProfileTrack.title}</span>
+										<span className='text-[10px] text-violet-300/80 truncate block leading-tight'>{pinnedProfileTrack.artist}</span>
+									</div>
+								</div>
+							)}
 							<p
 								className={`text-sm capitalize mt-1 ${
 									user.role === 'Admin'
