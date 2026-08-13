@@ -57,24 +57,47 @@ export default function PlaylistModal() {
 		return `${m}:${s < 10 ? '0' : ''}${s}`
 	}
 
-	const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+	const [isUploading, setIsUploading] = useState(false)
+
+	const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
 		const files = e.target.files
 		if (!files || files.length === 0) return
-		Array.from(files).forEach(file => {
-			if (!file.type.startsWith('audio/')) return
-			const url = URL.createObjectURL(file)
+		setIsUploading(true)
+		for (const file of Array.from(files)) {
+			if (!file.type.startsWith('audio/')) continue
 			const nameParts = file.name.replace(/\.[^/.]+$/, '').split(' - ')
 			const artist = nameParts.length > 1 ? nameParts[0] : 'Неизвестный исполнитель'
 			const title = nameParts.length > 1 ? nameParts.slice(1).join(' - ') : nameParts[0]
-			const newTrack: Track = {
-				id: `uploaded-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-				title,
-				artist,
-				duration: '0:00',
-				url,
+
+			try {
+				const formData = new FormData()
+				formData.append('file', file)
+				const res = await fetch('/api/upload/file', {
+					method: 'POST',
+					body: formData,
+				})
+				let fileUrl = ''
+				if (res.ok) {
+					const data = await res.json()
+					fileUrl = data.url || data.file_url || ''
+				}
+				if (!fileUrl) {
+					fileUrl = URL.createObjectURL(file)
+				}
+				const newTrack: Track = {
+					id: `uploaded-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+					title,
+					artist,
+					duration: '0:00',
+					url: fileUrl,
+				}
+				addToMyPlaylist(newTrack)
+			} catch (err) {
+				console.error('Audio upload error:', err)
 			}
-			addToMyPlaylist(newTrack)
-		})
+		}
+		setIsUploading(false)
+		if (fileInputRef.current) fileInputRef.current.value = ''
 	}
 
 	return (
@@ -105,10 +128,11 @@ export default function PlaylistModal() {
 						/>
 						<button
 							onClick={() => fileInputRef.current?.click()}
-							className='flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-violet-600 hover:bg-violet-500 rounded-lg transition-colors text-white'
+							disabled={isUploading}
+							className='flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-violet-600 hover:bg-violet-500 disabled:opacity-50 rounded-lg transition-colors text-white'
 							title='Загрузить аудиофайл'
 						>
-							<FiUpload className='w-3.5 h-3.5' /> Загрузить
+							<FiUpload className='w-3.5 h-3.5' /> {isUploading ? 'Загрузка...' : 'Загрузить'}
 						</button>
 						<button
 							onClick={() => setIsPlaylistModalOpen(false)}

@@ -342,11 +342,11 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 
 					{/* Streams Grid */}
 					<div
-						className={`grid gap-3 ${
+						className={`grid gap-2 sm:gap-3 ${
 							fullscreenStreamId
 								? 'grid-cols-1'
 								: activeWatchedStreams.length > 1
-								? 'grid-cols-1 sm:grid-cols-2'
+								? 'grid-cols-2'
 								: 'grid-cols-1'
 						}`}
 					>
@@ -357,7 +357,7 @@ const ActiveGroupCall: React.FC<ActiveGroupCallProps> = ({
 							<div
 								key={item.id}
 								className={`relative rounded-2xl border border-white/15 bg-black/60 overflow-hidden shadow-lg group ${
-									fullscreenStreamId ? 'h-80 sm:h-96' : 'h-48 sm:h-64'
+									fullscreenStreamId ? 'h-72 sm:h-96' : 'h-36 sm:h-64'
 								}`}
 							>
 								<video

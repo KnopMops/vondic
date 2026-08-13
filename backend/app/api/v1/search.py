@@ -43,8 +43,19 @@ async def global_search(
             "results": [p.to_dict(viewer_id=current_user.id) for p in posts]
         }
     else:
+        users = UserService.search_users(query)
+        from app.services.bot_service import BotService
+        bots = BotService.search_active_bots(query)
+        posts = PostService.search_posts(query)
+
+        user_list = [u.to_dict(viewer_id=current_user.id) for u in users]
+        bot_list = [b.to_dict() if hasattr(b, "to_dict") else b for b in bots]
+        post_list = [p.to_dict(viewer_id=current_user.id) for p in posts]
+
         return {
-            "type": "unknown",
-            "message": "Start query with @ for users or # for posts",
-            "results": []
+            "type": "all",
+            "users": user_list,
+            "bots": bot_list,
+            "posts": post_list,
+            "results": user_list + bot_list,
         }

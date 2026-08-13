@@ -3810,7 +3810,7 @@ export default function MessengerPage() {
 
 				if (botsRes.ok) {
 					const data = await botsRes.json()
-					const bots = Array.isArray(data) ? data : []
+					const bots = Array.isArray(data) ? data : (data?.bots || data?.items || [])
 					const mappedBots = bots
 						.filter((bot: any) => bot?.id && bot?.name)
 						.map((bot: any) => ({
@@ -4105,19 +4105,16 @@ export default function MessengerPage() {
 			is_read: true,
 			type: 'text',
 		})
-		const isBotikChat =
-			selectedFriend?.is_bot === true && selectedFriend.id === botUser.id
-		if (!isBotikChat) {
-			const targetBotId = selectedFriend?.id
-			setBotMessages(prev => [...prev, nextMessage])
-			if (selectedFriend && selectedFriend.is_bot === true && selectedFriend.id !== botUser.id) {
-				setActiveBots(prev => {
-					if (prev.some(b => b.id === selectedFriend.id)) return prev
-					const next = [...prev, selectedFriend]
-					try { localStorage.setItem(activeBotsStorageKey, JSON.stringify(next)) } catch {}
-					return next
-				})
-			}
+		const targetBotId = selectedFriend?.id || botUser.id
+		setBotMessages(prev => [...prev, nextMessage])
+		if (selectedFriend && selectedFriend.is_bot === true) {
+			setActiveBots(prev => {
+				if (prev.some(b => b.id === selectedFriend.id)) return prev
+				const next = [...prev, selectedFriend]
+				try { localStorage.setItem(activeBotsStorageKey, JSON.stringify(next)) } catch {}
+				return next
+			})
+		}
 			if (!accessToken || !user?.id) {
 				setBotMessages(prev => [
 					...prev,

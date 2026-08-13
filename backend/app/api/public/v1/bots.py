@@ -17,6 +17,7 @@ UPDATE_QUEUES = defaultdict(deque)
 UPDATE_COUNTERS = defaultdict(int)
 OUTBOX_QUEUES = defaultdict(deque)
 OUTBOX_COUNTERS = defaultdict(int)
+UPDATE_EVENTS = defaultdict(asyncio.Event)
 
 
 def _get_bot_token(authorization: Optional[str] = Header(None), x_bot_token: Optional[str] = Header(None)) -> Optional[str]:
@@ -87,6 +88,7 @@ async def push_bot_update(bot_id: str, payload: dict):
         raw_update["update_id"] = int(time.time() * 1000)
 
     UPDATE_QUEUES[bot_id].append(raw_update)
+    UPDATE_EVENTS[bot_id].set()
 
     chat_id = None
     if isinstance(raw_update, dict):
@@ -150,6 +152,7 @@ async def handle_bot_callback(bot_id: str, payload: dict):
         },
     }
     UPDATE_QUEUES[bot_id].append(raw_update)
+    UPDATE_EVENTS[bot_id].set()
 
     outbox = []
     if user_id and user_id != "unknown":
@@ -176,12 +179,15 @@ async def get_bot_updates(
     bot_token: Optional[str] = Depends(_get_bot_token),
 ):
     bot_id = _resolve_bot_id(bot_id)
-    start = time.time()
-    max_wait = min(max(timeout, 0), 5)
     q = UPDATE_QUEUES[bot_id]
 
-    while not q and (time.time() - start < max_wait):
-        await asyncio.sleep(0.1)
+    if not q and timeout > 0:
+        event = UPDATE_EVENTS[bot_id]
+        event.clear()
+        try:
+            await asyncio.wait_for(event.wait(), timeout=min(max(timeout, 0), 5))
+        except asyncio.TimeoutError:
+            pass
 
     items = []
     while q and len(items) < limit:

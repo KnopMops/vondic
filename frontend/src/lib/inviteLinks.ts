@@ -14,9 +14,19 @@ export function appOrigin(): string {
 	return process.env.NEXT_PUBLIC_APP_URL || ''
 }
 
+function _resolveCode(input: any): string {
+	if (!input) return ''
+	if (typeof input === 'string') return input
+	if (typeof input === 'object') {
+		return input.invite_code || input.code || input.inviteCode || input.id || ''
+	}
+	return String(input)
+}
+
 /** Сервер мессенджера (Discord: несколько каналов) */
 export function serverJoinPath(codeOrId: string): string {
-	return `/feed/messages/join/${encodeURIComponent(codeOrId)}`
+	const code = _resolveCode(codeOrId)
+	return `/feed/messages/join/${encodeURIComponent(code)}`
 }
 
 export function serverJoinUrl(codeOrId: string): string {
@@ -25,7 +35,8 @@ export function serverJoinUrl(codeOrId: string): string {
 
 /** Канал (Telegram: один чат) */
 export function channelJoinPath(codeOrId: string): string {
-	return `/feed/messages/join/channel/${encodeURIComponent(codeOrId)}`
+	const code = _resolveCode(codeOrId)
+	return `/feed/messages/join/channel/${encodeURIComponent(code)}`
 }
 
 export function channelJoinUrl(codeOrId: string): string {
@@ -34,7 +45,8 @@ export function channelJoinUrl(codeOrId: string): string {
 
 /** Групповой чат */
 export function groupJoinPath(codeOrId: string): string {
-	return `/feed/messages/join/group/${encodeURIComponent(codeOrId)}`
+	const code = _resolveCode(codeOrId)
+	return `/feed/messages/join/group/${encodeURIComponent(code)}`
 }
 
 export function groupJoinUrl(codeOrId: string): string {
@@ -43,7 +55,8 @@ export function groupJoinUrl(codeOrId: string): string {
 
 /** Публичное сообщество VK (стена) */
 export function socialCommunityJoinPath(codeOrId: string): string {
-	return `/feed/communities/join/${encodeURIComponent(codeOrId)}`
+	const code = _resolveCode(codeOrId)
+	return `/feed/communities/join/${encodeURIComponent(code)}`
 }
 
 export function socialCommunityJoinUrl(codeOrId: string): string {
