@@ -210,7 +210,6 @@ class BotMethodsMixin:
     async def decline_join_request(self, chat_id: str, user_id: str) -> dict:
         return await self._send_action("decline_join_request", {"chat_id": chat_id, "user_id": user_id})
 
-
     async def set_chat_permissions(self, chat_id: str, permissions: dict) -> dict:
         return await self._send_action("set_chat_permissions", {
             "chat_id": chat_id, "permissions": permissions,

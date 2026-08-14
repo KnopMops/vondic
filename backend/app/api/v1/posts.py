@@ -146,7 +146,6 @@ async def get_feed(
     }
 
 
-
 @posts_router.get("/{post_id}", response_model=Dict[str, Any])
 async def get_post(
     post_id: str,
@@ -224,4 +223,3 @@ async def create_comment(
         return {"comment": cdict, "message": "Comment added"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-

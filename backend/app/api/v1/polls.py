@@ -70,7 +70,6 @@ async def get_poll(
     return poll.to_dict()
 
 
-
 @polls_router.post("/{poll_id}/vote")
 async def vote_poll(
     poll_id: str,

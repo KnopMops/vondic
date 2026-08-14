@@ -1,3 +1,11 @@
+from app.api.public.v1.bots import (
+    push_bot_update,
+    get_bot_updates,
+    send_bot_message,
+    get_bot_outbox,
+    handle_bot_callback,
+    answer_bot_callback_query,
+)
 import logging
 import time
 from typing import Any, Dict, Optional
@@ -101,22 +109,15 @@ async def verify_bot(
     return {"ok": True, "is_verified": bot.is_verified}
 
 
-from app.api.public.v1.bots import (
-    push_bot_update,
-    get_bot_updates,
-    send_bot_message,
-    get_bot_outbox,
-    handle_bot_callback,
-    answer_bot_callback_query,
-)
-
 @bots_router.post("/{bot_id}/updates/push")
 async def push_update_alias(bot_id: str, payload: dict):
     return await push_bot_update(bot_id, payload)
 
+
 @bots_router.get("/{bot_id}/updates")
 async def get_updates_alias(bot_id: str, offset: int = Query(0), limit: int = Query(100), timeout: int = Query(2)):
     return await get_bot_updates(bot_id, offset, limit, timeout)
+
 
 @bots_router.post("/{bot_id}/send")
 @bots_router.post("/{bot_id}/sendMessage")
@@ -125,11 +126,13 @@ async def get_updates_alias(bot_id: str, offset: int = Query(0), limit: int = Qu
 async def send_message_alias(bot_id: str, payload: dict):
     return await send_bot_message(bot_id, payload)
 
+
 @bots_router.post("/{bot_id}/callback")
 @bots_router.post("/{bot_id}/callback_query")
 @bots_router.post("/{bot_id}/callback-query")
 async def callback_alias(bot_id: str, payload: dict):
     return await handle_bot_callback(bot_id, payload)
+
 
 @bots_router.post("/{bot_id}/answerCallbackQuery")
 @bots_router.post("/{bot_id}/answer_callback_query")
@@ -137,12 +140,13 @@ async def callback_alias(bot_id: str, payload: dict):
 async def answer_callback_alias(bot_id: str, payload: dict):
     return await answer_bot_callback_query(bot_id, payload)
 
+
 @bots_router.get("/{bot_id}/permissions")
 @bots_router.get("/{bot_id}/permissions/{user_id}")
 async def get_permissions_alias(bot_id: str, user_id: Optional[str] = None):
     return {"granted": True, "scopes": ["basic", "user_info", "send_messages"]}
 
+
 @bots_router.get("/{bot_id}/outbox")
 async def get_outbox_alias(bot_id: str, chat_id: str = Query(...)):
     return await get_bot_outbox(bot_id, chat_id)
-

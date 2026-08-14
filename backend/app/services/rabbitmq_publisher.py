@@ -13,7 +13,7 @@ async def publish_to_queue(queue_name: str, payload: dict) -> bool:
         async with connection:
             channel = await connection.channel()
             await channel.declare_queue(queue_name, durable=True)
-            
+
             message = aio_pika.Message(
                 body=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
                 delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
@@ -28,4 +28,3 @@ async def publish_to_queue(queue_name: str, payload: dict) -> bool:
     except Exception as e:
         logger.warning(f"RabbitMQ publish to '{queue_name}' failed: {e}")
         return False
-

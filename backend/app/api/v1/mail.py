@@ -90,7 +90,6 @@ async def fetch_messages(
         return {"messages": [], "total": 0}
 
 
-
 @mail_router.post("/send")
 async def send_mail(
     payload: MailSendSchema,

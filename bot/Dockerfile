@@ -1,11 +1,13 @@
 FROM python:3.13-slim
 
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
 WORKDIR /app
 
-# Copy requirements and install (without botiksdk)
-COPY bot/requirements_a.txt .
-RUN pip install --no-cache-dir -r requirements_a.txt && \
-    pip uninstall -y botiksdk 2>/dev/null || true
+# Copy requirements and install via uv (without botiksdk)
+COPY requirements.txt .
+RUN uv pip install --system --no-cache -r requirements.txt && \
+    uv pip uninstall --system botiksdk 2>/dev/null || true
 
 # Copy botiksdk first (local package)
 COPY botiksdk/ /app/botiksdk/

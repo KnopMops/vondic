@@ -571,21 +571,25 @@ class Message:
         if self.video:
             d["video"] = {"file_id": self.video.file_id, "duration": self.video.duration}
         if self.document:
-            d["document"] = {"file_id": self.document.file_id, "file_name": self.document.file_name, "mime_type": self.document.mime_type}
+            d["document"] = {"file_id": self.document.file_id,
+                             "file_name": self.document.file_name, "mime_type": self.document.mime_type}
         if self.audio:
-            d["audio"] = {"file_id": self.audio.file_id, "title": self.audio.title, "performer": self.audio.performer, "duration": self.audio.duration}
+            d["audio"] = {"file_id": self.audio.file_id, "title": self.audio.title,
+                          "performer": self.audio.performer, "duration": self.audio.duration}
         if self.voice:
             d["voice"] = {"file_id": self.voice.file_id, "duration": self.voice.duration}
         if self.video_note:
             d["video_note"] = {"file_id": self.video_note.file_id, "duration": self.video_note.duration}
         if self.sticker:
-            d["sticker"] = {"file_id": self.sticker.file_id, "emoji": self.sticker.emoji, "set_name": self.sticker.set_name}
+            d["sticker"] = {"file_id": self.sticker.file_id,
+                            "emoji": self.sticker.emoji, "set_name": self.sticker.set_name}
         if self.location:
             d["location"] = {"latitude": self.location.latitude, "longitude": self.location.longitude}
         if self.venue:
             d["venue"] = {"title": self.venue.title, "address": self.venue.address}
         if self.contact:
-            d["contact"] = {"phone_number": self.contact.phone_number, "first_name": self.contact.first_name, "user_id": self.contact.user_id}
+            d["contact"] = {"phone_number": self.contact.phone_number,
+                            "first_name": self.contact.first_name, "user_id": self.contact.user_id}
         if self.poll:
             d["poll"] = {
                 "id": self.poll.id, "question": self.poll.question,
@@ -604,7 +608,8 @@ class Message:
         if self.caption:
             d["caption"] = self.caption
         if self.entities:
-            d["entities"] = [{"type": e.type, "offset": e.offset, "length": e.length, "url": e.url} for e in self.entities]
+            d["entities"] = [{"type": e.type, "offset": e.offset, "length": e.length, "url": e.url}
+                             for e in self.entities]
         if self.reply_to_message:
             d["reply_to_message"] = {"message_id": self.reply_to_message.message_id, "text": self.reply_to_message.text}
         if self.forward_from:
@@ -632,13 +637,15 @@ class Message:
 
         # Parse all content types
         photo_data = data.get("photo")
-        photo_list = [PhotoSize.from_dict(p) for p in photo_data] if photo_data and isinstance(photo_data, list) else None
+        photo_list = [PhotoSize.from_dict(p)
+                      for p in photo_data] if photo_data and isinstance(photo_data, list) else None
 
         # Parse entities
         entities_data = data.get("entities") or data.get("caption_entities")
         entities_list = [MessageEntity.from_dict(e) for e in entities_data] if entities_data else None
         caption_entities_data = data.get("caption_entities")
-        caption_entities_list = [MessageEntity.from_dict(e) for e in caption_entities_data] if caption_entities_data else None
+        caption_entities_list = [MessageEntity.from_dict(
+            e) for e in caption_entities_data] if caption_entities_data else None
 
         # Parse reply_to_message recursively
         reply_msg = Message.from_dict(data.get("reply_to_message")) if data.get("reply_to_message") else None

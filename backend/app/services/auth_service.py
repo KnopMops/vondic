@@ -123,7 +123,6 @@ class AuthService:
             if ip_address:
                 new_user.registration_ip = ip_address
 
-
             db.session.add(new_user)
             db.session.flush()
 
@@ -798,4 +797,3 @@ class AuthService:
     @staticmethod
     async def verify_email_async(token: str, db=None):
         return AuthService.verify_email(token)
-

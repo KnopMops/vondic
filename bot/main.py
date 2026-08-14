@@ -47,6 +47,7 @@ dp = Dispatcher()
 async def http_get(url: str, timeout: int = 5, headers: dict = None):
     return await asyncio.to_thread(requests.get, url, timeout=timeout, headers=headers or {})
 
+
 async def http_post(url: str, json: dict = None, timeout: int = 10, headers: dict = None):
     return await asyncio.to_thread(requests.post, url, json=json, timeout=timeout, headers=headers or {})
 
@@ -264,8 +265,8 @@ async def register_user(callback: CallbackQuery, bot: Bot, state: FSMContext):
     # Auto-grant basic permissions on registration
     try:
         await http_post(f"{BACKEND_URL}/api/public/v1/bots/{BOT_ID}/permissions/grant",
-            json={"user_id": user_id, "scopes": "basic_profile,send_messages"},
-            headers=_bot_headers())
+                        json={"user_id": user_id, "scopes": "basic_profile,send_messages"},
+                        headers=_bot_headers())
     except Exception:
         pass
 
@@ -275,8 +276,8 @@ async def register_user(callback: CallbackQuery, bot: Bot, state: FSMContext):
         InlineKeyboardButton("✅ Готово", callback_data="register_done"),
     )
     await bot.send_message(chat_id,
-        "✅ Регистрация! Теперь привяжите аккаунт Вондик:",
-        reply_markup=builder.as_markup())
+                           "✅ Регистрация! Теперь привяжите аккаунт Вондик:",
+                           reply_markup=builder.as_markup())
     await safe_answer(bot, callback.id)
 
 
@@ -286,7 +287,7 @@ async def register_done(callback: CallbackQuery, bot: Bot):
     kb.row(KeyboardButton("🎮 Игры"), KeyboardButton("💰 Баланс"))
     kb.row(KeyboardButton("💳 Premium"), KeyboardButton("ℹ️ Помощь"))
     await bot.send_message(str(callback.message.chat.id),
-        "🎉 Готово! Используйте кнопки ниже:", reply_markup=kb.as_markup())
+                           "🎉 Готово! Используйте кнопки ниже:", reply_markup=kb.as_markup())
     await safe_answer(bot, callback.id)
 
 
@@ -424,8 +425,8 @@ async def link_yandex(callback: CallbackQuery, bot: Bot):
     builder = InlineKeyboardBuilder()
     builder.add(InlineKeyboardButton(text="🔗 Открыть настройки", url=link_url))
     await bot.send_message(str(callback.message.chat.id),
-        "Перейдите в настройки и привяжите аккаунт Яндекса.",
-        reply_markup=builder.as_markup())
+                           "Перейдите в настройки и привяжите аккаунт Яндекса.",
+                           reply_markup=builder.as_markup())
     await safe_answer(bot, callback.id)
 
 

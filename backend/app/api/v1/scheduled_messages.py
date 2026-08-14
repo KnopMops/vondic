@@ -75,7 +75,6 @@ async def list_scheduled(
     return {"scheduled_messages": items, "messages": items} if isinstance(items, list) else items
 
 
-
 @scheduled_router.delete("/{msg_id}")
 async def cancel_scheduled(
     msg_id: str,

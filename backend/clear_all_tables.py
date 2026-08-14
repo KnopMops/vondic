@@ -22,7 +22,6 @@ def build_dsn() -> str:
     return f"postgresql://{quote_plus(user)}@{host}:{port}/{dbname}?sslmode={sslmode}"
 
 
-
 def main() -> int:
     dsn = build_dsn()
 

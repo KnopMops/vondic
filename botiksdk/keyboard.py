@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 
 class KeyboardButton:
     """A button for reply keyboard."""
+
     def __init__(self, text: str, request_location: bool = False,
                  request_contact: bool = False, request_poll: bool = False):
         self.text = text
@@ -24,6 +25,7 @@ class KeyboardButton:
 
 class ReplyKeyboardBuilder:
     """Builder for reply keyboard markup."""
+
     def __init__(self, resize_keyboard: bool = True, one_time_keyboard: bool = False):
         self._rows: list[list[Dict[str, Any]]] = []
         self._current_row: list[Dict[str, Any]] = []
@@ -56,5 +58,6 @@ class ReplyKeyboardBuilder:
 
 class ReplyKeyboardRemove:
     """Removes the reply keyboard."""
+
     def as_markup(self) -> Dict[str, Any]:
         return {"remove_keyboard": True, "is_keyboard": True}

@@ -47,7 +47,8 @@ async def add_reaction(
         raise HTTPException(status_code=404, detail="Message not found")
 
     reactions = list(message.reactions or [])
-    user_reaction = next((r for r in reactions if r.get("user_id") == current_user.id and r.get("emoji") == emoji), None)
+    user_reaction = next((r for r in reactions if r.get("user_id") ==
+                         current_user.id and r.get("emoji") == emoji), None)
 
     if user_reaction:
         reactions = [r for r in reactions if r.get("user_id") != current_user.id or r.get("emoji") != emoji]

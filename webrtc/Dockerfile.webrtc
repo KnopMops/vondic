@@ -1,14 +1,14 @@
 FROM python:3.13-slim
 
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
 WORKDIR /app
 
-COPY requirements_a.txt .
-RUN pip install --no-cache-dir -r requirements_a.txt
+COPY requirements.txt .
+RUN uv pip install --system --no-cache -r requirements.txt
 
-# Копируем код webrtc в подпапку /app/webrtc
+# Copy WebRTC code
 COPY webrtc/ /app/webrtc/
-
-RUN pip install --no-cache-dir gunicorn==23.0.0 uvicorn websockets fastapi python-socketio httpx asyncpg aiosqlite pywebpush py-vapid
 
 RUN useradd --create-home appuser
 USER appuser

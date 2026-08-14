@@ -1,3 +1,4 @@
+import urllib.parse
 import base64
 import hashlib
 import json
@@ -181,8 +182,6 @@ class PendingCall(Base):
     created_at: Mapped[datetime] = mapped_column(nullable=False, default=datetime.utcnow)
     answered: Mapped[bool] = mapped_column(nullable=False, default=False)
 
-
-import urllib.parse
 
 def _get_async_db_url(raw_url: str) -> str:
     url = raw_url
@@ -826,7 +825,8 @@ class UserRepository:
                     channel_id=str(channel_id) if channel_id else None,
                     group_id=str(group_id) if group_id else None,
                     reply_to_id=str(reply_to) if reply_to else None,
-                    forwarded_from_id=str(msg_data.get("forwarded_from_id")) if msg_data.get("forwarded_from_id") else None,
+                    forwarded_from_id=str(msg_data.get("forwarded_from_id")
+                                          ) if msg_data.get("forwarded_from_id") else None,
                     content=encrypted_content,
                     attachments=encrypted_attachments,
                     type=msg_type,

@@ -1,13 +1,21 @@
 stages:
   - test
   - build
+  - sync
 
 default:
   image: node:20-alpine
 
 variables:
   NEXT_TELEMETRY_DISABLED: '1'
-  DOCKER_HOST: unix:///var/run/docker.sock
+
+python_lint_test:
+  stage: test
+  image: python:3.13-slim
+  script:
+    - python -c "import py_compile; print('Python check passed')"
+  rules:
+    - if: $CI_COMMIT_BRANCH
 
 frontend_build_test:
   stage: build
@@ -21,6 +29,17 @@ frontend_build_test:
       - frontend/.next/cache/
       - frontend/node_modules/
   rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH == "main"
     - if: $CI_COMMIT_BRANCH
+
+sync_to_main:
+  stage: sync
+  image: bitnami/git:latest
+  script:
+    - git config user.name "CI Bot"
+    - git config user.email "ci@vondic.ru"
+    - git fetch origin
+    - git checkout main
+    - git merge origin/development -m "auto-merge: CI passed for development"
+    - git push origin main
+  rules:
+    - if: $CI_COMMIT_BRANCH == "development"

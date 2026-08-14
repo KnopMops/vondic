@@ -20,7 +20,8 @@ async def list_bot_games(
     if not bot:
         raise HTTPException(status_code=404, detail="Bot not found")
 
-    published_only = not (manage == "1" and BotGameService.can_manage_bot(bot, str(current_user.id), getattr(current_user, "role", None)))
+    published_only = not (manage == "1" and BotGameService.can_manage_bot(
+        bot, str(current_user.id), getattr(current_user, "role", None)))
     games = BotGameService.list_games(bot_id, query=q, published_only=published_only)
     return {"games": [BotGameService.serialize(g) for g in games], "bot_id": bot_id}
 

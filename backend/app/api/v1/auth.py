@@ -149,9 +149,6 @@ async def me(
     }
 
 
-
-
-
 @auth_router.post("/forgot-password")
 async def forgot_password(
     payload: Dict[str, Any],
@@ -463,7 +460,8 @@ async def yandex_unlink(
         raise HTTPException(status_code=400, detail="Yandex аккаунт не привязан")
 
     if current_user.email and current_user.email.endswith("@yandex.ru"):
-        raise HTTPException(status_code=400, detail="Невозможно отвязать Yandex от аккаунта, созданного через Yandex OAuth")
+        raise HTTPException(
+            status_code=400, detail="Невозможно отвязать Yandex от аккаунта, созданного через Yandex OAuth")
 
     current_user.yandex_id = None
     current_user.yandex_token = None

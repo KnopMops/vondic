@@ -2,6 +2,7 @@
 Воркер RabbitMQ для обработки очередей отправки Email и Push-уведомлений (email_queue и push_queue).
 """
 
+from app.core.config import settings
 import json
 import logging
 import os
@@ -14,7 +15,6 @@ import pika
 
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
-from app.core.config import settings
 
 logging.basicConfig(
     level=logging.INFO,
@@ -28,7 +28,8 @@ RABBITMQ_URL = os.environ.get("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/
 def send_smtp_email(to_email: str, subject: str, html_content: str):
     smtp_host = getattr(settings, "MAIL_SERVER", None) or os.environ.get("MAIL_SERVER", "localhost")
     smtp_port = int(getattr(settings, "MAIL_PORT", 587) or os.environ.get("MAIL_PORT", 587))
-    sender = getattr(settings, "MAIL_DEFAULT_SENDER", None) or os.environ.get("MAIL_DEFAULT_SENDER", "noreply@vondic.ru")
+    sender = getattr(settings, "MAIL_DEFAULT_SENDER", None) or os.environ.get(
+        "MAIL_DEFAULT_SENDER", "noreply@vondic.ru")
     username = getattr(settings, "MAIL_USERNAME", None) or os.environ.get("MAIL_USERNAME")
     password = getattr(settings, "MAIL_PASSWORD", None) or os.environ.get("MAIL_PASSWORD")
 

@@ -73,7 +73,6 @@ async def join_social_community(
     return {"community": community.to_dict() if hasattr(community, "to_dict") else community}
 
 
-
 @social_communities_router.post("/leave")
 async def leave_social_community(
     payload: SocialCommunityLeaveSchema,

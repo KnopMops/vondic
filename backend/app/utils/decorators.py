@@ -1,3 +1,4 @@
+import secrets
 import time
 from collections import defaultdict, deque
 from datetime import datetime
@@ -62,9 +63,6 @@ def rate_limit(key_prefix: str, limit: int, window_seconds: int):
         return decorated
 
     return decorator
-
-
-import secrets
 
 
 def generate_csrf_token() -> str:

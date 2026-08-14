@@ -1,3 +1,5 @@
+from werkzeug.security import check_password_hash, generate_password_hash
+from sqlalchemy.exc import IntegrityError
 import json
 import os
 import secrets
@@ -23,9 +25,6 @@ from app.models.escalation import Escalation
 from app.models.user import User
 from sqlalchemy import or_
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from sqlalchemy.exc import IntegrityError
-from werkzeug.security import check_password_hash, generate_password_hash
 
 
 class UserService:

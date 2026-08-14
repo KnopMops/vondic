@@ -6,7 +6,6 @@ from app.services.user_service import UserService
 from fastapi.responses import JSONResponse
 
 
-
 def _check_mail_premium(user):
     if not user.premium or (
         user.premium_expired_at and user.premium_expired_at < datetime.utcnow()

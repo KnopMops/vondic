@@ -14,7 +14,6 @@ from app.services.social_community_service import SocialCommunityService
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
-
 def _paginate_query(query, page=1, per_page=20):
     p = int(page or 1)
     if p < 1:
@@ -103,13 +102,11 @@ class PostService:
 
         return _paginate_query(query.order_by(Post.created_at.desc()), page=page, per_page=per_page)
 
-
     @staticmethod
     def get_feed_paginated(user_id, page=1, per_page=20):
         return PostService.get_posts_paginated(
             page=page, per_page=per_page, user_id=user_id, filter_mode="subscriptions"
         )
-
 
     @staticmethod
     def get_post_by_id(post_id):

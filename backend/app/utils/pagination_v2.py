@@ -96,7 +96,7 @@ def paginate_list(items: list, limit=20, cursor=None, key_fn=None):
         limit = 100
 
     if key_fn is None:
-        key_fn = lambda x: (x.get("created_at", 0), x.get("id", ""))
+        def key_fn(x): return (x.get("created_at", 0), x.get("id", ""))
 
     start_idx = 0
     if cursor:

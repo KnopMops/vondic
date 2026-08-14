@@ -11,7 +11,7 @@ audit_log_router = APIRouter(prefix="/api/v1/audit-log", tags=["Audit Log"])
 
 
 async def log_audit_async(db, user_id: str, action: str, group_id: str = None, channel_id: str = None,
-                     target_user_id: str = None, details: dict = None):
+                          target_user_id: str = None, details: dict = None):
     try:
         entry = AuditLog(
             user_id=user_id, action=action, group_id=group_id,

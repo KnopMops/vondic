@@ -88,4 +88,3 @@ class Message(Base):
                     'is_deleted',
                     False),
         }
-

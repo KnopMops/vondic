@@ -44,7 +44,6 @@ class CommentService:
         items = query.order_by(Comment.created_at.asc()).offset((p - 1) * pp).limit(pp).all()
         return items, total, p, pages
 
-
     @staticmethod
     def get_comment_by_id(comment_id):
         return Comment.query.filter_by(id=comment_id, deleted=False).first()

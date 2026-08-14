@@ -48,4 +48,3 @@ class UserResponseSchema(BaseModel):
     disk_limit: int = 536870912
     privacy_settings: Optional[Dict[str, Any]] = None
     created_at: Optional[str] = None
-

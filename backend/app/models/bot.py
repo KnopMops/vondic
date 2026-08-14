@@ -20,4 +20,3 @@ class Bot(Base):
     created_at = Column(TIMESTAMP, default=datetime.utcnow)
     updated_at = Column(
         TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
-

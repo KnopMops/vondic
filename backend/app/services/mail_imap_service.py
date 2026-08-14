@@ -204,7 +204,7 @@ class MailImapService:
             uids.reverse()
 
             total_matching = len(uids)
-            page_uids = uids[offset : offset + limit]
+            page_uids = uids[offset: offset + limit]
             if not page_uids:
                 return [], total_in_folder
 

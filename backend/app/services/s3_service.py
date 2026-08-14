@@ -14,7 +14,7 @@ async def upload_file_to_s3(
     """Асинхронная загрузка файла в S3 MinIO через aioboto3."""
     session = aioboto3.Session()
     client_config = Config(signature_version="s3v4")
-    
+
     try:
         async with session.client(
             "s3",

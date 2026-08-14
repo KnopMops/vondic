@@ -114,7 +114,6 @@ def rate_limit(limit: int, window: int, per_user: bool = False):
         def wrapper(*args, **kwargs):
             from fastapi.responses import JSONResponse
 
-
             if per_user:
 
                 current_user = None

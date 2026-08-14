@@ -121,4 +121,3 @@ async def support_messenger_chats(
     db=Depends(get_async_db)
 ):
     return {"chats": [], "unread_count": 0}
-

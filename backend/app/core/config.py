@@ -36,7 +36,6 @@ def get_async_database_url(explicit: str | None = None) -> str:
     return make_async_database_url(url)
 
 
-
 def _build_redis_url() -> str | None:
     explicit = os.environ.get("REDIS_URL")
     if explicit:
@@ -55,14 +54,13 @@ def _build_redis_url() -> str | None:
 class Settings(BaseSettings):
     SECRET_KEY: str = os.environ.get("SECRET_KEY", "you-will-never-guess")
     BASE_DIR: str = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../"))
-    
+
     DATABASE_URL: str = os.environ.get("DATABASE_URL") or get_async_database_url()
-    
+
     @property
     def ASYNC_DATABASE_URL(self) -> str:
         return make_async_database_url(self.DATABASE_URL)
 
-    
     # S3 / MinIO Settings
     S3_ENDPOINT: str = os.environ.get("S3_ENDPOINT", "http://minio:9000")
     S3_ACCESS_KEY: str = os.environ.get("S3_ACCESS_KEY", "vondic")
@@ -70,10 +68,10 @@ class Settings(BaseSettings):
     S3_REGION: str = os.environ.get("S3_REGION", "us-east-1")
     S3_BUCKET: str = os.environ.get("S3_BUCKET", "uploads")
     S3_PUBLIC_URL: str = os.environ.get("S3_PUBLIC_URL", "https://s3.vondic.ru")
-    
+
     # RabbitMQ Settings
     RABBITMQ_URL: str = os.environ.get("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/%2F")
-    
+
     # Mail Settings
     MAIL_SERVER: str | None = os.environ.get("MAIL_SERVER")
     MAIL_PORT: int = int(os.environ.get("MAIL_PORT", "587"))
@@ -84,7 +82,7 @@ class Settings(BaseSettings):
     MAIL_DEFAULT_SENDER: str | None = os.environ.get("MAIL_DEFAULT_SENDER")
     MAIL_DOMAIN: str = os.environ.get("MAIL_DOMAIN", "vondic.ru")
     MAIL_NOREPLY_ADDRESS: str = os.environ.get("MAIL_NOREPLY_ADDRESS", "noreply@vondic.ru")
-    
+
     # Integration Settings
     YANDEX_CLIENT_ID: str | None = os.environ.get("YANDEX_CLIENT_ID")
     YANDEX_CLIENT_SECRET: str | None = os.environ.get("YANDEX_CLIENT_SECRET")
@@ -96,10 +94,12 @@ class Settings(BaseSettings):
     OLLAMA_MODEL: str = os.environ.get("OLLAMA_MODEL", "llama3.1")
     SESSION_TTL_SECONDS: int = int(os.environ.get("SESSION_TTL_SECONDS", "259200"))
     FRONTEND_URL: str = os.environ.get("FRONTEND_URL", "http://localhost:3000")
-    MESSAGE_ENCRYPTION_KEY: str = os.environ.get("MESSAGE_ENCRYPTION_KEY", "mPuUjRV-t-5eeaSrEFhVh4yZud-L7rv31SjYdXx9uIU=")
-    
+    MESSAGE_ENCRYPTION_KEY: str = os.environ.get(
+        "MESSAGE_ENCRYPTION_KEY", "mPuUjRV-t-5eeaSrEFhVh4yZud-L7rv31SjYdXx9uIU=")
+
     # NVIDIA AI Settings
-    NVIDIA_API_KEY: str = os.environ.get("NVIDIA_API_KEY", "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")
+    NVIDIA_API_KEY: str = os.environ.get(
+        "NVIDIA_API_KEY", "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")
     NVIDIA_BASE_URL: str = os.environ.get("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1")
     NVIDIA_MODEL: str = os.environ.get("NVIDIA_MODEL", "z-ai/glm-5.2")
 
@@ -111,4 +111,3 @@ class Settings(BaseSettings):
 
 settings = Settings()
 Config = settings
-

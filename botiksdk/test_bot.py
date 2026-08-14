@@ -4,6 +4,7 @@ import os
 
 from botiksdk import Bot, Command, Dispatcher
 
+
 async def main():
     logging.basicConfig(
         level=logging.INFO,

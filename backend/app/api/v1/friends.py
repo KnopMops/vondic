@@ -55,7 +55,6 @@ async def get_requests(
     return {"requests": requests}
 
 
-
 @friends_router.post("/request", status_code=status.HTTP_201_CREATED)
 async def send_request(
     payload: FriendRequestSchema,

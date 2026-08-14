@@ -38,7 +38,8 @@ async def update_me(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
 ):
-    allowed_fields = {"username", "description", "avatar_url", "profile_bg_theme", "profile_bg_gradient", "profile_bg_image", "privacy_settings"}
+    allowed_fields = {"username", "description", "avatar_url", "profile_bg_theme",
+                      "profile_bg_gradient", "profile_bg_image", "privacy_settings"}
     for k, v in payload.items():
         if k in allowed_fields:
             setattr(current_user, k, v)

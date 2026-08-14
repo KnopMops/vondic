@@ -1,3 +1,4 @@
+import time
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -23,8 +24,6 @@ class JoinRequestActionSchema(BaseModel):
     request_id: str
 
 
-import time
-
 def push_join_request_bot_message(req_id: str, owner_id: str, target_name: str, target_type: str, applicant_user: User):
     if not owner_id:
         return
@@ -32,7 +31,8 @@ def push_join_request_bot_message(req_id: str, owner_id: str, target_name: str, 
         from app.api.public.v1.bots import OUTBOX_QUEUES
         BOT_ID = "7e140ffc-5549-418a-8bad-525c02193812"
         target_type_ru = "канал" if target_type == "channel" else ("сервер" if target_type == "community" else "группу")
-        applicant_name = getattr(applicant_user, "username", None) or getattr(applicant_user, "name", None) or applicant_user.id
+        applicant_name = getattr(applicant_user, "username", None) or getattr(
+            applicant_user, "name", None) or applicant_user.id
         text = (
             f"📩 Новая заявка на вступление!\n\n"
             f"Пользователь @{applicant_name} хочет вступить в {target_type_ru} «{target_name}».\n\n"

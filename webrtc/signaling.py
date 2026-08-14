@@ -112,7 +112,8 @@ class SignalingService:
                 return
 
             vapid_private = os.environ.get("VAPID_PRIVATE_KEY") or "ZgiAe9mf4fmMp_Suy_ZQjj0CZVys5zRsFex25DllvTo"
-            vapid_public = os.environ.get("VAPID_PUBLIC_KEY") or "BIe-Z2GMAZp05xBkGysdmolFc7jczvXIQJcGDVfkWkyY-P1XJnJoTcyOzW00-z6AvlleA7wxFXa8B-f_RHI5pBk"
+            vapid_public = os.environ.get(
+                "VAPID_PUBLIC_KEY") or "BIe-Z2GMAZp05xBkGysdmolFc7jczvXIQJcGDVfkWkyY-P1XJnJoTcyOzW00-z6AvlleA7wxFXa8B-f_RHI5pBk"
             vapid_claims = {"sub": "mailto:admin@vondic.ru"}
 
             payload = json.dumps({
@@ -124,7 +125,8 @@ class SignalingService:
             for row in rows:
                 endpoint, p256dh, auth = row[0], row[1], row[2]
                 try:
-                    status = self._web_push_send(endpoint, p256dh, auth, payload, vapid_private, vapid_public, vapid_claims)
+                    status = self._web_push_send(endpoint, p256dh, auth, payload,
+                                                 vapid_private, vapid_public, vapid_claims)
                     logger.info(f"Web Push dispatched to {endpoint[:45]} -> status={status}")
                 except Exception as e:
                     logger.warning(f"Web Push to {endpoint[:45]} failed: {e}")
@@ -141,7 +143,7 @@ class SignalingService:
 
     @staticmethod
     def _web_push_send(endpoint: str, p256dh: str, auth_key: str, payload: bytes,
-                        vapid_private: str, vapid_public: str, claims: dict):
+                       vapid_private: str, vapid_public: str, claims: dict):
         try:
             from pywebpush import webpush, WebPushException
             subscription_info = {
@@ -1274,7 +1276,8 @@ class SignalingService:
 
             if disappear_after and int(disappear_after) > 0:
                 full_message_payload["disappear_after"] = int(disappear_after)
-                full_message_payload["disappear_at"] = (datetime.utcnow() + td(seconds=int(disappear_after))).isoformat() + "Z"
+                full_message_payload["disappear_at"] = (
+                    datetime.utcnow() + td(seconds=int(disappear_after))).isoformat() + "Z"
 
             if target_socket:
                 await self.io.emit("receive_message", full_message_payload, room=target_socket)
@@ -1285,7 +1288,8 @@ class SignalingService:
             try:
                 sender_info = await self.broker.resolve_recipient(sid)
                 if sender_info:
-                    sender_name = getattr(sender_info, "username", None) or (sender_info.get("username") if isinstance(sender_info, dict) else "Пользователь")
+                    sender_name = getattr(sender_info, "username", None) or (sender_info.get(
+                        "username") if isinstance(sender_info, dict) else "Пользователь")
                 else:
                     sender_name = "Пользователь"
                 push_title = f"{sender_name}"
@@ -1324,6 +1328,7 @@ class SignalingService:
                         "date": int(datetime.utcnow().timestamp()),
                     }
                 }
+
                 def _push_update_sync():
                     try:
                         req_data = json.dumps(bot_payload).encode("utf-8")

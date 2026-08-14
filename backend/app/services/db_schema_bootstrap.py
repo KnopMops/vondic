@@ -327,4 +327,3 @@ def ensure_push_subscriptions_table(engine) -> None:
             )
             """
         )
-

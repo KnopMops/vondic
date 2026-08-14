@@ -174,27 +174,27 @@ class Dispatcher:
 
         handlers = self._sorted_handlers("message")
         for handler in handlers:
-                # Check state filter
-                if handler.state is not None and handler.state != current_state:
-                    continue
+            # Check state filter
+            if handler.state is not None and handler.state != current_state:
+                continue
 
-                if await self._check_filters(handler.filters, message):
-                    logger.info(
-                        "botiksdk_handler_matched bot_id=%s text=%s state=%s",
-                        getattr(bot, "bot_id", None),
-                        message.text,
-                        current_state,
-                    )
-                    handled = await self._run_middlewares(
-                        "message",
-                        event=message,
-                        bot=bot,
-                        state=fsm,
-                        current_state=current_state,
-                        handler=handler,
-                    )
-                    if handled and handler.blocking:
-                        return
+            if await self._check_filters(handler.filters, message):
+                logger.info(
+                    "botiksdk_handler_matched bot_id=%s text=%s state=%s",
+                    getattr(bot, "bot_id", None),
+                    message.text,
+                    current_state,
+                )
+                handled = await self._run_middlewares(
+                    "message",
+                    event=message,
+                    bot=bot,
+                    state=fsm,
+                    current_state=current_state,
+                    handler=handler,
+                )
+                if handled and handler.blocking:
+                    return
 
     async def _dispatch_callback_query(self, bot, callback_query: CallbackQuery):
         user_id = str(callback_query.from_user.id) if callback_query.from_user else ""
@@ -204,27 +204,27 @@ class Dispatcher:
 
         handlers = self._sorted_handlers("callback_query")
         for handler in handlers:
-                # Check state filter
-                if handler.state is not None and handler.state != current_state:
-                    continue
+            # Check state filter
+            if handler.state is not None and handler.state != current_state:
+                continue
 
-                if await self._check_filters(handler.filters, callback_query):
-                    logger.info(
-                        "botiksdk_callback_handler_matched bot_id=%s data=%s state=%s",
-                        getattr(bot, "bot_id", None),
-                        callback_query.data,
-                        current_state,
-                    )
-                    handled = await self._run_middlewares(
-                        "callback_query",
-                        event=callback_query,
-                        bot=bot,
-                        state=fsm,
-                        current_state=current_state,
-                        handler=handler,
-                    )
-                    if handled and handler.blocking:
-                        return
+            if await self._check_filters(handler.filters, callback_query):
+                logger.info(
+                    "botiksdk_callback_handler_matched bot_id=%s data=%s state=%s",
+                    getattr(bot, "bot_id", None),
+                    callback_query.data,
+                    current_state,
+                )
+                handled = await self._run_middlewares(
+                    "callback_query",
+                    event=callback_query,
+                    bot=bot,
+                    state=fsm,
+                    current_state=current_state,
+                    handler=handler,
+                )
+                if handled and handler.blocking:
+                    return
 
     def _sorted_handlers(self, event_name: str):
         handlers = []

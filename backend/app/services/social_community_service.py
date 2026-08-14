@@ -142,4 +142,3 @@ class SocialCommunityService:
                 | (SocialCommunity.description.ilike(q)),
             ).all()
         return [c for c in results if user not in c.members]
-

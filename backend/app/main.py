@@ -123,7 +123,6 @@ async def alias_path_middleware(request: Request, call_next):
     return await call_next(request)
 
 
-
 @app.exception_handler(HTTPException)
 async def custom_http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(
@@ -245,4 +244,3 @@ app.include_router(v2_webhooks_router)
 app.include_router(public_bots_router)
 app.include_router(join_requests_router)
 app.include_router(ai_router)
-

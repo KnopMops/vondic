@@ -115,4 +115,3 @@ async def get_group_messages(
 
     messages = MessageService.get_group_messages(gid, current_user.id, limit=limit)
     return {"messages": [m.to_dict() if hasattr(m, "to_dict") else m for m in messages]}
-

@@ -138,4 +138,3 @@ class User(Base):
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
         return redact_user_dict(data, viewer_id)
-

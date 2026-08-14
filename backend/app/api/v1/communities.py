@@ -160,5 +160,3 @@ async def create_community_channel(
     if err or not channel:
         raise HTTPException(status_code=400, detail=err or "Failed to create channel")
     return {"channel": channel.to_dict() if hasattr(channel, "to_dict") else channel}
-
-

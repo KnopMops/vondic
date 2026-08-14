@@ -91,4 +91,3 @@ class CommunityChannelService:
     @staticmethod
     def get_channels_by_community(community_id):
         return CommunityChannelService.list_channels(community_id)
-

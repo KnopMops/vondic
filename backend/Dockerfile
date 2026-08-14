@@ -1,10 +1,12 @@
 FROM python:3.13-slim
 
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
 WORKDIR /app
 
-# Копируем файл зависимостей бэкенда и устанавливаем их
-COPY backend/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy unified requirements and install via uv
+COPY requirements.txt ./requirements.txt
+RUN uv pip install --system --no-cache -r requirements.txt
 
 
 # Копируем код бэкенда в подпапку /app/backend

@@ -6,6 +6,7 @@ from typing import Optional
 
 class InputFile:
     """Represents a file to be sent — wraps local path or bytes into base64."""
+
     def __init__(self, path: str = None, filename: str = None, file_bytes: bytes = None):
         self.path = path
         self.filename = filename or (os.path.basename(path) if path else None)
