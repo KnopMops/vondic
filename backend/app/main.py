@@ -49,6 +49,7 @@ from app.api.v2.marketplace import v2_marketplace_router
 from app.api.v2.webhooks import v2_webhooks_router
 from app.api.public.v1.bots import public_bots_router
 from app.api.v1.join_requests import join_requests_router
+from app.api.v1.ai import ai_router
 
 
 # Load extension routes
@@ -243,4 +244,5 @@ app.include_router(v2_marketplace_router)
 app.include_router(v2_webhooks_router)
 app.include_router(public_bots_router)
 app.include_router(join_requests_router)
+app.include_router(ai_router)
 

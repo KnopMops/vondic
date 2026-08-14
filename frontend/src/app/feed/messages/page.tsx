@@ -115,6 +115,8 @@ import {
 	LuUsers as Users,
 	LuX as X,
 	LuLifeBuoy as LifeBuoyIcon,
+	LuStar as StarIcon,
+	LuSparkles as SparklesIcon,
 } from 'react-icons/lu'
 import ChannelSettingsModal from './ChannelSettingsModal'
 import ChatDateSeparator from './ChatDateSeparator'
@@ -130,6 +132,7 @@ import ScheduleMessageModal from './ScheduleMessageModal'
 import GroupInfoPanel from './GroupInfoPanel'
 import ProfileModal from '@/components/messenger/ProfileModal'
 import TelegramChatInfoModal from '@/components/messenger/TelegramChatInfoModal'
+import PremiumModal from '@/components/premium/PremiumModal'
 
 const formatLastSeen = (
 	lastSeen?: string | Date,
@@ -1253,6 +1256,57 @@ export default function MessengerPage() {
 	const [messageFilter, setMessageFilter] = useState<
 		'all' | 'files' | 'photos' | 'links'
 	>('all')
+
+	const [isAiCorrecting, setIsAiCorrecting] = useState(false)
+	const [isAiPremiumModalOpen, setIsAiPremiumModalOpen] = useState(false)
+
+	const handleAiAutoCorrectText = async () => {
+		if (!user) {
+			showToast('Нужна авторизация', 'error')
+			return
+		}
+		if (!user.premium) {
+			showToast('ИИ-автоисправление доступно только с подпиской Premium', 'info')
+			setIsAiPremiumModalOpen(true)
+			return
+		}
+		const trimmedInput = input.trim()
+		if (!trimmedInput) {
+			showToast('Введите текст для ИИ-автоисправления', 'info')
+			return
+		}
+		setIsAiCorrecting(true)
+		try {
+			const token = user.access_token || localStorage.getItem('token') || ''
+			const res = await fetch('/api/v1/ai/autocorrect', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`,
+				},
+				body: JSON.stringify({ text: trimmedInput }),
+			})
+			const data = await res.json()
+			if (!res.ok) {
+				if (res.status === 403) {
+					showToast(data.detail || 'ИИ-функции доступны только для Premium', 'info')
+					setIsAiPremiumModalOpen(true)
+				} else {
+					throw new Error(data.detail || 'Ошибка исправления текста')
+				}
+				return
+			}
+			if (data.corrected) {
+				setInput(data.corrected)
+				showToast('Текст исправлен с помощью ИИ! ✨', 'success')
+			}
+		} catch (e: any) {
+			console.error('AI AutoCorrect Error:', e)
+			showToast(e.message || 'Не удалось исправить текст', 'error')
+		} finally {
+			setIsAiCorrecting(false)
+		}
+	}
 
 	const getReactionsForMessage = (id: string) => {
 		const counts = reactionCounts[id] || {}
@@ -8438,6 +8492,33 @@ export default function MessengerPage() {
 												<SmileIcon className='w-6 h-6' />
 											</button>
 
+											<button
+												type='button'
+												onClick={handleAiAutoCorrectText}
+												disabled={isBlockedChat || !canWriteToSelectedChannel || isAiCorrecting}
+												className={`p-2.5 rounded-full transition-all flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed relative group ${
+													isAiCorrecting
+														? 'animate-pulse text-amber-300 bg-amber-500/20 ring-1 ring-amber-400/50'
+														: user?.premium
+															? 'text-amber-400 hover:text-amber-300 hover:bg-amber-500/20 hover:scale-110 active:scale-95'
+															: 'text-gray-400 hover:text-amber-400 hover:bg-white/10'
+												}`}
+												title={
+													user?.premium
+														? 'ИИ-автоисправление текста (GLM Premium)'
+														: 'ИИ-автоисправление текста (Требуется Premium)'
+												}
+											>
+												{isAiCorrecting ? (
+													<div className='w-5 h-5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin' />
+												) : (
+													<div className='relative flex items-center justify-center'>
+														<StarIcon className={`w-6 h-6 ${user?.premium ? 'fill-amber-400/30 text-amber-400' : 'text-amber-400/80'}`} />
+														<SparklesIcon className='w-3 h-3 text-violet-400 absolute -top-1 -right-1.5 animate-bounce' />
+													</div>
+												)}
+											</button>
+
 											{input.trim() || files.length > 0 ? (
 												<>
 													<button
@@ -9463,6 +9544,10 @@ export default function MessengerPage() {
 				}}
 			/>
 		)}
+		<PremiumModal
+			isOpen={isAiPremiumModalOpen}
+			onClose={() => setIsAiPremiumModalOpen(false)}
+		/>
 		</div>
 	)
 }
