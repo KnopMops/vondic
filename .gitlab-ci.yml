@@ -37,6 +37,7 @@ sync_to_main:
   script:
     - git config user.name "CI Bot"
     - git config user.email "ci@vondic.ru"
+    - git remote set-url origin "http://oauth2:${GITLAB_TOKEN:-$CI_JOB_TOKEN}@192.168.140.13/root/vondic.git"
     - git fetch origin
     - git checkout main
     - 'git merge origin/development -m "auto-merge: CI passed for development"'
