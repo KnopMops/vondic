@@ -39,7 +39,7 @@ sync_to_main:
     - git config user.email "ci@vondic.ru"
     - git fetch origin
     - git checkout main
-    - git merge origin/development -m "auto-merge: CI passed for development"
+    - 'git merge origin/development -m "auto-merge: CI passed for development"'
     - git push origin main
   rules:
     - if: $CI_COMMIT_BRANCH == "development"
