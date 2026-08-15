@@ -37,3 +37,8 @@ firebase-admin==6.5.0
 pywebpush
 httpx>=0.27.0
 aiohttp>=3.9.0
+python-socketio>=5.11.0
+websocket-client>=1.7.0
+websockets>=12.0
+py-vapid>=1.9.0
+aiosqlite>=0.20.0
