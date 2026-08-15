@@ -182,3 +182,17 @@ class CommunityService:
                 Community.description.ilike(
                     f"%{query}%"))).all()
         return [c for c in results if user not in c.members]
+
+    @staticmethod
+    def get_invite_code(community_id):
+        community = Community.query.get(community_id)
+        if not community:
+            return None, "Community not found"
+        if not getattr(community, "invite_code", None):
+            import uuid
+            community.invite_code = str(uuid.uuid4())[:8]
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+        return community.invite_code, None

@@ -129,7 +129,7 @@ async def get_community_invite(
     invite_code, err = CommunityService.get_invite_code(community_id)
     if err or not invite_code:
         raise HTTPException(status_code=404, detail=err or "Community not found")
-    return {"invite_code": invite_code}
+    return {"invite_code": invite_code, "code": invite_code}
 
 
 @communities_router.post("/{community_id}/channels/list")
