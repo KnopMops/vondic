@@ -89,10 +89,32 @@ class User(Base):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
-    def __repr__(self):
-        return f"<User {self.username}>"
+    def check_and_clean_expired_premium(self):
+        """Reset premium to 0 and clear start/expire dates if subscription expired."""
+        from datetime import datetime
+        if self.premium and self.premium_expired_at:
+            now = datetime.utcnow()
+            expired_at = self.premium_expired_at
+            if isinstance(expired_at, str):
+                try:
+                    expired_at = datetime.fromisoformat(expired_at)
+                except Exception:
+                    expired_at = None
+            if expired_at and expired_at < now:
+                self.premium = 0
+                self.premium_started_at = None
+                self.premium_expired_at = None
+                try:
+                    from app.core.database import SyncScopedSession
+                    SyncScopedSession.add(self)
+                    SyncScopedSession.commit()
+                except Exception:
+                    pass
+                return True
+        return False
 
     def to_dict(self, viewer_id: str | None = None):
+        self.check_and_clean_expired_premium()
         from app.utils.user_privacy import redact_user_dict
 
         data = {

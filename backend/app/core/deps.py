@@ -66,6 +66,9 @@ async def get_current_user(
             detail=error or "Invalid or expired token",
         )
 
+    if hasattr(user, "check_and_clean_expired_premium"):
+        user.check_and_clean_expired_premium()
+
     if getattr(user, "is_blocked", 0):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

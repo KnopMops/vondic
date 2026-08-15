@@ -24,13 +24,11 @@ async def autocorrect_text(
     payload: AutoCorrectRequest,
     current_user=Depends(get_current_user)
 ):
-    # 1. Enforce Premium-only access
-    is_premium = bool(getattr(current_user, "premium", False))
-    expired_at = getattr(current_user, "premium_expired_at", None)
-    if expired_at and expired_at < datetime.utcnow():
-        is_premium = False
+    # 1. Enforce Premium-only access with auto-clearing
+    if hasattr(current_user, "check_and_clean_expired_premium"):
+        current_user.check_and_clean_expired_premium()
 
-    if not is_premium:
+    if not current_user.premium:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="ИИ-автоисправление доступно только для пользователей с подпиской Premium"
