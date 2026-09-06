@@ -300,6 +300,309 @@ def _consent_page(client_name: str, client_description: str, client_id: str,
     return HTMLResponse(content=html)
 
 
+def _unauthorized_modal_page(
+    client_name: str,
+    client_description: str,
+    client_id: str,
+    redirect_uri: str,
+    scope: str,
+    state: str,
+) -> HTMLResponse:
+    """Render the OAuth authorization page with an auth modal when unauthenticated."""
+    sep = "&" if "?" in redirect_uri else "?"
+    deny_url = f"{redirect_uri}{sep}error=access_denied"
+    if state:
+        deny_url += f"&state={state}"
+
+    html = f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vondic — Авторизация</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * {{ margin:0; padding:0; box-sizing:border-box; }}
+  body {{ font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+         background:#09090b; color:#e4e4e7; display:flex; align-items:center;
+         justify-content:center; min-height:100vh; overflow:hidden; }}
+
+  body::before {{ content:''; position:fixed; top:-50%; left:-50%; width:200%; height:200%;
+                  background:radial-gradient(circle at 30% 50%, rgba(124,92,255,.08) 0%, transparent 50%),
+                             radial-gradient(circle at 70% 50%, rgba(99,102,241,.06) 0%, transparent 50%);
+                  animation:bgShift 15s ease-in-out infinite alternate; z-index:0; }}
+  @keyframes bgShift {{ 0% {{ transform:translate(0,0) }} 100% {{ transform:translate(-5%,3%) }} }}
+
+  .card {{ position:relative; z-index:1; background:rgba(24,24,27,.85); backdrop-filter:blur(20px);
+           border:1px solid rgba(63,63,70,.5); border-radius:20px; padding:48px 40px;
+           max-width:460px; width:92%; box-shadow:0 24px 64px rgba(0,0,0,.6),
+           0 0 0 1px rgba(255,255,255,.03) inset;
+           animation:cardIn .5s cubic-bezier(.16,1,.3,1) both; }}
+  @keyframes cardIn {{ from {{ opacity:0; transform:translateY(24px) scale(.97) }} }}
+
+  .logo-wrap {{ display:flex; align-items:center; gap:12px; margin-bottom:28px; }}
+  .logo-icon {{ width:44px; height:44px; border-radius:12px; overflow:hidden;
+                box-shadow:0 4px 16px rgba(124,92,255,.3); flex-shrink:0; }}
+  .logo-icon img {{ width:100%; height:100%; object-fit:cover; }}
+  .logo-text {{ font-size:24px; font-weight:700; color:#fff; letter-spacing:-.5px; }}
+  .logo-badge {{ font-size:11px; font-weight:600; color:#7c5cff; background:rgba(124,92,255,.12);
+                  padding:3px 8px; border-radius:6px; letter-spacing:.5px; }}
+
+  .app-section {{ margin-bottom:24px; }}
+  .app-name {{ font-size:20px; font-weight:700; color:#fff; margin-bottom:6px; }}
+  .app-desc {{ font-size:14px; color:#a1a1aa; line-height:1.5; }}
+
+  .perms {{ background:rgba(39,39,42,.5); border:1px solid rgba(63,63,70,.3);
+            border-radius:14px; padding:18px; margin-bottom:24px; }}
+  .perms-title {{ font-size:12px; font-weight:600; color:#71717a; text-transform:uppercase;
+                  letter-spacing:.8px; margin-bottom:12px; display:flex; align-items:center; gap:8px; }}
+  .perms-title::before {{ content:''; width:6px; height:6px; background:#7c5cff; border-radius:50%; }}
+  .perm-item {{ display:flex; align-items:center; gap:12px; padding:8px 0;
+                border-bottom:1px solid rgba(63,63,70,.2); }}
+  .perm-item:last-child {{ border-bottom:none; }}
+  .perm-icon {{ width:30px; height:30px; background:rgba(124,92,255,.1); border-radius:8px;
+                display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }}
+  .perm-text {{ font-size:13px; color:#d4d4d8; }}
+  .perm-text b {{ color:#fff; font-weight:600; }}
+
+  .notice-box {{ background:rgba(124,92,255,.1); border:1px solid rgba(124,92,255,.25);
+                 border-radius:12px; padding:14px 16px; margin-bottom:20px; display:flex;
+                 align-items:center; gap:12px; }}
+  .notice-icon {{ width:32px; height:32px; border-radius:8px; background:rgba(124,92,255,.2);
+                  display:flex; align-items:center; justify-content:center; color:#a78bfa; flex-shrink:0; }}
+  .notice-title {{ font-size:13px; font-weight:600; color:#fff; }}
+  .notice-desc {{ font-size:12px; color:#a1a1aa; margin-top:2px; }}
+
+  .btn {{ display:flex; align-items:center; justify-content:center; width:100%; padding:14px;
+          border:none; border-radius:12px; font-size:15px; font-weight:600; cursor:pointer;
+          transition:all .2s ease; font-family:inherit; text-decoration:none; }}
+  .btn:active {{ transform:scale(.98) }}
+  .btn-primary {{ background:linear-gradient(135deg,#7c5cff,#6366f1); color:#fff;
+                  box-shadow:0 4px 16px rgba(124,92,255,.3); margin-bottom:12px; }}
+  .btn-primary:hover {{ box-shadow:0 6px 24px rgba(124,92,255,.45); transform:translateY(-1px) }}
+  .btn-deny {{ background:rgba(39,39,42,.6); color:#a1a1aa; border:1px solid rgba(63,63,70,.4); }}
+  .btn-deny:hover {{ background:rgba(39,39,42,.9); color:#d4d4d8; }}
+
+  .footer {{ margin-top:24px; text-align:center; font-size:11px; color:#52525b; }}
+  .footer a {{ color:#7c5cff; text-decoration:none; }}
+  .footer a:hover {{ text-decoration:underline; }}
+
+  /* Modal Overlay */
+  .modal-overlay {{ position:fixed; inset:0; z-index:1000; background:rgba(0,0,0,.75);
+                    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+                    display:flex; align-items:center; justify-content:center;
+                    padding:16px; animation:fadeIn .25s ease-out; }}
+  @keyframes fadeIn {{ from {{ opacity:0; }} to {{ opacity:1; }} }}
+
+  .modal-card {{ background:#141417; border:1px solid rgba(255,255,255,.12);
+                 border-radius:24px; width:100%; max-width:440px; max-height:92vh;
+                 box-shadow:0 24px 64px rgba(0,0,0,.85); display:flex; flex-direction:column;
+                 overflow:hidden; animation:scaleIn .3s cubic-bezier(.16,1,.3,1) both; position:relative; }}
+  @keyframes scaleIn {{ from {{ opacity:0; transform:scale(.95) translateY(10px); }} }}
+
+  .modal-header {{ display:flex; align-items:center; justify-content:space-between;
+                   padding:18px 24px 14px; border-bottom:1px solid rgba(255,255,255,.07); }}
+  .modal-title {{ display:flex; align-items:center; gap:10px; font-size:16px; font-weight:600; color:#fff; }}
+  .modal-title-icon {{ width:28px; height:28px; border-radius:8px; background:linear-gradient(135deg,#7c5cff,#6366f1);
+                       display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; color:#fff; }}
+  .modal-close {{ width:32px; height:32px; border-radius:8px; border:none; background:rgba(255,255,255,.05);
+                  color:#a1a1aa; display:flex; align-items:center; justify-content:center; cursor:pointer;
+                  font-size:20px; line-height:1; transition:all .2s ease; }}
+  .modal-close:hover {{ background:rgba(255,255,255,.15); color:#fff; }}
+
+  .modal-body {{ padding:0; flex:1; min-height:480px; display:flex; flex-direction:column; }}
+  .auth-iframe {{ width:100%; height:520px; border:none; background:transparent; flex:1; }}
+
+  .auth-fallback {{ padding:24px; display:none; flex-direction:column; gap:16px; }}
+  .auth-input {{ width:100%; padding:12px 16px; border-radius:12px; background:rgba(255,255,255,.05);
+                 border:1px solid rgba(255,255,255,.1); color:#fff; font-size:14px; outline:none; }}
+  .auth-input:focus {{ border-color:#7c5cff; }}
+  .toggle-fallback {{ text-align:center; font-size:12px; color:#71717a; padding:12px; cursor:pointer; }}
+  .toggle-fallback:hover {{ color:#a1a1aa; }}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo-wrap">
+    <div class="logo-icon">
+      <img src="https://vondic.ru/logo.png" alt="Вондик" onerror="this.parentElement.innerHTML='<div style=\\'width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#7c5cff,#6366f1);font-size:20px;font-weight:700;color:#fff\\'>V</div>'">
+    </div>
+    <div>
+      <div class="logo-text">Вондик</div>
+    </div>
+    <div class="logo-badge">OAuth 2.0</div>
+  </div>
+
+  <div class="app-section">
+    <div class="app-name">{client_name}</div>
+    <div class="app-desc">{client_description or 'Запрашивает доступ к вашему аккаунту'}</div>
+  </div>
+
+  <div class="perms">
+    <div class="perms-title">Запрашиваемые разрешения</div>
+    <div class="perm-item">
+      <div class="perm-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7c5cff" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </div>
+      <div class="perm-text">Доступ к <b>профилю</b> и основной информации</div>
+    </div>
+    <div class="perm-item">
+      <div class="perm-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7c5cff" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      </div>
+      <div class="perm-text">Доступ: <b>{scope or 'базовый'}</b></div>
+    </div>
+  </div>
+
+  <div class="notice-box">
+    <div class="notice-icon">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+    </div>
+    <div>
+      <div class="notice-title">Требуется вход в Vondic</div>
+      <div class="notice-desc">Для авторизации приложения войдите в свой аккаунт</div>
+    </div>
+  </div>
+
+  <button class="btn btn-primary" onclick="openModal()">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+    Войти в аккаунт
+  </button>
+  <a class="btn btn-deny" href="{deny_url}">Отклонить</a>
+
+  <div class="footer">
+    <a href="https://vondic.ru">Вондик</a> &middot; Платформа для общения
+  </div>
+</div>
+
+<!-- Modal Dialog for Authorization -->
+<div id="auth-modal" class="modal-overlay">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div class="modal-title">
+        <div class="modal-title-icon">V</div>
+        <span>Авторизация в Vondic</span>
+      </div>
+      <button class="modal-close" onclick="closeModal()" title="Закрыть">&times;</button>
+    </div>
+    <div class="modal-body">
+      <iframe id="auth-frame" class="auth-iframe" src="/login?modal=1" allow="clipboard-write"></iframe>
+
+      <div id="direct-auth-form" class="auth-fallback">
+        <input type="text" id="direct-email" class="auth-input" placeholder="Email или логин">
+        <input type="password" id="direct-password" class="auth-input" placeholder="Пароль">
+        <div id="direct-error" style="color:#f87171; font-size:13px; display:none;"></div>
+        <button class="btn btn-primary" onclick="submitDirectAuth()">Войти</button>
+      </div>
+
+      <div class="toggle-fallback" id="toggle-fallback-btn" onclick="toggleFallback()">
+        Проблемы с загрузкой? Войти через форму
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function openModal() {{
+    document.getElementById('auth-modal').style.display = 'flex';
+  }}
+
+  function closeModal() {{
+    document.getElementById('auth-modal').style.display = 'none';
+  }}
+
+  document.getElementById('auth-modal').addEventListener('click', function(e) {{
+    if (e.target === this) {{
+      closeModal();
+    }}
+  }});
+
+  document.addEventListener('keydown', function(e) {{
+    if (e.key === 'Escape') {{
+      closeModal();
+    }}
+  }});
+
+  function onAuthSuccess() {{
+    closeModal();
+    window.location.reload();
+  }}
+
+  window.addEventListener('message', function(event) {{
+    if (event.data && (event.data.type === 'VONDIC_AUTH_SUCCESS' || event.data === 'auth_success')) {{
+      onAuthSuccess();
+    }}
+  }});
+
+  var authCheckInterval = setInterval(function() {{
+    fetch('/oauth/me', {{ credentials: 'include' }})
+      .then(function(res) {{
+        if (res.ok) {{
+          clearInterval(authCheckInterval);
+          onAuthSuccess();
+        }}
+      }})
+      .catch(function() {{}});
+  }}, 2000);
+
+  function toggleFallback() {{
+    var iframe = document.getElementById('auth-frame');
+    var form = document.getElementById('direct-auth-form');
+    var btn = document.getElementById('toggle-fallback-btn');
+    if (form.style.display === 'flex') {{
+      form.style.display = 'none';
+      iframe.style.display = 'block';
+      btn.textContent = 'Проблемы с загрузкой? Войти через форму';
+    }} else {{
+      form.style.display = 'flex';
+      iframe.style.display = 'none';
+      btn.textContent = 'Вернуться к стандартной форме';
+    }}
+  }}
+
+  function submitDirectAuth() {{
+    var email = document.getElementById('direct-email').value.trim();
+    var password = document.getElementById('direct-password').value;
+    var errEl = document.getElementById('direct-error');
+    errEl.style.display = 'none';
+
+    if (!email || !password) {{
+      errEl.textContent = 'Заполните все поля';
+      errEl.style.display = 'block';
+      return;
+    }}
+
+    fetch('/api/v1/auth/login', {{
+      method: 'POST',
+      headers: {{ 'Content-Type': 'application/json' }},
+      credentials: 'include',
+      body: JSON.stringify({{ email: email, password: password, device_type: 'web' }})
+    }})
+    .then(function(r) {{ return r.json(); }})
+    .then(function(data) {{
+      if (data.access_token) {{
+        document.cookie = 'access_token=' + data.access_token + '; path=/; max-age=259200; SameSite=Lax';
+        onAuthSuccess();
+      }} else if (data.error) {{
+        errEl.textContent = data.error;
+        errEl.style.display = 'block';
+      }} else {{
+        errEl.textContent = 'Ошибка входа';
+        errEl.style.display = 'block';
+      }}
+    }})
+    .catch(function(err) {{
+      errEl.textContent = 'Ошибка соединения';
+      errEl.style.display = 'block';
+    }});
+  }}
+</script>
+</body>
+</html>"""
+    return HTMLResponse(content=html)
+
+
 # ── Authorization Endpoint ───────────────────────────────────────────
 
 @oauth_router.get("/authorize")
@@ -336,10 +639,15 @@ async def get_oauth_authorize(
                                "Redirect URI not in allowed list", state)
 
     if not current_user:
-        logger.info("[OAuth] User not logged in, showing auth required page")
-        return HTMLResponse(
-            content="<h2>Требуется авторизация</h2><p>Войдите в свой аккаунт Vondic, затем вернитесь на страницу приложения.</p>",
-            status_code=401)
+        logger.info("[OAuth] User not logged in, showing auth required page with modal")
+        return _unauthorized_modal_page(
+            client_name=client.name or "Приложение",
+            client_description=client.get_public_description() or "",
+            client_id=client_id,
+            redirect_uri=redirect_uri,
+            scope=scope or "",
+            state=state or "",
+        )
 
     logger.info("[OAuth] Showing consent page for user=%s, client=%s",
                 current_user.id, client.name)

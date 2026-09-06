@@ -48,11 +48,31 @@ export default function LoginPage() {
 	const [captchaToken, setCaptchaToken] = useState('')
 	const [captchaKey, setCaptchaKey] = useState(0)
 	const [showPassword, setShowPassword] = useState(false)
+	const [isModal, setIsModal] = useState(false)
+
+	const notifyParentAuthSuccess = () => {
+		if (typeof window !== 'undefined') {
+			if (window.parent && window.parent !== window) {
+				try {
+					window.parent.postMessage({ type: 'VONDIC_AUTH_SUCCESS' }, '*')
+				} catch {}
+			}
+			if (window.opener && !window.opener.closed) {
+				try {
+					window.opener.postMessage({ type: 'VONDIC_AUTH_SUCCESS' }, '*')
+				} catch {}
+			}
+		}
+	}
 
 	useEffect(() => {
 		const params = new URLSearchParams(window.location.search)
 		const pickAccount = params.get('pick_account') === '1'
 		const switchEmail = params.get('email') || params.get('switch')
+		const modalParam =
+			params.get('modal') === '1' ||
+			(typeof window !== 'undefined' && window.self !== window.top)
+		setIsModal(modalParam)
 		setPickAccountMode(pickAccount)
 		if (switchEmail && switchEmail !== '1') {
 			setEmail(switchEmail)
@@ -84,6 +104,10 @@ export default function LoginPage() {
 		setSwitchingAccountId(account.id)
 		try {
 			await switchAccount(account, postLoginRedirect)
+			if (typeof window !== 'undefined' && (window.parent !== window || isModal)) {
+				notifyParentAuthSuccess()
+				return
+			}
 		} catch {
 			if (account.auth_provider === 'yandex') {
 				await loginWithYandex({ loginHint: account.email })
@@ -163,6 +187,10 @@ export default function LoginPage() {
 					refresh_token: data.refresh_token || undefined,
 				})
 			}
+			if (typeof window !== 'undefined' && (window.parent !== window || isModal)) {
+				notifyParentAuthSuccess()
+				return
+			}
 			window.location.assign(consumePostLoginRedirect('/feed'))
 		} catch (err: any) {
 			setLoginError(err.message || 'Ошибка входа')
@@ -209,6 +237,10 @@ export default function LoginPage() {
 					refresh_token: data.refresh_token || undefined,
 				})
 			}
+			if (typeof window !== 'undefined' && (window.parent !== window || isModal)) {
+				notifyParentAuthSuccess()
+				return
+			}
 			window.location.assign(consumePostLoginRedirect('/feed'))
 		} catch (err: any) {
 			setLoginError(err.message || 'Ошибка подтверждения')
@@ -216,18 +248,30 @@ export default function LoginPage() {
 	}
 
 	return (
-		<div className='flex min-h-screen items-center justify-center bg-black text-white selection:bg-indigo-500 selection:text-white overflow-hidden relative'>
-			<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
-				<div className='absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-indigo-900/20 blur-[120px]' />
-				<div className='absolute top-[40%] -right-[10%] w-[40%] h-[60%] rounded-full bg-purple-900/20 blur-[120px]' />
-				<div className='absolute bottom-[10%] left-[20%] w-[30%] h-[30%] rounded-full bg-emerald-900/10 blur-[100px]' />
-			</div>
+		<div
+			className={`flex items-center justify-center text-white selection:bg-indigo-500 selection:text-white relative ${
+				isModal
+					? 'min-h-0 bg-transparent p-1'
+					: 'min-h-screen bg-black overflow-hidden'
+			}`}
+		>
+			{!isModal && (
+				<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
+					<div className='absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-indigo-900/20 blur-[120px]' />
+					<div className='absolute top-[40%] -right-[10%] w-[40%] h-[60%] rounded-full bg-purple-900/20 blur-[120px]' />
+					<div className='absolute bottom-[10%] left-[20%] w-[30%] h-[30%] rounded-full bg-emerald-900/10 blur-[100px]' />
+				</div>
+			)}
 
 			<motion.div
-				initial={{ opacity: 0, y: 20 }}
+				initial={{ opacity: 0, y: isModal ? 0 : 20 }}
 				animate={{ opacity: 1, y: 0 }}
-				transition={{ duration: 0.8, ease: 'easeOut' }}
-				className='w-full max-w-md space-y-6 rounded-3xl bg-white/5 border border-white/10 p-8 shadow-2xl backdrop-blur-xl relative z-10'
+				transition={{ duration: 0.6, ease: 'easeOut' }}
+				className={`w-full ${
+					isModal
+						? 'max-w-full rounded-2xl bg-zinc-900/80 border border-white/10 p-5 shadow-none'
+						: 'max-w-md space-y-6 rounded-3xl bg-white/5 border border-white/10 p-8 shadow-2xl backdrop-blur-xl'
+				} relative z-10`}
 			>
 				<div className='flex flex-col items-center justify-center gap-4'>
 					<div className='flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 shadow-lg shadow-indigo-500/20'>
