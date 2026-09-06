@@ -43,14 +43,20 @@ class InlineKeyboardButton:
         callback_data: Optional[str] = None,
         url: Optional[str] = None,
         modal: Optional[str] = None,
+        web_modal: Optional[str] = None,
     ):
         self.text = text
         self.callback_data = callback_data
         self.url = url
         self.modal = modal
+        self.web_modal = web_modal
 
     def to_dict(self) -> Dict[str, Any]:
         result = {"text": self.text}
+        if self.web_modal:
+            result["web_modal"] = self.web_modal
+            if not self.callback_data:
+                result["callback_data"] = f"web:{self.web_modal}"
         if self.modal:
             result["modal"] = self.modal
             if not self.callback_data:
@@ -76,6 +82,11 @@ def upload_game_button(text: str = "Загрузить игру") -> InlineKeybo
     return InlineKeyboardButton(text, modal="upload_game")
 
 
+def web_modal_button(text: str, url: str) -> InlineKeyboardButton:
+    """Open a website in a secure modal. Only HTTPS domains allowed."""
+    return InlineKeyboardButton(text, web_modal=url)
+
+
 class Bot(BotMethodsMixin):
     def __init__(
         self,
@@ -84,10 +95,12 @@ class Bot(BotMethodsMixin):
         *,
         base_url: str = "http://localhost:5050",
         api_key: Optional[str] = None,
+        required_scopes: Optional[list] = None,
     ):
         self.bot_id = bot_id
         self.token = token
         self.api_key = api_key
+        self.required_scopes = required_scopes or ["username", "send_messages"]
         self.public = PublicAPIClient(base_url=base_url)
         self._client = self.public
         self._client._last_bot_id = bot_id
@@ -103,6 +116,11 @@ class Bot(BotMethodsMixin):
 
     def set_api_key(self, api_key: str):
         self.api_key = api_key
+        return self
+
+    def set_required_scopes(self, scopes: list):
+        """Set required permission scopes for this bot."""
+        self.required_scopes = scopes
         return self
 
     def _ensure_ready(self):

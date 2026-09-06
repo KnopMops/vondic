@@ -142,6 +142,7 @@ interface MessageBubbleProps {
 	onBotOutboxItems?: (botId: string, items: any[]) => void
 	onBotModal?: (botId: string, modal: string) => void
 	onBotGamePlay?: (game: { embed_url: string; title?: string; download_url?: string }) => void
+	onWebModal?: (url: string, title?: string) => void
 	onSenderClick?: (senderId: string) => void
 }
 
@@ -171,6 +172,7 @@ const MessageBubble = memo(
 		onBotOutboxItems,
 		onBotModal,
 		onBotGamePlay,
+		onWebModal,
 		onSenderClick,
 	}: MessageBubbleProps) => {
 		const [isDetailsOpen, setIsDetailsOpen] = useState(false)
@@ -1084,6 +1086,18 @@ const MessageBubble = memo(
 											onClick={async (e) => {
 												e.preventDefault()
 												e.stopPropagation()
+												// Web modal (open website in secure iframe)
+												const webUrl =
+													typeof btn.web_modal === 'string'
+														? btn.web_modal
+														: typeof btn.callback_data === 'string' &&
+															  btn.callback_data.startsWith('web:')
+															? btn.callback_data.slice(4)
+															: null
+												if (webUrl) {
+													onWebModal?.(webUrl, btn.text)
+													return
+												}
 												const modalId =
 													typeof btn.modal === 'string'
 														? btn.modal

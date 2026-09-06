@@ -34,6 +34,7 @@ interface ChatMenuProps {
     onDelete?: () => void
     onMoveToFolder?: (folderId: string | null) => void
     onManageFolders?: () => void
+    isBot?: boolean
 }
 
 export const ChatMenu: React.FC<ChatMenuProps> = ({
@@ -43,6 +44,7 @@ export const ChatMenu: React.FC<ChatMenuProps> = ({
     isMuted = false,
     isOnline = false,
     isArchived = false,
+    isBot = false,
     onPin,
     onMute,
     onCall,
@@ -208,7 +210,7 @@ export const ChatMenu: React.FC<ChatMenuProps> = ({
                     <div className='my-2 border-t border-[#1e1f22]' />
 
                     
-                    {chatType === 'user' && (
+                    {chatType === 'user' && !isBot && (
                         <>
                             <button
                                 onClick={(e) => {

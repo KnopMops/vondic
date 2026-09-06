@@ -808,6 +808,7 @@ export default function MessengerPage() {
 	const [botMessages, setBotMessages] = useState<Message[]>([])
 	const [botGameUploadOpen, setBotGameUploadOpen] = useState(false)
 	const [activeBotGame, setActiveBotGame] = useState<{ embed_url: string; title?: string; download_url?: string } | null>(null)
+	const [activeWebModal, setActiveWebModal] = useState<{ url: string; title?: string } | null>(null)
 	const [botGamesModalBotId, setBotGamesModalBotId] = useState<string | null>(
 		null,
 	)
@@ -3187,6 +3188,24 @@ export default function MessengerPage() {
 					...item,
 					is_bot: item.is_bot === true ? true : false,
 				}))
+			// Resolve bot names for contacts that are bots but missing username
+			const botsToResolve = cleaned.filter((c: any) => c.is_bot && !c.username)
+			if (botsToResolve.length > 0) {
+				try {
+					const botsRes = await fetch('/api/public/v1/bots')
+					if (botsRes.ok) {
+						const botsData = await botsRes.json()
+						const botsList = botsData?.bots || []
+						const botNameMap = new Map(botsList.map((b: any) => [String(b.id), b.name]))
+						for (const c of cleaned) {
+							if (c.is_bot && !c.username) {
+								const name = botNameMap.get(String(c.id))
+								if (name) c.username = name
+							}
+						}
+					}
+				} catch {}
+			}
 			setRecentContacts(cleaned)
 			setPreviewRevision(v => v + 1)
 			// Decrypt E2E previews immediately after fetch
@@ -5518,14 +5537,19 @@ export default function MessengerPage() {
 		showArchivedChats,
 	])
 	const folderFilteredSidebarList = useMemo(() => {
-		if (normalizedSearch || activeFolderId === 'all') return sidebarList
-		return sidebarList.filter(friend =>
+		let list = sidebarList
+		// Exclude primary bot from list if it's already shown as the special botFriend entry
+		if (showBotInHistory && botFriend?.id && !normalizedSearch) {
+			list = list.filter(f => String(f.id) !== String(botFriend.id))
+		}
+		if (normalizedSearch || activeFolderId === 'all') return list
+		return list.filter(friend =>
 			matchesActiveFolder(chatFolders, activeFolderId, {
 				type: 'user',
 				id: String(friend.id),
 			}),
 		)
-	}, [sidebarList, normalizedSearch, activeFolderId, chatFolders])
+	}, [sidebarList, normalizedSearch, activeFolderId, chatFolders, showBotInHistory, botFriend?.id])
 	const folderFilteredGroups = useMemo(() => {
 		if (normalizedSearch || activeFolderId === 'all') return otherGroups
 		return otherGroups.filter(group =>
@@ -6001,6 +6025,9 @@ export default function MessengerPage() {
 													<span className='text-amber-400 text-[10px]'>📌</span>
 												)}
 												{friend.username}
+												{friend.is_bot && (
+													<span className='text-[9px] px-1 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 ml-1'>BOT</span>
+												)}
 												{friend.premium && (
 													<span className='text-amber-400'>★</span>
 												)}
@@ -6018,6 +6045,7 @@ export default function MessengerPage() {
 										<ChatMenu
 											chatId={friend.id}
 											chatType='user'
+											isBot={friend.is_bot === true}
 											isPinned={pinnedChatIds.includes(friend.id)}
 											isArchived={archivedChatIds.includes(friend.id)}
 											isOnline={friend.status?.toLowerCase() === 'online'}
@@ -7003,7 +7031,7 @@ export default function MessengerPage() {
 															className='w-10 h-10 rounded-full object-cover bg-white/5 ring-2 ring-white/10'
 															alt={selectedFriend.username}
 														/>
-														{selectedFriend.status?.toLowerCase() ===
+														{!selectedFriend.is_bot && selectedFriend.status?.toLowerCase() ===
 															'online' && (
 															<div className='absolute bottom-0 right-0 w-3 h-3 bg-[var(--app-accent)] border-2 border-[var(--app-bg)] rounded-full animate-pulse' />
 														)}
@@ -7018,6 +7046,9 @@ export default function MessengerPage() {
 													>
 														<span className='font-bold text-[var(--app-fg)] text-base leading-tight flex items-center gap-2'>
 															{selectedFriend.username}
+															{selectedFriend.is_bot && (
+																<span className='text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'>BOT</span>
+															)}
 															{secretChatEnabled && (
 																<span
 																	className='text-[10px] px-1.5 py-0.5 rounded-md bg-[var(--app-accent)]/15 text-[var(--app-accent)] font-medium'
@@ -8115,6 +8146,7 @@ export default function MessengerPage() {
 													onBotOutboxItems={appendBotOutboxItems}
 													onBotModal={handleBotModal}
 												onBotGamePlay={game => setActiveBotGame(game)}
+												onWebModal={(url, title) => setActiveWebModal({ url, title })}
 												onSenderClick={(senderId) => {
 													const friend = friends?.find((f: any) => String(f.id) === String(senderId))
 													const groupUser = groupParticipants[senderId]
@@ -8163,21 +8195,53 @@ export default function MessengerPage() {
 							{activeReplyKeyboard ? (
 								<div className='flex flex-wrap gap-2 px-1 pb-2'>
 									{activeReplyKeyboard.map((row: any[], rowIndex: number) => (
-										row.map((btn: any, btnIndex: number) => (
-											<button
-												key={`rk-${rowIndex}-${btnIndex}`}
-												onClick={() => {
-													const btnText = typeof btn === 'string' ? btn : (btn?.text || '')
-													if (btnText) {
-														sendBotMessage(btnText)
-													}
-												}}
-												className='bg-gray-700/60 hover:bg-gray-600/60 text-white font-medium py-2 px-4 rounded-lg transition-colors text-sm cursor-pointer border border-white/10'
-												type='button'
-											>
-												{btn.text}
-											</button>
-										))
+										row.map((btn: any, btnIndex: number) => {
+											const btnText = typeof btn === 'string' ? btn : (btn?.text || '')
+											const btnUrl = typeof btn === 'object' ? btn?.url : null
+											const btnWebModal = typeof btn === 'object' ? btn?.web_modal : null
+											const btnClass = typeof btn === 'object' ? btn?.css_class : null
+											const baseClass = btnClass || 'bg-gray-700/60 hover:bg-gray-600/60 text-white font-medium py-2 px-4 rounded-lg transition-colors text-sm cursor-pointer border border-white/10'
+											if (btnWebModal) {
+												return (
+													<button
+														key={`rk-${rowIndex}-${btnIndex}`}
+														onClick={() => setActiveWebModal({ url: btnWebModal, title: btnText })}
+														className={baseClass}
+														type='button'
+													>
+														{btnText}
+													</button>
+												)
+											}
+											if (btnUrl) {
+												return (
+													<a
+														key={`rk-${rowIndex}-${btnIndex}`}
+														href={btnUrl}
+														target='_blank'
+														rel='noopener noreferrer'
+														className={baseClass}
+													>
+														{btnText}
+													</a>
+												)
+											}
+											return (
+												<button
+													key={`rk-${rowIndex}-${btnIndex}`}
+													onClick={() => {
+														if (btnText) {
+															sendBotMessage(btnText)
+															setActiveReplyKeyboard(null)
+														}
+													}}
+													className={baseClass}
+													type='button'
+												>
+													{btnText}
+												</button>
+											)
+										})
 									))}
 								</div>
 							) : isBotChat ? (
@@ -9384,6 +9448,44 @@ export default function MessengerPage() {
 					</div>
 				</div>
 			)}
+
+			{activeWebModal && (() => {
+				let hostname = ''
+				try { hostname = new URL(activeWebModal.url).hostname } catch {}
+				const isSecure = activeWebModal.url.startsWith('https://') && !!hostname && !/^\d+\.\d+\.\d+\.\d+$/.test(hostname)
+				if (!isSecure) {
+					return (
+						<div className='fixed inset-0 z-[100002] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4' onClick={() => setActiveWebModal(null)}>
+							<div className='w-full max-w-sm rounded-2xl border border-rose-500/30 bg-gray-950 p-6 text-center' onClick={e => e.stopPropagation()}>
+								<div className='text-4xl mb-3'>⚠️</div>
+								<h3 className='text-lg font-bold text-white mb-2'>Небезопасная ссылка</h3>
+								<p className='text-sm text-gray-400 mb-4'>Ссылка должна использовать HTTPS и содержать домен (не IP-адрес).</p>
+								<button onClick={() => setActiveWebModal(null)} className='px-4 py-2 rounded-lg bg-white/10 text-white text-sm hover:bg-white/20'>Закрыть</button>
+							</div>
+						</div>
+					)
+				}
+				return (
+					<div className='fixed inset-0 z-[100002] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4' onClick={() => setActiveWebModal(null)}>
+						<div className='w-full max-w-3xl rounded-2xl border border-white/10 bg-gradient-to-br from-[#0b1220] to-[#1a1035] shadow-2xl overflow-hidden flex flex-col' style={{ height: '85vh' }} onClick={e => e.stopPropagation()}>
+							<div className='flex items-center justify-between px-5 py-3 border-b border-white/10'>
+								<div className='flex items-center gap-3 min-w-0'>
+									<h2 className='text-lg font-semibold text-white truncate'>{activeWebModal.title || hostname}</h2>
+									<span className='shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30'>Внешний сайт</span>
+								</div>
+								<button type='button' onClick={() => setActiveWebModal(null)} className='p-2 rounded-full text-gray-400 hover:text-white hover:bg-white/10'>✕</button>
+							</div>
+							<div className='px-5 py-2 bg-amber-500/5 border-b border-amber-500/20 flex items-center gap-2'>
+								<span className='text-amber-400 text-sm'>⚠️</span>
+								<p className='text-xs text-amber-200/80'>Этот сайт не принадлежит инфраструктуре Вондик. Будьте осторожны с вводом личных данных.</p>
+							</div>
+							<div className='flex-1 relative'>
+								<iframe title={activeWebModal.title || hostname} src={activeWebModal.url} className='absolute inset-0 w-full h-full border-0 bg-white' sandbox='allow-scripts allow-same-origin allow-forms allow-popups' />
+							</div>
+						</div>
+					</div>
+				)
+			})()}
 
 			<ScheduleMessageModal
 				isOpen={isScheduleModalOpen}

@@ -28,7 +28,7 @@ def push_join_request_bot_message(req_id: str, owner_id: str, target_name: str, 
     if not owner_id:
         return
     try:
-        from app.api.public.v1.bots import OUTBOX_QUEUES
+        from app.api.public.v1.bots import _q_push
         BOT_ID = "7e140ffc-5549-418a-8bad-525c02193812"
         target_type_ru = "канал" if target_type == "channel" else ("сервер" if target_type == "community" else "группу")
         applicant_name = getattr(applicant_user, "username", None) or getattr(
@@ -53,7 +53,7 @@ def push_join_request_bot_message(req_id: str, owner_id: str, target_name: str, 
             "reply_markup": reply_markup,
             "created_at": time.time(),
         }
-        OUTBOX_QUEUES[f"{BOT_ID}:{owner_id}"].append(item)
+        _q_push(f"bot:outbox:{BOT_ID}:{owner_id}", item)
 
         try:
             import os
@@ -110,7 +110,7 @@ def push_join_request_bot_message(req_id: str, owner_id: str, target_name: str, 
 
 def push_join_request_decision_message(req: JoinRequest, target_name: str):
     try:
-        from app.api.public.v1.bots import OUTBOX_QUEUES
+        from app.api.public.v1.bots import _q_push
         BOT_ID = "7e140ffc-5549-418a-8bad-525c02193812"
         if req.status == "approved":
             text = f"🎉 Ваша заявка на вступление в «{target_name}» была одобрена! Вы успешно добавлены."
@@ -123,7 +123,7 @@ def push_join_request_decision_message(req: JoinRequest, target_name: str):
             "text": text,
             "created_at": time.time(),
         }
-        OUTBOX_QUEUES[f"{BOT_ID}:{req.user_id}"].append(item)
+        _q_push(f"bot:outbox:{BOT_ID}:{req.user_id}", item)
     except Exception:
         pass
 

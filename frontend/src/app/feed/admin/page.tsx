@@ -51,6 +51,7 @@ export default function AdminSupportPage() {
 	const { user, logout } = useAuth()
 	const router = useRouter()
 	const [items, setItems] = useState<Escalation[]>([])
+	const [escFilter, setEscFilter] = useState<string>('open')
 	const [postReports, setPostReports] = useState<PostReport[]>([])
 	const [postReportsLoading, setPostReportsLoading] = useState(false)
 	const [userReports, setUserReports] = useState<UserReport[]>([])
@@ -61,6 +62,9 @@ export default function AdminSupportPage() {
 	const [oauthSearch, setOauthSearch] = useState('')
 	const [oauthResults, setOauthResults] = useState<any[]>([])
 	const [oauthLoading, setOauthLoading] = useState(false)
+	const [botSearch, setBotSearch] = useState('')
+	const [botResults, setBotResults] = useState<any[]>([])
+	const [botLoading, setBotLoading] = useState(false)
 	const [violationAction, setViolationAction] = useState<
 		'request_removal' | 'force_remove'
 	>('request_removal')
@@ -249,9 +253,13 @@ export default function AdminSupportPage() {
 		return `${hours}ч ${minutes}м ${seconds}с`
 	}
 
-	const loadEscalations = async () => {
+	const loadEscalations = async (filter?: string) => {
 		try {
-			const res = await fetch(`/api/support/admin/escalations`)
+			const statusParam = filter ?? escFilter
+			const url = statusParam
+				? `/api/support/admin/escalations?status=${encodeURIComponent(statusParam)}`
+				: `/api/support/admin/escalations`
+			const res = await fetch(url)
 			const text = await res.text()
 			let data: any = {}
 			try {
@@ -1019,6 +1027,49 @@ export default function AdminSupportPage() {
 		} catch {}
 	}
 
+	const searchBots = async (q: string) => {
+		setBotSearch(q)
+		if (q.length < 1) { setBotResults([]); return }
+		setBotLoading(true)
+		try {
+			const meRes = await fetch('/api/auth/me')
+			const meData = await meRes.json()
+			const token = meData?.user?.access_token || meData?.access_token
+			if (!token) return
+			const res = await fetch('/api/v1/bots/search', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+				body: JSON.stringify({ query: q }),
+			})
+			const data = await res.json()
+			const all = Array.isArray(data) ? data : (data?.bots || data?.items || [])
+			setBotResults(all)
+		} catch {}
+		setBotLoading(false)
+	}
+
+	const toggleBotVerified = async (botId: string, current: boolean) => {
+		try {
+			const meRes = await fetch('/api/auth/me')
+			const meData = await meRes.json()
+			const token = meData?.user?.access_token || meData?.access_token
+			if (!token) return
+			const res = await fetch(`/api/v1/bots/${botId}/verify`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+				body: JSON.stringify({ is_verified: !current }),
+			})
+			if (!res.ok) {
+				const err = await res.json().catch(() => ({}))
+				alert(err.detail || 'Ошибка')
+				return
+			}
+			setBotResults(prev =>
+				prev.map(b => (b.id === botId ? { ...b, is_verified: !current ? 1 : 0 } : b)),
+			)
+		} catch {}
+	}
+
 	const generateResetLink = async (userId: string) => {
 		setResetLinkLoading(userId)
 		setResetLinkResult(null)
@@ -1074,6 +1125,28 @@ export default function AdminSupportPage() {
 									<span className='text-xs text-gray-400'>
 										Заявки пользователей
 									</span>
+								</div>
+								<div className='flex gap-1'>
+									{[
+										{ label: 'Открытые', value: 'open' },
+										{ label: 'Все', value: '' },
+										{ label: 'Закрытые', value: 'closed' },
+									].map(f => (
+										<button
+											key={f.value}
+											onClick={() => {
+												setEscFilter(f.value)
+												loadEscalations(f.value)
+											}}
+											className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+												escFilter === f.value
+													? 'bg-indigo-600 text-white'
+													: 'bg-white/10 text-gray-400 hover:bg-white/20'
+											}`}
+										>
+											{f.label}
+										</button>
+									))}
 								</div>
 							</div>
 
@@ -2133,6 +2206,50 @@ export default function AdminSupportPage() {
 								</div>
 							)}
 							{oauthSearch.length >= 1 && !oauthLoading && oauthResults.length === 0 && (
+								<div className='text-sm text-gray-500'>Ничего не найдено</div>
+							)}
+						</div>
+					)}
+
+					{user?.role === 'Admin' && (
+						<div className='rounded-2xl bg-white/5 border border-white/10 p-6'>
+							<h2 className='text-lg font-bold text-white mb-4'>Верификация ботов</h2>
+							<input
+								type='text'
+								value={botSearch}
+								onChange={e => searchBots(e.target.value)}
+								placeholder='Поиск по названию или ID бота...'
+								className='w-full rounded-xl bg-black/30 border border-white/10 px-4 py-2.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 mb-4'
+							/>
+							{botLoading && <div className='text-sm text-gray-400'>Поиск...</div>}
+							{botResults.length > 0 && (
+								<div className='space-y-2'>
+									{botResults.map((b: any) => (
+										<div key={b.id} className='flex items-center justify-between rounded-lg bg-white/5 p-3'>
+											<div className='flex-1 min-w-0'>
+												<div className='flex items-center gap-2'>
+													<span className='text-sm font-medium text-white truncate'>{b.name || 'Без названия'}</span>
+													{b.is_verified === 1 && (
+														<span className='text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'>✓ Проверено</span>
+													)}
+												</div>
+												<div className='text-xs text-gray-500 truncate mt-0.5'>{b.id}</div>
+											</div>
+											<button
+												onClick={() => toggleBotVerified(b.id, b.is_verified === 1)}
+												className={`ml-3 shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+													b.is_verified === 1
+														? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30'
+														: 'bg-white/10 text-gray-300 border border-white/10 hover:bg-white/20'
+												}`}
+											>
+												{b.is_verified === 1 ? '✓ Верифицировано' : 'Верифицировать'}
+											</button>
+										</div>
+									))}
+								</div>
+							)}
+							{botSearch.length >= 1 && !botLoading && botResults.length === 0 && (
 								<div className='text-sm text-gray-500'>Ничего не найдено</div>
 							)}
 						</div>

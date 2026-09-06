@@ -1,8 +1,9 @@
 import asyncio
+import json as _json
 import logging
+import os
 import time
 from datetime import datetime
-from collections import defaultdict, deque
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
@@ -13,11 +14,63 @@ from app.services.bot_service import BotService
 public_bots_router = APIRouter(prefix="/api/public/v1/bots", tags=["Public Bots v1"])
 logger = logging.getLogger(__name__)
 
-UPDATE_QUEUES = defaultdict(deque)
-UPDATE_COUNTERS = defaultdict(int)
-OUTBOX_QUEUES = defaultdict(deque)
-OUTBOX_COUNTERS = defaultdict(int)
-UPDATE_EVENTS = defaultdict(asyncio.Event)
+# ── Redis-backed queues (shared across gunicorn workers) ──────────
+_REDIS = None
+
+
+def _get_redis():
+    global _REDIS
+    if _REDIS is None:
+        import redis as redis_mod
+        _REDIS = redis_mod.Redis(
+            host=os.environ.get("REDIS_HOST", "redis"),
+            port=int(os.environ.get("REDIS_PORT", 6379)),
+            db=0, decode_responses=True,
+        )
+    return _REDIS
+
+
+def _q_push(key: str, item: dict):
+    """Push item onto a Redis list (RPUSH = FIFO with LPOP)."""
+    _get_redis().rpush(key, _json.dumps(item))
+
+
+def _q_pop(key: str):
+    """Pop one item from the left of a Redis list."""
+    raw = _get_redis().lpop(key)
+    return _json.loads(raw) if raw else None
+
+
+def _q_len(key: str) -> int:
+    return _get_redis().llen(key)
+
+
+def _q_drain(key: str, limit: int = 100):
+    """Pop up to *limit* items from the queue."""
+    items = []
+    pipe = _get_redis().pipeline()
+    for _ in range(limit):
+        pipe.lpop(key)
+    results = pipe.execute()
+    for raw in results:
+        if raw is None:
+            break
+        items.append(_json.loads(raw))
+    return items
+
+
+def _pub_notify(channel: str):
+    """Publish a wakeup notification on a Redis pub/sub channel."""
+    try:
+        _get_redis().publish(channel, "1")
+    except Exception:
+        logger.debug("Redis publish failed for %s", channel)
+
+
+# Kept for backward compatibility (v1/bots.py imports these symbol names)
+UPDATE_QUEUES = None
+OUTBOX_QUEUES = None
+UPDATE_EVENTS = None
 
 
 def _get_bot_token(authorization: Optional[str] = Header(None), x_bot_token: Optional[str] = Header(None)) -> Optional[str]:
@@ -87,8 +140,8 @@ async def push_bot_update(bot_id: str, payload: dict):
     if isinstance(raw_update, dict) and "update_id" not in raw_update:
         raw_update["update_id"] = int(time.time() * 1000)
 
-    UPDATE_QUEUES[bot_id].append(raw_update)
-    UPDATE_EVENTS[bot_id].set()
+    _q_push(f"bot:updates:{bot_id}", raw_update)
+    _pub_notify(f"bot:updates:{bot_id}")
 
     chat_id = None
     if isinstance(raw_update, dict):
@@ -99,9 +152,7 @@ async def push_bot_update(bot_id: str, payload: dict):
 
     outbox = []
     if chat_id:
-        outbox_key = f"{bot_id}:{chat_id}"
-        while OUTBOX_QUEUES[outbox_key]:
-            outbox.append(OUTBOX_QUEUES[outbox_key].popleft())
+        outbox = _q_drain(f"bot:outbox:{bot_id}:{chat_id}")
 
     return {"ok": True, "outbox": outbox, "items": outbox}
 
@@ -151,14 +202,12 @@ async def handle_bot_callback(bot_id: str, payload: dict):
             "data": cb_data,
         },
     }
-    UPDATE_QUEUES[bot_id].append(raw_update)
-    UPDATE_EVENTS[bot_id].set()
+    _q_push(f"bot:updates:{bot_id}", raw_update)
+    _pub_notify(f"bot:updates:{bot_id}")
 
     outbox = []
     if user_id and user_id != "unknown":
-        outbox_key = f"{bot_id}:{user_id}"
-        while OUTBOX_QUEUES[outbox_key]:
-            outbox.append(OUTBOX_QUEUES[outbox_key].popleft())
+        outbox = _q_drain(f"bot:outbox:{bot_id}:{user_id}")
 
     return {"ok": True, "callback_id": cb_id, "outbox": outbox, "items": outbox}
 
@@ -179,19 +228,37 @@ async def get_bot_updates(
     bot_token: Optional[str] = Depends(_get_bot_token),
 ):
     bot_id = _resolve_bot_id(bot_id)
-    q = UPDATE_QUEUES[bot_id]
+    queue_key = f"bot:updates:{bot_id}"
 
-    if not q and timeout > 0:
-        event = UPDATE_EVENTS[bot_id]
-        event.clear()
+    items = _q_drain(queue_key, limit)
+    if items or timeout <= 0:
+        return {"items": items}
+
+    # Long-poll: wait for a Redis pub/sub notification or timeout
+    max_wait = min(max(timeout, 0), 5)
+    deadline = time.time() + max_wait
+    r = _get_redis()
+    pubsub = r.pubsub()
+    try:
+        pubsub.subscribe(queue_key)
+        while time.time() < deadline:
+            remaining = deadline - time.time()
+            msg = pubsub.get_message(timeout=min(remaining, 0.5))
+            if msg and msg.get("type") == "message":
+                break
+            await asyncio.sleep(0)
+            items = _q_drain(queue_key, limit)
+            if items:
+                break
+    finally:
         try:
-            await asyncio.wait_for(event.wait(), timeout=min(max(timeout, 0), 5))
-        except asyncio.TimeoutError:
+            pubsub.unsubscribe()
+            pubsub.close()
+        except Exception:
             pass
 
-    items = []
-    while q and len(items) < limit:
-        items.append(q.popleft())
+    if not items:
+        items = _q_drain(queue_key, limit)
     return {"items": items}
 
 
@@ -241,24 +308,43 @@ async def send_bot_message(
         raise HTTPException(status_code=400, detail="chat_id required")
 
     text = payload.get("text") or ""
+    game_raw = payload.get("game")
+
+    # Resolve game metadata if a game ID was provided
+    game_meta = None
+    if isinstance(game_raw, dict) and game_raw.get("id"):
+        try:
+            from app.services.bot_game_service import BotGameService
+            game_obj = BotGameService.get_game(bot_id, str(game_raw["id"]))
+            if game_obj:
+                game_meta = {
+                    "id": game_obj.id,
+                    "title": game_obj.title,
+                    "embed_url": f"/api/v1/bots/{bot_id}/games/{game_obj.id}/embed",
+                    "download_url": f"/api/v1/bots/{bot_id}/games/{game_obj.id}/download",
+                    "play_url": f"/feed/bot-game/{bot_id}/{game_obj.id}",
+                }
+        except Exception as e:
+            logger.warning("Error resolving game %s: %s", game_raw.get("id"), e)
+
     item = {
         "bot_id": bot_id,
         "chat_id": chat_id,
         "text": text,
         "reply_markup": payload.get("reply_markup"),
         "parse_mode": payload.get("parse_mode"),
-        "game": payload.get("game"),
+        "game": game_meta or game_raw,
         "created_at": time.time(),
     }
-    outbox_key = f"{bot_id}:{chat_id}"
-    OUTBOX_QUEUES[outbox_key].append(item)
+    _q_push(f"bot:outbox:{bot_id}:{chat_id}", item)
 
     msg_id = None
     iso_time = datetime.utcnow().isoformat() + "Z"
+    msg_type = "game" if game_meta else "text"
     try:
         from app.services.message_service import MessageService
         msg_obj, _ = MessageService.create_message(
-            {"content": text, "type": "text"},
+            {"content": text or (game_meta.get("title") if game_meta else ""), "type": msg_type},
             user_id=bot_id,
             target_id=chat_id,
         )
@@ -282,7 +368,8 @@ async def send_bot_message(
                 "target_id": chat_id,
                 "content": text,
                 "reply_markup": payload.get("reply_markup"),
-                "type": "text",
+                "type": msg_type,
+                "game": game_meta,
                 "timestamp": iso_time,
                 "is_read": 0,
             }
@@ -316,10 +403,66 @@ async def get_file(bot_id: str, file_id: str = Query(...)):
     return {"ok": True, "file_id": file_id, "file_path": f"files/{file_id}"}
 
 
-@public_bots_router.get("/{bot_id}/permissions")
 @public_bots_router.get("/{bot_id}/permissions/{user_id}")
-async def get_bot_user_permissions(bot_id: str, user_id: Optional[str] = None):
-    return {"granted": True, "scopes": ["basic", "user_info", "send_messages"]}
+async def get_bot_user_permissions(bot_id: str, user_id: str):
+    """Check if user has granted permissions to this bot. Returns bot's required scopes + granted scopes."""
+    bot_id = _resolve_bot_id(bot_id)
+    from app.models.bot import Bot, BOT_SCOPES
+
+    bot = Bot.query.get(bot_id)
+    required = bot.get_scopes() if bot else ["username", "send_messages"]
+
+    # Check Redis for granted consent
+    consent_key = f"bot:consent:{bot_id}:{user_id}"
+    r = _get_redis()
+    granted_raw = r.get(consent_key)
+    if granted_raw:
+        granted_scopes = _json.loads(granted_raw)
+        return {
+            "granted": True,
+            "required_scopes": required,
+            "granted_scopes": granted_scopes,
+            "scope_descriptions": {s: BOT_SCOPES.get(s, s) for s in required},
+        }
+
+    return {
+        "granted": False,
+        "required_scopes": required,
+        "granted_scopes": [],
+        "scope_descriptions": {s: BOT_SCOPES.get(s, s) for s in required},
+    }
+
+
+@public_bots_router.post("/{bot_id}/permissions/grant")
+async def grant_bot_permissions(bot_id: str, payload: dict):
+    """User grants consent to a bot. Stores in Redis."""
+    bot_id = _resolve_bot_id(bot_id)
+    user_id = str(payload.get("user_id") or "")
+    scopes = payload.get("scopes") or []
+
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id required")
+
+    consent_key = f"bot:consent:{bot_id}:{user_id}"
+    r = _get_redis()
+    r.set(consent_key, _json.dumps(scopes), ex=86400 * 365)  # 1 year
+
+    return {"ok": True, "granted": True, "scopes": scopes}
+
+
+@public_bots_router.post("/{bot_id}/permissions/revoke")
+async def revoke_bot_permissions(bot_id: str, payload: dict):
+    """User revokes consent from a bot."""
+    bot_id = _resolve_bot_id(bot_id)
+    user_id = str(payload.get("user_id") or "")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id required")
+
+    consent_key = f"bot:consent:{bot_id}:{user_id}"
+    r = _get_redis()
+    r.delete(consent_key)
+
+    return {"ok": True, "revoked": True}
 
 
 @public_bots_router.get("/{bot_id}/outbox")
@@ -327,9 +470,36 @@ async def get_bot_outbox(
     bot_id: str,
     chat_id: str = Query(...),
 ):
-    outbox_key = f"{bot_id}:{chat_id}"
-    items = []
-    q = OUTBOX_QUEUES[outbox_key]
-    while q:
-        items.append(q.popleft())
+    bot_id = _resolve_bot_id(bot_id)
+    items = _q_drain(f"bot:outbox:{bot_id}:{chat_id}")
     return {"items": items, "outbox": items}
+
+
+@public_bots_router.post("/{bot_id}/update")
+async def bot_self_update(
+    bot_id: str,
+    payload: dict,
+    bot_token: Optional[str] = Depends(_get_bot_token),
+):
+    """Bot can update its own name, description, avatar_url via Bot token."""
+    bot_id = _resolve_bot_id(bot_id)
+    from app.core.extensions import db
+    from app.models.bot import Bot
+
+    bot = Bot.query.get(bot_id)
+    if not bot:
+        raise HTTPException(status_code=404, detail="Bot not found")
+
+    if "name" in payload:
+        bot.name = payload["name"]
+    if "description" in payload:
+        bot.description = payload["description"]
+    if "avatar_url" in payload:
+        bot.avatar_url = payload["avatar_url"]
+    if "required_scopes" in payload:
+        scopes = payload["required_scopes"]
+        if isinstance(scopes, list):
+            bot.set_scopes(scopes)
+
+    db.session.commit()
+    return {"ok": True, "bot_id": bot_id}

@@ -308,14 +308,14 @@ class _VondicAppState extends State<VondicApp> {
       if (code != null) {
         try {
           final oauthService = OAuthService(widget.apiClient, widget.storageService);
-          final user = await oauthService.handleCodeExchange(code, state ?? '');
+          final user = await oauthService.handleOAuthCallback(code, state ?? '');
           if (user != null && mounted) {
             _authBloc.add(AuthSetUserEvent(user));
           } else {
             _showErrorSnackBar('Не удалось получить данные пользователя.');
           }
         } catch (e) {
-          debugPrint('[DeepLink] OAuth code exchange error: $e');
+          debugPrint('[DeepLink] OAuth callback error: $e');
           _showErrorSnackBar('Ошибка авторизации: $e');
         }
       }

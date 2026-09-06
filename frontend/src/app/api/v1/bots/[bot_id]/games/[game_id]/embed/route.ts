@@ -10,11 +10,7 @@ export async function GET(
 	const url = `${backendUrl}/api/v1/bots/${bot_id}/games/${game_id}/embed`
 
 	try {
-		const res = await fetch(url, {
-			headers: {
-				'Accept': 'text/html',
-			},
-		})
+		const res = await fetch(url)
 		const body = await res.text()
 		return new NextResponse(body, {
 			status: res.status,

@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import BaseModel
 from sqlalchemy import or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -246,3 +247,48 @@ async def get_avatars(
         return {r[0]: {"username": r[1], "avatar_url": r[2]} for r in rows}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@users_router.post("/buy-premium")
+async def buy_premium(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    now = datetime.utcnow()
+    # If already premium, extend from current expiry; otherwise from now
+    if current_user.premium and current_user.premium_expired_at and current_user.premium_expired_at > now:
+        current_user.premium_expired_at = current_user.premium_expired_at + timedelta(days=30)
+    else:
+        current_user.premium = 1
+        current_user.premium_started_at = now
+        current_user.premium_expired_at = now + timedelta(days=30)
+
+    await db.commit()
+    return {"ok": True, "user": current_user.to_dict()}
+
+
+class GiftPremiumSchema(BaseModel):
+    recipient_id: str
+
+
+@users_router.post("/gift-premium")
+async def gift_premium(
+    payload: GiftPremiumSchema,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    res = await db.execute(select(User).where(User.id == payload.recipient_id))
+    recipient = res.scalar_one_or_none()
+    if not recipient:
+        raise HTTPException(status_code=404, detail="Recipient not found")
+
+    now = datetime.utcnow()
+    if recipient.premium and recipient.premium_expired_at and recipient.premium_expired_at > now:
+        recipient.premium_expired_at = recipient.premium_expired_at + timedelta(days=30)
+    else:
+        recipient.premium = 1
+        recipient.premium_started_at = now
+        recipient.premium_expired_at = now + timedelta(days=30)
+
+    await db.commit()
+    return {"ok": True, "recipient": recipient.to_dict()}

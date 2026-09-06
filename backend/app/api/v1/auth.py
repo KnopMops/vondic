@@ -280,6 +280,34 @@ async def api_key_login(
     }
 
 
+@auth_router.get("/api-key")
+async def get_api_key(current_user=Depends(get_current_user)):
+    api_key, error = UserService.get_api_key(str(current_user.id))
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+    return {"api_key": api_key}
+
+
+@auth_router.post("/api-key")
+async def generate_api_key(current_user=Depends(get_current_user)):
+    api_key, error = UserService.generate_api_key(str(current_user.id), rotate=True)
+    if error or not api_key:
+        raise HTTPException(status_code=400, detail=error or "Failed to generate API key")
+    return {"api_key": api_key}
+
+
+@auth_router.post("/developer/toggle")
+async def toggle_developer_mode(
+    payload: Dict[str, Any],
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    enable = payload.get("enable", False)
+    current_user.is_developer = 1 if enable else 0
+    await db.commit()
+    return {"ok": True, "user": current_user.to_dict()}
+
+
 @auth_router.get("/device-sessions")
 async def list_device_sessions(
     current_user: User = Depends(get_current_user),
@@ -350,12 +378,17 @@ async def yandex_login(
 @auth_router.post("/yandex/callback")
 async def yandex_callback(
     code: Optional[str] = Query(None),
+    state: Optional[str] = Query(None),
     payload: Optional[Dict[str, Any]] = None,
     request: Request = None,
 ):
+    from urllib.parse import urlencode
+    from fastapi.responses import RedirectResponse
+
     auth_code = code
     if not auth_code and payload:
         auth_code = payload.get("code")
+        state = state or payload.get("state")
 
     if not auth_code:
         raise HTTPException(status_code=400, detail="Требуется код авторизации")
@@ -365,10 +398,20 @@ async def yandex_callback(
     if error or not result:
         raise HTTPException(status_code=400, detail=error or "Ошибка авторизации через Yandex")
 
-    return {
-        "message": "Вход через Yandex выполнен успешно",
+    tokens = {
         "access_token": result["access_token"],
         "refresh_token": result["refresh_token"],
+    }
+
+    # Mobile deep link redirect: state contains the custom URL scheme
+    if state and state.startswith("mobile_redirect:"):
+        redirect_uri = state[len("mobile_redirect:"):]
+        params = urlencode(tokens)
+        return RedirectResponse(url=f"{redirect_uri}?{params}", status_code=302)
+
+    return {
+        "message": "Вход через Yandex выполнен успешно",
+        **tokens,
         "user": result["user"].to_dict(),
     }
 

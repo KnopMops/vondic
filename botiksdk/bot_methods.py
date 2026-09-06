@@ -1,4 +1,5 @@
-"""Extended Bot methods — media, moderation, polls, stickers, callbacks, location, inline, webhook."""
+"""Extended Bot methods — media, moderation, polls, stickers, callbacks, location, inline, webhook, calls."""
+import asyncio
 import json
 import logging
 from typing import Any, Dict, List, Optional
@@ -452,6 +453,206 @@ class BotMethodsMixin:
 
     async def upload_voice(self, chat_id: str) -> dict:
         return await self.send_chat_action(chat_id, "upload_voice")
+
+    # ── Voice Channels (v2 API) ──────────────────────────────────────
+
+    async def join_voice_channel(self, channel_id: str) -> dict:
+        """Join a voice channel. Bot appears as participant."""
+        return await asyncio.to_thread(
+            self._client.v2_join_voice_channel,
+            channel_id,
+            api_key=self.api_key,
+            bot_token=self.token,
+        )
+
+    async def leave_voice_channel(self, channel_id: str) -> dict:
+        """Leave a voice channel."""
+        return await asyncio.to_thread(
+            self._client.v2_leave_voice_channel,
+            channel_id,
+            api_key=self.api_key,
+            bot_token=self.token,
+        )
+
+    async def get_voice_channel_participants(self, channel_id: str) -> dict:
+        """Get list of participants in a voice channel."""
+        return await asyncio.to_thread(
+            self._client.v2_get_voice_channel_participants,
+            channel_id,
+            api_key=self.api_key,
+            bot_token=self.token,
+        )
+
+    async def list_active_voice_channels(self) -> dict:
+        """List all active voice channels."""
+        return await asyncio.to_thread(
+            self._client.v2_list_active_voice_channels,
+            api_key=self.api_key,
+            bot_token=self.token,
+        )
+
+    async def play_audio_in_channel(
+        self,
+        channel_id: str,
+        audio_url: str,
+        *,
+        filename: str = None,
+        duration: int = None,
+    ) -> dict:
+        """Play an audio file in a voice channel.
+
+        The bot must have already joined the channel.
+        audio_url must be a publicly accessible URL.
+        """
+        return await asyncio.to_thread(
+            self._client.v2_send_audio_to_channel,
+            channel_id,
+            audio_url,
+            api_key=self.api_key,
+            bot_token=self.token,
+            filename=filename,
+            duration=duration,
+        )
+
+    # ── Calls (v2 API) ───────────────────────────────────────────────
+
+    async def initiate_call(
+        self,
+        target_user_id: str,
+        *,
+        is_video: bool = False,
+    ) -> dict:
+        """Initiate a 1:1 call to a user."""
+        return await asyncio.to_thread(
+            self._client.v2_initiate_call,
+            target_user_id,
+            api_key=self.api_key,
+            bot_token=self.token,
+            is_video=is_video,
+        )
+
+    async def initiate_group_call(
+        self,
+        group_id: str,
+        *,
+        is_video: bool = False,
+    ) -> dict:
+        """Initiate a group call."""
+        return await asyncio.to_thread(
+            self._client.v2_initiate_group_call,
+            group_id,
+            api_key=self.api_key,
+            bot_token=self.token,
+            is_video=is_video,
+        )
+
+    async def answer_call(self, call_id: str) -> dict:
+        """Answer an incoming call."""
+        return await asyncio.to_thread(
+            self._client.v2_answer_call,
+            call_id,
+            api_key=self.api_key,
+            bot_token=self.token,
+        )
+
+    async def reject_call(self, call_id: str) -> dict:
+        """Reject an incoming call."""
+        return await asyncio.to_thread(
+            self._client.v2_reject_call,
+            call_id,
+            api_key=self.api_key,
+            bot_token=self.token,
+        )
+
+    async def end_call(self, call_id: str) -> dict:
+        """End an active call."""
+        return await asyncio.to_thread(
+            self._client.v2_end_call,
+            call_id,
+            api_key=self.api_key,
+            bot_token=self.token,
+        )
+
+    async def list_active_calls(self) -> dict:
+        """List all active calls."""
+        return await asyncio.to_thread(
+            self._client.v2_list_active_calls,
+            api_key=self.api_key,
+            bot_token=self.token,
+        )
+
+    # ── Chat v2 API ──────────────────────────────────────────────────
+
+    async def send_message_v2(
+        self,
+        target_user_id: str = None,
+        channel_id: str = None,
+        group_id: str = None,
+        content: str = "",
+        *,
+        msg_type: str = "text",
+        attachments: list = None,
+        reply_to: str = None,
+    ) -> dict:
+        """Send message via v2 API (supports DM, channel, group)."""
+        return await asyncio.to_thread(
+            self._client.v2_send_message,
+            api_key=self.api_key,
+            bot_token=self.token,
+            target_user_id=target_user_id,
+            channel_id=channel_id,
+            group_id=group_id,
+            content=content,
+            msg_type=msg_type,
+            attachments=attachments,
+            reply_to=reply_to,
+        )
+
+    async def get_messages_v2(
+        self,
+        target_id: str,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict:
+        """Get message history via v2 API."""
+        return await asyncio.to_thread(
+            self._client.v2_get_messages,
+            target_id,
+            api_key=self.api_key,
+            bot_token=self.token,
+            limit=limit,
+            offset=offset,
+        )
+
+    async def edit_message_v2(self, message_id: str, content: str) -> dict:
+        """Edit a message via v2 API."""
+        return await asyncio.to_thread(
+            self._client.v2_edit_message,
+            message_id,
+            content,
+            api_key=self.api_key,
+            bot_token=self.token,
+        )
+
+    async def delete_message_v2(self, message_id: str) -> dict:
+        """Delete a message via v2 API."""
+        return await asyncio.to_thread(
+            self._client.v2_delete_message,
+            message_id,
+            api_key=self.api_key,
+            bot_token=self.token,
+        )
+
+    async def add_reaction_v2(self, message_id: str, emoji: str) -> dict:
+        """Add/toggle reaction on a message via v2 API."""
+        return await asyncio.to_thread(
+            self._client.v2_add_reaction,
+            message_id,
+            emoji,
+            api_key=self.api_key,
+            bot_token=self.token,
+        )
 
     # ── Internal ─────────────────────────────────────────────────────
 

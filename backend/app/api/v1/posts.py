@@ -76,12 +76,14 @@ async def get_posts(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     community_id: Optional[str] = None,
+    social_community_id: Optional[str] = None,
     current_user: Optional[User] = Depends(get_optional_current_user),
     db=Depends(get_async_db)
 ):
     viewer_id = current_user.id if current_user else None
+    cid = social_community_id or community_id
     items, total, current_page, pages = PostService.get_posts_paginated(
-        page, per_page, viewer_id=viewer_id, community_id=community_id
+        page, per_page, viewer_id=viewer_id, community_id=cid
     )
     dicts = [p.to_dict(viewer_id=viewer_id) for p in items]
     await _attach_authors_to_posts_async(db, dicts)

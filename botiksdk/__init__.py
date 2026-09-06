@@ -6,6 +6,7 @@ from botiksdk.bot import (
     play_games_button,
     upload_game_button,
     game_play_button,
+    web_modal_button,
 )
 from botiksdk.bot_types import (
     # Core types
@@ -104,4 +105,7 @@ __all__ = [
     "play_games_button",
     "upload_game_button",
     "game_play_button",
+
+    # Web modal
+    "web_modal_button",
 ]

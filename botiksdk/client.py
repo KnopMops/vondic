@@ -273,3 +273,307 @@ class PublicAPIClient:
             f"/api/public/v1/bots/{bot_id}/permissions/{user_id}",
             bot_token=bot_token,
         )
+
+    # ── V2 Public API (API-key authenticated) ────────────────────────
+
+    def v2_send_message(
+        self,
+        *,
+        api_key: Optional[str] = None,
+        bot_token: Optional[str] = None,
+        target_user_id: Optional[str] = None,
+        channel_id: Optional[str] = None,
+        group_id: Optional[str] = None,
+        content: str = "",
+        msg_type: str = "text",
+        attachments: Optional[list] = None,
+        reply_to: Optional[str] = None,
+    ):
+        """Send message via v2 public API (API key or bot token auth)."""
+        body: Dict[str, Any] = {"content": content, "type": msg_type}
+        if target_user_id:
+            body["target_user_id"] = target_user_id
+        if channel_id:
+            body["channel_id"] = channel_id
+        if group_id:
+            body["group_id"] = group_id
+        if attachments:
+            body["attachments"] = attachments
+        if reply_to:
+            body["reply_to"] = reply_to
+        return self._request(
+            "POST",
+            "/api/public/v2/chat/messages",
+            json_body=body,
+            api_key=api_key,
+            bot_token=bot_token,
+        )
+
+    def v2_get_messages(
+        self,
+        target_id: str,
+        *,
+        api_key: Optional[str] = None,
+        bot_token: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ):
+        """Get message history via v2 public API."""
+        return self._request(
+            "GET",
+            f"/api/public/v2/chat/messages/{target_id}",
+            params={"limit": limit, "offset": offset},
+            api_key=api_key,
+            bot_token=bot_token,
+        )
+
+    def v2_edit_message(
+        self,
+        message_id: str,
+        content: str,
+        *,
+        api_key: Optional[str] = None,
+        bot_token: Optional[str] = None,
+    ):
+        """Edit a message via v2 public API."""
+        return self._request(
+            "PUT",
+            f"/api/public/v2/chat/messages/{message_id}",
+            json_body={"content": content},
+            api_key=api_key,
+            bot_token=bot_token,
+        )
+
+    def v2_delete_message(
+        self,
+        message_id: str,
+        *,
+        api_key: Optional[str] = None,
+        bot_token: Optional[str] = None,
+    ):
+        """Delete a message via v2 public API."""
+        return self._request(
+            "DELETE",
+            f"/api/public/v2/chat/messages/{message_id}",
+            api_key=api_key,
+            bot_token=bot_token,
+        )
+
+    def v2_add_reaction(
+        self,
+        message_id: str,
+        emoji: str,
+        *,
+        api_key: Optional[str] = None,
+        bot_token: Optional[str] = None,
+    ):
+        """Add/toggle reaction on a message via v2 public API."""
+        return self._request(
+            "POST",
+            f"/api/public/v2/chat/messages/{message_id}/reaction",
+            json_body={"emoji": emoji},
+            api_key=api_key,
+            bot_token=bot_token,
+        )
+
+    def v2_get_conversations(
+        self,
+        *,
+        api_key: Optional[str] = None,
+        bot_token: Optional[str] = None,
+        limit: int = 30,
+    ):
+        """Get recent conversations via v2 public API."""
+        return self._request(
+            "GET",
+            "/api/public/v2/chat/conversations",
+            params={"limit": limit},
+            api_key=api_key,
+            bot_token=bot_token,
+        )
+
+    # ── V2 Calls API ─────────────────────────────────────────────────
+
+    def v2_join_voice_channel(
+        self,
+        channel_id: str,
+        *,
+        api_key: Optional[str] = None,
+        bot_token: Optional[str] = None,
+    ):
+        """Join a voice channel via v2 public API."""
+        return self._request(
+            "POST",
+            "/api/public/v2/calls/voice-channels/join",
+            json_body={"channel_id": channel_id},
+            api_key=api_key,
+            bot_token=bot_token,
+        )
+
+    def v2_leave_voice_channel(
+        self,
+        channel_id: str,
+        *,
+        api_key: Optional[str] = None,
+        bot_token: Optional[str] = None,
+    ):
+        """Leave a voice channel via v2 public API."""
+        return self._request(
+            "POST",
+            "/api/public/v2/calls/voice-channels/leave",
+            json_body={"channel_id": channel_id},
+            api_key=api_key,
+            bot_token=bot_token,
+        )
+
+    def v2_get_voice_channel_participants(
+        self,
+        channel_id: str,
+        *,
+        api_key: Optional[str] = None,
+        bot_token: Optional[str] = None,
+    ):
+        """Get participants of a voice channel."""
+        return self._request(
+            "GET",
+            f"/api/public/v2/calls/voice-channels/{channel_id}/participants",
+            api_key=api_key,
+            bot_token=bot_token,
+        )
+
+    def v2_list_active_voice_channels(
+        self,
+        *,
+        api_key: Optional[str] = None,
+        bot_token: Optional[str] = None,
+    ):
+        """List all active voice channels."""
+        return self._request(
+            "GET",
+            "/api/public/v2/calls/voice-channels/active",
+            api_key=api_key,
+            bot_token=bot_token,
+        )
+
+    def v2_send_audio_to_channel(
+        self,
+        channel_id: str,
+        audio_url: str,
+        *,
+        api_key: Optional[str] = None,
+        bot_token: Optional[str] = None,
+        filename: Optional[str] = None,
+        duration: Optional[int] = None,
+    ):
+        """Send/play audio in a voice channel."""
+        body: Dict[str, Any] = {
+            "channel_id": channel_id,
+            "audio_url": audio_url,
+        }
+        if filename:
+            body["filename"] = filename
+        if duration:
+            body["duration"] = duration
+        return self._request(
+            "POST",
+            "/api/public/v2/calls/voice-channels/send-audio",
+            json_body=body,
+            api_key=api_key,
+            bot_token=bot_token,
+        )
+
+    def v2_initiate_call(
+        self,
+        target_user_id: str,
+        *,
+        api_key: Optional[str] = None,
+        bot_token: Optional[str] = None,
+        is_video: bool = False,
+    ):
+        """Initiate a 1:1 call."""
+        return self._request(
+            "POST",
+            "/api/public/v2/calls/initiate",
+            json_body={"target_user_id": target_user_id, "is_video": is_video},
+            api_key=api_key,
+            bot_token=bot_token,
+        )
+
+    def v2_initiate_group_call(
+        self,
+        group_id: str,
+        *,
+        api_key: Optional[str] = None,
+        bot_token: Optional[str] = None,
+        is_video: bool = False,
+    ):
+        """Initiate a group call."""
+        return self._request(
+            "POST",
+            "/api/public/v2/calls/group/initiate",
+            json_body={"group_id": group_id, "is_video": is_video},
+            api_key=api_key,
+            bot_token=bot_token,
+        )
+
+    def v2_answer_call(
+        self,
+        call_id: str,
+        *,
+        api_key: Optional[str] = None,
+        bot_token: Optional[str] = None,
+    ):
+        """Answer an incoming call."""
+        return self._request(
+            "POST",
+            "/api/public/v2/calls/answer",
+            json_body={"call_id": call_id, "action": "answer"},
+            api_key=api_key,
+            bot_token=bot_token,
+        )
+
+    def v2_reject_call(
+        self,
+        call_id: str,
+        *,
+        api_key: Optional[str] = None,
+        bot_token: Optional[str] = None,
+    ):
+        """Reject an incoming call."""
+        return self._request(
+            "POST",
+            "/api/public/v2/calls/reject",
+            json_body={"call_id": call_id, "action": "reject"},
+            api_key=api_key,
+            bot_token=bot_token,
+        )
+
+    def v2_end_call(
+        self,
+        call_id: str,
+        *,
+        api_key: Optional[str] = None,
+        bot_token: Optional[str] = None,
+    ):
+        """End an active call."""
+        return self._request(
+            "POST",
+            "/api/public/v2/calls/end",
+            json_body={"call_id": call_id, "action": "end"},
+            api_key=api_key,
+            bot_token=bot_token,
+        )
+
+    def v2_list_active_calls(
+        self,
+        *,
+        api_key: Optional[str] = None,
+        bot_token: Optional[str] = None,
+    ):
+        """List all active calls."""
+        return self._request(
+            "GET",
+            "/api/public/v2/calls/active",
+            api_key=api_key,
+            bot_token=bot_token,
+        )

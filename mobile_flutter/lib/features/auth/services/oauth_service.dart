@@ -15,116 +15,125 @@ class OAuthService {
 
   OAuthService(this._apiClient, this._storageService);
 
-  String _generateState() {
-    final rand = Random();
-    final values = List<int>.generate(16, (i) => rand.nextInt(256));
-    final state = 'st_' + base64UrlEncode(values).replaceAll('=', '') + DateTime.now().millisecondsSinceEpoch.toString();
-    return state;
+  /// Login with email and password via Vondic backend.
+  Future<User?> loginWithEmail(String email, String password) async {
+    try {
+      final response = await _apiClient.publicDio.post(
+        '${AppConfig.backendUrl}/api/v1/auth/login',
+        data: {
+          'email': email,
+          'password': password,
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = response.data as Map<String, dynamic>;
+        final accessToken = data['access_token'] as String?;
+        final refreshToken = data['refresh_token'] as String?;
+
+        if (accessToken != null) {
+          await _storageService.writeSecure('access_token', accessToken);
+        }
+        if (refreshToken != null) {
+          await _storageService.writeSecure('refresh_token', refreshToken);
+        }
+
+        final userData = data['user'] as Map<String, dynamic>?;
+        if (userData != null) {
+          final user = User.fromJson(userData);
+          await _storageService.writeString('user', jsonEncode(user.toJson()));
+          return user;
+        }
+      }
+      throw Exception('Неверный email или пароль');
+    } on DioException catch (e) {
+      _logger.e('[Auth] Email login failed: ${e.message}');
+      final detail = e.response?.data?['detail'] ?? e.response?.data?['error'];
+      if (detail != null) {
+        throw Exception(detail.toString());
+      }
+      if (e.response?.statusCode == 401) {
+        throw Exception('Неверный email или пароль');
+      }
+      throw Exception('Ошибка авторизации');
+    }
   }
 
-  Future<User?> login() async {
+  /// Open Yandex OAuth in system browser.
+  /// The browser will redirect back to vondic:///oauth/callback after auth.
+  Future<void> loginWithYandex() async {
     try {
-      final state = _generateState();
-      await _storageService.writeString('oauth_state', state);
+      // Get the Yandex auth URL from backend
+      final response = await _apiClient.publicDio.get(
+        '${AppConfig.backendUrl}/api/v1/auth/yandex/login',
+      );
 
-      final authUrl = '${AppConfig.oauthUrl}/oauth/authorize'
-          '?client_id=${AppConfig.oauthClientId}'
-          '&redirect_uri=${Uri.encodeComponent(AppConfig.oauthRedirectUrl)}'
-          '&response_type=code'
-          '&state=$state'
-          '&device_type=mobile';
+      String authUrl;
+      if (response.statusCode == 200 && response.data is Map) {
+        authUrl = response.data['auth_url'] as String;
+      } else {
+        // Fallback: build URL manually
+        final clientId = AppConfig.yandexClientId;
+        authUrl = 'https://oauth.yandex.ru/authorize?'
+            'response_type=code'
+            '&client_id=$clientId'
+            '&redirect_uri=${Uri.encodeComponent('vondic:///oauth/callback')}';
+      }
 
-      _logger.d('[OAuth] Authenticating via external system browser with url: $authUrl');
+      _logger.d('[Auth] Opening Yandex OAuth: $authUrl');
 
       await launchUrl(
         Uri.parse(authUrl),
         mode: LaunchMode.externalApplication,
       );
-      return null;
     } catch (e) {
-      _logger.e('[OAuth] Login launch failed: $e');
+      _logger.e('[Auth] Yandex login launch failed: $e');
       rethrow;
     }
   }
 
-  Future<User?> handleCodeExchange(String code, String state) async {
+  /// Handle OAuth callback from Yandex (or any OAuth provider).
+  /// Called when the app receives vondic:///oauth/callback?code=...&state=...
+  Future<User?> handleOAuthCallback(String code, String state) async {
     try {
-      final storedState = _storageService.readString('oauth_state');
-      await _storageService.remove('oauth_state');
+      _logger.d('[Auth] Handling OAuth callback, code length: ${code.length}');
 
-      if (storedState != null && state != storedState) {
-        throw Exception('CSRF Warning: State mismatch!');
-      }
-
-      // Exchange code for tokens
-      final tokenData = await _exchangeCodeForTokens(code);
-      if (tokenData == null) {
-        throw Exception('Failed to exchange code for tokens');
-      }
-
-      final accessToken = tokenData['access_token'] as String;
-      final refreshToken = tokenData['refresh_token'] as String?;
-
-      await _storageService.writeSecure('access_token', accessToken);
-      if (refreshToken != null) {
-        await _storageService.writeSecure('refresh_token', refreshToken);
-      }
-
-      // Fetch user info
-      final user = await _fetchUserInfo(accessToken);
-      if (user != null) {
-        await _storageService.writeString('user', jsonEncode(user.toJson()));
-      }
-      return user;
-    } catch (e) {
-      _logger.e('[OAuth] handleCodeExchange failed: $e');
-      rethrow;
-    }
-  }
-
-  Future<Map<String, dynamic>?> _exchangeCodeForTokens(String code) async {
-    try {
-      final response = await _apiClient.publicDio.post(
-        '${AppConfig.backendUrl}/oauth/token',
-        data: {
-          'grant_type': 'authorization_code',
-          'code': code,
-          'redirect_uri': AppConfig.oauthRedirectUrl,
-          'client_id': AppConfig.oauthClientId,
-          'client_secret': AppConfig.oauthClientSecret,
-          'device_type': 'mobile',
-        },
-        options: Options(
-          contentType: 'application/x-www-form-urlencoded',
-        ),
-      );
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return response.data as Map<String, dynamic>;
-      }
-    } catch (e) {
-      _logger.e('[OAuth] Token exchange request failed: $e');
-    }
-    return null;
-  }
-
-  Future<User?> _fetchUserInfo(String token) async {
-    try {
+      // Exchange code via backend Yandex callback
       final response = await _apiClient.publicDio.get(
-        '${AppConfig.backendUrl}/oauth/userinfo',
-        options: Options(
-          headers: {
-            'Authorization': 'Bearer $token',
-          },
-        ),
+        '${AppConfig.backendUrl}/api/v1/auth/yandex/callback',
+        queryParameters: {'code': code},
       );
 
       if (response.statusCode == 200) {
-        return User.fromJson(response.data as Map<String, dynamic>);
+        final data = response.data as Map<String, dynamic>;
+        final accessToken = data['access_token'] as String?;
+        final refreshToken = data['refresh_token'] as String?;
+
+        if (accessToken != null) {
+          await _storageService.writeSecure('access_token', accessToken);
+        }
+        if (refreshToken != null) {
+          await _storageService.writeSecure('refresh_token', refreshToken);
+        }
+
+        final userData = data['user'] as Map<String, dynamic>?;
+        if (userData != null) {
+          final user = User.fromJson(userData);
+          await _storageService.writeString('user', jsonEncode(user.toJson()));
+          return user;
+        }
       }
+      throw Exception('Не удалось получить данные пользователя');
+    } on DioException catch (e) {
+      _logger.e('[Auth] OAuth callback failed: ${e.message}');
+      final detail = e.response?.data?['detail'] ?? e.response?.data?['error'];
+      if (detail != null) {
+        throw Exception(detail.toString());
+      }
+      throw Exception('Ошибка авторизации через Яндекс');
     } catch (e) {
-      _logger.e('[OAuth] Fetch userinfo failed: $e');
+      _logger.e('[Auth] OAuth callback error: $e');
+      rethrow;
     }
-    return null;
   }
 }

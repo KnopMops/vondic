@@ -29,6 +29,11 @@ class AppConfig {
     defaultValue: 'vondic://oauth/callback',
   );
 
+  static const String yandexClientId = String.fromEnvironment(
+    'YANDEX_CLIENT_ID',
+    defaultValue: '',
+  );
+
   static const String internalTurnHost = String.fromEnvironment(
     'INTERNAL_TURN_HOST',
     defaultValue: '192.168.140.11',

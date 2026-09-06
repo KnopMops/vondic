@@ -163,7 +163,7 @@ class MessageService:
                     target_user = User.query.get(target_id)
                     if target_user and (getattr(target_user, "is_bot", False) or str(target_id) == "7e140ffc-5549-418a-8bad-525c02193812"):
                         import time
-                        from app.api.public.v1.bots import UPDATE_QUEUES
+                        from app.api.public.v1.bots import _q_push, _pub_notify
                         sender = User.query.get(user_id)
                         sender_name = getattr(sender, "username", None) or getattr(sender, "name", "User")
                         bot_update = {
@@ -183,7 +183,8 @@ class MessageService:
                                 "date": int(time.time()),
                             }
                         }
-                        UPDATE_QUEUES[str(target_id)].append(bot_update)
+                        _q_push(f"bot:updates:{target_id}", bot_update)
+                        _pub_notify(f"bot:updates:{target_id}")
                 except Exception as e:
                     print(f"Error pushing update to bot: {e}")
 

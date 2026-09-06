@@ -52,7 +52,8 @@ export async function createOAuthClient(
     throw new Error(error.error || 'Failed to create OAuth client')
   }
 
-  return res.json()
+  const data = await res.json()
+  return data.client || data
 }
 
 export async function getOAuthClients(token: string): Promise<OAuthClient[]> {
@@ -67,7 +68,8 @@ export async function getOAuthClients(token: string): Promise<OAuthClient[]> {
     throw new Error(error.error || 'Failed to fetch OAuth clients')
   }
 
-  return res.json()
+  const data = await res.json()
+  return Array.isArray(data) ? data : (data.clients || data.items || [])
 }
 
 export async function deleteOAuthClient(
@@ -113,5 +115,6 @@ export async function updateOAuthClient(
     throw new Error(error.error || 'Failed to update OAuth client')
   }
 
-  return res.json()
+  const data = await res.json()
+  return data.client || data
 }

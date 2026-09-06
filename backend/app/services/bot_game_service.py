@@ -1,24 +1,24 @@
+import io
 import json
+import logging
 import os
 import shutil
 import uuid
 import zipfile
 from pathlib import Path
+from typing import Optional
 
 import pika
 from app.core.extensions import db
+
+logger = logging.getLogger(__name__)
 from app.models.bot import Bot
 from app.models.bot_game import BotGame
 from app.services.game_safety_scanner import scan_game_directory
 from sqlalchemy import or_
 
-
-def _uploads_root() -> Path:
-    return Path(os.environ.get("UPLOADS_DIR", "/app/uploads"))
-
-
-def _game_dir(bot_id: str, game_id: str) -> Path:
-    return _uploads_root() / "bot_games" / bot_id / game_id
+# S3 key prefix for game files
+_GAMES_S3_PREFIX = "bot_games"
 
 
 def _publish_game_scan(game_id: str, storage_dir: str) -> None:
@@ -93,7 +93,7 @@ class BotGameService:
         }
 
     @staticmethod
-    def create_from_zip(
+    async def create_from_zip(
         bot_id: str,
         user_id: str,
         title: str,
@@ -108,14 +108,13 @@ class BotGameService:
             return None, "Архив слишком большой (макс. 30 МБ)"
 
         game_id = str(uuid.uuid4())
-        dest = _game_dir(bot_id, game_id)
-        dest.mkdir(parents=True, exist_ok=True)
-
-        zip_path = dest / "_upload.zip"
-        zip_path.write_bytes(zip_bytes)
+        # Extract to a temp directory
+        import tempfile
+        tmp_dir = tempfile.mkdtemp(prefix="vondic_game_")
+        dest = Path(tmp_dir)
 
         try:
-            with zipfile.ZipFile(zip_path, "r") as zf:
+            with zipfile.ZipFile(io.BytesIO(zip_bytes), "r") as zf:
                 for info in zf.infolist():
                     if info.is_dir():
                         continue
@@ -132,12 +131,36 @@ class BotGameService:
         except Exception as e:
             shutil.rmtree(dest, ignore_errors=True)
             return None, str(e)
-        finally:
-            if zip_path.exists():
-                zip_path.unlink()
 
         ok, err, meta = scan_game_directory(str(dest))
         entry = meta.get("entry", "index.html") if meta else "index.html"
+
+        # Upload all game files to S3
+        s3_prefix = f"{_GAMES_S3_PREFIX}/{bot_id}/{game_id}"
+        try:
+            from app.services.s3_service import upload_file_to_s3
+            _MIME_MAP = {
+                ".html": "text/html", ".css": "text/css",
+                ".js": "application/javascript", ".json": "application/json",
+                ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                ".gif": "image/gif", ".svg": "image/svg+xml", ".webp": "image/webp",
+                ".ico": "image/x-icon", ".woff": "font/woff", ".woff2": "font/woff2",
+                ".ttf": "font/ttf", ".mp3": "audio/mpeg", ".wav": "audio/wav",
+                ".ogg": "audio/ogg", ".mp4": "video/mp4", ".webm": "video/webm",
+            }
+            for file_path in dest.rglob("*"):
+                if file_path.is_file():
+                    rel = file_path.relative_to(dest).as_posix()
+                    key = f"{s3_prefix}/{rel}"
+                    ext = file_path.suffix.lower()
+                    ct = _MIME_MAP.get(ext, "application/octet-stream")
+                    file_bytes = file_path.read_bytes()
+                    await upload_file_to_s3(file_bytes, key, content_type=ct)
+        except Exception as e:
+            logger.warning("S3 upload error for game %s: %s", game_id, e)
+
+        # Cleanup temp directory
+        shutil.rmtree(dest, ignore_errors=True)
 
         game = BotGame(
             id=game_id,
@@ -146,7 +169,7 @@ class BotGameService:
             title=title.strip() or "Игра",
             description=(description or "").strip() or None,
             entry_path=entry,
-            storage_dir=str(dest),
+            storage_dir=s3_prefix,
             scan_status="approved" if ok else "rejected",
             scan_error=err,
             scan_result=json.dumps(meta, ensure_ascii=False) if meta else None,
@@ -157,11 +180,6 @@ class BotGameService:
 
         if not ok:
             return game, err
-
-        try:
-            _publish_game_scan(game.id, game.storage_dir)
-        except Exception:
-            pass
 
         return game, None
 
@@ -185,7 +203,11 @@ class BotGameService:
 
     @staticmethod
     def resolve_asset_path(game: BotGame, rel_path: str) -> Path | None:
-        base = Path(game.storage_dir).resolve()
+        """Resolve local asset path. Returns None for S3-stored games."""
+        base_str = game.storage_dir or ""
+        if base_str.startswith(f"{_GAMES_S3_PREFIX}/"):
+            return None  # S3 storage — use get_asset_bytes instead
+        base = Path(base_str).resolve()
         target = (base / rel_path).resolve()
         if not str(target).startswith(str(base)):
             return None
@@ -194,8 +216,27 @@ class BotGameService:
         return target
 
     @staticmethod
+    async def get_asset_bytes(game: BotGame, rel_path: str) -> bytes | None:
+        """Download a game asset. Works for both local and S3 storage."""
+        base_str = game.storage_dir or ""
+        if base_str.startswith(f"{_GAMES_S3_PREFIX}/"):
+            # S3 storage
+            from app.services.s3_service import download_file_from_s3
+            key = f"{base_str}/{rel_path}"
+            return await download_file_from_s3(key)
+        # Fallback: local storage
+        local = BotGameService.resolve_asset_path(game, rel_path)
+        if local:
+            return local.read_bytes()
+        return None
+
+    @staticmethod
     def make_download_zip(game: BotGame) -> Path | None:
-        base = Path(game.storage_dir)
+        """Create a download ZIP. Only works for local-stored games."""
+        base_str = game.storage_dir or ""
+        if base_str.startswith(f"{_GAMES_S3_PREFIX}/"):
+            return None  # S3 games: could generate on-the-fly if needed
+        base = Path(base_str)
         if not base.is_dir():
             return None
         out = base / "_download.zip"

@@ -7,6 +7,7 @@ import { User } from '@/lib/types'
 import { getAttachmentUrl, getAvatarUrl, formatMskDateTime } from '@/lib/utils'
 import { useMusicPlayerStore } from '@/lib/stores/musicPlayerStore'
 import { FiPlay, FiPause } from 'react-icons/fi'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
 	LuBan as Ban,
 	LuBell as Bell,

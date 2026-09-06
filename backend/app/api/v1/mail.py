@@ -19,9 +19,11 @@ class MailboxCreateSchema(BaseModel):
 
 
 class MailSendSchema(BaseModel):
-    to_address: str
+    to_address: Optional[str] = None
+    to: Optional[str] = None
     subject: str
     body: str
+    body_text: Optional[str] = None
     is_html: Optional[bool] = False
 
 
@@ -95,11 +97,15 @@ async def send_mail(
     payload: MailSendSchema,
     current_user=Depends(get_current_user)
 ):
+    to_addr = payload.to_address or payload.to
+    if not to_addr:
+        raise HTTPException(status_code=422, detail="to_address or to is required")
+    body = payload.body or payload.body_text or ""
     success, err = MailboxService.send_message(
         current_user.id,
-        to_address=payload.to_address,
+        to_address=to_addr,
         subject=payload.subject,
-        body=payload.body,
+        body=body,
         is_html=payload.is_html or False
     )
     if not success:

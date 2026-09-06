@@ -5,21 +5,32 @@ from typing import Any, Dict, List, Optional
 class KeyboardButton:
     """A button for reply keyboard."""
 
-    def __init__(self, text: str, request_location: bool = False,
-                 request_contact: bool = False, request_poll: bool = False):
+    def __init__(self, text: str, url: Optional[str] = None,
+                 web_modal: Optional[str] = None,
+                 request_location: bool = False, request_contact: bool = False,
+                 request_poll: bool = False, css_class: Optional[str] = None):
         self.text = text
+        self.url = url
+        self.web_modal = web_modal
         self.request_location = request_location
         self.request_contact = request_contact
         self.request_poll = request_poll
+        self.css_class = css_class
 
     def to_dict(self) -> Dict[str, Any]:
         d: Dict[str, Any] = {"text": self.text}
+        if self.url:
+            d["url"] = self.url
+        if self.web_modal:
+            d["web_modal"] = self.web_modal
         if self.request_location:
             d["request_location"] = True
         if self.request_contact:
             d["request_contact"] = True
         if self.request_poll:
             d["request_poll"] = True
+        if self.css_class:
+            d["css_class"] = self.css_class
         return d
 
 

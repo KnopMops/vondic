@@ -12,6 +12,8 @@ import {
 	FiVideoOff as VideoOff,
 } from 'react-icons/fi'
 import {
+	LuMaximize2 as Maximize2,
+	LuMinimize2 as Minimize2,
 	LuMonitorOff as MonitorOff,
 	LuScreenShare as ScreenShare,
 	LuSettings2 as Settings2,
@@ -63,6 +65,8 @@ export const CallPanel: React.FC<CallPanelProps> = ({ onClose }) => {
 	const panelRef = useRef<HTMLDivElement>(null)
 
 	const [isFullscreen, setIsFullscreen] = useState(false)
+	const [isScreenShareFullscreen, setIsScreenShareFullscreen] = useState(false)
+	const screenShareContainerRef = useRef<HTMLDivElement>(null)
 
 	const localScreenVideoRef = useRef<HTMLVideoElement>(null)
 	const remoteScreenVideoRefs = useRef<Map<string, HTMLVideoElement>>(new Map())
@@ -247,6 +251,32 @@ export const CallPanel: React.FC<CallPanelProps> = ({ onClose }) => {
 			localAudioRef.current.play().catch(() => {})
 		}
 	}, [localStream])
+
+	// Screen share fullscreen
+	const toggleScreenShareFullscreen = async () => {
+		if (!screenShareContainerRef.current) return
+		try {
+			if (document.fullscreenElement) {
+				await document.exitFullscreen()
+				setIsScreenShareFullscreen(false)
+			} else {
+				await screenShareContainerRef.current.requestFullscreen()
+				setIsScreenShareFullscreen(true)
+			}
+		} catch (err) {
+			console.error('Screen share fullscreen error:', err)
+		}
+	}
+
+	useEffect(() => {
+		const handleFullscreenChange = () => {
+			if (!document.fullscreenElement) {
+				setIsScreenShareFullscreen(false)
+			}
+		}
+		document.addEventListener('fullscreenchange', handleFullscreenChange)
+		return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
+	}, [])
 
 	// Resize handlers
 	const handleResizeStart = (e: React.MouseEvent) => {
@@ -597,7 +627,10 @@ export const CallPanel: React.FC<CallPanelProps> = ({ onClose }) => {
 				<div className='flex-1 overflow-y-auto p-3'>
 					{hasScreenShare && (
 						<div className='mb-3'>
-							<div className='bg-[#1e1f22] rounded-lg overflow-hidden aspect-video relative'>
+							<div
+								ref={screenShareContainerRef}
+								className={`bg-[#1e1f22] rounded-lg overflow-hidden aspect-video relative ${isScreenShareFullscreen ? '!rounded-none' : ''}`}
+							>
 								{screenStream && (
 									<video
 										autoPlay
@@ -633,18 +666,18 @@ export const CallPanel: React.FC<CallPanelProps> = ({ onClose }) => {
 											: 'Демонстрация экрана'}
 									</div>
 									<button
-										onClick={() => setIsFullscreen(!isFullscreen)}
+										onClick={toggleScreenShareFullscreen}
 										className='p-1.5 bg-black/60 hover:bg-black/80 rounded text-white transition-colors'
 										title={
-											isFullscreen
+											isScreenShareFullscreen
 												? 'Выйти из полноэкранного режима'
 												: 'Во весь экран'
 										}
 									>
-										{isFullscreen ? (
-											<MonitorOff className='w-3.5 h-3.5' />
+										{isScreenShareFullscreen ? (
+											<Minimize2 className='w-3.5 h-3.5' />
 										) : (
-											<Monitor className='w-3.5 h-3.5' />
+											<Maximize2 className='w-3.5 h-3.5' />
 										)}
 									</button>
 								</div>

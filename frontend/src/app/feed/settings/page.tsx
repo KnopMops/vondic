@@ -2,6 +2,7 @@
 
 import FeedPageShell from '@/components/social/FeedPageShell'
 import DeveloperSettings from '@/components/settings/DeveloperSettings'
+import BrowserPermissions from '@/components/settings/BrowserPermissions'
 import MailApiSettings from '@/components/settings/MailApiSettings'
 import PasswordInput from '@/components/ui/PasswordInput'
 import { useAuth } from '@/lib/AuthContext'
@@ -1488,7 +1489,7 @@ export default function SettingsPage() {
 								</div>
 							)}
 						</motion.div>
-					)}
+						)}
 					</>
 				)}
 
@@ -2062,6 +2063,8 @@ export default function SettingsPage() {
 								</div>
 							</div>
 						</motion.div>
+
+						<BrowserPermissions />
 			</div>
 		</FeedPageShell>
 	)

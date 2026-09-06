@@ -6,6 +6,7 @@ from app.api.public.v1.bots import (
     handle_bot_callback,
     answer_bot_callback_query,
 )
+from app.api.v1.bot_games import bot_games_router
 import logging
 import time
 from typing import Any, Dict, Optional
@@ -22,6 +23,7 @@ from app.models.user import User
 logger = logging.getLogger(__name__)
 
 bots_router = APIRouter(prefix="/api/v1/bots", tags=["Bots"])
+bots_router.include_router(bot_games_router)
 
 
 @bots_router.get("")
@@ -107,6 +109,77 @@ async def verify_bot(
     bot.is_verified = 1 if is_verified else 0
     await db.commit()
     return {"ok": True, "is_verified": bot.is_verified}
+
+
+@bots_router.put("/{bot_id}")
+async def update_bot(
+    bot_id: str,
+    payload: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    stmt = select(Bot).where(Bot.id == bot_id)
+    res = await db.execute(stmt)
+    bot = res.scalars().first()
+    if not bot:
+        raise HTTPException(status_code=404, detail="Bot not found")
+    if str(bot.owner_id) != str(current_user.id) and (current_user.role or "").lower() not in ("admin",):
+        raise HTTPException(status_code=403, detail="Not your bot")
+
+    if "name" in payload:
+        bot.name = payload["name"]
+    if "description" in payload:
+        bot.description = payload["description"]
+    if "avatar_url" in payload:
+        bot.avatar_url = payload["avatar_url"]
+    if "is_verified" in payload and (current_user.role or "").lower() in ("admin",):
+        bot.is_verified = 1 if payload["is_verified"] else 0
+
+    await db.commit()
+    await db.refresh(bot)
+    return bot.to_dict() if hasattr(bot, 'to_dict') else {"id": bot.id, "name": bot.name}
+
+
+@bots_router.delete("/{bot_id}")
+async def delete_bot(
+    bot_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    stmt = select(Bot).where(Bot.id == bot_id)
+    res = await db.execute(stmt)
+    bot = res.scalars().first()
+    if not bot:
+        raise HTTPException(status_code=404, detail="Bot not found")
+    if str(bot.owner_id) != str(current_user.id) and (current_user.role or "").lower() not in ("admin",):
+        raise HTTPException(status_code=403, detail="Not your bot")
+
+    bot.is_active = 0
+    await db.commit()
+    return {"ok": True, "message": "Bot deleted"}
+
+
+@bots_router.post("/{bot_id}/generate-token")
+async def generate_bot_token(
+    bot_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    import uuid as _uuid
+    from werkzeug.security import generate_password_hash
+
+    stmt = select(Bot).where(Bot.id == bot_id)
+    res = await db.execute(stmt)
+    bot = res.scalars().first()
+    if not bot:
+        raise HTTPException(status_code=404, detail="Bot not found")
+    if str(bot.owner_id) != str(current_user.id) and (current_user.role or "").lower() not in ("admin",):
+        raise HTTPException(status_code=403, detail="Not your bot")
+
+    token = _uuid.uuid4().hex + _uuid.uuid4().hex[:32]
+    bot.bot_token_hash = generate_password_hash(token)
+    await db.commit()
+    return {"ok": True, "bot_id": bot_id, "token": token}
 
 
 @bots_router.post("/{bot_id}/updates/push")

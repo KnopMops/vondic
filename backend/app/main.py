@@ -48,8 +48,12 @@ from app.api.oauth import oauth_router
 from app.api.v2.marketplace import v2_marketplace_router
 from app.api.v2.webhooks import v2_webhooks_router
 from app.api.public.v1.bots import public_bots_router
+from app.api.public.v1.account import public_account_router
+from app.api.public.v2.chat import v2_chat_router
+from app.api.public.v2.calls import v2_calls_router
 from app.api.v1.join_requests import join_requests_router
 from app.api.v1.ai import ai_router
+from app.api.v1.corporate import corporate_router
 
 
 # Load extension routes
@@ -199,6 +203,21 @@ async def startup_db_migrations():
             await conn.execute(text("ALTER TABLE communities ADD COLUMN IF NOT EXISTS require_approval BOOLEAN DEFAULT FALSE"))
             await conn.execute(text("ALTER TABLE groups ADD COLUMN IF NOT EXISTS require_approval BOOLEAN DEFAULT FALSE"))
             await conn.execute(text("CREATE TABLE IF NOT EXISTS join_requests (id TEXT PRIMARY KEY, target_type TEXT NOT NULL, target_id TEXT NOT NULL, user_id TEXT NOT NULL, status TEXT DEFAULT 'pending', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"))
+            await conn.execute(text(
+                "CREATE TABLE IF NOT EXISTS corporate_instances ("
+                "id TEXT PRIMARY KEY, "
+                "instance_uuid TEXT UNIQUE NOT NULL, "
+                "secret_key_hash TEXT NOT NULL, "
+                "api_key TEXT UNIQUE NOT NULL, "
+                "domain TEXT, "
+                "company_name TEXT, "
+                "is_active BOOLEAN DEFAULT TRUE, "
+                "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+                "last_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+                "metadata_json TEXT)"
+            ))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_corporate_instances_uuid ON corporate_instances(instance_uuid)"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_corporate_instances_api_key ON corporate_instances(api_key)"))
     except Exception as e:
         logger.warning(f"Startup DB migration warning: {e}")
 
@@ -235,12 +254,15 @@ app.include_router(devices_router)
 app.include_router(chat_folders_router)
 app.include_router(audit_log_router)
 app.include_router(app_downloads_router)
-app.include_router(bot_games_router)
 app.include_router(oauth_router)
 app.include_router(oauth_router, prefix="/api")
 app.include_router(oauth_router, prefix="/api/v1")
 app.include_router(v2_marketplace_router)
 app.include_router(v2_webhooks_router)
 app.include_router(public_bots_router)
+app.include_router(public_account_router)
+app.include_router(v2_chat_router)
+app.include_router(v2_calls_router)
 app.include_router(join_requests_router)
 app.include_router(ai_router)
+app.include_router(corporate_router)

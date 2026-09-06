@@ -335,6 +335,104 @@ def create_app():
 
         return {"status": "success"}
 
+    # ── Internal: Emit arbitrary Socket.IO event ─────────────────────
+
+    @app.post("/internal/emit")
+    async def internal_emit(data: dict[str, Any]):
+        """Emit a Socket.IO event to a room or broadcast.
+
+        Used by the backend to proxy v2 API calls into the real-time layer.
+        """
+        event = data.get("event")
+        payload = data.get("payload", {})
+        room = data.get("room")
+
+        if not event:
+            raise HTTPException(status_code=400, detail="event required")
+
+        if room:
+            await sio.emit(event, payload, room=room)
+            # Also try to emit to user_id room (for direct user delivery)
+            target_socket = await broker.get_user_socket(room)
+            if target_socket:
+                await sio.emit(event, payload, room=target_socket)
+        else:
+            await sio.emit(event, payload)
+
+        return {"status": "emitted", "event": event, "room": room}
+
+    # ── Internal: Voice Channels ─────────────────────────────────────
+
+    @app.get("/internal/voice-channels/active")
+    async def get_active_voice_channels():
+        """List all active voice channels with participants."""
+        channels = []
+        for channel_id, participants in signaling.voice_channel_calls.items():
+            participant_list = []
+            for sid in participants:
+                user_info = await broker.resolve_recipient(sid)
+                if user_info:
+                    participant_list.append({
+                        "user_id": user_info.get("id"),
+                        "username": user_info.get("username"),
+                        "avatar_url": user_info.get("avatar_url"),
+                        "socket_id": sid,
+                    })
+            channels.append({
+                "channel_id": channel_id,
+                "participants": participant_list,
+                "participant_count": len(participant_list),
+            })
+        return {"channels": channels}
+
+    @app.get("/internal/voice-channels/{channel_id}/participants")
+    async def get_voice_channel_participants(channel_id: str):
+        """Get participants of a specific voice channel."""
+        participants_set = signaling.voice_channel_calls.get(channel_id, set())
+        participant_list = []
+        for sid in participants_set:
+            user_info = await broker.resolve_recipient(sid)
+            if user_info:
+                participant_list.append({
+                    "user_id": user_info.get("id"),
+                    "username": user_info.get("username"),
+                    "avatar_url": user_info.get("avatar_url"),
+                    "socket_id": sid,
+                })
+        return {"channel_id": channel_id, "participants": participant_list}
+
+    # ── Internal: Calls ──────────────────────────────────────────────
+
+    @app.get("/internal/calls/active")
+    async def get_active_calls():
+        """List all active group calls."""
+        calls = []
+        for call_id, call_data in signaling.group_calls.items():
+            calls.append({
+                "call_id": call_id,
+                "group_id": call_data.get("group_id"),
+                "caller_user_id": call_data.get("caller_user_id"),
+                "caller_username": call_data.get("caller_username"),
+                "participants": list(call_data.get("joined", [])),
+                "participant_count": len(call_data.get("joined", [])),
+            })
+        return {"calls": calls}
+
+    @app.get("/internal/calls/{call_id}")
+    async def get_call_status(call_id: str):
+        """Get status of a specific call."""
+        call_data = signaling.group_calls.get(call_id)
+        if not call_data:
+            raise HTTPException(status_code=404, detail="Call not found")
+        return {
+            "call_id": call_id,
+            "group_id": call_data.get("group_id"),
+            "caller_user_id": call_data.get("caller_user_id"),
+            "caller_username": call_data.get("caller_username"),
+            "participants": list(call_data.get("joined", [])),
+            "participant_count": len(call_data.get("joined", [])),
+        }
+
     combined_app = socketio.ASGIApp(sio, app)
     return combined_app
 

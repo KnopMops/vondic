@@ -67,7 +67,7 @@ async def safe_answer(bot: Bot, callback_id: str, text: Optional[str] = None, sh
 # ── Consent middleware — auto-checks permissions ───────────────
 
 async def _check_user_consent(message: Message, bot: Bot) -> bool:
-    """Check if user has granted permissions. If not, send consent request message."""
+    """Check if user has granted permissions. If not, send consent request with scope details."""
     user_id = str(message.from_user.id)
     chat_id = str(message.chat.id)
     try:
@@ -80,17 +80,37 @@ async def _check_user_consent(message: Message, bot: Bot) -> bool:
             data = resp.json()
             if data.get("granted"):
                 return True
+            # Not granted — show detailed consent request
+            required = data.get("required_scopes", [])
+            descriptions = data.get("scope_descriptions", {})
+            scope_lines = []
+            for s in required:
+                desc = descriptions.get(s, s)
+                scope_lines.append(f"  • **{desc}** (`{s}`)")
+            scopes_text = "\n".join(scope_lines) if scope_lines else "  • Базовые данные"
+
+            kb = InlineKeyboardBuilder()
+            kb.row(InlineKeyboardButton("✅ Разрешить доступ", callback_data=f"consent_grant:{user_id}"))
+            await bot.send_message(
+                chat_id,
+                "🔐 **Запрос разрешений**\n\n"
+                f"Бот **{BOT_ID[:8]}...** запрашивает доступ к:\n\n"
+                f"{scopes_text}\n\n"
+                "Нажмите кнопку ниже, чтобы предоставить доступ:",
+                reply_markup=kb.as_markup(),
+            )
+            return False
     except Exception:
         pass
 
-    # No consent — show inline button that triggers consent callback
+    # Fallback if API unavailable
     kb = InlineKeyboardBuilder()
     kb.row(InlineKeyboardButton("🔐 Разрешить доступ", callback_data=f"consent_grant:{user_id}"))
     await bot.send_message(
         chat_id,
         "🔐 **Запрос разрешений**\n\n"
-        "Чтобы использовать функции бота, необходимо разрешить доступ к базовым данным профиля и отправке сообщений.\n\n"
-        "Нажмите кнопку ниже для подтверждения доступа:",
+        "Чтобы использовать функции бота, необходимо разрешить доступ.\n\n"
+        "Нажмите кнопку ниже для подтверждения:",
         reply_markup=kb.as_markup(),
     )
     return False
@@ -125,15 +145,17 @@ async def on_error(update, bot, error):
 @dp.message(Command("start"))
 async def cmd_start(message: Message, bot: Bot, state: FSMContext):
     kb = ReplyKeyboardBuilder()
-    kb.row(KeyboardButton("🎮 Игры"), KeyboardButton("💰 Баланс"))
-    kb.row(KeyboardButton("💳 Premium"), KeyboardButton("ℹ️ Помощь"))
+    kb.row(
+        KeyboardButton("🎮 Игры", css_class="rk-btn rk-purple"),
+        KeyboardButton("💰 Пополнить", css_class="rk-btn rk-green"),
+    )
+    kb.row(KeyboardButton("ℹ️ Помощь", css_class="rk-btn rk-gray"))
 
     await bot.send_message(
         str(message.chat.id),
         "👋 Добро пожаловать в Вондик!\n\n"
         "🎮 Игры — HTML/CSS/JS в ZIP\n"
-        "💰 Баланс — пополнение через бота\n"
-        "💳 Premium — подписка на 30 дней",
+        "💰 Пополнить — пополнение через бота",
         reply_markup=kb.as_markup(),
     )
 
@@ -143,9 +165,12 @@ async def cmd_start(message: Message, bot: Bot, state: FSMContext):
 @dp.message(Command("kb"))
 async def cmd_kb(message: Message, bot: Bot):
     kb = ReplyKeyboardBuilder()
-    kb.row(KeyboardButton("🎮 Игры"), KeyboardButton("💰 Баланс"))
-    kb.row(KeyboardButton("💳 Premium"), KeyboardButton("ℹ️ Помощь"))
-    await bot.send_message(str(message.chat.id), "Меню:", reply_markup=kb.as_markup())
+    kb.row(
+        KeyboardButton("🎮 Игры", css_class="rk-btn rk-purple"),
+        KeyboardButton("💰 Пополнить", css_class="rk-btn rk-green"),
+    )
+    kb.row(KeyboardButton("ℹ️ Помощь", css_class="rk-btn rk-gray"))
+    await bot.send_message(str(message.chat.id), "📋 Меню:", reply_markup=kb.as_markup())
 
 
 # ── All other commands require consent ────────────────────────
@@ -155,8 +180,11 @@ async def cmd_help(message: Message, bot: Bot):
     if not await _check_user_consent(message, bot):
         return
     kb = ReplyKeyboardBuilder()
-    kb.row(KeyboardButton("🎮 Игры"), KeyboardButton("💰 Баланс"))
-    kb.row(KeyboardButton("💳 Premium"), KeyboardButton("ℹ️ Помощь"))
+    kb.row(
+        KeyboardButton("🎮 Игры", css_class="rk-btn rk-purple"),
+        KeyboardButton("💰 Пополнить", css_class="rk-btn rk-green"),
+    )
+    kb.row(KeyboardButton("ℹ️ Помощь", css_class="rk-btn rk-gray"))
     await bot.send_message(
         str(message.chat.id),
         "ℹ️ Помощь:\n\n"
@@ -164,8 +192,7 @@ async def cmd_help(message: Message, bot: Bot):
         "/kb — Меню\n"
         "/help — Справка\n\n"
         "🎮 Игры — играйте в HTML/CSS/JS игры\n"
-        "💰 Баланс — проверьте баланс\n"
-        "💳 Premium — подписка на 30 дней",
+        "💰 Пополнить баланс — пополнение счёта",
         reply_markup=kb.as_markup(),
     )
 
@@ -177,36 +204,32 @@ async def menu_games(message: Message, bot: Bot):
     if not await _check_user_consent(message, bot):
         return
     builder = InlineKeyboardBuilder()
-    builder.row(game_play_button("games:list", "Список игр"), play_games_button("🔄 Обновить"))
+    builder.row(InlineKeyboardButton("📋 Список игр", callback_data="games:list"), play_games_button("🔄 Обновить"))
     await bot.send_message(str(message.chat.id), "🎮 Выберите действие:", reply_markup=builder.as_markup())
 
 
-@dp.message(Text("💰 Баланс"))
+@dp.message(Text("💰 Пополнить"))
 async def menu_balance(message: Message, bot: Bot):
     if not await _check_user_consent(message, bot):
         return
     user_id = str(message.from_user.id)
     try:
-        resp = await http_get(f"{BACKEND_URL}/api/v1/users/by-telegram/{user_id}")
+        resp = await http_post(f"{BACKEND_URL}/api/v1/users/get", json={"user_id": user_id})
         if resp.status_code == 200:
             user = resp.json()
             bal = user.get("balance", 0)
             bonus = user.get("bonus_balance", 0)
-            await bot.send_message(str(message.chat.id), f"💰 Баланс: {bal}₽\n🎁 Бонус: {bonus}₽\n\nИтого: {bal + bonus}₽")
+            builder = InlineKeyboardBuilder()
+            builder.row(InlineKeyboardButton(text="💳 Пополнить баланс", callback_data="topup"))
+            await bot.send_message(
+                str(message.chat.id),
+                f"💰 Баланс: {bal}₽\n🎁 Бонус: {bonus}₽\n\nИтого: {bal + bonus}₽",
+                reply_markup=builder.as_markup(),
+            )
         else:
             await bot.send_message(str(message.chat.id), "⚠️ Сначала зарегистрируйтесь.")
     except Exception:
         await bot.send_message(str(message.chat.id), "❌ Ошибка")
-
-
-@dp.message(Text("💳 Premium"))
-async def menu_premium(message: Message, bot: Bot):
-    if not await _check_user_consent(message, bot):
-        return
-    builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="Купить Premium (50₽)", callback_data="premium"))
-    builder.row(InlineKeyboardButton(text="Подарить Premium", callback_data="premium_gift"))
-    await bot.send_message(str(message.chat.id), "💳 Vondic Premium — 30 дней за 50₽", reply_markup=builder.as_markup())
 
 
 @dp.message(Text("ℹ️ Помощь"))
@@ -214,14 +237,16 @@ async def menu_help(message: Message, bot: Bot):
     if not await _check_user_consent(message, bot):
         return
     kb = ReplyKeyboardBuilder()
-    kb.row(KeyboardButton("🎮 Игры"), KeyboardButton("💰 Баланс"))
-    kb.row(KeyboardButton("💳 Premium"), KeyboardButton("ℹ️ Помощь"))
+    kb.row(
+        KeyboardButton("🎮 Игры", css_class="rk-btn rk-purple"),
+        KeyboardButton("💰 Пополнить", css_class="rk-btn rk-green"),
+    )
+    kb.row(KeyboardButton("ℹ️ Помощь", css_class="rk-btn rk-gray"))
     await bot.send_message(
         str(message.chat.id),
         "ℹ️ Помощь:\n\n"
         "🎮 Игры — играйте в HTML/CSS/JS игры\n"
-        "💰 Баланс — проверьте баланс\n"
-        "💳 Premium — подписка на 30 дней",
+        "💰 Пополнить баланс — пополнение счёта",
         reply_markup=kb.as_markup(),
     )
 
@@ -232,16 +257,33 @@ async def menu_help(message: Message, bot: Bot):
 async def consent_grant(callback: CallbackQuery, bot: Bot):
     user_id = callback.data.split(":", 1)[1]
     chat_id = str(callback.message.chat.id)
+
+    # Get bot's required scopes
+    required_scopes = ["username", "send_messages"]
+    try:
+        perms_resp = await http_get(
+            f"{BACKEND_URL}/api/public/v1/bots/{BOT_ID}/permissions/{user_id}",
+            timeout=3,
+            headers=_bot_headers(),
+        )
+        if perms_resp.status_code == 200:
+            required_scopes = perms_resp.json().get("required_scopes", required_scopes)
+    except Exception:
+        pass
+
     try:
         resp = await http_post(
             f"{BACKEND_URL}/api/public/v1/bots/{BOT_ID}/permissions/grant",
-            json={"user_id": user_id, "scopes": "basic_profile,send_messages"},
+            json={"user_id": user_id, "scopes": required_scopes},
             headers=_bot_headers(),
         )
         if resp.status_code == 200:
             kb = ReplyKeyboardBuilder()
-            kb.row(KeyboardButton("🎮 Игры"), KeyboardButton("💰 Баланс"))
-            kb.row(KeyboardButton("💳 Premium"), KeyboardButton("ℹ️ Помощь"))
+            kb.row(
+                KeyboardButton("🎮 Игры", css_class="rk-btn rk-purple"),
+                KeyboardButton("💰 Пополнить", css_class="rk-btn rk-green"),
+            )
+            kb.row(KeyboardButton("ℹ️ Помощь", css_class="rk-btn rk-gray"))
             await bot.send_message(
                 chat_id,
                 "✅ Разрешения предоставлены! Теперь вы можете пользоваться ботом.",
@@ -284,21 +326,24 @@ async def register_user(callback: CallbackQuery, bot: Bot, state: FSMContext):
 @dp.callback_query(lambda c: c.data == "register_done")
 async def register_done(callback: CallbackQuery, bot: Bot):
     kb = ReplyKeyboardBuilder()
-    kb.row(KeyboardButton("🎮 Игры"), KeyboardButton("💰 Баланс"))
-    kb.row(KeyboardButton("💳 Premium"), KeyboardButton("ℹ️ Помощь"))
+    kb.row(
+        KeyboardButton("🎮 Игры", css_class="rk-btn rk-purple"),
+        KeyboardButton("💰 Пополнить", css_class="rk-btn rk-green"),
+    )
+    kb.row(KeyboardButton("ℹ️ Помощь", css_class="rk-btn rk-gray"))
     await bot.send_message(str(callback.message.chat.id),
                            "🎉 Готово! Используйте кнопки ниже:", reply_markup=kb.as_markup())
     await safe_answer(bot, callback.id)
 
 
-# ── Premium ───────────────────────────────────────────────────
+# ── Balance / Topup ────────────────────────────────────────────
 
 @dp.callback_query(lambda c: c.data == "premium")
-async def premium_menu(callback: CallbackQuery, bot: Bot, state: FSMContext):
+async def balance_from_inline(callback: CallbackQuery, bot: Bot, state: FSMContext):
     user_id = str(callback.from_user.id)
     linked = None
     try:
-        resp = await http_get(f"{BACKEND_URL}/api/v1/users/by-telegram/{user_id}")
+        resp = await http_post(f"{BACKEND_URL}/api/v1/users/get", json={"user_id": user_id})
         if resp.status_code == 200:
             linked = resp.json()
     except Exception:
@@ -311,28 +356,29 @@ async def premium_menu(callback: CallbackQuery, bot: Bot, state: FSMContext):
         await safe_answer(bot, callback.id)
         return
 
+    bal = linked.get("balance", 0)
+    bonus = linked.get("bonus_balance", 0)
     builder = InlineKeyboardBuilder()
-    builder.add(InlineKeyboardButton(text=f"💳 Купить Premium (50₽)", callback_data=f"buy_premium:{linked['id']}"))
-    await bot.send_message(str(callback.message.chat.id), "💳 Vondic Premium — 30 дней", reply_markup=builder.as_markup())
+    builder.row(InlineKeyboardButton(text="💳 Пополнить баланс", callback_data="topup"))
+    await bot.send_message(
+        str(callback.message.chat.id),
+        f"💰 Баланс: {bal}₽\n🎁 Бонус: {bonus}₽\n\nИтого: {bal + bonus}₽",
+        reply_markup=builder.as_markup(),
+    )
     await safe_answer(bot, callback.id)
 
 
-@dp.callback_query(lambda c: c.data.startswith("buy_premium:"))
-async def buy_premium(callback: CallbackQuery, bot: Bot, state: FSMContext):
-    user_id = callback.data.split(":")[1]
-    try:
-        resp = await http_post(f"{BACKEND_URL}/api/v1/payments/create-checkout-session", json={"user_id": user_id})
-        if resp.status_code == 200:
-            url = resp.json().get("url")
-            if url:
-                builder = InlineKeyboardBuilder()
-                builder.add(InlineKeyboardButton(text="💳 Оплатить", url=url))
-                await bot.send_message(str(callback.message.chat.id), "Перейдите к оплате:", reply_markup=builder.as_markup())
-                await safe_answer(bot, callback.id, text="Ссылка отправлена")
-                return
-        await bot.send_message(str(callback.message.chat.id), "❌ Ошибка сервиса оплаты.")
-    except Exception:
-        await bot.send_message(str(callback.message.chat.id), "❌ Ошибка")
+@dp.callback_query(lambda c: c.data == "topup")
+async def topup_handler(callback: CallbackQuery, bot: Bot):
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="💳 Перейти к оплате", url=f"{FRONTEND_URL}/feed/settings"))
+    await bot.send_message(
+        str(callback.message.chat.id),
+        "💳 **Пополнение баланса**\n\n"
+        "Нажмите кнопку ниже, чтобы перейти к оплате.\n"
+        "После оплаты баланс будет зачислен автоматически.",
+        reply_markup=builder.as_markup(),
+    )
     await safe_answer(bot, callback.id)
 
 
