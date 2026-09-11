@@ -263,14 +263,12 @@ services:
     image: coturn/coturn
     container_name: turn
     restart: unless-stopped
-    ports:
-      - '3478:3478'
-      - '3478:3478/udp'
-      - '50000-50050:50000-50050'
-      - '50000-50050:50000-50050/udp'
+    # network_mode: "host" рекомендуется для 10 000+ одновременных участников для обхода лимитов Docker NAT/conntrack.
+    # Если используется bridge, откройте полный диапазон портов UDP:
+    network_mode: "host"
     command: >
       -n --log-file=stdout
-      --min-port=50000 --max-port=50050
+      --min-port=49152 --max-port=65535
       --user=...:...
       --realm=...
       --listening-port=3478
@@ -278,11 +276,15 @@ services:
       --external-ip=...
       --fingerprint
       --lt-cred-mech
+      --bps-capacity=0
+      --max-bps=0
+      --no-tcp-relay
+      --stale-nonce=600
+      --max-allocate-timeout=60
+      --mobility
       --no-cli
       --no-tls
       --no-dtls
-    networks:
-      - app-network
 
   backup:
     image: postgres:15

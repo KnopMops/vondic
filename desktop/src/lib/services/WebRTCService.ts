@@ -40,6 +40,8 @@ export class WebRTCService {
 	private forceRelay: boolean = false
 	private turnTested: boolean = false
 	private useInternalTurnOnly: boolean = false
+	private isDataSaverMode: boolean = false
+	private isIpPrivacyMode: boolean = false
 	/** Резолвнутый хост internal TURN (для фильтра iceServers и логов) */
 	private internalTurnHostResolved: string = DEFAULT_INTERNAL_TURN_HOST
 	private iceDisconnectTimeouts: Map<string, NodeJS.Timeout> = new Map()
@@ -247,6 +249,25 @@ export class WebRTCService {
 			return false
 		}
 		return /^[A-Za-z0-9_-]{10,45}$/.test(key)
+	}
+
+	public setDataSaverMode(enabled: boolean): void {
+		this.isDataSaverMode = enabled
+		console.log(`[WebRTC Desktop] Data Saver Mode set to: ${enabled}`)
+	}
+
+	public isDataSaver(): boolean {
+		return this.isDataSaverMode
+	}
+
+	public setIpPrivacyMode(enabled: boolean): void {
+		this.isIpPrivacyMode = enabled
+		this.forceRelay = enabled
+		console.log(`[WebRTC Desktop] IP Privacy (Relay Only) set to: ${enabled}`)
+	}
+
+	public isIpPrivacy(): boolean {
+		return this.isIpPrivacyMode
 	}
 
 	private async applyBitrateConstraints(
@@ -699,6 +720,13 @@ export class WebRTCService {
 		// Обработка ICE кандидатов
 		pc.onicecandidate = event => {
 			if (event.candidate) {
+				if (this.isIpPrivacyMode || this.forceRelay) {
+					const candStr = event.candidate.candidate || ''
+					if (!candStr.includes('typ relay')) {
+						return
+					}
+				}
+
 				const isLikelySocketId = this.isSocketKey(targetSocketId)
 				if (isLikelySocketId) {
 					this.socket.emit('ice_candidate', {
@@ -908,7 +936,7 @@ export class WebRTCService {
 		}
 
 		const baseConfig: any = { iceServers }
-		if (policy === 'relay' || this.useInternalTurnOnly || this.forceRelay) {
+		if (policy === 'relay' || this.useInternalTurnOnly || this.forceRelay || this.isIpPrivacyMode) {
 			baseConfig.iceTransportPolicy = 'relay'
 		}
 		const pc = new RTCPeerConnection(baseConfig)

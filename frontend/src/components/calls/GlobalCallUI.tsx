@@ -51,6 +51,10 @@ export const GlobalCallUI: React.FC = () => {
 		setAudioQualityPreset,
 		setScreenSharePreset,
 		toggleKrisp,
+		isDataSaver,
+		isIpPrivacy,
+		toggleDataSaver,
+		toggleIpPrivacy,
 	} = useCallStore()
 
 	const { showToast } = useToast()
@@ -171,11 +175,15 @@ export const GlobalCallUI: React.FC = () => {
 					isPremium={Boolean(user?.premium)}
 					audioQualityPreset={audioQualityPreset}
 					networkStats={networkStats}
+					isDataSaver={isDataSaver}
+					isIpPrivacy={isIpPrivacy}
 					onMuteToggle={handleMuteToggle}
 					onVideoToggle={handleVideoToggle}
 					onScreenShareToggle={toggleScreenShare}
 					onKrispToggle={handleKrispToggle}
 					onAudioQualityChange={setAudioQualityPreset}
+					onDataSaverToggle={toggleDataSaver}
+					onIpPrivacyToggle={toggleIpPrivacy}
 					onDisconnect={() => handleLeaveGroupCall(activeGroupCallId)}
 				/>
 			)}
@@ -211,11 +219,15 @@ export const GlobalCallUI: React.FC = () => {
 					isPremium={Boolean(user?.premium)}
 					audioQualityPreset={audioQualityPreset}
 					networkStats={networkStats}
+					isDataSaver={isDataSaver}
+					isIpPrivacy={isIpPrivacy}
 					onMuteToggle={handleMuteToggle}
 					onVideoToggle={handleVideoToggle}
 					onScreenShareToggle={toggleScreenShare}
 					onKrispToggle={handleKrispToggle}
 					onAudioQualityChange={setAudioQualityPreset}
+					onDataSaverToggle={toggleDataSaver}
+					onIpPrivacyToggle={toggleIpPrivacy}
 					onDisconnect={handleLeaveVoiceChannel}
 				/>
 			)}
@@ -248,11 +260,15 @@ export const GlobalCallUI: React.FC = () => {
 					isPremium={Boolean(user?.premium)}
 					audioQualityPreset={audioQualityPreset}
 					networkStats={networkStats}
+					isDataSaver={isDataSaver}
+					isIpPrivacy={isIpPrivacy}
 					onMuteToggle={handleMuteToggle}
 					onVideoToggle={handleVideoToggle}
 					onScreenShareToggle={toggleScreenShare}
 					onKrispToggle={handleKrispToggle}
 					onAudioQualityChange={setAudioQualityPreset}
+					onDataSaverToggle={toggleDataSaver}
+					onIpPrivacyToggle={toggleIpPrivacy}
 					onDisconnect={() => endCall(activeDirectCall.socketId)}
 				/>
 			)}

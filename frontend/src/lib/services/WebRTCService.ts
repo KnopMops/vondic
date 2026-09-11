@@ -63,6 +63,8 @@ export class WebRTCService {
 	public screenSharePreset: ScreenSharePresetKey = 'screen1080p60'
 	private screenAudioMixerContext: AudioContext | null = null
 	private rawMicTrackBeforeScreenShare: MediaStreamTrack | null = null
+	private isDataSaverMode: boolean = false
+	private isIpPrivacyMode: boolean = false
 
 	public onNetworkStats?: (stats: NetworkQualityStats) => void
 	public onRemoteStream?: (socketId: string, stream: MediaStream) => void
@@ -401,13 +403,26 @@ export class WebRTCService {
 	public optimizeSessionDescription(desc: RTCSessionDescriptionInit): RTCSessionDescriptionInit {
 		if (!desc || !desc.sdp) return desc
 		const targetBitrate = AUDIO_BITRATE_PRESETS[this.audioQualityPreset].bitrate
-		const optimizedSdp = optimizeOpusSdp(desc.sdp, {
+		let optimizedSdp = optimizeOpusSdp(desc.sdp, {
 			bitrate: targetBitrate,
-			stereo: true,
+			stereo: !this.isDataSaverMode,
 			useFec: true,
 			useDtx: true,
-			minPtime: 10,
+			minPtime: this.isDataSaverMode ? 20 : 10,
 		})
+
+		// If IP privacy mode is active, sanitize SDP: strip out any host and srflx candidate lines
+		if (this.isIpPrivacyMode || this.forceRelay) {
+			optimizedSdp = optimizedSdp
+				.split(/\r\n|\n/)
+				.filter(line => {
+					if (line.startsWith('a=candidate:') && (line.includes('typ host') || line.includes('typ srflx'))) {
+						return false
+					}
+					return true
+				})
+				.join('\r\n')
+		}
 
 		return {
 			type: desc.type,
@@ -505,6 +520,28 @@ export class WebRTCService {
 
 	public isKrispEnabled(): boolean {
 		return this.isKrispActive
+	}
+
+	public setDataSaverMode(enabled: boolean): void {
+		this.isDataSaverMode = enabled
+		if (enabled) {
+			this.setAudioQualityLevel('eco')
+		}
+		console.log(`[WebRTC] Data Saver Mode set to: ${enabled}`)
+	}
+
+	public isDataSaver(): boolean {
+		return this.isDataSaverMode
+	}
+
+	public setIpPrivacyMode(enabled: boolean): void {
+		this.isIpPrivacyMode = enabled
+		this.forceRelay = enabled
+		console.log(`[WebRTC] IP Privacy (Relay Only) set to: ${enabled}`)
+	}
+
+	public isIpPrivacy(): boolean {
+		return this.isIpPrivacyMode
 	}
 
 	public getNetworkStats(): NetworkQualityStats | null {
@@ -980,9 +1017,20 @@ export class WebRTCService {
 		pc: RTCPeerConnection,
 		targetSocketId: string,
 	) {
+		const routingSettings = getStoredCallRoutingSettings()
+		const isIpPrivacyActive = this.isIpPrivacyMode || this.forceRelay || routingSettings.force_relay
+
 		// Обработка ICE кандидатов
 		pc.onicecandidate = event => {
 			if (event.candidate) {
+				// В режиме скрытия IP отбрасываем все кандидаты, кроме relay (защита от утечки реального IP)
+				if (isIpPrivacyActive) {
+					const candStr = event.candidate.candidate || ''
+					if (!candStr.includes('typ relay')) {
+						return
+					}
+				}
+
 				const isLikelySocketId = this.isSocketKey(targetSocketId)
 				if (isLikelySocketId) {
 					this.socket.emit('ice_candidate', {
@@ -1136,7 +1184,7 @@ export class WebRTCService {
 			iceServers = [...publicStunServers, ...iceServers]
 		}
 
-		const shouldForceRelay = this.forceRelay || routingSettings.force_relay
+		const shouldForceRelay = this.forceRelay || this.isIpPrivacyMode || routingSettings.force_relay
 		const baseConfig: any = { iceServers }
 		if (policy === 'relay' || this.useInternalTurnOnly || shouldForceRelay) {
 			baseConfig.iceTransportPolicy = 'relay'

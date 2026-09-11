@@ -60,6 +60,10 @@ interface CallStore {
 	setAudioQualityPreset: (preset: AudioBitratePreset) => void
 	setScreenSharePreset: (preset: ScreenSharePresetKey) => void
 	toggleKrisp: () => boolean
+	isDataSaver: boolean
+	isIpPrivacy: boolean
+	toggleDataSaver: () => void
+	toggleIpPrivacy: () => void
 
 	
 	initiateCall: (targetUserId: string, targetUserName: string, targetAvatarUrl?: string) => Promise<void>
@@ -111,6 +115,16 @@ export const useCallStore = create<CallStore>((set, get) => ({
 	audioQualityPreset: 'boost1',
 	isKrispEnabled: false,
 	networkStats: null,
+	isDataSaver:
+		typeof window !== 'undefined' &&
+		(localStorage.getItem('vondic_data_saver') === 'true' ||
+			Boolean(
+				(navigator as any).connection?.saveData ||
+				['2g', '3g'].includes((navigator as any).connection?.effectiveType),
+			)),
+	isIpPrivacy:
+		typeof window !== 'undefined' &&
+		localStorage.getItem('vondic_ip_privacy') === 'true',
 
 	
 	webRTCService: null,
@@ -152,6 +166,13 @@ export const useCallStore = create<CallStore>((set, get) => ({
 			const webRTCService = new WebRTCService(socket, user.id)
 			const callManager = CallManager.getInstance(webRTCService, socket)
 			callManager.setCurrentUser(user)
+
+			if (get().isDataSaver) {
+				webRTCService.setDataSaverMode(true)
+			}
+			if (get().isIpPrivacy) {
+				webRTCService.setIpPrivacyMode(true)
+			}
 
 			
 			webRTCService.onLocalStream = (stream: MediaStream) => {
@@ -578,6 +599,34 @@ export const useCallStore = create<CallStore>((set, get) => ({
 		}
 		set({ isKrispEnabled: nextState })
 		return nextState
+	},
+
+	toggleDataSaver: () => {
+		const { isDataSaver, webRTCService } = get()
+		const next = !isDataSaver
+		if (webRTCService) {
+			webRTCService.setDataSaverMode(next)
+		}
+		if (next) {
+			set({ isDataSaver: true, audioQualityPreset: 'eco' })
+		} else {
+			set({ isDataSaver: false, audioQualityPreset: 'boost1' })
+		}
+		try {
+			localStorage.setItem('vondic_data_saver', next ? 'true' : 'false')
+		} catch {}
+	},
+
+	toggleIpPrivacy: () => {
+		const { isIpPrivacy, webRTCService } = get()
+		const next = !isIpPrivacy
+		if (webRTCService) {
+			webRTCService.setIpPrivacyMode(next)
+		}
+		set({ isIpPrivacy: next })
+		try {
+			localStorage.setItem('vondic_ip_privacy', next ? 'true' : 'false')
+		} catch {}
 	},
 
 	// Действия звонков

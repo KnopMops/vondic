@@ -20,6 +20,8 @@ import {
 	PinOffIcon,
 	LayoutGridIcon,
 	TvIcon,
+	ShieldCheckIcon,
+	ShieldIcon,
 } from 'lucide-react'
 import {
 	AudioBitratePreset,
@@ -152,12 +154,16 @@ export interface DiscordCallModalProps {
 	isPremium?: boolean
 	audioQualityPreset?: AudioBitratePreset
 	networkStats?: NetworkQualityStats | null
+	isDataSaver?: boolean
+	isIpPrivacy?: boolean
 	onMuteToggle: () => void
 	onVideoToggle: () => void
 	onScreenShareToggle: () => void
 	onScreenSharePresetChange?: (preset: ScreenSharePresetKey) => void
 	onKrispToggle?: () => void
 	onAudioQualityChange?: (preset: AudioBitratePreset) => void
+	onDataSaverToggle?: () => void
+	onIpPrivacyToggle?: () => void
 	onDisconnect: () => void
 }
 
@@ -179,15 +185,20 @@ export const DiscordCallModal: React.FC<DiscordCallModalProps> = ({
 	isPremium = false,
 	audioQualityPreset = 'boost1',
 	networkStats,
+	isDataSaver = false,
+	isIpPrivacy = false,
 	onMuteToggle,
 	onVideoToggle,
 	onScreenShareToggle,
 	onScreenSharePresetChange,
 	onKrispToggle,
 	onAudioQualityChange,
+	onDataSaverToggle,
+	onIpPrivacyToggle,
 	onDisconnect,
 }) => {
 	const [isFullscreen, setIsFullscreen] = useState(false)
+	const [allowVideoInDataSaver, setAllowVideoInDataSaver] = useState(false)
 	const [isQualityMenuOpen, setIsQualityMenuOpen] = useState(false)
 	const [isScreenQualityMenuOpen, setIsScreenQualityMenuOpen] = useState(false)
 	const [pinnedParticipantId, setPinnedParticipantId] = useState<string | null>(null)
@@ -378,6 +389,44 @@ export const DiscordCallModal: React.FC<DiscordCallModalProps> = ({
 								<span className="opacity-80">({networkStats.packetLoss}% loss)</span>
 							)}
 						</div>
+					{/* Data Saver Mode Pill */}
+					{onDataSaverToggle && (
+						<button
+							onClick={onDataSaverToggle}
+							className={`flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full border transition-all font-semibold cursor-pointer shadow-sm ${
+								isDataSaver
+									? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-amber-500/10'
+									: 'bg-[#313338] hover:bg-[#383a40] text-gray-400 hover:text-gray-200 border-white/10'
+							}`}
+							title={
+								isDataSaver
+									? 'Режим экономии трафика: ВКЛ (звук 32 кбит/с с DTX, видеопотоки на паузе)'
+									: 'Включить режим экономии мобильного трафика'
+							}
+						>
+							<ZapIcon className={`w-3.5 h-3.5 ${isDataSaver ? 'text-amber-400 fill-amber-400' : 'text-gray-400'}`} />
+							<span className="hidden sm:inline">Эконом</span>
+						</button>
+					)}
+
+					{/* IP Privacy Mode Pill */}
+					{onIpPrivacyToggle && (
+						<button
+							onClick={onIpPrivacyToggle}
+							className={`flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full border transition-all font-semibold cursor-pointer shadow-sm ${
+								isIpPrivacy
+									? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-emerald-500/10'
+									: 'bg-[#313338] hover:bg-[#383a40] text-gray-400 hover:text-gray-200 border-white/10'
+							}`}
+							title={
+								isIpPrivacy
+									? 'IP скрыт: соединение идёт строго через Vondic Relay, прямой P2P отключён'
+									: 'Включить защиту IP: скрыть свой реальный IP через защищённый Vondic Relay'
+							}
+						>
+							<ShieldCheckIcon className={`w-3.5 h-3.5 ${isIpPrivacy ? 'text-emerald-400' : 'text-gray-400'}`} />
+							<span className="hidden sm:inline">{isIpPrivacy ? 'IP скрыт' : 'Скрыть IP'}</span>
+						</button>
 					)}
 
 					{/* Discord Boost Bitrate Selector */}
@@ -559,13 +608,49 @@ export const DiscordCallModal: React.FC<DiscordCallModalProps> = ({
 						<div className="flex-1 bg-[#111214] rounded-2xl overflow-hidden border border-white/[0.08] relative shadow-2xl flex items-center justify-center min-h-0">
 							{activeScreenStream ? (
 								/* Screen Share Stream */
-								<StreamVideo stream={activeScreenStream} className="w-full h-full object-contain" />
+								isDataSaver && !allowVideoInDataSaver && !localScreenStream ? (
+									<div className="flex flex-col items-center justify-center p-6 text-center max-w-sm gap-3 bg-[#1e1f22]/90 backdrop-blur-md rounded-2xl border border-amber-500/30 shadow-2xl z-10">
+										<div className="w-12 h-12 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center">
+											<ZapIcon className="w-6 h-6 fill-amber-400" />
+										</div>
+										<div className="flex flex-col gap-1">
+											<span className="font-bold text-gray-100 text-sm">Режим экономии трафика</span>
+											<span className="text-xs text-gray-400">Трансляция экрана приостановлена для сохранения мобильного интернета.</span>
+										</div>
+										<button
+											onClick={() => setAllowVideoInDataSaver(true)}
+											className="mt-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs shadow-lg transition-all cursor-pointer"
+										>
+											Смотреть трансляцию
+										</button>
+									</div>
+								) : (
+									<StreamVideo stream={activeScreenStream} className="w-full h-full object-contain" />
+								)
 							) : pinnedParticipant && getParticipantVideoStream(pinnedParticipant) ? (
 								/* Pinned Participant Camera */
-								<StreamVideo
-									stream={getParticipantVideoStream(pinnedParticipant)!}
-									className="w-full h-full object-contain"
-								/>
+								isDataSaver && !allowVideoInDataSaver && pinnedParticipant.id !== 'me' ? (
+									<div className="flex flex-col items-center justify-center p-6 text-center max-w-sm gap-3 bg-[#1e1f22]/90 backdrop-blur-md rounded-2xl border border-amber-500/30 shadow-2xl z-10">
+										<div className="w-12 h-12 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center">
+											<ZapIcon className="w-6 h-6 fill-amber-400" />
+										</div>
+										<div className="flex flex-col gap-1">
+											<span className="font-bold text-gray-100 text-sm">Видео на паузе (Эконом)</span>
+											<span className="text-xs text-gray-400">Режим экономии трафика бережёт ваш канал.</span>
+										</div>
+										<button
+											onClick={() => setAllowVideoInDataSaver(true)}
+											className="mt-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs shadow-lg transition-all cursor-pointer"
+										>
+											Включить видео
+										</button>
+									</div>
+								) : (
+									<StreamVideo
+										stream={getParticipantVideoStream(pinnedParticipant)!}
+										className="w-full h-full object-contain"
+									/>
+								)
 							) : pinnedParticipant ? (
 								/* Pinned Participant Avatar */
 								<div className="flex flex-col items-center gap-3">
@@ -669,7 +754,7 @@ export const DiscordCallModal: React.FC<DiscordCallModalProps> = ({
 										title={`Нажмите, чтобы закрепить ${p.name}`}
 									>
 										{/* Video or Avatar */}
-										{hasVideo && video ? (
+										{hasVideo && video && (!isDataSaver || allowVideoInDataSaver || p.id === 'me') ? (
 											<StreamVideo stream={video} className="w-full h-full object-cover" />
 										) : (
 											<div className="relative flex items-center justify-center">
@@ -752,7 +837,7 @@ export const DiscordCallModal: React.FC<DiscordCallModalProps> = ({
 									}`}
 								>
 									{/* Video or Centered Avatar */}
-									{hasVideo && video ? (
+									{hasVideo && video && (!isDataSaver || allowVideoInDataSaver || p.id === 'me') ? (
 										<StreamVideo stream={video} className="w-full h-full object-cover" />
 									) : (
 										<div className="flex flex-col items-center gap-3">
@@ -890,6 +975,44 @@ export const DiscordCallModal: React.FC<DiscordCallModalProps> = ({
 						title={isScreenSharing ? 'Остановить демонстрацию' : 'Поделиться экраном HD'}
 					>
 						<MonitorIcon className="w-5 h-5" />
+					</button>
+				)}
+
+				{/* Data Saver Toggle Dock Button */}
+				{onDataSaverToggle && (
+					<button
+						onClick={onDataSaverToggle}
+						className={`p-3.5 rounded-full transition-all duration-200 cursor-pointer shadow-md flex items-center justify-center ${
+							isDataSaver
+								? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
+								: 'bg-[#313338] hover:bg-[#3b3d42] text-gray-400'
+						}`}
+						title={
+							isDataSaver
+								? 'Режим экономии трафика: ВКЛ'
+								: 'Включить режим экономии трафика'
+						}
+					>
+						<ZapIcon className="w-5 h-5" />
+					</button>
+				)}
+
+				{/* IP Privacy Toggle Dock Button */}
+				{onIpPrivacyToggle && (
+					<button
+						onClick={onIpPrivacyToggle}
+						className={`p-3.5 rounded-full transition-all duration-200 cursor-pointer shadow-md flex items-center justify-center ${
+							isIpPrivacy
+								? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30'
+								: 'bg-[#313338] hover:bg-[#3b3d42] text-gray-400'
+						}`}
+						title={
+							isIpPrivacy
+								? 'Защита IP (Relay): ВКЛЮЧЕНА'
+								: 'Включить защиту IP (Relay)'
+						}
+					>
+						<ShieldCheckIcon className="w-5 h-5" />
 					</button>
 				)}
 
