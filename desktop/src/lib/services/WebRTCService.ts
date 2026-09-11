@@ -297,12 +297,19 @@ export class WebRTCService {
 			}
 
 			// Replace/add video track with screen share
-			let videoSender = pc.getSenders().find(s => s.track?.kind === 'video')
+			const videoTransceiver = pc.getTransceivers().find(
+				t => t.receiver.track?.kind === 'video' || t.sender.track?.kind === 'video',
+			)
+			let videoSender = videoTransceiver?.sender || pc.getSenders().find(s => s.track?.kind === 'video')
 			let needsRenegotiation = false
 
 			if (videoSender) {
 				try {
 					await videoSender.replaceTrack(videoTrack)
+					if (videoTransceiver && (videoTransceiver.direction === 'recvonly' || videoTransceiver.direction === 'inactive')) {
+						videoTransceiver.direction = 'sendrecv'
+						needsRenegotiation = true
+					}
 					console.log(`[WebRTC] Replaced video track with screen share seamlessly for ${socketId}`)
 				} catch (e) {
 					console.error(`[WebRTC] Failed to replace video track for ${socketId}:`, e)
@@ -516,10 +523,16 @@ export class WebRTCService {
 				continue
 			}
 
-			let sender = pc.getSenders().find(s => s.track?.kind === 'video')
+			const videoTransceiver = pc.getTransceivers().find(
+				t => t.receiver.track?.kind === 'video' || t.sender.track?.kind === 'video',
+			)
+			let sender = videoTransceiver?.sender || pc.getSenders().find(s => s.track?.kind === 'video')
 			if (sender) {
 				try {
 					await sender.replaceTrack(track)
+					if (videoTransceiver && (videoTransceiver.direction === 'recvonly' || videoTransceiver.direction === 'inactive')) {
+						videoTransceiver.direction = 'sendrecv'
+					}
 					console.log(`[WebRTC] Replaced video track with camera for ${socketId}`)
 				} catch (e) {
 					console.error(`[WebRTC] Failed to replace video track for ${socketId}:`, e)

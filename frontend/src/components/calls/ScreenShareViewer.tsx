@@ -44,18 +44,32 @@ export const ScreenShareViewer: React.FC<ScreenShareViewerProps> = ({
 			(document.documentElement as any).msRequestFullscreen)
 
 	useEffect(() => {
-		if (videoRef.current && streamToPlay) {
-			if (videoRef.current.srcObject !== streamToPlay) {
-				videoRef.current.srcObject = streamToPlay
+		const el = videoRef.current
+		if (el && streamToPlay) {
+			const liveVideoTracks = streamToPlay.getVideoTracks().filter(t => t.readyState === 'live')
+			if (liveVideoTracks.length === 0) return
+
+			const videoStream = new MediaStream(liveVideoTracks)
+			el.srcObject = videoStream
+			el.muted = true
+			el.playsInline = true
+
+			const attemptPlay = () => {
+				if (el) {
+					el.play().catch(err => {
+						console.error('Failed to play screen share:', err)
+						setHasError(true)
+					})
+				}
 			}
-			videoRef.current.muted = true
-			videoRef.current.play().catch(err => {
-				console.error('Failed to play screen share:', err)
-				setHasError(true)
+
+			liveVideoTracks.forEach(track => {
+				track.addEventListener('unmute', attemptPlay)
 			})
 
-			
-			const track = streamToPlay.getVideoTracks()[0]
+			attemptPlay()
+
+			const track = liveVideoTracks[0]
 			if (track) {
 				const settings = track.getSettings()
 				setResolution({
@@ -64,7 +78,6 @@ export const ScreenShareViewer: React.FC<ScreenShareViewerProps> = ({
 				})
 				setFps(settings.frameRate || 0)
 
-				
 				const interval = setInterval(() => {
 					const currentSettings = track.getSettings()
 					setResolution({
@@ -74,7 +87,10 @@ export const ScreenShareViewer: React.FC<ScreenShareViewerProps> = ({
 					setFps(currentSettings.frameRate || 0)
 				}, 1000)
 
-				return () => clearInterval(interval)
+				return () => {
+					clearInterval(interval)
+					liveVideoTracks.forEach(t => t.removeEventListener('unmute', attemptPlay))
+				}
 			}
 		}
 	}, [streamToPlay])

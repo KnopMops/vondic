@@ -401,16 +401,13 @@ export class WebRTCService {
 	public optimizeSessionDescription(desc: RTCSessionDescriptionInit): RTCSessionDescriptionInit {
 		if (!desc || !desc.sdp) return desc
 		const targetBitrate = AUDIO_BITRATE_PRESETS[this.audioQualityPreset].bitrate
-		let optimizedSdp = optimizeOpusSdp(desc.sdp, {
+		const optimizedSdp = optimizeOpusSdp(desc.sdp, {
 			bitrate: targetBitrate,
 			stereo: true,
 			useFec: true,
 			useDtx: true,
 			minPtime: 10,
 		})
-
-		const preset = SCREEN_SHARE_PRESETS[this.screenSharePreset] || SCREEN_SHARE_PRESETS.screen1080p60
-		optimizedSdp = optimizeVideoSdp(optimizedSdp, preset.maxBitrate)
 
 		return {
 			type: desc.type,
@@ -422,29 +419,17 @@ export class WebRTCService {
 		try {
 			const transceivers = pc.getTransceivers()
 			const videoTransceiver = transceivers.find(
-				t => (t.sender && t.sender.track && t.sender.track.kind === 'video') ||
+				t => (t.sender && t.track && t.sender.track.kind === 'video') ||
 				     (t.receiver && t.receiver.track && t.receiver.track.kind === 'video')
 			)
 			if (videoTransceiver && typeof RTCRtpReceiver !== 'undefined' && 'getCapabilities' in RTCRtpReceiver) {
 				const capabilities = RTCRtpReceiver.getCapabilities('video')
 				if (capabilities && capabilities.codecs) {
-					// Приоритет: H264 (High Profile) -> VP9 -> AV1 -> VP8
-					const h264Codecs = capabilities.codecs.filter(c => c.mimeType.toLowerCase() === 'video/h264')
-					const vp9Codecs = capabilities.codecs.filter(c => c.mimeType.toLowerCase() === 'video/vp9')
-					const av1Codecs = capabilities.codecs.filter(c => c.mimeType.toLowerCase() === 'video/av01')
-					const otherCodecs = capabilities.codecs.filter(c => 
-						!['video/h264', 'video/vp9', 'video/av01'].includes(c.mimeType.toLowerCase())
-					)
-
-					h264Codecs.sort((a, b) => {
-						const aFmtp = a.sdpFmtpLine || ''
-						const bFmtp = b.sdpFmtpLine || ''
-						if (aFmtp.includes('profile-level-id=640c') || aFmtp.includes('profile-level-id=42e0')) return -1
-						if (bFmtp.includes('profile-level-id=640c') || bFmtp.includes('profile-level-id=42e0')) return 1
-						return 0
-					})
-
-					const sorted = [...h264Codecs, ...vp9Codecs, ...av1Codecs, ...otherCodecs]
+					// Prioritize VP8 and H264 for universal decoder compatibility across all browsers and devices
+					const vp8 = capabilities.codecs.filter(c => c.mimeType.toLowerCase() === 'video/vp8')
+					const h264 = capabilities.codecs.filter(c => c.mimeType.toLowerCase() === 'video/h264')
+					const others = capabilities.codecs.filter(c => !['video/vp8', 'video/h264'].includes(c.mimeType.toLowerCase()))
+					const sorted = [...vp8, ...h264, ...others]
 					if (sorted.length > 0) {
 						videoTransceiver.setCodecPreferences(sorted)
 						console.log('[WebRTC] Preferred hardware-accelerated video codecs (H264 High Profile / VP9 / AV1)')
@@ -542,12 +527,19 @@ export class WebRTCService {
 			}
 
 			// Replace/add video track with screen share
-			let videoSender = pc.getSenders().find(s => s.track?.kind === 'video')
+			const videoTransceiver = pc.getTransceivers().find(
+				t => t.receiver.track?.kind === 'video' || t.sender.track?.kind === 'video',
+			)
+			let videoSender = videoTransceiver?.sender || pc.getSenders().find(s => s.track?.kind === 'video')
 			let needsRenegotiation = false
 
 			if (videoSender) {
 				try {
 					await videoSender.replaceTrack(videoTrack)
+					if (videoTransceiver && (videoTransceiver.direction === 'recvonly' || videoTransceiver.direction === 'inactive')) {
+						videoTransceiver.direction = 'sendrecv'
+						needsRenegotiation = true
+					}
 					console.log(`[WebRTC] Replaced video track with screen share seamlessly for ${socketId}`)
 				} catch (e) {
 					console.error(`[WebRTC] Failed to replace video track for ${socketId}:`, e)
@@ -797,10 +789,19 @@ export class WebRTCService {
 				continue
 			}
 
-			let sender = pc.getSenders().find(s => s.track?.kind === 'video')
+			const videoTransceiver = pc.getTransceivers().find(
+				t => t.receiver.track?.kind === 'video' || t.sender.track?.kind === 'video',
+			)
+			let sender = videoTransceiver?.sender || pc.getSenders().find(s => s.track?.kind === 'video')
+			let needsRenegotiation = false
+
 			if (sender) {
 				try {
 					await sender.replaceTrack(track)
+					if (videoTransceiver && (videoTransceiver.direction === 'recvonly' || videoTransceiver.direction === 'inactive')) {
+						videoTransceiver.direction = 'sendrecv'
+						needsRenegotiation = true
+					}
 					console.log(`[WebRTC] Replaced video track with camera for ${socketId}`)
 				} catch (e) {
 					console.error(`[WebRTC] Failed to replace video track for ${socketId}:`, e)
@@ -808,6 +809,7 @@ export class WebRTCService {
 			} else {
 				try {
 					sender = pc.addTrack(track, stream)
+					needsRenegotiation = true
 					console.log(`[WebRTC] Added camera video track for ${socketId}`)
 				} catch (e) {
 					console.error(`[WebRTC] Failed to add video track for ${socketId}:`, e)
@@ -999,92 +1001,35 @@ export class WebRTCService {
 		pc.ontrack = event => {
 			console.log(`[WebRTC] ontrack for ${targetSocketId}: kind=${event.track.kind}, state=${event.track.readyState}, muted=${event.track.muted}`)
 
-			// Get or create stream for this peer
-			let stream = this.remoteStreams.get(targetSocketId)
-			if (!stream) {
-				stream = new MediaStream()
-				this.remoteStreams.set(targetSocketId, stream)
-			}
-
-			// Add the new track if not already present
-			// Do NOT remove existing tracks - just add new ones
-			if (!stream.getTracks().includes(event.track)) {
-				try {
-					stream.addTrack(event.track)
-					console.log(`[WebRTC] Added ${event.track.kind} track to stream for ${targetSocketId}`)
-				} catch (e) {
-					console.error(`[WebRTC] Could not add track to stream:`, e)
-				}
-			} else {
-				console.log(`[WebRTC] Track already exists in stream for ${targetSocketId}`)
-			}
-
-			// Debounce stream updates to prevent flickering
-			const now = Date.now()
-			const lastUpdate = (this as any)._lastStreamUpdate?.get(targetSocketId) || 0
-			if (now - lastUpdate < 100) {
-				// Skip if less than 100ms since last update
-				return
-			}
-			(this as any)._lastStreamUpdate = (this as any)._lastStreamUpdate || new Map()
-			;(this as any)._lastStreamUpdate.set(targetSocketId, now)
-
-			const assign = () => {
-				console.log(`[WebRTC] Assigning remote stream for ${targetSocketId}, tracks: ${stream?.getTracks().length}`)
-				if (this.onRemoteStream) {
-					this.onRemoteStream(targetSocketId, stream!)
-				}
-			}
 			try {
-				const track = event.track
-				if (track) {
-					// Use a timeout to prevent premature track removal during renegotiation
-					let trackEndTimeout: any = null
-					
-					track.onended = () => {
-						console.log(`[WebRTC] Remote ${track.kind} track ended for ${targetSocketId}, waiting 2s before removal...`)
-						// Don't remove immediately - wait 2 seconds in case it's just renegotiation
-						trackEndTimeout = setTimeout(() => {
-							// Check if track is still in ended state
-							if (track.readyState === 'ended') {
-								console.log(`[WebRTC] Removing ended ${track.kind} track from stream for ${targetSocketId}`)
-								try {
-									if (stream && stream.getTracks().includes(track)) {
-										stream.removeTrack(track)
-										console.log(`[WebRTC] Removed ${track.kind} track from stream for ${targetSocketId}`)
-									}
-								} catch (e) {
-									console.error(`[WebRTC] Could not remove ended track:`, e)
-								}
-								assign()
-							} else {
-								console.log(`[WebRTC] Track ${track.kind} recovered for ${targetSocketId}, not removing`)
-							}
-						}, 2000)
-					}
+				event.track.enabled = true
+			} catch {}
 
-					// Check for mute/unmute events - debounce these too
-					let muteDebounceTimer: any = null
-					if (typeof (track as any).onunmute !== 'undefined') {
-						;(track as any).onunmute = () => {
-							console.log(`[WebRTC] Remote ${track.kind} track unmuted for ${targetSocketId}`)
-							// Clear pending removal if track comes back
-							if (trackEndTimeout) {
-								clearTimeout(trackEndTimeout)
-								trackEndTimeout = null
-							}
-							clearTimeout(muteDebounceTimer)
-							muteDebounceTimer = setTimeout(assign, 100)
-						}
-						;(track as any).onmute = () => {
-							console.log(`[WebRTC] Remote ${track.kind} track muted for ${targetSocketId}`)
-							clearTimeout(muteDebounceTimer)
-							muteDebounceTimer = setTimeout(assign, 100)
-						}
+			// Always create a new MediaStream instance so references update cleanly across stores and components
+			const existingStream = this.remoteStreams.get(targetSocketId)
+			const otherTracks = existingStream
+				? existingStream.getTracks().filter(t => t.id !== event.track.id && t.readyState === 'live')
+				: []
+
+			const newStream = new MediaStream([...otherTracks, event.track])
+			this.remoteStreams.set(targetSocketId, newStream)
+
+			event.track.onended = () => {
+				console.log(`[WebRTC] Remote track ${event.track.kind} ended for ${targetSocketId}`)
+				const current = this.remoteStreams.get(targetSocketId)
+				if (current) {
+					const remaining = current.getTracks().filter(t => t.id !== event.track.id && t.readyState === 'live')
+					const updated = new MediaStream(remaining)
+					this.remoteStreams.set(targetSocketId, updated)
+					if (this.onRemoteStream) {
+						this.onRemoteStream(targetSocketId, updated)
 					}
 				}
-			} catch {}
-			assign()
+			}
+
+			if (this.onRemoteStream) {
+				this.onRemoteStream(targetSocketId, newStream)
+			}
 		}
 
 		// Обработка изменения состояния соединения
@@ -1817,33 +1762,33 @@ export class WebRTCService {
 		if (!pc) return;
 
 		let stream = this.remoteStreams.get(targetSocketId);
-		if (!stream) {
-			stream = new MediaStream();
-			this.remoteStreams.set(targetSocketId, stream);
-		}
+		const existingTracks = stream ? stream.getTracks().filter(t => t.readyState === 'live') : [];
 
 		try {
 			const receivers = pc.getReceivers() || [];
-			const existingTracks = stream.getTracks();
+			let hasNewTracks = false;
+			const currentTracks = [...existingTracks];
 
 			// Add any new tracks from receivers
 			receivers.forEach(receiver => {
-				if (receiver.track) {
-					const trackExists = existingTracks.some(t =>
-						t.id === receiver.track.id && t.kind === receiver.track.kind && t.readyState === receiver.track.readyState
+				if (receiver.track && receiver.track.readyState === 'live') {
+					const trackExists = currentTracks.some(t =>
+						t.id === receiver.track.id && t.kind === receiver.track.kind
 					);
 					if (!trackExists) {
-						// Simply add the new track - do NOT remove existing tracks
-						// Removing tracks causes audio disruption
-						console.log(`[WebRTC] Adding ${receiver.track.kind} track to remote stream for ${targetSocketId}`);
-						stream!.addTrack(receiver.track);
+						console.log(`[WebRTC] Adding ${receiver.track.kind} track from receiver to remote stream for ${targetSocketId}`);
+						currentTracks.push(receiver.track);
+						hasNewTracks = true;
 					}
 				}
 			});
 
-			// Update UI with the updated stream
-			if (this.onRemoteStream) {
-				this.onRemoteStream(targetSocketId, stream);
+			if (hasNewTracks || !stream) {
+				const freshStream = new MediaStream(currentTracks);
+				this.remoteStreams.set(targetSocketId, freshStream);
+				if (this.onRemoteStream) {
+					this.onRemoteStream(targetSocketId, freshStream);
+				}
 			}
 		} catch (e) {
 			console.error('[WebRTC] Error syncing remote stream tracks:', e);

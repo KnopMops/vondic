@@ -42,41 +42,81 @@ const StreamVideo = React.memo(({
 	className?: string
 }) => {
 	const videoRef = useRef<HTMLVideoElement | null>(null)
+	const [videoTrackVersion, setVideoTrackVersion] = useState(0)
 
-	const assignStream = (el: HTMLVideoElement | null) => {
-		videoRef.current = el
-		if (el && stream) {
-			if (el.srcObject !== stream) {
-				el.srcObject = stream
-			}
-			el.muted = true
-			el.playsInline = true
-			el.play().catch(() => {
-				// Autoplay safe fallback
-			})
-		}
-	}
-
+	// Listen for track changes on the stream (e.g. video track added/removed)
 	useEffect(() => {
-		const el = videoRef.current
-		if (el && stream) {
-			if (el.srcObject !== stream) {
-				el.srcObject = stream
-			}
-			el.muted = true
-			el.playsInline = true
-			el.play().catch(() => {})
+		if (!stream) return
+
+		const handleTracksChanged = () => {
+			setVideoTrackVersion(v => v + 1)
+		}
+
+		stream.addEventListener('addtrack', handleTracksChanged)
+		stream.addEventListener('removetrack', handleTracksChanged)
+
+		return () => {
+			stream.removeEventListener('addtrack', handleTracksChanged)
+			stream.removeEventListener('removetrack', handleTracksChanged)
 		}
 	}, [stream])
 
+	useEffect(() => {
+		const el = videoRef.current
+		if (!el || !stream) return
+
+		// Extract only live video tracks. Creating a dedicated video-only MediaStream
+		// avoids audio-pipeline lockups in Chromium, eliminates autoplay issues,
+		// and guarantees the hardware/software video decoder initializes immediately.
+		const liveVideoTracks = stream.getVideoTracks().filter(t => t.readyState === 'live')
+		if (liveVideoTracks.length === 0) {
+			if (el.srcObject) {
+				el.srcObject = null
+			}
+			return
+		}
+
+		const videoStream = new MediaStream(liveVideoTracks)
+		el.srcObject = videoStream
+		el.muted = true
+		el.playsInline = true
+
+		const attemptPlay = () => {
+			if (el) {
+				el.play().catch(() => {
+					// Safe autoplay policy handling
+				})
+			}
+		}
+
+		// WebRTC video tracks are created in a muted state until the first RTP packet arrives.
+		// When the first packet arrives, the track emits an 'unmute' event.
+		// Listening to 'unmute' ensures video starts playing the instant frames begin arriving.
+		liveVideoTracks.forEach(track => {
+			track.addEventListener('unmute', attemptPlay)
+			track.addEventListener('ended', () => setVideoTrackVersion(v => v + 1))
+		})
+
+		attemptPlay()
+
+		return () => {
+			liveVideoTracks.forEach(track => {
+				track.removeEventListener('unmute', attemptPlay)
+			})
+		}
+	}, [stream, videoTrackVersion])
+
 	return (
 		<video
-			ref={assignStream}
+			ref={videoRef}
 			autoPlay
 			playsInline
 			muted
-			onLoadedMetadata={() => {
-				videoRef.current?.play().catch(() => {})
+			onLoadedMetadata={e => {
+				;(e.target as HTMLVideoElement).play().catch(() => {})
+			}}
+			onCanPlay={e => {
+				;(e.target as HTMLVideoElement).play().catch(() => {})
 			}}
 			className={className}
 		/>
@@ -187,11 +227,47 @@ export const DiscordCallModal: React.FC<DiscordCallModalProps> = ({
 	}, [isScreenSharing, screenStream])
 
 	const remoteScreenStream = useMemo(() => {
-		if (remoteScreenShare?.isSharing && remoteScreenShare.socketId) {
-			return remoteStreams.get(remoteScreenShare.socketId) || null
+		if (!remoteScreenShare?.isSharing) return null
+
+		// 1. Direct match by socketId
+		if (remoteScreenShare.socketId && remoteStreams.has(remoteScreenShare.socketId)) {
+			const s = remoteStreams.get(remoteScreenShare.socketId)
+			if (s && s.getVideoTracks().some(t => t.readyState === 'live')) return s
 		}
-		return null
-	}, [remoteScreenShare, remoteStreams])
+
+		// 2. Direct match by userId
+		if (remoteScreenShare.userId && remoteStreams.has(remoteScreenShare.userId)) {
+			const s = remoteStreams.get(remoteScreenShare.userId)
+			if (s && s.getVideoTracks().some(t => t.readyState === 'live')) return s
+		}
+
+		// 3. Match through participant lookup
+		if (remoteScreenShare.socketId || remoteScreenShare.userId) {
+			const matchedParticipant = participants.find(
+				p =>
+					(remoteScreenShare.socketId && p.socketId === remoteScreenShare.socketId) ||
+					(remoteScreenShare.userId && p.id === remoteScreenShare.userId),
+			)
+			if (matchedParticipant?.socketId && remoteStreams.has(matchedParticipant.socketId)) {
+				const s = remoteStreams.get(matchedParticipant.socketId)
+				if (s && s.getVideoTracks().some(t => t.readyState === 'live')) return s
+			}
+		}
+
+		// 4. In 1-on-1 calls, fallback to the single remote stream
+		if (remoteStreams.size === 1) {
+			const singleStream = remoteStreams.values().next().value
+			if (singleStream && singleStream.getVideoTracks().some(t => t.readyState === 'live')) {
+				return singleStream
+			}
+		}
+
+		// 5. Fallback: find any remote stream that has live video tracks
+		const streamWithVideo = Array.from(remoteStreams.values()).find(s =>
+			s.getVideoTracks().some(t => t.readyState === 'live'),
+		)
+		return streamWithVideo || null
+	}, [remoteScreenShare, remoteStreams, participants])
 
 	const activeScreenStream = localScreenStream || remoteScreenStream
 
@@ -215,11 +291,20 @@ export const DiscordCallModal: React.FC<DiscordCallModalProps> = ({
 		if (p.id === 'me') {
 			return isVideoEnabled && videoStream ? videoStream : null
 		}
-		if (p.socketId) {
-			const stream = remoteStreams.get(p.socketId)
-			if (stream && stream.getVideoTracks().some(t => t.readyState === 'live' && t.enabled)) {
-				return stream
-			}
+
+		let stream: MediaStream | undefined = undefined
+		if (p.socketId && remoteStreams.has(p.socketId)) {
+			stream = remoteStreams.get(p.socketId)
+		}
+		if (!stream && p.id && remoteStreams.has(p.id)) {
+			stream = remoteStreams.get(p.id)
+		}
+		// In 1-on-1 call, fallback to the single remote stream
+		if (!stream && remoteStreams.size === 1 && p.id !== 'me') {
+			stream = remoteStreams.values().next().value
+		}
+		if (stream && stream.getVideoTracks().some(t => t.readyState === 'live')) {
+			return stream
 		}
 		return null
 	}
@@ -230,13 +315,11 @@ export const DiscordCallModal: React.FC<DiscordCallModalProps> = ({
 			return Boolean(
 				isVideoEnabled &&
 					videoStream &&
-					videoStream.getVideoTracks().some(t => t.readyState === 'live' && t.enabled),
+					videoStream.getVideoTracks().some(t => t.readyState === 'live'),
 			)
 		}
-		const stream = p.socketId ? remoteStreams.get(p.socketId) : null
-		return Boolean(
-			stream && stream.getVideoTracks().some(t => t.readyState === 'live' && t.enabled),
-		)
+		const stream = getParticipantVideoStream(p)
+		return Boolean(stream)
 	}
 
 	// Эффективный режим отображения (Hero Stage vs Grid)
