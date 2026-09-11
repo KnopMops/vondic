@@ -42,6 +42,10 @@ export class CallManager {
 		participant: { userId: string; username: string; avatarUrl?: string; socketId: string },
 	) => void
 	public onVoiceChannelParticipantLeft?: (channelId: string, socketId: string) => void
+	public onVideoStateChange?: (
+		stream: MediaStream | null,
+		isEnabled: boolean,
+	) => void
 
 	constructor(webRTCService: WebRTCService, socket: Socket) {
 		this.webRTCService = webRTCService
@@ -961,8 +965,9 @@ export class CallManager {
 			stream: MediaStream | null,
 			isEnabled: boolean,
 		) => {
-			// Forward the video state change to any listeners
-			// This is typically handled by the store that uses the CallManager
+			if (this.onVideoStateChange) {
+				this.onVideoStateChange(stream, isEnabled)
+			}
 		}
 	}
 
@@ -1417,22 +1422,31 @@ export class CallManager {
 
 	// Video methods
 	async startVideo(): Promise<void> {
-		await this.webRTCService.startVideo();
+		await this.webRTCService.startVideo()
+		if (this.onVideoStateChange) {
+			this.onVideoStateChange(this.webRTCService.getVideoStream(), this.webRTCService.isVideoEnabledState())
+		}
 	}
 
 	async stopVideo(): Promise<void> {
-		await this.webRTCService.stopVideo();
+		await this.webRTCService.stopVideo()
+		if (this.onVideoStateChange) {
+			this.onVideoStateChange(null, false)
+		}
 	}
 
-	toggleVideo(): Promise<void> {
-		return this.webRTCService.toggleVideo();
+	async toggleVideo(): Promise<void> {
+		await this.webRTCService.toggleVideo()
+		if (this.onVideoStateChange) {
+			this.onVideoStateChange(this.webRTCService.getVideoStream(), this.webRTCService.isVideoEnabledState())
+		}
 	}
 
 	isVideoEnabled(): boolean {
-		return this.webRTCService.isVideoEnabledState();
+		return this.webRTCService.isVideoEnabledState()
 	}
 
 	getVideoStream(): MediaStream | null {
-		return this.webRTCService.getVideoStream();
+		return this.webRTCService.getVideoStream()
 	}
 }

@@ -1748,6 +1748,18 @@ class SignalingService:
         has_video = payload.get("has_video", False)
         user_id = payload.get("user_id") or sender_id
 
+        target_socket_id = payload.get("target_socket_id")
+        if target_socket_id:
+            await self.io.emit(
+                "video_state_changed",
+                {
+                    "from_socket_id": socket_id,
+                    "user_id": user_id,
+                    "has_video": has_video,
+                },
+                room=target_socket_id,
+            )
+
         call_id = payload.get("call_id")
         if call_id and call_id in self.group_calls:
             call = self.group_calls[call_id]
@@ -1795,6 +1807,18 @@ class SignalingService:
         socket_id = payload.get("sender_socket_id") or sid
         is_sharing = payload.get("is_sharing", False)
         user_id = payload.get("user_id") or sender_id
+
+        target_socket_id = payload.get("target_socket_id")
+        if target_socket_id:
+            await self.io.emit(
+                "screen_share_state_changed",
+                {
+                    "from_socket_id": socket_id,
+                    "user_id": user_id,
+                    "is_sharing": is_sharing,
+                },
+                room=target_socket_id,
+            )
 
         for call_id, call in list(self.group_calls.items()):
             participants = call.get("participants", [])

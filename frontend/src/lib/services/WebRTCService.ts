@@ -604,8 +604,18 @@ export class WebRTCService {
 		this.socket.emit('screen_share_state_changed', {
 			sender_socket_id: this.socket.id,
 			is_sharing: true,
-			user_id: this.userId
+			user_id: this.userId,
 		})
+		for (const [socketId] of this.peerConnections.entries()) {
+			if (this.isSocketKey(socketId)) {
+				this.socket.emit('screen_share_state_changed', {
+					sender_socket_id: this.socket.id,
+					target_socket_id: socketId,
+					is_sharing: true,
+					user_id: this.userId,
+				})
+			}
+		}
 	}
 
 	async stopScreenShare(): Promise<void> {
@@ -686,8 +696,18 @@ export class WebRTCService {
 		this.socket.emit('screen_share_state_changed', {
 			sender_socket_id: this.socket.id,
 			is_sharing: false,
-			user_id: this.userId
+			user_id: this.userId,
 		})
+		for (const [socketId] of this.peerConnections.entries()) {
+			if (this.isSocketKey(socketId)) {
+				this.socket.emit('screen_share_state_changed', {
+					sender_socket_id: this.socket.id,
+					target_socket_id: socketId,
+					is_sharing: false,
+					user_id: this.userId,
+				})
+			}
+		}
 	}
 
 	getScreenStream(): MediaStream | null {
@@ -833,13 +853,19 @@ export class WebRTCService {
 		}
 
 		// Emit video state change to other participants
+		this.socket.emit('video_state_changed', {
+			sender_socket_id: this.socket.id,
+			has_video: true,
+			user_id: this.userId,
+		})
 		for (const [socketId] of this.peerConnections.entries()) {
 			if (this.isSocketKey(socketId)) {
 				this.socket.emit('video_state_changed', {
-					sender_socket_id: socketId,
+					sender_socket_id: this.socket.id,
+					target_socket_id: socketId,
 					has_video: true,
-					user_id: this.userId
-				});
+					user_id: this.userId,
+				})
 			}
 		}
 
@@ -913,13 +939,19 @@ export class WebRTCService {
 		}
 
 		// Emit video state change to other participants
+		this.socket.emit('video_state_changed', {
+			sender_socket_id: this.socket.id,
+			has_video: false,
+			user_id: this.userId,
+		})
 		for (const [socketId] of this.peerConnections.entries()) {
 			if (this.isSocketKey(socketId)) {
 				this.socket.emit('video_state_changed', {
-					sender_socket_id: socketId,
+					sender_socket_id: this.socket.id,
+					target_socket_id: socketId,
 					has_video: false,
-					user_id: this.userId
-				});
+					user_id: this.userId,
+				})
 			}
 		}
 

@@ -27,13 +27,14 @@ export const GlobalCallUI: React.FC = () => {
 		activeVoiceChannelId,
 		voiceChannelParticipants,
 		localStream,
+		videoStream,
+		isVideoActive,
 		screenStream,
 		remoteStreams,
 		remoteScreenShare,
 		screenSharePreset,
 		isMuted,
 		isScreenSharing,
-		isVideoEnabled,
 		isScreenShareSupported,
 		acceptCall,
 		rejectCall,
@@ -69,20 +70,22 @@ export const GlobalCallUI: React.FC = () => {
 				incomingCall && incomingCall.socketId === callerSocketId
 					? {
 							userId: incomingCall.userId,
-							userName: incomingCall.userName || 'Unknown',
-						}
-					: { userId: '', userName: '' }
-
+							userName: incomingCall.userName,
+							avatarUrl: incomingCall.avatarUrl,
+					  }
+					: undefined
 			await acceptCall(callerSocketId, info)
 			showToast('Звонок принят', 'success')
 		} catch (error) {
-			console.error('Failed to accept call:', error)
+			console.error('Failed to accept call in GlobalCallUI:', error)
 			showToast('Не удалось принять звонок', 'error')
 		}
 	}
 
-	const handleRejectCall = (callerSocketId: string) => {
-		rejectCall(callerSocketId)
+	const handleRejectCall = () => {
+		if (incomingCall) {
+			rejectCall(incomingCall.socketId)
+		}
 		showToast('Звонок отклонен', 'info')
 	}
 
@@ -106,6 +109,20 @@ export const GlobalCallUI: React.FC = () => {
 		await toggleVideo()
 	}
 
+	const myName = user?.first_name
+		? `${user.first_name} (Вы)`
+		: user?.username
+		? `${user.username} (Вы)`
+		: 'Вы'
+
+	const meParticipant = {
+		id: 'me',
+		name: myName,
+		avatar: user?.avatar,
+		isMuted: isMuted,
+		isVideoOn: isVideoActive,
+	}
+
 	const activeDirectCall = Array.from(activeCalls.values()).find(c => !c.isGroupCall)
 	const hasDirectCall = !!activeDirectCall
 	const isMessagesPage = pathname ? (pathname.startsWith('/feed/messages') || pathname.startsWith('/messages')) : false
@@ -127,24 +144,27 @@ export const GlobalCallUI: React.FC = () => {
 				<DiscordCallModal
 					title="Групповой звонок"
 					subtitle="Vondic Group Call"
-					participants={Array.from(activeCalls.values())
-						.filter(c => c.isGroupCall && c.callId === activeGroupCallId)
-						.map(c => ({
-							id: c.userId || c.socketId,
-							name: c.userName || 'Участник',
-							avatar: c.avatarUrl,
-							socketId: c.socketId,
-							isMuted: false,
-						}))}
+					participants={[
+						meParticipant,
+						...Array.from(activeCalls.values())
+							.filter(c => c.isGroupCall && c.callId === activeGroupCallId && c.userId !== user?.id)
+							.map(c => ({
+								id: c.userId || c.socketId,
+								name: c.userName || 'Участник',
+								avatar: c.avatarUrl,
+								socketId: c.socketId,
+								isMuted: false,
+							})),
+					]}
 					localStream={localStream}
-					videoStream={webRTCService?.getVideoStream() || null}
+					videoStream={videoStream || webRTCService?.getVideoStream() || null}
 					screenStream={screenStream}
 					remoteStreams={remoteStreams}
 					remoteScreenShare={remoteScreenShare}
 					screenSharePreset={screenSharePreset}
 					onScreenSharePresetChange={setScreenSharePreset}
 					isMuted={isMuted}
-					isVideoEnabled={isVideoEnabled()}
+					isVideoEnabled={isVideoActive}
 					isScreenSharing={isScreenSharing}
 					isScreenShareSupported={isScreenShareSupported}
 					isKrispEnabled={isKrispEnabled}
@@ -164,22 +184,27 @@ export const GlobalCallUI: React.FC = () => {
 				<DiscordCallModal
 					title="Голосовой канал"
 					subtitle="Сервер Vondic"
-					participants={(voiceChannelParticipants[activeVoiceChannelId] || []).map(p => ({
-						id: p.userId,
-						name: p.username,
-						avatar: p.avatarUrl,
-						socketId: p.socketId,
-						isMuted: isMuted && p.userId === webRTCService?.userId,
-					}))}
+					participants={[
+						meParticipant,
+						...(voiceChannelParticipants[activeVoiceChannelId] || [])
+							.filter(p => p.userId !== user?.id)
+							.map(p => ({
+								id: p.userId,
+								name: p.username,
+								avatar: p.avatarUrl,
+								socketId: p.socketId,
+								isMuted: isMuted && p.userId === user?.id,
+							})),
+					]}
 					localStream={localStream}
-					videoStream={webRTCService?.getVideoStream() || null}
+					videoStream={videoStream || webRTCService?.getVideoStream() || null}
 					screenStream={screenStream}
 					remoteStreams={remoteStreams}
 					remoteScreenShare={remoteScreenShare}
 					screenSharePreset={screenSharePreset}
 					onScreenSharePresetChange={setScreenSharePreset}
 					isMuted={isMuted}
-					isVideoEnabled={isVideoEnabled()}
+					isVideoEnabled={isVideoActive}
 					isScreenSharing={isScreenSharing}
 					isScreenShareSupported={isScreenShareSupported}
 					isKrispEnabled={isKrispEnabled}
@@ -200,11 +225,7 @@ export const GlobalCallUI: React.FC = () => {
 					title={`Звонок с ${activeDirectCall.userName || 'пользователем'}`}
 					subtitle="Прямой звонок"
 					participants={[
-						{
-							id: 'me',
-							name: 'Вы',
-							isMuted: isMuted,
-						},
+						meParticipant,
 						{
 							id: activeDirectCall.userId,
 							name: activeDirectCall.userName || 'Собеседник',
@@ -213,14 +234,14 @@ export const GlobalCallUI: React.FC = () => {
 						},
 					]}
 					localStream={localStream}
-					videoStream={webRTCService?.getVideoStream() || null}
+					videoStream={videoStream || webRTCService?.getVideoStream() || null}
 					screenStream={screenStream}
 					remoteStreams={remoteStreams}
 					remoteScreenShare={remoteScreenShare}
 					screenSharePreset={screenSharePreset}
 					onScreenSharePresetChange={setScreenSharePreset}
 					isMuted={isMuted}
-					isVideoEnabled={isVideoEnabled()}
+					isVideoEnabled={isVideoActive}
 					isScreenSharing={isScreenSharing}
 					isScreenShareSupported={isScreenShareSupported}
 					isKrispEnabled={isKrispEnabled}

@@ -289,11 +289,12 @@ export const useCallStore = create<CallStore>((set, get) => ({
 				set({ activeCalls: newCalls })
 			}
 
-			// Add the video state change callback to the WebRTCService
-			webRTCService.onVideoStateChange = (stream: MediaStream | null, isEnabled: boolean) => {
-				// Update the video stream in the store
+			// Add the video state change callback to both CallManager and WebRTCService
+			const handleVideoChange = (stream: MediaStream | null, isEnabled: boolean) => {
 				set({ videoStream: stream, isVideoActive: isEnabled })
 			}
+			callManager.onVideoStateChange = handleVideoChange
+			webRTCService.onVideoStateChange = handleVideoChange
 
 			callManager.onGroupCallIdChange = (groupId: string | null) => {
 				set({ activeGroupCallId: groupId })
@@ -502,21 +503,33 @@ export const useCallStore = create<CallStore>((set, get) => ({
 	},
 
 	startVideo: async () => {
-		const { callManager } = get()
+		const { callManager, webRTCService } = get()
 		if (!callManager) return
 		await callManager.startVideo()
+		set({
+			isVideoActive: callManager.isVideoEnabled(),
+			videoStream: webRTCService?.getVideoStream() ?? null,
+		})
 	},
 
 	stopVideo: async () => {
 		const { callManager } = get()
 		if (!callManager) return
 		await callManager.stopVideo()
+		set({
+			isVideoActive: false,
+			videoStream: null,
+		})
 	},
 
 	toggleVideo: async () => {
-		const { callManager } = get()
+		const { callManager, webRTCService } = get()
 		if (!callManager) return
 		await callManager.toggleVideo()
+		set({
+			isVideoActive: callManager.isVideoEnabled(),
+			videoStream: webRTCService?.getVideoStream() ?? null,
+		})
 	},
 
 	isVideoEnabled: () => {
