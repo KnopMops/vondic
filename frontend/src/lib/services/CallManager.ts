@@ -396,6 +396,20 @@ export class CallManager {
 					}
 				}
 
+				// Ensure local video/screen share track is present if active
+				const screenStream = this.webRTCService.getScreenStream()
+				if (this.webRTCService.isScreenSharing() && screenStream) {
+					const screenTrack = screenStream.getVideoTracks()[0]
+					if (screenTrack && screenTrack.readyState === 'live') {
+						const existingVideoSender = pc.getSenders().find(s => s.track?.kind === 'video')
+						if (!existingVideoSender) {
+							pc.addTrack(screenTrack, screenStream)
+						} else if (existingVideoSender.track !== screenTrack) {
+							await existingVideoSender.replaceTrack(screenTrack)
+						}
+					}
+				}
+
 				const rawOffer = await pc.createOffer()
 				const offer = this.webRTCService.optimizeSessionDescription(rawOffer)
 				await pc.setLocalDescription(offer)
@@ -437,6 +451,20 @@ export class CallManager {
 						} else if (existingSender.track !== audioTrack) {
 							await existingSender.replaceTrack(audioTrack)
 							console.log(`[VoiceChannel] Replaced audio track for ${socket_id} (answerer)`)
+						}
+					}
+				}
+
+				// Ensure local video/screen share track is present if active
+				const screenStream = this.webRTCService.getScreenStream()
+				if (this.webRTCService.isScreenSharing() && screenStream) {
+					const screenTrack = screenStream.getVideoTracks()[0]
+					if (screenTrack && screenTrack.readyState === 'live') {
+						const existingVideoSender = pc.getSenders().find(s => s.track?.kind === 'video')
+						if (!existingVideoSender) {
+							pc.addTrack(screenTrack, screenStream)
+						} else if (existingVideoSender.track !== screenTrack) {
+							await existingVideoSender.replaceTrack(screenTrack)
 						}
 					}
 				}

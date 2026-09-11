@@ -309,8 +309,6 @@ export class WebRTCService {
 
 		const tasks: Promise<void>[] = []
 		for (const [socketId, pc] of this.peerConnections.entries()) {
-			if (!this.isSocketKey(socketId)) continue
-
 			// Check if we can renegotiate - must be in stable state
 			if (pc.signalingState !== 'stable') {
 				console.log(`[WebRTC] Cannot start screen share: PC for ${socketId} is in ${pc.signalingState}, waiting for stable state`)
@@ -319,26 +317,26 @@ export class WebRTCService {
 
 			// Replace/add video track with screen share
 			const videoTransceiver = pc.getTransceivers().find(
-				t => t.receiver.track?.kind === 'video' || t.sender.track?.kind === 'video',
+				t =>
+					(t.sender && t.sender.track && t.sender.track.kind === 'video') ||
+					(t.receiver && t.receiver.track && t.receiver.track.kind === 'video') ||
+					(t as any).mid === 'video',
 			)
 			let videoSender = videoTransceiver?.sender || pc.getSenders().find(s => s.track?.kind === 'video')
-			let needsRenegotiation = false
 
 			if (videoSender) {
 				try {
 					await videoSender.replaceTrack(videoTrack)
-					if (videoTransceiver && (videoTransceiver.direction === 'recvonly' || videoTransceiver.direction === 'inactive')) {
+					if (videoTransceiver) {
 						videoTransceiver.direction = 'sendrecv'
-						needsRenegotiation = true
 					}
-					console.log(`[WebRTC] Replaced video track with screen share seamlessly for ${socketId}`)
+					console.log(`[WebRTC] Replaced video track with screen share for ${socketId}`)
 				} catch (e) {
 					console.error(`[WebRTC] Failed to replace video track for ${socketId}:`, e)
 				}
 			} else {
 				try {
 					videoSender = pc.addTrack(videoTrack, stream)
-					needsRenegotiation = true
 					console.log(`[WebRTC] Added screen share video track for ${socketId}`)
 				} catch (e) {
 					console.error(`[WebRTC] Failed to add video track for ${socketId}:`, e)
@@ -348,32 +346,30 @@ export class WebRTCService {
 				void this.applyBitrateConstraints(videoSender, videoTrack)
 			}
 
-			if (needsRenegotiation) {
-				tasks.push(
-					(async () => {
-						try {
-							if (pc.signalingState !== 'stable') {
-								console.log(`[WebRTC] State changed, skipping screen share offer for ${socketId}`)
-								return
-							}
-							const offer = await pc.createOffer()
-							if (pc.signalingState !== 'stable') {
-								console.log(`[WebRTC] State changed during offer creation, skipping screen share offer for ${socketId}`)
-								return
-							}
-							await pc.setLocalDescription(offer)
-							this.socket.emit('offer', {
-								target_socket_id: socketId,
-								offer,
-								caller_user_id: this.userId,
-							})
-							console.log(`[WebRTC] Screen share offer sent to ${socketId}`)
-						} catch (e) {
-							console.error(`[WebRTC] Screen share offer failed for ${socketId}:`, e)
+			tasks.push(
+				(async () => {
+					try {
+						if (pc.signalingState !== 'stable') {
+							console.log(`[WebRTC] State changed, skipping screen share offer for ${socketId}`)
+							return
 						}
-					})(),
-				)
-			}
+						const offer = await pc.createOffer()
+						if (pc.signalingState !== 'stable') {
+							console.log(`[WebRTC] State changed during offer creation, skipping screen share offer for ${socketId}`)
+							return
+						}
+						await pc.setLocalDescription(offer)
+						this.socket.emit('offer', {
+							target_socket_id: socketId,
+							offer,
+							caller_user_id: this.userId,
+						})
+						console.log(`[WebRTC] Screen share offer sent to ${socketId}`)
+					} catch (e) {
+						console.error(`[WebRTC] Screen share offer failed for ${socketId}:`, e)
+					}
+				})(),
+			)
 		}
 		if (tasks.length > 0) {
 			await Promise.allSettled(tasks)
@@ -386,6 +382,14 @@ export class WebRTCService {
 			is_sharing: true,
 			user_id: this.userId
 		})
+		for (const [socketId] of this.peerConnections.entries()) {
+			this.socket.emit('screen_share_state_changed', {
+				sender_socket_id: this.socket.id,
+				target_socket_id: socketId,
+				is_sharing: true,
+				user_id: this.userId,
+			})
+		}
 	}
 
 	async stopScreenShare(): Promise<void> {
@@ -403,57 +407,52 @@ export class WebRTCService {
 
 		const tasks: Promise<void>[] = []
 		for (const [socketId, pc] of this.peerConnections.entries()) {
-			if (!this.isSocketKey(socketId)) continue
-
-			// Check if we can renegotiate - must be in stable state
-			if (pc.signalingState !== 'stable') {
-				console.log(`[WebRTC] Cannot stop screen share: PC for ${socketId} is in ${pc.signalingState}, waiting for stable state`)
-				continue
-			}
-
-			// Remove screen share video track
-			const videoSender = pc.getSenders().find(s => s.track?.kind === 'video')
+			// Remove/revert screen share video track
+			const cameraTrack = this.videoStream?.getVideoTracks()[0] || null
+			const videoTransceiver = pc.getTransceivers().find(
+				t =>
+					(t.sender && t.sender.track && t.sender.track.kind === 'video') ||
+					(t.receiver && t.receiver.track && t.receiver.track.kind === 'video') ||
+					(t as any).mid === 'video',
+			)
+			const videoSender = videoTransceiver?.sender || pc.getSenders().find(s => s.track?.kind === 'video')
 			if (videoSender) {
 				try {
-					await videoSender.replaceTrack(null)
-					console.log(`[WebRTC] Removed screen share track for ${socketId}`)
+					await videoSender.replaceTrack(cameraTrack)
+					if (!cameraTrack && videoTransceiver) {
+						videoTransceiver.direction = 'recvonly'
+					}
+					console.log(`[WebRTC] Reverted video track to ${cameraTrack ? 'camera' : 'null'} for ${socketId}`)
 				} catch (e) {
-					console.error(`[WebRTC] Failed to replace video track with null for ${socketId}:`, e)
+					console.error(`[WebRTC] Failed to revert video track for ${socketId}:`, e)
 				}
 			}
 
-			// Microphone audio was never replaced, so nothing to restore
-
-			tasks.push(
-				(async () => {
-					try {
-						// Check state again before creating offer
-						if (pc.signalingState !== 'stable') {
-							console.log(`[WebRTC] State changed, skipping stop screen share offer for ${socketId}`)
-							return
+			if (pc.signalingState === 'stable') {
+				tasks.push(
+					(async () => {
+						try {
+							if (pc.signalingState !== 'stable') return
+							const offer = await pc.createOffer()
+							if (pc.signalingState !== 'stable') return
+							await pc.setLocalDescription(offer)
+							this.socket.emit('offer', {
+								target_socket_id: socketId,
+								offer,
+								caller_user_id: this.userId,
+							})
+						} catch (e) {
+							console.warn(`[WebRTC] Stop screen share offer failed for ${socketId}:`, e)
 						}
-						const offer = await pc.createOffer()
-						// Double-check state before setting local description
-						if (pc.signalingState !== 'stable') {
-							console.log(`[WebRTC] State changed during offer creation, skipping stop screen share offer for ${socketId}`)
-							return
-						}
-						await pc.setLocalDescription(offer)
-						this.socket.emit('offer', {
-							target_socket_id: socketId,
-							offer,
-							caller_user_id: this.userId,
-						})
-						console.log(`[WebRTC] Screen share stop offer sent to ${socketId}`)
-					} catch (e) {
-						console.error(`[WebRTC] Stop screen share offer failed for ${socketId}:`, e)
-					}
-				})(),
-			)
+					})(),
+				)
+			}
 		}
-		await Promise.allSettled(tasks)
-		console.log(`[WebRTC] Screen share stopped for ${tasks.length} peer(s)`)
-		
+		if (tasks.length > 0) {
+			await Promise.allSettled(tasks)
+		}
+		console.log(`[WebRTC] Screen share stopped for ${this.peerConnections.size} peer(s)`)
+
 		// Emit screen share state change to notify other participants
 		this.socket.emit('screen_share_state_changed', {
 			sender_socket_id: this.socket.id,
@@ -950,18 +949,22 @@ export class WebRTCService {
 			console.log(`[WebRTC] Added local audio track to new PC for ${targetSocketId}`)
 		}
 
-		// Add video track if camera is active (NOT screen share - that's started explicitly)
-		if (this.videoStream) {
+		// Add video track: if screen share is active, add screen track; else if camera is active, add camera track
+		if (this.isSharingScreen && this.screenStream) {
+			const screenTrack = this.screenStream.getVideoTracks()[0]
+			if (screenTrack && screenTrack.readyState === 'live') {
+				const sender = pc.addTrack(screenTrack, this.screenStream)
+				void this.applyBitrateConstraints(sender, screenTrack)
+				console.log(`[WebRTC] Added active screen share track to new PC for ${targetSocketId}`)
+			}
+		} else if (this.videoStream) {
 			const videoTrack = this.videoStream.getVideoTracks()[0]
-			if (videoTrack) {
+			if (videoTrack && videoTrack.readyState === 'live') {
 				const sender = pc.addTrack(videoTrack, this.videoStream)
 				void this.applyBitrateConstraints(sender, videoTrack)
 				console.log(`[WebRTC] Added camera video track to new PC for ${targetSocketId}`)
 			}
 		}
-
-		// NOTE: Screen share is NOT added automatically - it must be started explicitly via startScreenShare()
-		// This prevents screen share from interfering with call establishment
 
 		this.setupPeerConnectionHandlers(pc, targetSocketId)
 

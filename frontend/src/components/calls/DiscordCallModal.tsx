@@ -67,9 +67,7 @@ const StreamVideo = React.memo(({
 		const el = videoRef.current
 		if (!el || !stream) return
 
-		// Extract only live video tracks. Creating a dedicated video-only MediaStream
-		// avoids audio-pipeline lockups in Chromium, eliminates autoplay issues,
-		// and guarantees the hardware/software video decoder initializes immediately.
+		// Extract only live video tracks.
 		const liveVideoTracks = stream.getVideoTracks().filter(t => t.readyState === 'live')
 		if (liveVideoTracks.length === 0) {
 			if (el.srcObject) {
@@ -78,23 +76,31 @@ const StreamVideo = React.memo(({
 			return
 		}
 
-		const videoStream = new MediaStream(liveVideoTracks)
-		el.srcObject = videoStream
-		el.muted = true
-		el.playsInline = true
+		// Prevent re-assigning srcObject if it already plays the same track.
+		// Re-assigning srcObject causes Chromium to reset hardware decoding and show a black screen!
+		const currentSrcStream = el.srcObject as MediaStream | null
+		const currentTrackId = currentSrcStream?.getVideoTracks()[0]?.id
+		const newTrack = liveVideoTracks[0]
+
+		if (!currentSrcStream || currentTrackId !== newTrack.id) {
+			const videoStream = new MediaStream(liveVideoTracks)
+			el.srcObject = videoStream
+			el.muted = true
+			el.playsInline = true
+		}
+
+		newTrack.enabled = true
 
 		const attemptPlay = () => {
-			if (el) {
+			if (el && el.paused) {
 				el.play().catch(() => {
 					// Safe autoplay policy handling
 				})
 			}
 		}
 
-		// WebRTC video tracks are created in a muted state until the first RTP packet arrives.
-		// When the first packet arrives, the track emits an 'unmute' event.
-		// Listening to 'unmute' ensures video starts playing the instant frames begin arriving.
 		liveVideoTracks.forEach(track => {
+			track.enabled = true
 			track.addEventListener('unmute', attemptPlay)
 			track.addEventListener('ended', () => setVideoTrackVersion(v => v + 1))
 		})
@@ -238,22 +244,21 @@ export const DiscordCallModal: React.FC<DiscordCallModalProps> = ({
 	}, [isScreenSharing, screenStream])
 
 	const remoteScreenStream = useMemo(() => {
-		if (!remoteScreenShare?.isSharing) return null
+		// 1. Если пришел явный сокет-сигнал remoteScreenShare с флагом isSharing:
+		if (remoteScreenShare?.isSharing) {
+			// 1a. Прямой поиск по socketId
+			if (remoteScreenShare.socketId && remoteStreams.has(remoteScreenShare.socketId)) {
+				const s = remoteStreams.get(remoteScreenShare.socketId)
+				if (s && s.getVideoTracks().some(t => t.readyState === 'live')) return s
+			}
 
-		// 1. Direct match by socketId
-		if (remoteScreenShare.socketId && remoteStreams.has(remoteScreenShare.socketId)) {
-			const s = remoteStreams.get(remoteScreenShare.socketId)
-			if (s && s.getVideoTracks().some(t => t.readyState === 'live')) return s
-		}
+			// 1b. Прямой поиск по userId
+			if (remoteScreenShare.userId && remoteStreams.has(remoteScreenShare.userId)) {
+				const s = remoteStreams.get(remoteScreenShare.userId)
+				if (s && s.getVideoTracks().some(t => t.readyState === 'live')) return s
+			}
 
-		// 2. Direct match by userId
-		if (remoteScreenShare.userId && remoteStreams.has(remoteScreenShare.userId)) {
-			const s = remoteStreams.get(remoteScreenShare.userId)
-			if (s && s.getVideoTracks().some(t => t.readyState === 'live')) return s
-		}
-
-		// 3. Match through participant lookup
-		if (remoteScreenShare.socketId || remoteScreenShare.userId) {
+			// 1c. Поиск через сопоставление участников
 			const matchedParticipant = participants.find(
 				p =>
 					(remoteScreenShare.socketId && p.socketId === remoteScreenShare.socketId) ||
@@ -263,9 +268,13 @@ export const DiscordCallModal: React.FC<DiscordCallModalProps> = ({
 				const s = remoteStreams.get(matchedParticipant.socketId)
 				if (s && s.getVideoTracks().some(t => t.readyState === 'live')) return s
 			}
+			if (matchedParticipant?.id && remoteStreams.has(matchedParticipant.id)) {
+				const s = remoteStreams.get(matchedParticipant.id)
+				if (s && s.getVideoTracks().some(t => t.readyState === 'live')) return s
+			}
 		}
 
-		// 4. In 1-on-1 calls, fallback to the single remote stream
+		// 2. В звонке 1-на-1: если единственный собеседник отдает живое видео
 		if (remoteStreams.size === 1) {
 			const singleStream = remoteStreams.values().next().value
 			if (singleStream && singleStream.getVideoTracks().some(t => t.readyState === 'live')) {
@@ -273,11 +282,14 @@ export const DiscordCallModal: React.FC<DiscordCallModalProps> = ({
 			}
 		}
 
-		// 5. Fallback: find any remote stream that has live video tracks
-		const streamWithVideo = Array.from(remoteStreams.values()).find(s =>
-			s.getVideoTracks().some(t => t.readyState === 'live'),
-		)
-		return streamWithVideo || null
+		// 3. Гарантированный фоллбэк: ищем любой удаленный поток с живыми видеотреками
+		for (const [key, s] of remoteStreams.entries()) {
+			if (s && s.getVideoTracks().some(t => t.readyState === 'live')) {
+				return s
+			}
+		}
+
+		return null
 	}, [remoteScreenShare, remoteStreams, participants])
 
 	const activeScreenStream = localScreenStream || remoteScreenStream
@@ -288,14 +300,24 @@ export const DiscordCallModal: React.FC<DiscordCallModalProps> = ({
 			return participants.find(p => p.id === 'me') || { id: 'me', name: 'Вы' }
 		}
 		if (remoteScreenShare?.isSharing) {
-			return (
-				participants.find(
-					p => p.socketId === remoteScreenShare.socketId || p.id === remoteScreenShare.userId,
-				) || { id: 'remote', name: 'Собеседник' }
+			const found = participants.find(
+				p => p.socketId === remoteScreenShare.socketId || p.id === remoteScreenShare.userId,
 			)
+			if (found) return found
+		}
+		if (remoteScreenStream) {
+			for (const [key, s] of remoteStreams.entries()) {
+				if (s === remoteScreenStream) {
+					const p = participants.find(part => part.socketId === key || part.id === key)
+					if (p) return p
+				}
+			}
+			const other = participants.find(p => p.id !== 'me')
+			if (other) return other
+			return { id: 'remote', name: 'Собеседник' }
 		}
 		return null
-	}, [localScreenStream, remoteScreenShare, participants])
+	}, [localScreenStream, remoteScreenShare, remoteScreenStream, remoteStreams, participants])
 
 	// Вспомогательная функция для получения видеопотока участника (камера)
 	const getParticipantVideoStream = (p: Participant): MediaStream | null => {
