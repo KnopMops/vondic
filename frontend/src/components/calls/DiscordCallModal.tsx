@@ -389,6 +389,8 @@ export const DiscordCallModal: React.FC<DiscordCallModalProps> = ({
 								<span className="opacity-80">({networkStats.packetLoss}% loss)</span>
 							)}
 						</div>
+					)}
+
 					{/* Data Saver Mode Pill */}
 					{onDataSaverToggle && (
 						<button
