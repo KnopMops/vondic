@@ -660,7 +660,7 @@ export const SCREEN_SHARE_PRESETS: Record<ScreenSharePresetKey, ScreenSharePrese
 		height: 1080,
 		frameRate: 60,
 		maxBitrate: 8_500_000,
-		isPremium: true,
+		isPremium: false,
 	},
 	screen1440p60: {
 		key: 'screen1440p60',
