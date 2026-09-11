@@ -24,12 +24,12 @@ import {
 	LuGlobe,
 	LuServer,
 	LuRefreshCw,
-	LuCheckCircle2,
-	LuAlertTriangle,
+	LuCircleCheck as LuCheckCircle2,
+	LuTriangleAlert as LuAlertTriangle,
 	LuRadio,
 	LuSettings,
 	LuGift,
-	LuArrowDownCircle,
+	LuCircleArrowDown as LuArrowDownCircle,
 	LuUsers,
 } from 'react-icons/lu'
 
