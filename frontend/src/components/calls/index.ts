@@ -7,4 +7,5 @@ export { GlobalCallUI } from './GlobalCallUI'
 export { IntegratedCallPanel } from './IntegratedCallPanel'
 export { ScreenShareViewer } from './ScreenShareViewer'
 export { ChatMenu } from './ChatMenu'
-
+export { default as ActiveVoiceChannel } from './ActiveVoiceChannel'
+export { default as DiscordCallModal } from './DiscordCallModal'

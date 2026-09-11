@@ -54,6 +54,7 @@ from app.api.public.v2.calls import v2_calls_router
 from app.api.v1.join_requests import join_requests_router
 from app.api.v1.ai import ai_router
 from app.api.v1.corporate import corporate_router
+from app.api.v1.call_routing import call_routing_router
 
 
 # Load extension routes
@@ -266,3 +267,4 @@ app.include_router(v2_calls_router)
 app.include_router(join_requests_router)
 app.include_router(ai_router)
 app.include_router(corporate_router)
+app.include_router(call_routing_router)

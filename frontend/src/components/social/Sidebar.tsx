@@ -12,6 +12,7 @@ import {
 	LuChevronLeft as ChevronLeft,
 	LuChevronRight as ChevronRight,
 	LuWrench as Wrench,
+	LuPhoneCall as PhoneCall,
 } from 'react-icons/lu'
 
 export default function Sidebar() {
@@ -46,9 +47,11 @@ export default function Sidebar() {
 		})
 		.filter(item => !(item.label === 'Почта' && !user?.premium))
 
-	// Add Admin panel for Support role
-	if (user?.role === 'Support' || user?.role === 'Admin') {
+	// Add Admin panel and Call routing for Admin / Support roles
+	const roleLower = String(user?.role || '').toLowerCase()
+	if (roleLower === 'support' || roleLower === 'admin' || roleLower === 'superadmin' || user?.role === 'Admin' || user?.role === 'Support') {
 		items.push({ label: 'Админка', icon: Wrench, href: '/feed/admin' })
+		items.push({ label: 'Маршрутизация', icon: PhoneCall, href: '/feed/admin?tab=routing' })
 	}
 
 	return (

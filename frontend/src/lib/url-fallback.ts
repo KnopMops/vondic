@@ -69,12 +69,21 @@ export function isFallbackMode(): boolean {
 }
 
 
+import { getActiveSignalingUrl, getActiveBackendUrl } from './callRouting';
+
 export function getBackendUrl(): string {
+	if (typeof window !== 'undefined') {
+		const custom = getActiveBackendUrl();
+		if (custom) return custom;
+	}
 	return useFallbackMode ? config.backend.fallback : config.backend.primary;
 }
 
-
 export function getWebRtcUrl(): string {
+	if (typeof window !== 'undefined') {
+		const custom = getActiveSignalingUrl();
+		if (custom) return custom;
+	}
 	return useFallbackMode ? config.webrtc.fallback : config.webrtc.primary;
 }
 

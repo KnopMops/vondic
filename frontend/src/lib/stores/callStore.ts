@@ -2,6 +2,7 @@ import { Socket } from 'socket.io-client'
 import { create } from 'zustand'
 import { CallManager, CallRecord, CallState } from '../services/CallManager'
 import { WebRTCService } from '../services/WebRTCService'
+import { AudioBitratePreset, NetworkQualityStats } from '../services/AudioProcessor'
 
 interface CallStore {
 	
@@ -21,6 +22,9 @@ interface CallStore {
 	videoStream: MediaStream | null
 	isVideoActive: boolean
 	callHistory: CallRecord[]
+	audioQualityPreset: AudioBitratePreset
+	isKrispEnabled: boolean
+	networkStats: NetworkQualityStats | null
 
 	
 	webRTCService: WebRTCService | null
@@ -51,6 +55,8 @@ interface CallStore {
 	stopVideo: () => Promise<void>
 	toggleVideo: () => Promise<void>
 	isVideoEnabled: () => boolean
+	setAudioQualityPreset: (preset: AudioBitratePreset) => void
+	toggleKrisp: () => boolean
 
 	
 	initiateCall: (targetUserId: string, targetUserName: string, targetAvatarUrl?: string) => Promise<void>
@@ -97,6 +103,9 @@ export const useCallStore = create<CallStore>((set, get) => ({
 	isMuted: false,
 	isScreenSharing: false,
 	callHistory: [],
+	audioQualityPreset: 'boost1',
+	isKrispEnabled: true,
+	networkStats: null,
 
 	
 	webRTCService: null,
@@ -293,6 +302,13 @@ export const useCallStore = create<CallStore>((set, get) => ({
 			webRTCService.onVideoStateChange = (stream: MediaStream | null, isEnabled: boolean) => {
 				// Update the video stream in the store
 				set({ videoStream: stream, isVideoActive: isEnabled })
+			}
+
+			// Discord audio setup: quality preset, Krisp noise suppression, network stats
+			webRTCService.setAudioQualityLevel(get().audioQualityPreset)
+			webRTCService.toggleKrispNoiseSuppression(get().isKrispEnabled)
+			webRTCService.onNetworkStats = (stats) => {
+				set({ networkStats: stats })
 			}
 
 			callManager.onGroupCallIdChange = (groupId: string | null) => {
@@ -523,6 +539,24 @@ export const useCallStore = create<CallStore>((set, get) => ({
 		const { callManager } = get()
 		if (!callManager) return false
 		return callManager.isVideoEnabled()
+	},
+
+	setAudioQualityPreset: (preset: AudioBitratePreset) => {
+		const { webRTCService } = get()
+		if (webRTCService) {
+			webRTCService.setAudioQualityLevel(preset)
+		}
+		set({ audioQualityPreset: preset })
+	},
+
+	toggleKrisp: () => {
+		const { webRTCService, isKrispEnabled } = get()
+		let nextState = !isKrispEnabled
+		if (webRTCService) {
+			nextState = webRTCService.toggleKrispNoiseSuppression()
+		}
+		set({ isKrispEnabled: nextState })
+		return nextState
 	},
 
 	// Действия звонков

@@ -9,6 +9,7 @@ import React, {
 } from 'react'
 import { io, Socket } from 'socket.io-client'
 import { setSocketId } from './features/authSlice'
+import { updateUserStatus } from './features/presenceSlice'
 import { useAppDispatch, useAppSelector } from './hooks'
 import { getWebRtcUrl } from './url-fallback'
 
@@ -216,6 +217,9 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 					console.log(
 						`[presence] user_status_changed: user ${data.user_id} → ${data.status}`,
 					)
+					if (data?.user_id) {
+						dispatch(updateUserStatus({ userId: data.user_id, status: data.status }))
+					}
 				})
 
 				setSocket(socketInstance)

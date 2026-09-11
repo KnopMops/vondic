@@ -14,9 +14,11 @@ def normalize_email(email: str | None) -> str:
 
 def find_user_by_email(email: str | None) -> User | None:
     norm = normalize_email(email)
-    if not norm or "@" not in norm:
+    if not norm:
         return None
-    return User.query.filter(func.lower(User.email) == norm).first()
+    if "@" in norm:
+        return User.query.filter(func.lower(User.email) == norm).first()
+    return User.query.filter(func.lower(User.username) == norm).first()
 
 
 def email_exists(email: str | None) -> bool:

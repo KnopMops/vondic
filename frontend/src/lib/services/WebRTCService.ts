@@ -1,5 +1,14 @@
 import { Socket } from 'socket.io-client'
-import { getDiscordLikeAudioConstraints } from './AudioProcessor'
+import { getActiveIceServers, getStoredCallRoutingSettings } from '../callRouting'
+import {
+	getDiscordLikeAudioConstraints,
+	AudioProcessor,
+	AdaptiveBitrateManager,
+	optimizeOpusSdp,
+	AudioBitratePreset,
+	AUDIO_BITRATE_PRESETS,
+	NetworkQualityStats,
+} from './AudioProcessor'
 
 /** Внутренний coturn (LAN). Переопределение: NEXT_PUBLIC_INTERNAL_TURN_HOST */
 const DEFAULT_INTERNAL_TURN_HOST = '192.168.140.11'
@@ -29,6 +38,12 @@ export class WebRTCService {
 	public configuration: WebRTCConfig
 	public peerConnections: Map<string, RTCPeerConnection> = new Map()
 	private localStream: MediaStream | null = null
+	private rawLocalStream: MediaStream | null = null
+	private audioProcessor: AudioProcessor | null = null
+	private adaptiveBitrateManagers: Map<string, AdaptiveBitrateManager> = new Map()
+	private audioQualityPreset: AudioBitratePreset = 'boost1'
+	private isKrispActive: boolean = true
+	private latestNetworkStats: NetworkQualityStats | null = null
 	private videoStream: MediaStream | null = null
 	private screenStream: MediaStream | null = null
 	private isSharingScreen: boolean = false
@@ -44,7 +59,7 @@ export class WebRTCService {
 	private internalTurnHostResolved: string = DEFAULT_INTERNAL_TURN_HOST
 	private iceDisconnectTimeouts: Map<string, NodeJS.Timeout> = new Map()
 
-	
+	public onNetworkStats?: (stats: NetworkQualityStats) => void
 	public onRemoteStream?: (socketId: string, stream: MediaStream) => void
 	public onConnectionStateChange?: (
 		socketId: string,
@@ -82,9 +97,12 @@ export class WebRTCService {
 
 		this.internalTurnHostResolved = internalTurnHost.trim()
 
-		// Always populate iceServers with STUN and TURN relay credentials so NAT traversal works for non-VPN users
+		// Load routing settings configured by administrator (Vondic Cloud vs. Corporate Self-Hosted)
+		const routingSettings = getStoredCallRoutingSettings()
+		const configuredIceServers = getActiveIceServers(routingSettings)
+
 		this.configuration = {
-			iceServers: [
+			iceServers: configuredIceServers.length ? configuredIceServers : [
 				{
 					urls: [
 						'stun:stun.l.google.com:19302',
@@ -116,7 +134,7 @@ export class WebRTCService {
 			typeof process !== 'undefined'
 				? (process.env.NEXT_PUBLIC_FORCE_RELAY as string | undefined)
 				: undefined
-		this.forceRelay = fr === 'true'
+		this.forceRelay = routingSettings.force_relay || fr === 'true'
 		if (this.forceRelay && !this.hasTurn) {
 			console.warn(
 				'[WebRTC] FORCE_RELAY enabled but no TURN credentials provided; ICE may stay in "new"',
@@ -126,18 +144,21 @@ export class WebRTCService {
 
 	async initializeLocalStream(): Promise<MediaStream> {
 		try {
-			// Use the browser's native audio processing (Discord-like).
-			// Avoiding a custom Web Audio chain prevents latency, glitches and
-			// the "robotic/choppy" sound users report.
-			const audioConstraints = getDiscordLikeAudioConstraints()
+			// Discord-like audio capture with 48kHz and stereo capabilities
+			const audioConstraints = getDiscordLikeAudioConstraints({
+				stereo: true,
+				krisp: this.isKrispActive,
+			})
 
-			this.localStream = await navigator.mediaDevices.getUserMedia({
+			const rawStream = await navigator.mediaDevices.getUserMedia({
 				audio: audioConstraints,
 				video: false, // Только аудио для голосовых звонков
 			})
 
+			this.rawLocalStream = rawStream
+
 			// Re-apply constraints on the captured audio track.
-			const audioTrack = this.localStream.getAudioTracks()[0]
+			const audioTrack = rawStream.getAudioTracks()[0]
 			if (audioTrack) {
 				try {
 					await audioTrack.applyConstraints(audioConstraints)
@@ -146,11 +167,22 @@ export class WebRTCService {
 				}
 			}
 
+			// Discord-like intelligent Krisp noise suppression and spectral gating
+			try {
+				if (!this.audioProcessor) {
+					this.audioProcessor = new AudioProcessor({ krispEnabled: this.isKrispActive })
+				}
+				this.localStream = await this.audioProcessor.initialize(rawStream)
+			} catch (procErr) {
+				console.warn('[WebRTC] AudioProcessor failed, using raw stream:', procErr)
+				this.localStream = rawStream
+			}
+
 			if (this.onLocalStream) {
 				this.onLocalStream(this.localStream)
 			}
 
-			console.log('[WebRTC] Native audio capture enabled')
+			console.log('[WebRTC] Discord-like audio capture enabled with Krisp AI')
 			return this.localStream
 		} catch (error: any) {
 			console.error('Error accessing microphone:', error)
@@ -260,6 +292,7 @@ export class WebRTCService {
 	private async applyBitrateConstraints(
 		sender: RTCRtpSender,
 		track: MediaStreamTrack,
+		overrideBitrate?: number,
 	): Promise<void> {
 		try {
 			const params = sender.getParameters()
@@ -279,14 +312,102 @@ export class WebRTCService {
 					console.log('[WebRTC] Applied camera bitrate limit: 2.5 Mbps')
 				}
 			} else if (track.kind === 'audio') {
-				// Discord-like voice quality (~128 kbps Opus).
-				params.encodings[0].maxBitrate = 128_000
-				console.log('[WebRTC] Applied audio bitrate limit: 128 kbps')
+				const targetBitrate = overrideBitrate || AUDIO_BITRATE_PRESETS[this.audioQualityPreset].bitrate
+				params.encodings[0].maxBitrate = targetBitrate
+				;(params.encodings[0] as any).networkPriority = 'high'
+				;(params.encodings[0] as any).priority = 'high'
+				console.log(`[WebRTC] Applied Opus audio bitrate: ${Math.round(targetBitrate / 1000)} kbps (${this.audioQualityPreset})`)
 			}
 			await sender.setParameters(params)
 		} catch (e) {
 			console.warn('[WebRTC] Failed to apply bitrate constraints:', e)
 		}
+	}
+
+	public optimizeSessionDescription(desc: RTCSessionDescriptionInit): RTCSessionDescriptionInit {
+		if (!desc || !desc.sdp) return desc
+		const targetBitrate = AUDIO_BITRATE_PRESETS[this.audioQualityPreset].bitrate
+		const optimizedSdp = optimizeOpusSdp(desc.sdp, {
+			bitrate: targetBitrate,
+			stereo: true,
+			useFec: true,
+			useDtx: true,
+			minPtime: 10,
+		})
+		return {
+			type: desc.type,
+			sdp: optimizedSdp,
+		}
+	}
+
+	public preferOpusCodec(pc: RTCPeerConnection) {
+		try {
+			const transceivers = pc.getTransceivers()
+			const audioTransceiver = transceivers.find(
+				t => (t.sender && t.sender.track && t.sender.track.kind === 'audio') ||
+				     (t.receiver && t.receiver.track && t.receiver.track.kind === 'audio')
+			)
+			if (audioTransceiver && typeof RTCRtpReceiver !== 'undefined' && 'getCapabilities' in RTCRtpReceiver) {
+				const capabilities = RTCRtpReceiver.getCapabilities('audio')
+				if (capabilities && capabilities.codecs) {
+					const opusCodecs = capabilities.codecs.filter(c => c.mimeType.toLowerCase() === 'audio/opus')
+					const otherCodecs = capabilities.codecs.filter(c => c.mimeType.toLowerCase() !== 'audio/opus')
+					if (opusCodecs.length > 0) {
+						audioTransceiver.setCodecPreferences([...opusCodecs, ...otherCodecs])
+						console.log('[WebRTC] Preferred Opus codec on audio transceiver')
+					}
+				}
+			}
+		} catch (e) {
+			// Older browsers or mobile webviews without setCodecPreferences
+		}
+	}
+
+	public setAudioQualityLevel(preset: AudioBitratePreset | number): void {
+		let targetBitrate: number
+		if (typeof preset === 'string' && AUDIO_BITRATE_PRESETS[preset]) {
+			this.audioQualityPreset = preset
+			targetBitrate = AUDIO_BITRATE_PRESETS[preset].bitrate
+		} else if (typeof preset === 'number') {
+			targetBitrate = preset
+		} else {
+			this.audioQualityPreset = 'boost1'
+			targetBitrate = AUDIO_BITRATE_PRESETS.boost1.bitrate
+		}
+
+		console.log(`[WebRTC] Set audio quality preset: ${this.audioQualityPreset} (${Math.round(targetBitrate / 1000)} kbps)`)
+
+		for (const [, manager] of this.adaptiveBitrateManagers.entries()) {
+			manager.setTargetBitrate(targetBitrate)
+		}
+
+		for (const [, pc] of this.peerConnections.entries()) {
+			const senders = pc.getSenders()
+			const audioSender = senders.find(s => s.track && s.track.kind === 'audio')
+			if (audioSender && audioSender.track) {
+				void this.applyBitrateConstraints(audioSender, audioSender.track, targetBitrate)
+			}
+		}
+	}
+
+	public getAudioQualityLevel(): AudioBitratePreset {
+		return this.audioQualityPreset
+	}
+
+	public toggleKrispNoiseSuppression(enabled?: boolean): boolean {
+		this.isKrispActive = enabled !== undefined ? enabled : !this.isKrispActive
+		if (this.audioProcessor) {
+			this.audioProcessor.setKrispEnabled(this.isKrispActive)
+		}
+		return this.isKrispActive
+	}
+
+	public isKrispEnabled(): boolean {
+		return this.isKrispActive
+	}
+
+	public getNetworkStats(): NetworkQualityStats | null {
+		return this.latestNetworkStats
 	}
 
 	async startScreenShare(): Promise<void> {
@@ -338,12 +459,13 @@ export class WebRTCService {
 							console.log(`[WebRTC] State changed, skipping screen share offer for ${socketId}`)
 							return
 						}
-						const offer = await pc.createOffer()
+						const rawOffer = await pc.createOffer()
 						// Double-check state before setting local description
 						if (pc.signalingState !== 'stable') {
 							console.log(`[WebRTC] State changed during offer creation, skipping screen share offer for ${socketId}`)
 							return
 						}
+						const offer = this.optimizeSessionDescription(rawOffer)
 						await pc.setLocalDescription(offer)
 						this.socket.emit('offer', {
 							target_socket_id: socketId,
@@ -412,12 +534,13 @@ export class WebRTCService {
 							console.log(`[WebRTC] State changed, skipping stop screen share offer for ${socketId}`)
 							return
 						}
-						const offer = await pc.createOffer()
+						const rawOffer = await pc.createOffer()
 						// Double-check state before setting local description
 						if (pc.signalingState !== 'stable') {
 							console.log(`[WebRTC] State changed during offer creation, skipping stop screen share offer for ${socketId}`)
 							return
 						}
+						const offer = this.optimizeSessionDescription(rawOffer)
 						await pc.setLocalDescription(offer)
 						this.socket.emit('offer', {
 							target_socket_id: socketId,
@@ -557,12 +680,13 @@ export class WebRTCService {
 							console.log(`[WebRTC] State changed, skipping video offer for ${socketId}`)
 							return
 						}
-						const offer = await pc.createOffer()
+						const rawOffer = await pc.createOffer()
 						// Double-check state before setting local description
 						if (pc.signalingState !== 'stable') {
 							console.log(`[WebRTC] State changed during offer creation, skipping video offer for ${socketId}`)
 							return
 						}
+						const offer = this.optimizeSessionDescription(rawOffer)
 						await pc.setLocalDescription(offer)
 						this.socket.emit('offer', {
 							target_socket_id: socketId,
@@ -628,12 +752,13 @@ export class WebRTCService {
 							console.log(`[WebRTC] State changed, skipping stop video offer for ${socketId}`)
 							return
 						}
-						const offer = await pc.createOffer()
+						const rawOffer = await pc.createOffer()
 						// Double-check state before setting local description
 						if (pc.signalingState !== 'stable') {
 							console.log(`[WebRTC] State changed during offer creation, skipping stop video offer for ${socketId}`)
 							return
 						}
+						const offer = this.optimizeSessionDescription(rawOffer)
 						await pc.setLocalDescription(offer)
 						this.socket.emit('offer', {
 							target_socket_id: socketId,
@@ -891,24 +1016,27 @@ export class WebRTCService {
 		targetSocketId: string,
 		policy: 'all' | 'relay' = 'all',
 	): RTCPeerConnection {
-		let iceServers = this.configuration.iceServers
+		const routingSettings = getStoredCallRoutingSettings()
+		const activeIce = getActiveIceServers(routingSettings)
+		let iceServers = activeIce.length ? activeIce : this.configuration.iceServers
 
 		if (this.useInternalTurnOnly) {
-			iceServers = this.configuration.iceServers.filter(server => {
+			iceServers = iceServers.filter(server => {
 				const urls = Array.isArray(server.urls) ? server.urls : [server.urls]
 				return urls.some(url =>
 					String(url).includes('turn:') || String(url).includes('turns:'),
 				)
 			})
-		} else {
+		} else if (routingSettings.ice_source === 'vondic') {
 			const publicStunServers: RTCIceServer[] = [
-				{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302', 'stun:webrtc.vondic.ru:3478', 'stun:vondic.ru:3478', 'stun:95.165.96.208:3478'] },
+				{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:webrtc.vondic.ru:3478', 'stun:vondic.ru:3478'] },
 			]
-			iceServers = [...publicStunServers, ...this.configuration.iceServers]
+			iceServers = [...publicStunServers, ...iceServers]
 		}
 
+		const shouldForceRelay = this.forceRelay || routingSettings.force_relay
 		const baseConfig: any = { iceServers }
-		if (policy === 'relay' || this.useInternalTurnOnly || this.forceRelay) {
+		if (policy === 'relay' || this.useInternalTurnOnly || shouldForceRelay) {
 			baseConfig.iceTransportPolicy = 'relay'
 		}
 		const pc = new RTCPeerConnection(baseConfig)
@@ -932,10 +1060,22 @@ export class WebRTCService {
 			}
 		}
 
-		// NOTE: Screen share is NOT added automatically - it must be started explicitly via startScreenShare()
-		// This prevents screen share from interfering with call establishment
+		// Prefer Opus codec for voice channels and calls
+		this.preferOpusCodec(pc)
 
 		this.setupPeerConnectionHandlers(pc, targetSocketId)
+
+		// Discord-like Adaptive Bitrate monitoring & dynamic scaling
+		const initialBitrate = AUDIO_BITRATE_PRESETS[this.audioQualityPreset].bitrate
+		const abr = new AdaptiveBitrateManager(pc, initialBitrate)
+		abr.onNetworkStats = (stats) => {
+			this.latestNetworkStats = stats
+			if (this.onNetworkStats) {
+				this.onNetworkStats(stats)
+			}
+		}
+		abr.start(2500)
+		this.adaptiveBitrateManagers.set(targetSocketId, abr)
 
 		this.peerConnections.set(targetSocketId, pc)
 		return pc
@@ -1051,7 +1191,8 @@ export class WebRTCService {
 				}
 			}
 
-			const offer = await pc.createOffer()
+			const rawOffer = await pc.createOffer()
+			const offer = this.optimizeSessionDescription(rawOffer)
 			await pc.setLocalDescription(offer)
 			console.log('Created offer:', offer)
 
@@ -1127,8 +1268,8 @@ export class WebRTCService {
 			}
 		}
 
-		// Устанавливаем полученный offer
-		await pc.setRemoteDescription(new RTCSessionDescription(offer))
+		// Устанавливаем полученный offer с оптимизацией кодека Opus
+		await pc.setRemoteDescription(new RTCSessionDescription(this.optimizeSessionDescription(offer)))
 		console.log('Remote description set for incoming call')
 
 		// Process any buffered ICE candidates
@@ -1154,10 +1295,11 @@ export class WebRTCService {
 				console.log(`Cannot process renegotiation offer from ${socketId}: state is ${pc.signalingState}`)
 				return
 			}
-			await pc.setRemoteDescription(new RTCSessionDescription(offer))
+			await pc.setRemoteDescription(new RTCSessionDescription(this.optimizeSessionDescription(offer)))
 			this.processBufferedCandidates(socketId)
 			// Create and send answer for the renegotiation offer
-			const answer = await pc.createAnswer()
+			const rawAnswer = await pc.createAnswer()
+			const answer = this.optimizeSessionDescription(rawAnswer)
 			await pc.setLocalDescription(answer)
 			// Send the answer back to the peer
 			this.socket.emit('answer', {
@@ -1185,12 +1327,13 @@ export class WebRTCService {
 				throw new Error(`Cannot accept call: PC state is ${pc.signalingState}, expected 'have-remote-offer'`)
 			}
 
-			// Создаем answer
-			const answer = await pc.createAnswer()
+			// Создаем answer с оптимизацией Opus
+			const rawAnswer = await pc.createAnswer()
 			// Double-check state again before setting local description
 			if (pc.signalingState !== 'have-remote-offer') {
 				throw new Error(`State changed during answer creation for ${callerSocketId}: ${pc.signalingState}`)
 			}
+			const answer = this.optimizeSessionDescription(rawAnswer)
 			await pc.setLocalDescription(answer)
 			console.log('Answer created and set as local description')
 
@@ -1352,7 +1495,7 @@ export class WebRTCService {
 				console.log(
 					`[WebRTC] Setting remote description for answer from ${data.sender_socket_id}`,
 				)
-				await pc.setRemoteDescription(new RTCSessionDescription(data.answer))
+				await pc.setRemoteDescription(new RTCSessionDescription(this.optimizeSessionDescription(data.answer)))
 				console.log('[WebRTC] Remote description set from answer')
 				this.processBufferedCandidates(data.sender_socket_id)
 		
@@ -1599,7 +1742,8 @@ export class WebRTCService {
 	private async renegotiateWithRelay(targetSocketId: string): Promise<void> {
 		this.cleanupCall(targetSocketId)
 		const pc = this.createPeerConnectionWithPolicy(targetSocketId, 'relay')
-		const offer = await pc.createOffer()
+		const rawOffer = await pc.createOffer()
+		const offer = this.optimizeSessionDescription(rawOffer)
 		await pc.setLocalDescription(offer)
 		this.socket.emit('offer', {
 			target_socket_id: targetSocketId,
@@ -1620,7 +1764,8 @@ export class WebRTCService {
 		if (pc.signalingState === 'stable' || pc.signalingState === 'have-local-offer') {
 			console.log(`[WebRTC] Restarting ICE for ${targetSocketId}`)
 			try {
-				const offer = await pc.createOffer({ iceRestart: true })
+				const rawOffer = await pc.createOffer({ iceRestart: true })
+				const offer = this.optimizeSessionDescription(rawOffer)
 				await pc.setLocalDescription(offer)
 				this.socket.emit('offer', {
 					target_socket_id: targetSocketId,
@@ -1651,6 +1796,13 @@ export class WebRTCService {
 			this.iceDisconnectTimeouts.delete(socketId)
 		}
 
+		// Stop Adaptive Bitrate Manager
+		const abr = this.adaptiveBitrateManagers.get(socketId)
+		if (abr) {
+			abr.stop()
+			this.adaptiveBitrateManagers.delete(socketId)
+		}
+
 		const pc = this.peerConnections.get(socketId)
 		if (pc) {
 			pc.close()
@@ -1671,6 +1823,12 @@ export class WebRTCService {
 	}
 
 	closePeerConnection(targetKey: string): void {
+		const abr = this.adaptiveBitrateManagers.get(targetKey)
+		if (abr) {
+			abr.stop()
+			this.adaptiveBitrateManagers.delete(targetKey)
+		}
+
 		const pc = this.peerConnections.get(targetKey)
 		if (pc) {
 			pc.close()
@@ -1686,6 +1844,10 @@ export class WebRTCService {
 			this.socket.emit('call_end', { target_socket_id: socketId })
 			this.cleanupCall(socketId)
 		}
+		for (const abr of this.adaptiveBitrateManagers.values()) {
+			abr.stop()
+		}
+		this.adaptiveBitrateManagers.clear()
 	}
 
 	/**
@@ -1802,6 +1964,11 @@ export class WebRTCService {
 		const audioTrack = this.localStream.getAudioTracks()[0]
 		if (audioTrack) {
 			audioTrack.enabled = !audioTrack.enabled
+			if (this.rawLocalStream) {
+				this.rawLocalStream.getAudioTracks().forEach(t => {
+					t.enabled = audioTrack.enabled
+				})
+			}
 			return !audioTrack.enabled
 		}
 

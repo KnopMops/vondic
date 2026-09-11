@@ -305,6 +305,26 @@ class _VondicAppState extends State<VondicApp> {
     if (uri.scheme == 'vondic') {
       final code = uri.queryParameters['code'];
       final state = uri.queryParameters['state'];
+      final accessToken = uri.queryParameters['access_token'];
+      final refreshToken = uri.queryParameters['refresh_token'];
+
+      // 1. Direct tokens (from backend mobile_redirect: state)
+      if (accessToken != null && accessToken.isNotEmpty) {
+        try {
+          await widget.storageService.writeSecure('access_token', accessToken);
+          if (refreshToken != null && refreshToken.isNotEmpty) {
+            await widget.storageService.writeSecure('refresh_token', refreshToken);
+          }
+          if (mounted) {
+            _authBloc.add(AuthFetchUserEvent());
+          }
+          return;
+        } catch (e) {
+          debugPrint('[DeepLink] Direct token save error: $e');
+        }
+      }
+
+      // 2. Authorization code (Vondic or Yandex OAuth)
       if (code != null) {
         try {
           final oauthService = OAuthService(widget.apiClient, widget.storageService);

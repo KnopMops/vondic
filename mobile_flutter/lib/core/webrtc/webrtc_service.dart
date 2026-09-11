@@ -25,6 +25,43 @@ class WebRTCService {
     _compileIceConfiguration();
   }
 
+  static RTCSessionDescription optimizeSessionDescription(RTCSessionDescription desc, {int bitrate = 128000}) {
+    final sdp = desc.sdp;
+    if (sdp == null || sdp.isEmpty) return desc;
+
+    final lines = sdp.split(RegExp(r'\r\n|\n'));
+    String? opusPt;
+    for (final line in lines) {
+      final match = RegExp(r'^a=rtpmap:(\d+)\s+opus/48000/2', caseSensitive: false).firstMatch(line);
+      if (match != null) {
+        opusPt = match.group(1);
+        break;
+      }
+    }
+    if (opusPt == null) return desc;
+
+    final params = 'minptime=10;useinbandfec=1;stereo=1;sprop-stereo=1;maxplaybackrate=48000;sprop-maxcapturerate=48000;cbr=0;usedtx=1;maxaveragebitrate=$bitrate';
+    bool fmtpFound = false;
+    final updated = <String>[];
+    for (int i = 0; i < lines.length; i++) {
+      final line = lines[i];
+      if (line.startsWith('a=fmtp:$opusPt ')) {
+        fmtpFound = true;
+        updated.add('a=fmtp:$opusPt $params');
+      } else {
+        updated.add(line);
+        if (line.startsWith('a=rtpmap:$opusPt ') && !fmtpFound) {
+          final next = i + 1 < lines.length ? lines[i + 1] : '';
+          if (!next.startsWith('a=fmtp:$opusPt ')) {
+            updated.add('a=fmtp:$opusPt $params');
+            fmtpFound = true;
+          }
+        }
+      }
+    }
+    return RTCSessionDescription(updated.join('\r\n'), desc.type);
+  }
+
   void _compileIceConfiguration() {
     final List<Map<String, dynamic>> iceServers = [
       {
@@ -149,7 +186,8 @@ class WebRTCService {
           }
 
           // Trigger WebRTC renegotiation offer
-          final offer = await pc.createOffer({});
+          final rawOffer = await pc.createOffer({});
+          final offer = optimizeSessionDescription(rawOffer);
           await pc.setLocalDescription(offer);
 
           _socketService.emit('offer', {
@@ -198,7 +236,8 @@ class WebRTCService {
         }
 
         // Trigger WebRTC renegotiation offer
-        final offer = await pc.createOffer({});
+        final rawOffer = await pc.createOffer({});
+        final offer = optimizeSessionDescription(rawOffer);
         await pc.setLocalDescription(offer);
 
         _socketService.emit('offer', {
@@ -292,7 +331,8 @@ class WebRTCService {
       if (state == RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
         _logger.w('[WebRTC] ICE restart needed for: $targetSocketId');
         // Simple ICE restart trigger
-        pc.createOffer({'iceRestart': true}).then((offer) {
+        pc.createOffer({'iceRestart': true}).then((rawOffer) {
+          final offer = optimizeSessionDescription(rawOffer);
           pc.setLocalDescription(offer);
           _socketService.emit('offer', {
             'target_socket_id': targetSocketId,

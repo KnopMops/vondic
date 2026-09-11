@@ -81,7 +81,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = 'Ошибка открытия Яндекс авторизации';
+          _errorMessage = e.toString().replaceFirst('Exception: ', '');
         });
       }
     } finally {
@@ -188,7 +188,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       keyboardType: TextInputType.emailAddress,
                       style: const TextStyle(color: Colors.white),
                       decoration: InputDecoration(
-                        hintText: 'Email',
+                        hintText: 'Email или логин',
                         hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
                         prefixIcon: Icon(Icons.email_outlined, color: Colors.white.withOpacity(0.4)),
                         filled: true,

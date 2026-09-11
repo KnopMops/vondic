@@ -25,6 +25,8 @@ import {
 	LuUser,
 	LuChartNoAxesColumn,
 	LuMusic,
+	LuPlay,
+	LuPause,
 } from 'react-icons/lu'
 import { FiMoreHorizontal as MoreHorizontal } from 'react-icons/fi'
 
@@ -147,6 +149,96 @@ interface MessageBubbleProps {
 }
 
 const REACTIONS = ['❤️', '🔥', '😂', '👍', '😮', '😢']
+
+function VoiceWaveformPlayer({ url, isOwn }: { url: string; isOwn: boolean }) {
+	const audioRef = useRef<HTMLAudioElement>(null)
+	const [isPlaying, setIsPlaying] = useState(false)
+	const [currentTime, setCurrentTime] = useState(0)
+	const [duration, setDuration] = useState(0)
+
+	const togglePlay = () => {
+		if (!audioRef.current) return
+		if (isPlaying) {
+			audioRef.current.pause()
+		} else {
+			audioRef.current.play().catch(() => {})
+		}
+	}
+
+	const formatTime = (sec: number) => {
+		if (!Number.isFinite(sec) || sec < 0) return '0:00'
+		const m = Math.floor(sec / 60)
+		const s = Math.floor(sec % 60)
+		return `${m}:${s < 10 ? '0' : ''}${s}`
+	}
+
+	const bars = [35, 55, 80, 40, 95, 60, 45, 85, 30, 70, 90, 50, 65, 40, 75, 85, 40, 60, 30, 90, 50, 40]
+	const progress = duration > 0 ? currentTime / duration : 0
+
+	return (
+		<div className='min-w-[220px] py-1 flex items-center gap-3'>
+			<button
+				type='button'
+				onClick={(e) => {
+					e.stopPropagation()
+					togglePlay()
+				}}
+				className='w-9 h-9 rounded-full bg-blue-600 hover:bg-blue-500 flex items-center justify-center text-white shrink-0 shadow-md transition'
+				title={isPlaying ? 'Пауза' : 'Воспроизвести'}
+			>
+				{isPlaying ? <LuPause className='w-4 h-4' /> : <LuPlay className='w-4 h-4 ml-0.5' />}
+			</button>
+			<div className='flex-1 flex flex-col gap-1 min-w-0'>
+				<div
+					className='flex items-end gap-[2px] h-6 cursor-pointer'
+					onClick={(e) => {
+						if (!audioRef.current || duration <= 0) return
+						const rect = e.currentTarget.getBoundingClientRect()
+						const clickX = e.clientX - rect.left
+						const newPct = Math.max(0, Math.min(1, clickX / rect.width))
+						audioRef.current.currentTime = newPct * duration
+					}}
+				>
+					{bars.map((val, idx) => {
+						const isPassed = idx / bars.length <= progress
+						return (
+							<div
+								key={idx}
+								style={{ height: `${val}%` }}
+								className={`w-[3px] rounded-full transition-colors ${
+									isPassed
+										? (isOwn ? 'bg-white' : 'bg-blue-400')
+										: (isOwn ? 'bg-white/40' : 'bg-gray-600')
+								}`}
+							/>
+						)
+					})}
+				</div>
+				<div className='flex justify-between text-[10px] text-gray-400'>
+					<span>{formatTime(currentTime)}</span>
+					<span>{formatTime(duration)}</span>
+				</div>
+			</div>
+			<audio
+				ref={audioRef}
+				src={url}
+				onPlay={() => setIsPlaying(true)}
+				onPause={() => setIsPlaying(false)}
+				onEnded={() => {
+					setIsPlaying(false)
+					setCurrentTime(0)
+				}}
+				onLoadedMetadata={() => {
+					if (audioRef.current) setDuration(audioRef.current.duration || 0)
+				}}
+				onTimeUpdate={() => {
+					if (audioRef.current) setCurrentTime(audioRef.current.currentTime || 0)
+				}}
+				className='hidden'
+			/>
+		</div>
+	)
+}
 
 const MessageBubble = memo(
 	({
@@ -406,6 +498,11 @@ const MessageBubble = memo(
 					</div>
 				)}
 				<div
+					onContextMenu={(e) => {
+						e.preventDefault()
+						e.stopPropagation()
+						setIsMenuOpen(true)
+					}}
 					className={`relative max-w-[min(72%,480px)] px-4 py-2.5 text-[15px] leading-relaxed transition-colors duration-300 ${bubbleRadius} ${
 						msg.isOwn ? ownBubbleClass : 'chat-bubble-other'
 					} ${
@@ -617,17 +714,15 @@ const MessageBubble = memo(
 						</div>
 					) : msg.type === 'voice' ? (
 						<div className='min-w-[240px] py-1'>
-							<div className='flex items-center gap-2 mb-2'>
+							<div className='flex items-center gap-2 mb-1'>
 								<Mic className='w-4 h-4 text-blue-400' />
 								<span className='text-xs text-blue-400'>
 									Голосовое сообщение
 								</span>
 							</div>
-							<audio
-								controls
-								// voice notes should be stored as attachment; fallback to content if server sent url there
-								src={getAttachmentUrl(attachments[0]?.url || msg.content)}
-								className='w-full h-8'
+							<VoiceWaveformPlayer
+								url={getAttachmentUrl(attachments[0]?.url || msg.content)}
+								isOwn={msg.isOwn}
 							/>
 						</div>
 					) : msg.type === 'video_note' ? (
@@ -852,14 +947,17 @@ const MessageBubble = memo(
 						</div>
 					) : msg.bot_voice ? (
 						<div className='min-w-[240px] py-1'>
-							<div className='flex items-center gap-2 mb-2'>
+							<div className='flex items-center gap-2 mb-1'>
 								<Mic className='w-4 h-4 text-blue-400' />
 								<span className='text-xs text-blue-400'>
 									Голосовое сообщение
 									{msg.bot_voice?.duration ? ` (${msg.bot_voice.duration}с)` : ''}
 								</span>
 							</div>
-							<audio controls src={getAttachmentUrl(msg.bot_voice?.url || msg.bot_voice?.file_id || '')} className='w-full h-8' />
+							<VoiceWaveformPlayer
+								url={getAttachmentUrl(msg.bot_voice?.url || msg.bot_voice?.file_id || '')}
+								isOwn={msg.isOwn}
+							/>
 						</div>
 					) : msg.bot_video_note ? (
 						<div className='py-1'>

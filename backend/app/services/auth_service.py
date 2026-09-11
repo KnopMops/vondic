@@ -600,7 +600,7 @@ class AuthService:
     def login_user(data, ip_address=None):
         from app.utils.email_utils import find_user_by_email, normalize_email
 
-        email = normalize_email(data.get("email"))
+        email = normalize_email(data.get("email") or data.get("username") or data.get("login"))
         password = data.get("password")
         device_type = (data.get("device_type") or "web").strip().lower()
         device_name = data.get("device_name")

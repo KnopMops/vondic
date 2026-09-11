@@ -8350,26 +8350,39 @@ export default function MessengerPage() {
 
 
 											{files.length > 0 && (
-												<div className='absolute bottom-full left-0 right-0 mb-2 px-2'>
-													<div className='flex flex-wrap gap-2'>
-														{files.map((f, idx) => (
-															<div
-																key={`${f.name}-${f.size}-${idx}`}
-																className='flex items-center gap-2 rounded-lg border border-gray-700/50 bg-gray-800/40 px-3 py-2 text-xs text-gray-200'
-															>
-																<span className='max-w-[180px] truncate'>
-																	{f.name}
-																</span>
-																<button
-																	onClick={() => removeFile(idx)}
-																	disabled={isBlockedChat || isBlockedUserChat || !canWriteToSelectedChannel}
-																	className='rounded-md px-2 py-1 text-gray-400 hover:bg-gray-800 hover:text-white transition-colors'
-																	type='button'
+												<div className='absolute bottom-full left-0 right-0 mb-2 px-2 z-20'>
+													<div className='flex items-center gap-2 overflow-x-auto p-2.5 rounded-2xl border border-gray-700/60 bg-gray-900/95 shadow-xl backdrop-blur-md custom-scrollbar'>
+														{files.map((f, idx) => {
+															const isImg = f.type.startsWith('image/')
+															const previewUrl = isImg ? URL.createObjectURL(f) : null
+															const sizeKb = Math.round(f.size / 1024)
+															const sizeStr = sizeKb > 1024 ? `${(sizeKb / 1024).toFixed(1)} MB` : `${sizeKb} KB`
+															return (
+																<div
+																	key={`${f.name}-${f.size}-${idx}`}
+																	className='relative flex flex-col items-center justify-between w-20 h-20 shrink-0 rounded-xl overflow-hidden border border-gray-700 bg-gray-800 p-1 group'
 																>
-																	✕
-																</button>
-															</div>
-														))}
+																	{isImg && previewUrl ? (
+																		<img src={previewUrl} alt={f.name} className='w-full h-full object-cover rounded-lg' />
+																	) : (
+																		<div className='flex-1 flex flex-col items-center justify-center text-gray-400 p-1 text-center'>
+																			<Paperclip className='w-5 h-5 mb-0.5 text-blue-400' />
+																			<span className='text-[9px] text-gray-300 truncate max-w-[68px] font-medium'>{f.name}</span>
+																			<span className='text-[8px] text-gray-500'>{sizeStr}</span>
+																		</div>
+																	)}
+																	<button
+																		onClick={() => removeFile(idx)}
+																		disabled={isBlockedChat || isBlockedUserChat || !canWriteToSelectedChannel}
+																		className='absolute top-1 right-1 w-5 h-5 rounded-full bg-red-600 hover:bg-red-500 text-white text-xs flex items-center justify-center opacity-80 group-hover:opacity-100 transition shadow'
+																		type='button'
+																		title='Удалить'
+																	>
+																		✕
+																	</button>
+																</div>
+															)
+														})}
 													</div>
 												</div>
 											)}

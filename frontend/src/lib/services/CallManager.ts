@@ -199,7 +199,8 @@ export class CallManager {
 						}
 					}
 
-					const offer = await pc.createOffer()
+					const rawOffer = await pc.createOffer()
+					const offer = this.webRTCService.optimizeSessionDescription(rawOffer)
 					await pc.setLocalDescription(offer)
 
 					this.socket.emit('offer', {
@@ -388,7 +389,8 @@ export class CallManager {
 					}
 				}
 
-				const offer = await pc.createOffer()
+				const rawOffer = await pc.createOffer()
+				const offer = this.webRTCService.optimizeSessionDescription(rawOffer)
 				await pc.setLocalDescription(offer)
 				this.socket.emit('offer', {
 					target_socket_id: socket_id,

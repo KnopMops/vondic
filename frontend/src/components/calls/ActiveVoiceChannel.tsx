@@ -2,6 +2,7 @@
 
 import React from 'react'
 import { LuMic, LuMicOff, LuPhoneOff, LuUsers } from 'react-icons/lu'
+import { SparklesIcon } from 'lucide-react'
 
 interface VoiceParticipant {
 	userId: string
@@ -15,7 +16,9 @@ interface ActiveVoiceChannelProps {
 	channelName?: string
 	participants: VoiceParticipant[]
 	isMuted: boolean
+	isKrispEnabled?: boolean
 	onMuteToggle: () => void
+	onKrispToggle?: () => void
 	onLeave: () => void
 }
 
@@ -24,7 +27,9 @@ const ActiveVoiceChannel: React.FC<ActiveVoiceChannelProps> = ({
 	channelName = 'Голосовой канал',
 	participants,
 	isMuted,
+	isKrispEnabled = true,
 	onMuteToggle,
+	onKrispToggle,
 	onLeave,
 }) => {
 	return (
@@ -83,6 +88,24 @@ const ActiveVoiceChannel: React.FC<ActiveVoiceChannelProps> = ({
 					>
 						{isMuted ? <LuMicOff className='w-4 h-4' /> : <LuMic className='w-4 h-4' />}
 					</button>
+
+					{onKrispToggle && (
+						<button
+							onClick={onKrispToggle}
+							className={`p-2.5 rounded-full transition-colors relative ${
+								isKrispEnabled
+									? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30'
+									: 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+							}`}
+							title={isKrispEnabled ? 'Krisp AI: ВКЛ (шумоподавление)' : 'Krisp AI: ВЫКЛ'}
+						>
+							<SparklesIcon className="w-4 h-4" />
+							{isKrispEnabled && (
+								<span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-emerald-400 rounded-full" />
+							)}
+						</button>
+					)}
+
 					<button
 						onClick={onLeave}
 						className='p-2.5 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors'

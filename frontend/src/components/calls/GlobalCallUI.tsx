@@ -37,6 +37,11 @@ export const GlobalCallUI: React.FC = () => {
 		toggleScreenShare,
 		toggleVideo,
 		webRTCService,
+		audioQualityPreset,
+		isKrispEnabled,
+		networkStats,
+		setAudioQualityPreset,
+		toggleKrisp,
 	} = useCallStore()
 
 	const { showToast } = useToast()
@@ -122,9 +127,14 @@ export const GlobalCallUI: React.FC = () => {
 					isVideoEnabled={isVideoEnabled()}
 					isScreenSharing={isScreenSharing}
 					isScreenShareSupported={isScreenShareSupported}
+					isKrispEnabled={isKrispEnabled}
+					audioQualityPreset={audioQualityPreset}
+					networkStats={networkStats}
 					onMuteToggle={handleMuteToggle}
 					onVideoToggle={handleVideoToggle}
 					onScreenShareToggle={toggleScreenShare}
+					onKrispToggle={toggleKrisp}
+					onAudioQualityChange={setAudioQualityPreset}
 					onDisconnect={() => handleLeaveGroupCall(activeGroupCallId)}
 				/>
 			)}
@@ -148,9 +158,14 @@ export const GlobalCallUI: React.FC = () => {
 					isVideoEnabled={isVideoEnabled()}
 					isScreenSharing={isScreenSharing}
 					isScreenShareSupported={isScreenShareSupported}
+					isKrispEnabled={isKrispEnabled}
+					audioQualityPreset={audioQualityPreset}
+					networkStats={networkStats}
 					onMuteToggle={handleMuteToggle}
 					onVideoToggle={handleVideoToggle}
 					onScreenShareToggle={toggleScreenShare}
+					onKrispToggle={toggleKrisp}
+					onAudioQualityChange={setAudioQualityPreset}
 					onDisconnect={handleLeaveVoiceChannel}
 				/>
 			)}
@@ -180,9 +195,14 @@ export const GlobalCallUI: React.FC = () => {
 					isVideoEnabled={isVideoEnabled()}
 					isScreenSharing={isScreenSharing}
 					isScreenShareSupported={isScreenShareSupported}
+					isKrispEnabled={isKrispEnabled}
+					audioQualityPreset={audioQualityPreset}
+					networkStats={networkStats}
 					onMuteToggle={handleMuteToggle}
 					onVideoToggle={handleVideoToggle}
 					onScreenShareToggle={toggleScreenShare}
+					onKrispToggle={toggleKrisp}
+					onAudioQualityChange={setAudioQualityPreset}
 					onDisconnect={() => endCall(activeDirectCall.socketId)}
 				/>
 			)}

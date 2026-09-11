@@ -1,12 +1,14 @@
 import { configureStore } from '@reduxjs/toolkit'
 import authReducer from './features/authSlice'
 import postsReducer from './features/postsSlice'
+import presenceReducer from './features/presenceSlice'
 
 export const makeStore = () => {
 	return configureStore({
 		reducer: {
 			auth: authReducer,
 			posts: postsReducer,
+			presence: presenceReducer,
 		},
 	})
 }

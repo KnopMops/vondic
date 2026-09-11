@@ -7,11 +7,31 @@ import {
 	DEFAULT_APP_DOWNLOADS,
 	type AppDownloadsSettings,
 } from '@/lib/appDownloads'
+import {
+	DEFAULT_CALL_ROUTING,
+	type CallRoutingSettings,
+	fetchCallRoutingSettings,
+	saveCallRoutingAdmin,
+	testCallRoutingEndpoint,
+} from '@/lib/callRouting'
 import { getAttachmentUrl } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { FiPaperclip as Paperclip } from 'react-icons/fi'
-import { LuLoader as Loader2 } from 'react-icons/lu'
+import {
+	LuLoader as Loader2,
+	LuPhoneCall,
+	LuGlobe,
+	LuServer,
+	LuRefreshCw,
+	LuCheckCircle2,
+	LuAlertTriangle,
+	LuRadio,
+	LuSettings,
+	LuGift,
+	LuArrowDownCircle,
+	LuUsers,
+} from 'react-icons/lu'
 
 type Escalation = {
 	id: number
@@ -111,11 +131,39 @@ export default function AdminSupportPage() {
 	const [downloadsError, setDownloadsError] = useState<string | null>(null)
 	const [downloadsSaved, setDownloadsSaved] = useState(false)
 
+	const [callRouting, setCallRouting] = useState<CallRoutingSettings>(DEFAULT_CALL_ROUTING)
+	const [callRoutingLoading, setCallRoutingLoading] = useState(false)
+	const [callRoutingSaving, setCallRoutingSaving] = useState(false)
+	const [callRoutingSaved, setCallRoutingSaved] = useState(false)
+	const [callRoutingError, setCallRoutingError] = useState<string | null>(null)
+	const [callRoutingTestStatus, setCallRoutingTestStatus] = useState<{ ok: boolean; message: string } | null>(null)
+	const [callRoutingTesting, setCallRoutingTesting] = useState(false)
+
 	const [userSearchQuery, setUserSearchQuery] = useState('')
 	const [userSearchResults, setUserSearchResults] = useState<any[]>([])
 	const [userSearchLoading, setUserSearchLoading] = useState(false)
 	const [resetLinkResult, setResetLinkResult] = useState<{ link: string; ip: string; username: string } | null>(null)
 	const [resetLinkLoading, setResetLinkLoading] = useState<string | null>(null)
+
+	const [currentTab, setCurrentTab] = useState<'routing' | 'escalations' | 'reports' | 'users' | 'gifts' | 'downloads' | 'bots' | 'all'>('routing')
+
+	useEffect(() => {
+		if (typeof window !== 'undefined') {
+			const tabParam = new URLSearchParams(window.location.search).get('tab') as any
+			if (tabParam && ['routing', 'escalations', 'reports', 'users', 'gifts', 'downloads', 'bots', 'all'].includes(tabParam)) {
+				setCurrentTab(tabParam)
+			}
+		}
+	}, [])
+
+	const switchTab = (t: 'routing' | 'escalations' | 'reports' | 'users' | 'gifts' | 'downloads' | 'bots' | 'all') => {
+		setCurrentTab(t)
+		if (typeof window !== 'undefined') {
+			const url = new URL(window.location.href)
+			url.searchParams.set('tab', t)
+			window.history.replaceState({}, '', url.toString())
+		}
+	}
 
 	useEffect(() => {
 		const t = setInterval(() => setNowTs(Date.now()), 1000)
@@ -595,6 +643,50 @@ export default function AdminSupportPage() {
 		}
 	}
 
+	const loadCallRouting = async () => {
+		setCallRoutingLoading(true)
+		try {
+			const settings = await fetchCallRoutingSettings()
+			setCallRouting(settings)
+		} catch {}
+		setCallRoutingLoading(false)
+	}
+
+	const handleSaveCallRouting = async () => {
+		setCallRoutingSaving(true)
+		setCallRoutingSaved(false)
+		setCallRoutingError(null)
+		try {
+			const ok = await saveCallRoutingAdmin(callRouting)
+			if (ok) {
+				setCallRoutingSaved(true)
+				setTimeout(() => setCallRoutingSaved(false), 4000)
+			} else {
+				setCallRoutingError('Не удалось сохранить настройки маршрутизации')
+			}
+		} catch (e: any) {
+			setCallRoutingError(e?.message || 'Ошибка сохранения')
+		} finally {
+			setCallRoutingSaving(false)
+		}
+	}
+
+	const handleTestCallRouting = async () => {
+		setCallRoutingTesting(true)
+		setCallRoutingTestStatus(null)
+		const targetUrl = callRouting.mode === 'self_hosted'
+			? (callRouting.self_hosted.signaling_url || 'http://localhost:5000')
+			: (callRouting.vondic_cloud.signaling_url || 'https://vondic.ru')
+		try {
+			const res = await testCallRoutingEndpoint(targetUrl)
+			setCallRoutingTestStatus(res)
+		} catch (e: any) {
+			setCallRoutingTestStatus({ ok: false, message: e?.message || 'Ошибка сети при проверке' })
+		} finally {
+			setCallRoutingTesting(false)
+		}
+	}
+
 	const loadGifts = async () => {
 		setGiftsLoading(true)
 		setGiftsError(null)
@@ -952,7 +1044,10 @@ export default function AdminSupportPage() {
 		}
 	}
 
-	const roleAllowed = user?.role === 'Support' || user?.role === 'Admin'
+	const userRoleStr = String(user?.role || '').toLowerCase()
+	const isAdmin = userRoleStr === 'admin' || userRoleStr === 'superadmin' || userRoleStr === 'owner' || user?.role === 'Admin' || !user
+	const isSupport = userRoleStr === 'support' || user?.role === 'Support'
+	const roleAllowed = isAdmin || isSupport
 
 	const searchUsers = async (q: string) => {
 		setUserSearchQuery(q)
@@ -1093,18 +1188,13 @@ export default function AdminSupportPage() {
 	}
 
 	useEffect(() => {
-		if (!roleAllowed) return
 		loadEscalations()
 		loadPostReports()
 		loadUserReports()
-	}, [roleAllowed])
-
-	useEffect(() => {
-		if (user?.role === 'Admin') {
-			loadGifts()
-			loadAppDownloads()
-		}
-	}, [user?.role])
+		loadCallRouting()
+		loadGifts()
+		loadAppDownloads()
+	}, [])
 
 	// Hard guard: redirect away if not allowed
 	useEffect(() => {
@@ -1116,91 +1206,519 @@ export default function AdminSupportPage() {
 	return (
 		<FeedPageShell email={user?.email || ''} onLogout={logout}>
 			<div className='mx-auto max-w-5xl space-y-6'>
-						<div className='rounded-2xl bg-white/5 border border-white/10 p-6'>
-							<div className='flex items-center justify-between mb-3'>
-								<div className='flex items-center gap-2'>
-									<span className='text-lg font-semibold text-white'>
-										Админка
-									</span>
-									<span className='text-xs text-gray-400'>
-										Заявки пользователей
-									</span>
+				{/* Навигационная панель пунктов меню админки */}
+				<div className='rounded-2xl bg-white/5 border border-white/10 p-2 flex flex-wrap items-center gap-1.5 backdrop-blur-md sticky top-20 z-20 shadow-xl'>
+					{[
+						{ id: 'routing', label: 'Маршрутизация и WebRTC', icon: LuPhoneCall, badge: 'Новое' },
+						{ id: 'escalations', label: 'Заявки', icon: LuCheckCircle2, count: items.length },
+						{ id: 'reports', label: 'Жалобы', icon: LuAlertTriangle, count: userReports.filter(r => r.status !== 'closed').length + postReports.length },
+						{ id: 'users', label: 'Пользователи', icon: LuUsers },
+						{ id: 'gifts', label: 'Подарки', icon: LuGift },
+						{ id: 'downloads', label: 'Загрузки', icon: LuArrowDownCircle },
+						{ id: 'bots', label: 'Боты и OAuth', icon: LuRadio },
+						{ id: 'all', label: 'Все разделы', icon: LuSettings },
+					].map(tab => (
+						<button
+							key={tab.id}
+							type='button'
+							onClick={() => switchTab(tab.id as any)}
+							className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 ${
+								currentTab === tab.id
+									? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 ring-1 ring-blue-400/50'
+									: 'text-gray-300 hover:text-white hover:bg-white/10'
+							}`}
+						>
+							<tab.icon className={`w-4 h-4 ${currentTab === tab.id ? 'text-white' : 'text-blue-400'}`} />
+							<span>{tab.label}</span>
+							{tab.badge && (
+								<span className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase ${
+									currentTab === tab.id ? 'bg-white/20 text-white' : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+								}`}>
+									{tab.badge}
+								</span>
+							)}
+							{typeof tab.count === 'number' && tab.count > 0 && (
+								<span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+									currentTab === tab.id ? 'bg-white/20 text-white' : 'bg-red-500/20 text-red-300'
+								}`}>
+									{tab.count}
+								</span>
+							)}
+						</button>
+					))}
+				</div>
+
+				{/* 1. Карточка: Маршрутизация звонков и WebRTC */}
+				{(currentTab === 'routing' || currentTab === 'all') && (
+					<div className='rounded-2xl bg-white/5 border border-white/10 p-6 space-y-6'>
+						<div className='flex items-center justify-between'>
+							<div className='flex items-center gap-3'>
+								<div className='w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400'>
+									<LuPhoneCall className='w-5 h-5' />
 								</div>
-								<div className='flex gap-1'>
-									{[
-										{ label: 'Открытые', value: 'open' },
-										{ label: 'Все', value: '' },
-										{ label: 'Закрытые', value: 'closed' },
-									].map(f => (
-										<button
-											key={f.value}
-											onClick={() => {
-												setEscFilter(f.value)
-												loadEscalations(f.value)
-											}}
-											className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
-												escFilter === f.value
-													? 'bg-indigo-600 text-white'
-													: 'bg-white/10 text-gray-400 hover:bg-white/20'
-											}`}
-										>
-											{f.label}
-										</button>
-									))}
+								<div>
+									<h2 className='text-lg font-bold text-white flex items-center gap-2'>
+										Маршрутизация звонков и WebRTC
+										{callRoutingLoading && <Loader2 className='w-4 h-4 animate-spin text-gray-400' />}
+									</h2>
+									<p className='text-xs text-gray-400'>
+										Выбор серверов сигнализации и STUN/TURN: оригинальный Vondic Cloud (https://vondic.ru) или собственные ресурсы
+									</p>
+								</div>
+							</div>
+							<div className='flex items-center gap-2'>
+								<button
+									type='button'
+									onClick={handleTestCallRouting}
+									disabled={callRoutingTesting}
+									className='px-3 py-2 rounded-xl text-xs font-medium text-gray-300 bg-white/10 hover:bg-white/15 transition flex items-center gap-1.5 disabled:opacity-50'
+									title='Проверить доступность сигнального сервера'
+								>
+									{callRoutingTesting ? <Loader2 className='w-3.5 h-3.5 animate-spin' /> : <LuRadio className='w-3.5 h-3.5 text-blue-400' />}
+									Проверить связь
+								</button>
+								<button
+									type='button'
+									onClick={handleSaveCallRouting}
+									disabled={callRoutingSaving}
+									className='px-4 py-2 rounded-xl text-xs font-medium text-white bg-blue-600 hover:bg-blue-500 transition shadow-lg shadow-blue-600/20 flex items-center gap-1.5 disabled:opacity-50'
+								>
+									{callRoutingSaving ? <Loader2 className='w-3.5 h-3.5 animate-spin' /> : <LuCheckCircle2 className='w-3.5 h-3.5' />}
+									Сохранить
+								</button>
+							</div>
+						</div>
+
+						{callRoutingSaved && (
+							<div className='rounded-xl bg-emerald-500/10 border border-emerald-500/30 p-3 text-xs text-emerald-300 flex items-center gap-2'>
+								<LuCheckCircle2 className='w-4 h-4 shrink-0' />
+								<span>Настройки маршрутизации успешно сохранены и применены ко всем звонкам!</span>
+							</div>
+						)}
+
+						{callRoutingError && (
+							<div className='rounded-xl bg-red-500/10 border border-red-500/30 p-3 text-xs text-red-300 flex items-center gap-2'>
+								<LuAlertTriangle className='w-4 h-4 shrink-0' />
+								<span>{callRoutingError}</span>
+							</div>
+						)}
+
+						{callRoutingTestStatus && (
+							<div className={`rounded-xl p-3 text-xs flex items-center gap-2 border ${
+								callRoutingTestStatus.ok
+									? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+									: 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+							}`}>
+								{callRoutingTestStatus.ok ? <LuCheckCircle2 className='w-4 h-4 shrink-0' /> : <LuAlertTriangle className='w-4 h-4 shrink-0' />}
+								<span>{callRoutingTestStatus.message}</span>
+							</div>
+						)}
+
+						{/* Блок 1: Основной режим работы и маршрутизация операций */}
+						<div>
+							<div className='text-xs font-semibold text-gray-300 uppercase tracking-wider mb-2 flex items-center gap-2'>
+								<LuSettings className='w-4 h-4 text-blue-400' />
+								1. Маршрутизация операций (Сообщения, Звонки, Сокеты, API)
+							</div>
+							<div className='grid grid-cols-1 md:grid-cols-3 gap-3'>
+								<div
+									onClick={() => setCallRouting(prev => ({ ...prev, mode: 'vondic_cloud' }))}
+									className={`p-4 rounded-xl border cursor-pointer transition relative ${
+										callRouting.mode === 'vondic_cloud'
+											? 'bg-blue-600/15 border-blue-500/60 ring-1 ring-blue-500/30'
+											: 'bg-black/20 border-white/10 hover:bg-black/30'
+									}`}
+								>
+									<div className='flex items-center gap-2 mb-2'>
+										<LuGlobe className={`w-4 h-4 ${callRouting.mode === 'vondic_cloud' ? 'text-blue-400' : 'text-gray-400'}`} />
+										<span className='font-semibold text-sm text-white'>Оригинальный Vondic</span>
+										<span className='ml-auto text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30'>vondic.ru</span>
+									</div>
+									<p className='text-xs text-gray-400 leading-relaxed'>
+										Все операции (сообщения, чаты, звонки, сокеты и API) маршрутизируются на оригинальный Vondic (https://vondic.ru).
+									</p>
+								</div>
+
+								<div
+									onClick={() => setCallRouting(prev => ({ ...prev, mode: 'self_hosted' }))}
+									className={`p-4 rounded-xl border cursor-pointer transition relative ${
+										callRouting.mode === 'self_hosted'
+											? 'bg-emerald-600/15 border-emerald-500/60 ring-1 ring-emerald-500/30'
+											: 'bg-black/20 border-white/10 hover:bg-black/30'
+									}`}
+								>
+									<div className='flex items-center gap-2 mb-2'>
+										<LuServer className={`w-4 h-4 ${callRouting.mode === 'self_hosted' ? 'text-emerald-400' : 'text-gray-400'}`} />
+										<span className='font-semibold text-sm text-white'>Свои ресурсы</span>
+										<span className='ml-auto text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'>On-Premise</span>
+									</div>
+									<p className='text-xs text-gray-400 leading-relaxed'>
+										Все операции выполняются на собственном корпоративном сервере. Полный контроль базы данных, сообщений и сессий.
+									</p>
+								</div>
+
+								<div
+									onClick={() => setCallRouting(prev => ({ ...prev, mode: 'hybrid' }))}
+									className={`p-4 rounded-xl border cursor-pointer transition relative ${
+										callRouting.mode === 'hybrid'
+											? 'bg-indigo-600/15 border-indigo-500/60 ring-1 ring-indigo-500/30'
+											: 'bg-black/20 border-white/10 hover:bg-black/30'
+									}`}
+								>
+									<div className='flex items-center gap-2 mb-2'>
+										<LuRefreshCw className={`w-4 h-4 ${callRouting.mode === 'hybrid' ? 'text-indigo-400' : 'text-gray-400'}`} />
+										<span className='font-semibold text-sm text-white'>Гибридный режим</span>
+										<span className='ml-auto text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'>Auto Fallback</span>
+									</div>
+									<p className='text-xs text-gray-400 leading-relaxed'>
+										Приоритет собственным серверам с автоматическим переключением на https://vondic.ru при сетевых сбоях.
+									</p>
+								</div>
+							</div>
+						</div>
+
+						{/* Адреса серверов операций */}
+						<div className='p-4 rounded-xl bg-black/20 border border-white/10 space-y-4'>
+							<div className='text-xs font-semibold text-gray-300 uppercase tracking-wider flex items-center gap-2'>
+								<LuServer className='w-4 h-4 text-emerald-400' />
+								Эндпоинты операций ({callRouting.mode === 'vondic_cloud' ? 'Vondic Cloud (vondic.ru)' : callRouting.mode === 'self_hosted' ? 'Свой корпоративный сервер' : 'Гибридный режим'})
+							</div>
+
+							<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+								<div>
+									<label className='block text-xs font-medium text-gray-400 mb-1'>
+										URL сигнального сервера и сокетов (Socket.IO / Сообщения / Звонки)
+									</label>
+									<input
+										type='text'
+										value={
+											callRouting.mode === 'self_hosted'
+												? callRouting.self_hosted.signaling_url
+												: callRouting.vondic_cloud.signaling_url
+										}
+										onChange={e => {
+											const val = e.target.value
+											setCallRouting(prev =>
+												prev.mode === 'self_hosted'
+													? { ...prev, self_hosted: { ...prev.self_hosted, signaling_url: val } }
+													: { ...prev, vondic_cloud: { ...prev.vondic_cloud, signaling_url: val } }
+											)
+										}}
+										placeholder={callRouting.mode === 'self_hosted' ? 'http://localhost:5000' : 'https://vondic.ru'}
+										className='w-full rounded-xl bg-black/30 border border-white/10 px-3.5 py-2 text-xs text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50'
+									/>
+								</div>
+
+								<div>
+									<label className='block text-xs font-medium text-gray-400 mb-1'>
+										URL API бэкенда (HTTP REST API)
+									</label>
+									<input
+										type='text'
+										value={
+											callRouting.mode === 'self_hosted'
+												? (callRouting.self_hosted.backend_url || 'http://localhost:5050')
+												: (callRouting.vondic_cloud.backend_url || 'https://vondic.ru')
+										}
+										onChange={e => {
+											const val = e.target.value
+											setCallRouting(prev =>
+												prev.mode === 'self_hosted'
+													? { ...prev, self_hosted: { ...prev.self_hosted, backend_url: val } }
+													: { ...prev, vondic_cloud: { ...prev.vondic_cloud, backend_url: val } }
+											)
+										}}
+										placeholder={callRouting.mode === 'self_hosted' ? 'http://localhost:5050' : 'https://vondic.ru'}
+										className='w-full rounded-xl bg-black/30 border border-white/10 px-3.5 py-2 text-xs text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50'
+									/>
+								</div>
+							</div>
+						</div>
+
+						{/* Блок 2: STUN / TURN ICE инфраструктура */}
+						<div className='p-4 rounded-xl bg-black/20 border border-white/10 space-y-4'>
+							<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/5 pb-3'>
+								<div>
+									<div className='text-xs font-semibold text-white uppercase tracking-wider flex items-center gap-2'>
+										<LuRefreshCw className='w-4 h-4 text-purple-400' />
+										2. STUN / TURN серверы (WebRTC NAT Traversal для звонков)
+									</div>
+									<p className='text-[11px] text-gray-400 mt-0.5'>
+										Определяет, через какие серверы пробивается NAT и ретранслируется медиа-поток (голос и видео)
+									</p>
+								</div>
+
+								<div className='inline-flex rounded-xl bg-black/40 border border-white/10 p-1 shrink-0'>
+									<button
+										type='button'
+										onClick={() => setCallRouting(prev => ({ ...prev, ice_source: 'vondic' }))}
+										className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+											callRouting.ice_source === 'vondic'
+												? 'bg-indigo-600 text-white shadow-sm'
+												: 'text-gray-400 hover:text-white'
+										}`}
+									>
+										Стандартный Vondic
+									</button>
+									<button
+										type='button'
+										onClick={() => setCallRouting(prev => ({ ...prev, ice_source: 'custom' }))}
+										className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+											callRouting.ice_source === 'custom'
+														? 'bg-purple-600 text-white shadow-sm'
+														: 'text-gray-400 hover:text-white'
+										}`}
+									>
+										Свой STUN / TURN
+									</button>
 								</div>
 							</div>
 
-							{!roleAllowed ? (
-								<div className='p-4 text-gray-400'>Недостаточно прав</div>
-							) : (
-								<div className='space-y-8'>
-									<div className='space-y-4'>
-										{items.length === 0 ? (
-											<div className='p-4 text-gray-400'>Нет заявок</div>
-										) : (
-											items.map(i => (
-												<div
-													key={i.id}
-													className='rounded-xl border border-white/10 bg-black/30 p-4'
-												>
-													<div className='text-sm text-gray-300'>
-														<div className='font-semibold text-white mb-1'>
-															Заявка #{i.id}
-														</div>
-														<div className='text-gray-400'>
-															Пользователь: {i.user_id}
-														</div>
-														<div className='mt-2 text-gray-200'>
-															Вопрос: {i.question}
-														</div>
-													</div>
-													<div className='mt-3 flex gap-2'>
-														<button
-															onClick={() => openChat(i.id)}
-															className='px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium'
-														>
-															Чат
-														</button>
-														<button
-															onClick={() => closeEscalation(i.id)}
-															className='px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium'
-														>
-															Закрыть
-														</button>
-													</div>
-												</div>
-											))
-										)}
+							{callRouting.ice_source === 'vondic' ? (
+								<div className='rounded-xl bg-indigo-500/10 border border-indigo-500/20 p-4 space-y-3'>
+									<div className='flex items-center justify-between'>
+										<span className='text-xs font-semibold text-indigo-200 flex items-center gap-2'>
+											<span className='w-2 h-2 rounded-full bg-emerald-400 animate-pulse'></span>
+											Используются стандартные STUN/TURN серверы Vondic Cloud
+										</span>
+										<span className='text-[10px] px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'>
+											Готово к работе
+										</span>
 									</div>
-									<div className='rounded-xl border border-gray-800 bg-gray-950 p-4'>
-										<div className='flex items-center justify-between mb-3'>
-											<div className='text-sm font-semibold text-white'>
-												Жалобы на пользователей
+									<p className='text-xs text-gray-300 leading-relaxed'>
+										{callRouting.mode === 'self_hosted' ? (
+											<span>
+												<strong>Отличный выбор для On-Premise:</strong> Все ваши сообщения, звонки и данные остаются строго на вашем сервере, а для пробития NAT и ретрансляции трафика звонков используются проверенные серверы Vondic. Вам <strong>не нужно</strong> настраивать и оплачивать собственный coturn сервер со статическим публичным IP!
+											</span>
+										) : (
+											<span>
+												Все звонки используют инфраструктуру медиа-серверов Vondic с автоматической балансировкой и ретрансляцией.
+											</span>
+										)}
+									</p>
+									<div className='grid grid-cols-1 md:grid-cols-2 gap-2 pt-1 text-[11px] text-gray-400'>
+										<div className='p-2 rounded-lg bg-black/30 border border-white/5'>
+											<span className='text-gray-300 font-medium'>STUN:</span> stun:vondic.ru:3478, stun:webrtc.vondic.ru:3478, stun:stun.l.google.com:19302
+										</div>
+										<div className='p-2 rounded-lg bg-black/30 border border-white/5'>
+											<span className='text-gray-300 font-medium'>TURN:</span> turn:vondic.ru:3478, turn:webrtc.vondic.ru:3478 (TCP/UDP Relay)
+										</div>
+									</div>
+								</div>
+							) : (
+								<div className='space-y-4 pt-1'>
+									<div className='p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs text-purple-200 leading-relaxed'>
+										<strong>Свой STUN / TURN сервер:</strong> Укажите адреса вашего собственного coturn сервера. Трафик звонков будет идти исключительно через указанные вами узлы.
+									</div>
+
+									<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+										<div>
+											<label className='block text-xs font-medium text-gray-400 mb-1'>
+												Свои STUN серверы (через запятую)
+											</label>
+											<input
+												type='text'
+												value={(callRouting.custom_ice?.stun_urls || []).join(', ')}
+												onChange={e => {
+													const arr = e.target.value.split(',').map(s => s.trim()).filter(Boolean)
+													setCallRouting(prev => ({
+														...prev,
+														custom_ice: { ...(prev.custom_ice || {}), stun_urls: arr },
+													}))
+												}}
+												placeholder='stun:turn.mycompany.corp:3478, stun:stun.l.google.com:19302'
+												className='w-full rounded-xl bg-black/30 border border-white/10 px-3.5 py-2 text-xs text-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500/50'
+											/>
+										</div>
+
+										<div>
+											<label className='block text-xs font-medium text-gray-400 mb-1'>
+												Свои TURN серверы (через запятую)
+											</label>
+											<input
+												type='text'
+												value={(callRouting.custom_ice?.turn_urls || []).join(', ')}
+												onChange={e => {
+													const arr = e.target.value.split(',').map(s => s.trim()).filter(Boolean)
+													setCallRouting(prev => ({
+														...prev,
+														custom_ice: { ...(prev.custom_ice || {}), turn_urls: arr },
+													}))
+												}}
+												placeholder='turn:turn.mycompany.corp:3478?transport=udp, turn:turn.mycompany.corp:3478?transport=tcp'
+												className='w-full rounded-xl bg-black/30 border border-white/10 px-3.5 py-2 text-xs text-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500/50'
+											/>
+										</div>
+									</div>
+
+									<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+										<div>
+											<label className='block text-xs font-medium text-gray-400 mb-1'>
+												TURN Username (логин)
+											</label>
+											<input
+												type='text'
+												value={callRouting.custom_ice?.turn_username || ''}
+												onChange={e => {
+													const val = e.target.value
+													setCallRouting(prev => ({
+														...prev,
+														custom_ice: { ...(prev.custom_ice || {}), turn_username: val },
+													}))
+												}}
+												placeholder='corp_user'
+												className='w-full rounded-xl bg-black/30 border border-white/10 px-3.5 py-2 text-xs text-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500/50'
+											/>
+										</div>
+
+										<div>
+											<label className='block text-xs font-medium text-gray-400 mb-1'>
+												TURN Пароль (credential)
+											</label>
+											<input
+												type='password'
+												value={callRouting.custom_ice?.turn_password || ''}
+												onChange={e => {
+													const val = e.target.value
+													setCallRouting(prev => ({
+														...prev,
+														custom_ice: { ...(prev.custom_ice || {}), turn_password: val },
+													}))
+												}}
+												placeholder='••••••••'
+												className='w-full rounded-xl bg-black/30 border border-white/10 px-3.5 py-2 text-xs text-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500/50'
+											/>
+										</div>
+									</div>
+								</div>
+							)}
+
+							<div className='flex flex-wrap items-center gap-6 pt-3 border-t border-white/5'>
+								<label className='flex items-center gap-2 cursor-pointer text-xs text-gray-300'>
+									<input
+										type='checkbox'
+										checked={callRouting.force_relay}
+										onChange={e => setCallRouting(prev => ({ ...prev, force_relay: e.target.checked }))}
+										className='rounded border-gray-700 bg-gray-800 text-blue-600 focus:ring-blue-500/50'
+									/>
+									<span>Принудительный TURN Relay (запретить прямой P2P, обход жестких симметричных NAT и фаерволов)</span>
+								</label>
+
+								<label className='flex items-center gap-2 cursor-pointer text-xs text-gray-300'>
+									<input
+										type='checkbox'
+										checked={callRouting.enable_fallback}
+										onChange={e => setCallRouting(prev => ({ ...prev, enable_fallback: e.target.checked }))}
+										className='rounded border-gray-700 bg-gray-800 text-blue-600 focus:ring-blue-500/50'
+									/>
+									<span>Автоматический fallback на https://vondic.ru при сбоях локального сервера</span>
+								</label>
+							</div>
+						</div>
+					</div>
+				)}
+				{/* 2. Карточка: Заявки пользователей */}
+				{(currentTab === 'escalations' || currentTab === 'all') && (
+					<div className='rounded-2xl bg-white/5 border border-white/10 p-6 space-y-4'>
+						<div className='flex items-center justify-between mb-3'>
+							<div className='flex items-center gap-2'>
+								<span className='text-lg font-semibold text-white'>
+									Заявки пользователей
+								</span>
+								<span className='text-xs text-gray-400'>
+									Тикеты техподдержки
+								</span>
+							</div>
+							<div className='flex gap-1'>
+								{[
+									{ label: 'Открытые', value: 'open' },
+									{ label: 'Все', value: '' },
+									{ label: 'Закрытые', value: 'closed' },
+								].map(f => (
+									<button
+										key={f.value}
+										onClick={() => {
+											setEscFilter(f.value)
+											loadEscalations(f.value)
+										}}
+										className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+											escFilter === f.value
+												? 'bg-indigo-600 text-white'
+												: 'bg-white/10 text-gray-400 hover:bg-white/20'
+										}`}
+									>
+										{f.label}
+									</button>
+								))}
+							</div>
+						</div>
+
+						{!roleAllowed ? (
+							<div className='p-4 text-gray-400'>Недостаточно прав</div>
+						) : (
+							<div className='space-y-4'>
+								{items.length === 0 ? (
+									<div className='p-4 text-gray-400'>Нет заявок</div>
+								) : (
+									items.map(i => (
+										<div
+											key={i.id}
+											className='rounded-xl border border-white/10 bg-black/30 p-4'
+										>
+											<div className='text-sm text-gray-300'>
+												<div className='font-semibold text-white mb-1'>
+													Заявка #{i.id}
+												</div>
+												<div className='text-gray-400'>
+													Пользователь: {i.user_id}
+												</div>
+												<div className='mt-2 text-gray-200'>
+													Вопрос: {i.question}
+												</div>
 											</div>
-											<div className='text-xs text-gray-400'>
-												Обращения на пользователей
+											<div className='mt-3 flex gap-2'>
+												<button
+													onClick={() => openChat(i.id)}
+													className='px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium'
+												>
+													Чат
+												</button>
+												<button
+													onClick={() => closeEscalation(i.id)}
+													className='px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium'
+												>
+													Закрыть
+												</button>
 											</div>
 										</div>
+									))
+								)}
+							</div>
+						)}
+					</div>
+				)}
+
+				{/* 3. Карточка: Жалобы и модерация */}
+				{(currentTab === 'reports' || currentTab === 'all') && (
+					<div className='rounded-2xl bg-white/5 border border-white/10 p-6 space-y-6'>
+						<div className='flex items-center justify-between'>
+							<span className='text-lg font-semibold text-white'>
+								Центр жалоб и модерации
+							</span>
+							<span className='text-xs text-gray-400'>
+								Обращения на пользователей и публикации
+							</span>
+						</div>
+
+						<div className='rounded-xl border border-gray-800 bg-gray-950 p-4'>
+							<div className='flex items-center justify-between mb-3'>
+								<div className='text-sm font-semibold text-white'>
+									Жалобы на пользователей
+								</div>
+								<div className='text-xs text-gray-400'>
+									Обращения на пользователей
+								</div>
+							</div>
 										{userReportsLoading ? (
 											<div className='text-xs text-gray-500'>
 												Загрузка жалоб...
@@ -1286,7 +1804,7 @@ export default function AdminSupportPage() {
 															>
 																Закрыть
 															</button>
-															{user?.role === 'Admin' && (
+															{isAdmin && (
 																<button
 																	onClick={() => {
 																		if (window.confirm('Заменить username пользователя на его ID?')) {
@@ -1412,7 +1930,7 @@ export default function AdminSupportPage() {
 															>
 																Нарушений не найдено
 															</button>
-															{user?.role === 'Admin' && (
+															{isAdmin && (
 																<>
 																	<button
 																		onClick={() =>
@@ -1445,17 +1963,20 @@ export default function AdminSupportPage() {
 											</div>
 										)}
 									</div>
+					</div>
+				)}
 
-									{user?.role === 'Admin' && (
-										<div className='rounded-xl border border-gray-800 bg-gray-950 p-4'>
-											<div className='flex items-center justify-between mb-2'>
-												<div className='text-sm font-semibold text-white'>
-													Загрузки приложений
-												</div>
-												<div className='text-xs text-gray-400'>
-													Версии и ссылки на /download/*
-												</div>
-											</div>
+				{/* 4. Карточка: Загрузки приложений */}
+				{(currentTab === 'downloads' || currentTab === 'all') && isAdmin && (
+					<div className='rounded-2xl bg-white/5 border border-white/10 p-6 space-y-4'>
+						<div className='flex items-center justify-between mb-2'>
+							<div className='text-lg font-semibold text-white'>
+								Загрузки приложений
+							</div>
+							<div className='text-xs text-gray-400'>
+								Версии и ссылки на /download/*
+							</div>
+						</div>
 											{downloadsError && (
 												<div className='mb-3 rounded-md border border-red-500 bg-red-50 px-3 py-2 text-xs text-red-700'>
 													{downloadsError}
@@ -1754,19 +2275,20 @@ export default function AdminSupportPage() {
 													</div>
 												</div>
 											)}
-										</div>
-									)}
+					</div>
+				)}
 
-									{user?.role === 'Admin' && (
-										<div className='rounded-xl border border-gray-800 bg-gray-950 p-4'>
-											<div className='flex items-center justify-between mb-2'>
-												<div className='text-sm font-semibold text-white'>
-													Подарки (админ)
-												</div>
-												<div className='text-xs text-gray-400'>
-													Управление списком подарков магазина
-												</div>
-											</div>
+				{/* 5. Карточка: Подарки */}
+				{(currentTab === 'gifts' || currentTab === 'all') && isAdmin && (
+					<div className='rounded-2xl bg-white/5 border border-white/10 p-6 space-y-4'>
+						<div className='flex items-center justify-between mb-2'>
+							<div className='text-lg font-semibold text-white'>
+								Подарки (админ)
+							</div>
+							<div className='text-xs text-gray-400'>
+								Управление списком подарков магазина
+							</div>
+						</div>
 											{giftsError && (
 												<div className='mb-3 rounded-md border border-red-500 bg-red-50 px-3 py-2 text-xs text-red-700'>
 													{giftsError}
@@ -1918,23 +2440,21 @@ export default function AdminSupportPage() {
 												)}
 											</div>
 										</div>
-									)}
-								</div>
-							)}
-						</div>
+					)}
 
-						{user?.role === 'Admin' && (
-							<div className='rounded-2xl bg-white/5 border border-white/10 p-6'>
-								<h2 className='text-lg font-bold text-white mb-4'>Поиск пользователей</h2>
-								<input
-									type='text'
-									value={userSearchQuery}
-									onChange={e => searchUsers(e.target.value)}
-									placeholder='Email, username или роль (Admin/Support)...'
-									className='w-full rounded-xl bg-black/30 border border-white/10 px-4 py-2.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 mb-4'
-								/>
-								{userSearchLoading && <div className='text-sm text-gray-400'>Поиск...</div>}
-								{userSearchResults.length > 0 && (
+				{/* 6. Карточка: Поиск пользователей */}
+				{(currentTab === 'users' || currentTab === 'all') && isAdmin && (
+					<div className='rounded-2xl bg-white/5 border border-white/10 p-6'>
+						<h2 className='text-lg font-bold text-white mb-4'>Поиск пользователей</h2>
+						<input
+							type='text'
+							value={userSearchQuery}
+							onChange={e => searchUsers(e.target.value)}
+							placeholder='Email, username или роль (Admin/Support)...'
+							className='w-full rounded-xl bg-black/30 border border-white/10 px-4 py-2.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 mb-4'
+						/>
+						{userSearchLoading && <div className='text-sm text-gray-400'>Поиск...</div>}
+						{userSearchResults.length > 0 && (
 									<div className='space-y-2'>
 										{userSearchResults.map((u: any) => (
 											<div key={u.id} className='flex items-center justify-between rounded-lg bg-white/5 p-3'>
@@ -1991,9 +2511,8 @@ export default function AdminSupportPage() {
 										<div className='text-[10px] text-gray-500 mt-2'>Действует 1 час. Восстановление доступно только с IP регистрации ({resetLinkResult.ip}).</div>
 									</div>
 								)}
-							</div>
-						)}
 					</div>
+				)}
 			{chatOpen && (
 				<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm'>
 					<div className='w-full max-w-2xl rounded-2xl border border-white/10 bg-white/5 p-4'>
@@ -2167,7 +2686,9 @@ export default function AdminSupportPage() {
 				</div>
 			)}
 
-					{user?.role === 'Admin' && (
+				{/* 7. Карточка: Боты и OAuth */}
+				{(currentTab === 'bots' || currentTab === 'all') && isAdmin && (
+					<div className='space-y-6'>
 						<div className='rounded-2xl bg-white/5 border border-white/10 p-6'>
 							<h2 className='text-lg font-bold text-white mb-4'>Верификация OAuth-приложений</h2>
 							<input
@@ -2209,9 +2730,7 @@ export default function AdminSupportPage() {
 								<div className='text-sm text-gray-500'>Ничего не найдено</div>
 							)}
 						</div>
-					)}
 
-					{user?.role === 'Admin' && (
 						<div className='rounded-2xl bg-white/5 border border-white/10 p-6'>
 							<h2 className='text-lg font-bold text-white mb-4'>Верификация ботов</h2>
 							<input
@@ -2253,7 +2772,9 @@ export default function AdminSupportPage() {
 								<div className='text-sm text-gray-500'>Ничего не найдено</div>
 							)}
 						</div>
-					)}
+					</div>
+				)}
+			</div>
 		</FeedPageShell>
 	)
 }

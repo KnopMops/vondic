@@ -194,7 +194,8 @@ class CallManager {
           final offerSdp = data['offer']['sdp']?.toString() ?? '';
           await pc.setRemoteDescription(RTCSessionDescription(offerSdp, 'offer'));
           
-          final answer = await pc.createAnswer({});
+          final rawAnswer = await pc.createAnswer({});
+          final answer = WebRTCService.optimizeSessionDescription(rawAnswer);
           await pc.setLocalDescription(answer);
 
           _socketService.emit('answer', {
@@ -396,7 +397,8 @@ class CallManager {
     final pc = await _webRTCService.establishPeerConnection(socketId);
 
     // 3. Create offer
-    final offer = await pc.createOffer({});
+    final rawOffer = await pc.createOffer({});
+    final offer = WebRTCService.optimizeSessionDescription(rawOffer);
     await pc.setLocalDescription(offer);
 
     final callState = CallState(
@@ -447,7 +449,8 @@ class CallManager {
     final pc = await _webRTCService.establishPeerConnection(callerSocketId);
 
     // 5. Create answer
-    final answer = await pc.createAnswer({});
+    final rawAnswer = await pc.createAnswer({});
+    final answer = WebRTCService.optimizeSessionDescription(rawAnswer);
     await pc.setLocalDescription(answer);
 
     // 6. Update call status to connected
