@@ -42,6 +42,9 @@ export class CallManager {
 		participant: { userId: string; username: string; avatarUrl?: string; socketId: string },
 	) => void
 	public onVoiceChannelParticipantLeft?: (channelId: string, socketId: string) => void
+	public onRemoteScreenShareChange?: (
+		info: { socketId: string; userId?: string; isSharing: boolean } | null,
+	) => void
 
 	constructor(webRTCService: WebRTCService, socket: Socket) {
 		this.webRTCService = webRTCService
@@ -914,11 +917,17 @@ export class CallManager {
 			if (from_socket_id) {
 				console.log(`Participant ${from_socket_id} screen share state changed: ${is_sharing}`);
 				
+				if (this.onRemoteScreenShareChange) {
+					this.onRemoteScreenShareChange({
+						socketId: from_socket_id,
+						userId: user_id,
+						isSharing: !!is_sharing,
+					});
+				}
+
 				// Get the current remote stream for this participant
 				const currentStream = this.webRTCService.getRemoteStream(from_socket_id);
 				if (currentStream) {
-					// Notify about the screen share state change
-					// The actual screen share track will be added via WebRTC renegotiation
 					if (this.onRemoteStream) {
 						this.onRemoteStream(from_socket_id, currentStream);
 					}

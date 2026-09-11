@@ -97,9 +97,16 @@ const ActiveVoiceChannel: React.FC<ActiveVoiceChannelProps> = ({
 									? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30'
 									: 'bg-gray-700 text-gray-400 hover:bg-gray-600'
 							}`}
-							title={isKrispEnabled ? 'Krisp AI: ВКЛ (шумоподавление)' : 'Krisp AI: ВЫКЛ'}
+							title={
+								isKrispEnabled
+									? 'Krisp AI: ВКЛ (Вондик Premium)'
+									: 'Krisp AI: шумоподавление (Доступно с Вондик Premium)'
+							}
 						>
 							<SparklesIcon className="w-4 h-4" />
+							<span className="absolute -bottom-1 -right-1 text-[8px] px-0.5 rounded-full bg-amber-500/30 text-amber-300 font-bold border border-amber-500/40 flex items-center">
+								👑
+							</span>
 							{isKrispEnabled && (
 								<span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-emerald-400 rounded-full" />
 							)}

@@ -679,3 +679,119 @@ export function getDiscordLikeAudioConstraints(options: {
 export function getEnhancedAudioConstraints(): MediaTrackConstraints {
 	return getDiscordLikeAudioConstraints({ stereo: true, krisp: true })
 }
+
+/**
+ * Пресеты качества демонстрации экрана (в стиле Discord Nitro).
+ */
+export type ScreenSharePresetKey = 'screen720p30' | 'screen1080p60' | 'screen1440p60'
+
+export interface ScreenSharePreset {
+	key: ScreenSharePresetKey
+	label: string
+	shortLabel: string
+	description: string
+	width: number
+	height: number
+	frameRate: number
+	maxBitrate: number
+	isPremium: boolean
+}
+
+export const SCREEN_SHARE_PRESETS: Record<ScreenSharePresetKey, ScreenSharePreset> = {
+	screen720p30: {
+		key: 'screen720p30',
+		label: '720p (30 FPS)',
+		shortLabel: '720p 30fps',
+		description: 'Базовое качество, минимальный расход трафика',
+		width: 1280,
+		height: 720,
+		frameRate: 30,
+		maxBitrate: 3_500_000,
+		isPremium: false,
+	},
+	screen1080p60: {
+		key: 'screen1080p60',
+		label: '1080p Full HD (60 FPS)',
+		shortLabel: '1080p 60fps',
+		description: 'Кристальная четкость текста и высокая плавность',
+		width: 1920,
+		height: 1080,
+		frameRate: 60,
+		maxBitrate: 8_500_000,
+		isPremium: true,
+	},
+	screen1440p60: {
+		key: 'screen1440p60',
+		label: '1440p / Исходное (60 FPS)',
+		shortLabel: '1440p 60fps',
+		description: 'Максимальная детализация для 2K/4K мониторов и игр',
+		width: 2560,
+		height: 1440,
+		frameRate: 60,
+		maxBitrate: 14_000_000,
+		isPremium: true,
+	},
+}
+
+/**
+ * Оптимизация видеосекции SDP (b=AS, b=TIAS, x-google-max-bitrate для H264, VP9, AV1).
+ */
+export function optimizeVideoSdp(sdp: string, targetBitrateBps: number = 8_500_000): string {
+	if (!sdp || !sdp.includes('m=video')) return sdp
+
+	const targetBitrateKbps = Math.round(targetBitrateBps / 1000)
+	const lines = sdp.split(/\r\n|\n/)
+	const resultLines: string[] = []
+	let inVideoSection = false
+	let hasBandwidthAS = false
+	let hasBandwidthTIAS = false
+
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i]
+
+		if (line.startsWith('m=')) {
+			if (inVideoSection) {
+				if (!hasBandwidthAS) resultLines.push(`b=AS:${targetBitrateKbps}`)
+				if (!hasBandwidthTIAS) resultLines.push(`b=TIAS:${targetBitrateBps}`)
+			}
+			inVideoSection = line.startsWith('m=video')
+			hasBandwidthAS = false
+			hasBandwidthTIAS = false
+			resultLines.push(line)
+			continue
+		}
+
+		if (inVideoSection) {
+			if (line.startsWith('b=AS:')) {
+				hasBandwidthAS = true
+				resultLines.push(`b=AS:${targetBitrateKbps}`)
+				continue
+			}
+			if (line.startsWith('b=TIAS:')) {
+				hasBandwidthTIAS = true
+				resultLines.push(`b=TIAS:${targetBitrateBps}`)
+				continue
+			}
+
+			if (line.startsWith('a=fmtp:')) {
+				let modifiedFmtp = line
+				if (!modifiedFmtp.includes('x-google-max-bitrate')) {
+					const separator = modifiedFmtp.endsWith(';') ? '' : ';'
+					modifiedFmtp += `${separator}x-google-min-bitrate=2000;x-google-max-bitrate=${targetBitrateKbps};x-google-start-bitrate=${Math.min(targetBitrateKbps, 5000)}`
+				}
+				resultLines.push(modifiedFmtp)
+				continue
+			}
+		}
+
+		resultLines.push(line)
+	}
+
+	if (inVideoSection) {
+		if (!hasBandwidthAS) resultLines.push(`b=AS:${targetBitrateKbps}`)
+		if (!hasBandwidthTIAS) resultLines.push(`b=TIAS:${targetBitrateBps}`)
+	}
+
+	return resultLines.join('\r\n')
+}
+

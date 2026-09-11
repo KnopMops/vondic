@@ -18,7 +18,7 @@ interface ScreenShareViewerProps {
 export const ScreenShareViewer: React.FC<ScreenShareViewerProps> = ({
 	onClose,
 }) => {
-	const { screenStream, isScreenSharing, remoteStreams, activeCalls } =
+	const { screenStream, isScreenSharing, remoteStreams, remoteScreenShare, activeCalls } =
 		useCallStore()
 	const videoRef = useRef<HTMLVideoElement>(null)
 	const [isFullscreen, setIsFullscreen] = useState(false)
@@ -28,6 +28,14 @@ export const ScreenShareViewer: React.FC<ScreenShareViewerProps> = ({
 	const [fps, setFps] = useState(0)
 	const [resolution, setResolution] = useState({ width: 0, height: 0 })
 
+	const streamToPlay =
+		screenStream ||
+		(remoteScreenShare?.isSharing && remoteScreenShare.socketId
+			? remoteStreams.get(remoteScreenShare.socketId) || null
+			: null) ||
+		Array.from(remoteStreams.values()).find(s => s.getVideoTracks().length > 0) ||
+		null
+
 	const isFullscreenSupported =
 		typeof document !== 'undefined' &&
 		(!!document.documentElement.requestFullscreen ||
@@ -36,8 +44,10 @@ export const ScreenShareViewer: React.FC<ScreenShareViewerProps> = ({
 			(document.documentElement as any).msRequestFullscreen)
 
 	useEffect(() => {
-		if (videoRef.current && screenStream) {
-			videoRef.current.srcObject = screenStream
+		if (videoRef.current && streamToPlay) {
+			if (videoRef.current.srcObject !== streamToPlay) {
+				videoRef.current.srcObject = streamToPlay
+			}
 			videoRef.current.muted = true
 			videoRef.current.play().catch(err => {
 				console.error('Failed to play screen share:', err)
@@ -45,7 +55,7 @@ export const ScreenShareViewer: React.FC<ScreenShareViewerProps> = ({
 			})
 
 			
-			const track = screenStream.getVideoTracks()[0]
+			const track = streamToPlay.getVideoTracks()[0]
 			if (track) {
 				const settings = track.getSettings()
 				setResolution({
@@ -67,7 +77,7 @@ export const ScreenShareViewer: React.FC<ScreenShareViewerProps> = ({
 				return () => clearInterval(interval)
 			}
 		}
-	}, [screenStream])
+	}, [streamToPlay])
 
 	useEffect(() => {
 		const handleFullscreenChange = () => {

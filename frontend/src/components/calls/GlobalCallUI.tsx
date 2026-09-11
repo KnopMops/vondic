@@ -1,9 +1,11 @@
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
-import React from 'react'
+import React, { useState } from 'react'
 import { useCallStore } from '../../lib/stores/callStore'
 import { useToast } from '../../lib/ToastContext'
+import { useAuth } from '../../lib/AuthContext'
+import PremiumModal from '../premium/PremiumModal'
 import ActiveCall from './ActiveCall'
 import ActiveGroupCall from './ActiveGroupCall'
 import ActiveVoiceChannel from './ActiveVoiceChannel'
@@ -15,6 +17,9 @@ import IncomingCallModal from './IncomingCallModal'
 export const GlobalCallUI: React.FC = () => {
 	const pathname = usePathname()
 	const router = useRouter()
+	const { user } = useAuth()
+	const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false)
+
 	const {
 		incomingCall,
 		activeCalls,
@@ -24,6 +29,8 @@ export const GlobalCallUI: React.FC = () => {
 		localStream,
 		screenStream,
 		remoteStreams,
+		remoteScreenShare,
+		screenSharePreset,
 		isMuted,
 		isScreenSharing,
 		isVideoEnabled,
@@ -41,10 +48,20 @@ export const GlobalCallUI: React.FC = () => {
 		isKrispEnabled,
 		networkStats,
 		setAudioQualityPreset,
+		setScreenSharePreset,
 		toggleKrisp,
 	} = useCallStore()
 
 	const { showToast } = useToast()
+
+	const handleKrispToggle = () => {
+		if (!user?.premium) {
+			setIsPremiumModalOpen(true)
+			showToast('Шумоподавление Krisp AI доступно только с подпиской Вондик Premium', 'info')
+			return
+		}
+		toggleKrisp()
+	}
 
 	const handleAcceptCall = async (callerSocketId: string) => {
 		try {
@@ -123,17 +140,21 @@ export const GlobalCallUI: React.FC = () => {
 					videoStream={webRTCService?.getVideoStream() || null}
 					screenStream={screenStream}
 					remoteStreams={remoteStreams}
+					remoteScreenShare={remoteScreenShare}
+					screenSharePreset={screenSharePreset}
+					onScreenSharePresetChange={setScreenSharePreset}
 					isMuted={isMuted}
 					isVideoEnabled={isVideoEnabled()}
 					isScreenSharing={isScreenSharing}
 					isScreenShareSupported={isScreenShareSupported}
 					isKrispEnabled={isKrispEnabled}
+					isPremium={Boolean(user?.premium)}
 					audioQualityPreset={audioQualityPreset}
 					networkStats={networkStats}
 					onMuteToggle={handleMuteToggle}
 					onVideoToggle={handleVideoToggle}
 					onScreenShareToggle={toggleScreenShare}
-					onKrispToggle={toggleKrisp}
+					onKrispToggle={handleKrispToggle}
 					onAudioQualityChange={setAudioQualityPreset}
 					onDisconnect={() => handleLeaveGroupCall(activeGroupCallId)}
 				/>
@@ -154,17 +175,21 @@ export const GlobalCallUI: React.FC = () => {
 					videoStream={webRTCService?.getVideoStream() || null}
 					screenStream={screenStream}
 					remoteStreams={remoteStreams}
+					remoteScreenShare={remoteScreenShare}
+					screenSharePreset={screenSharePreset}
+					onScreenSharePresetChange={setScreenSharePreset}
 					isMuted={isMuted}
 					isVideoEnabled={isVideoEnabled()}
 					isScreenSharing={isScreenSharing}
 					isScreenShareSupported={isScreenShareSupported}
 					isKrispEnabled={isKrispEnabled}
+					isPremium={Boolean(user?.premium)}
 					audioQualityPreset={audioQualityPreset}
 					networkStats={networkStats}
 					onMuteToggle={handleMuteToggle}
 					onVideoToggle={handleVideoToggle}
 					onScreenShareToggle={toggleScreenShare}
-					onKrispToggle={toggleKrisp}
+					onKrispToggle={handleKrispToggle}
 					onAudioQualityChange={setAudioQualityPreset}
 					onDisconnect={handleLeaveVoiceChannel}
 				/>
@@ -191,17 +216,21 @@ export const GlobalCallUI: React.FC = () => {
 					videoStream={webRTCService?.getVideoStream() || null}
 					screenStream={screenStream}
 					remoteStreams={remoteStreams}
+					remoteScreenShare={remoteScreenShare}
+					screenSharePreset={screenSharePreset}
+					onScreenSharePresetChange={setScreenSharePreset}
 					isMuted={isMuted}
 					isVideoEnabled={isVideoEnabled()}
 					isScreenSharing={isScreenSharing}
 					isScreenShareSupported={isScreenShareSupported}
 					isKrispEnabled={isKrispEnabled}
+					isPremium={Boolean(user?.premium)}
 					audioQualityPreset={audioQualityPreset}
 					networkStats={networkStats}
 					onMuteToggle={handleMuteToggle}
 					onVideoToggle={handleVideoToggle}
 					onScreenShareToggle={toggleScreenShare}
-					onKrispToggle={toggleKrisp}
+					onKrispToggle={handleKrispToggle}
 					onAudioQualityChange={setAudioQualityPreset}
 					onDisconnect={() => endCall(activeDirectCall.socketId)}
 				/>
@@ -218,6 +247,11 @@ export const GlobalCallUI: React.FC = () => {
 					}}
 				/>
 			)}
+
+			<PremiumModal
+				isOpen={isPremiumModalOpen}
+				onClose={() => setIsPremiumModalOpen(false)}
+			/>
 		</>
 	)
 }

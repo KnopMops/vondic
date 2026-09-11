@@ -5,8 +5,11 @@ import {
 	AudioProcessor,
 	AdaptiveBitrateManager,
 	optimizeOpusSdp,
+	optimizeVideoSdp,
 	AudioBitratePreset,
 	AUDIO_BITRATE_PRESETS,
+	ScreenSharePresetKey,
+	SCREEN_SHARE_PRESETS,
 	NetworkQualityStats,
 } from './AudioProcessor'
 
@@ -54,10 +57,12 @@ export class WebRTCService {
 	private hasTurn: boolean = false
 	private forceRelay: boolean = false
 	private turnTested: boolean = false
-	private useInternalTurnOnly: boolean = false
-	/** Резолвнутый хост internal TURN (для фильтра iceServers и логов) */
 	private internalTurnHostResolved: string = DEFAULT_INTERNAL_TURN_HOST
 	private iceDisconnectTimeouts: Map<string, NodeJS.Timeout> = new Map()
+
+	public screenSharePreset: ScreenSharePresetKey = 'screen1080p60'
+	private screenAudioMixerContext: AudioContext | null = null
+	private rawMicTrackBeforeScreenShare: MediaStreamTrack | null = null
 
 	public onNetworkStats?: (stats: NetworkQualityStats) => void
 	public onRemoteStream?: (socketId: string, stream: MediaStream) => void
@@ -204,6 +209,27 @@ export class WebRTCService {
 		}
 	}
 
+	public setScreenSharePreset(presetKey: ScreenSharePresetKey) {
+		this.screenSharePreset = presetKey
+		const preset = SCREEN_SHARE_PRESETS[presetKey] || SCREEN_SHARE_PRESETS.screen1080p60
+		if (this.isSharingScreen && this.screenStream) {
+			const track = this.screenStream.getVideoTracks()[0]
+			if (track) {
+				void track.applyConstraints({
+					width: { ideal: preset.width, max: preset.width },
+					height: { ideal: preset.height, max: preset.height },
+					frameRate: { ideal: preset.frameRate, max: preset.frameRate },
+				}).catch(() => {})
+			}
+			for (const pc of this.peerConnections.values()) {
+				const videoSender = pc.getSenders().find(s => s.track?.kind === 'video')
+				if (videoSender && track) {
+					void this.applyBitrateConstraints(videoSender, track)
+				}
+			}
+		}
+	}
+
 	private async ensureScreenStream(): Promise<MediaStream> {
 		if (this.screenStream) {
 			return this.screenStream
@@ -214,13 +240,13 @@ export class WebRTCService {
 			throw new Error('Демонстрация экрана недоступна на этом устройстве')
 		}
 
-		// Full HD 60fps constraints for smooth, Discord-like screen sharing.
-		// We request 60fps and high resolution; the browser will fall back
-		// gracefully if the display/capture source cannot provide it.
+		const preset = SCREEN_SHARE_PRESETS[this.screenSharePreset] || SCREEN_SHARE_PRESETS.screen1080p60
+
+		// Discord-like high-definition screen sharing constraints
 		const videoConstraints: MediaTrackConstraints = {
-			width: { ideal: 1920, max: 2560 },
-			height: { ideal: 1080, max: 1440 },
-			frameRate: { ideal: 60, max: 60 },
+			width: { ideal: preset.width, max: 3840 },
+			height: { ideal: preset.height, max: 2160 },
+			frameRate: { ideal: preset.frameRate, max: 60 },
 			cursor: 'always',
 			displaySurface: 'monitor',
 		}
@@ -228,7 +254,13 @@ export class WebRTCService {
 		try {
 			const stream = await navigator.mediaDevices.getDisplayMedia({
 				video: videoConstraints,
-				audio: true, // Capture system audio for screen share
+				audio: {
+					echoCancellation: false,
+					noiseSuppression: false,
+					autoGainControl: false,
+					channelCount: 2,
+					sampleRate: 48000,
+				} as any,
 			} as any)
 
 			this.screenStream = stream
@@ -236,35 +268,33 @@ export class WebRTCService {
 
 			const track = stream.getVideoTracks()[0]
 			if (track) {
-				// Try to lock the best available resolution and framerate.
 				try {
 					await track.applyConstraints({
-						width: { ideal: 1920 },
-						height: { ideal: 1080 },
-						frameRate: { ideal: 60 },
-						advanced: [
-							{ width: 1920, height: 1080, frameRate: 60 },
-							{ width: 1920, height: 1080, frameRate: 30 },
-							{ width: 1600, height: 900, frameRate: 60 },
-							{ width: 1280, height: 720, frameRate: 60 },
-						],
+						width: { ideal: preset.width },
+						height: { ideal: preset.height },
+						frameRate: { ideal: preset.frameRate },
 					} as any)
-					
-					// Log actual constraints applied
 					const settings = track.getSettings()
-					console.log('[WebRTC] Screen share settings:', {
+					console.log('[WebRTC] Screen share settings applied:', {
+						preset: preset.key,
 						width: settings.width,
 						height: settings.height,
 						frameRate: settings.frameRate,
 					})
 				} catch (e) {
-					console.warn('Failed to apply screen share constraints:', e)
+					console.warn('[WebRTC] Failed to apply screen share constraints:', e)
 				}
 
 				track.onended = () => {
 					console.log('[WebRTC] Screen share track ended by user')
 					this.stopScreenShare().catch(() => {})
 				}
+			}
+
+			// Capture & mix system audio if provided
+			const screenAudioTrack = stream.getAudioTracks()[0]
+			if (screenAudioTrack && this.localStream) {
+				this.setupScreenAudioMixing(screenAudioTrack)
 			}
 
 			this.notifyScreenShareState()
@@ -275,6 +305,49 @@ export class WebRTCService {
 				throw new Error('Демонстрация экрана отменена пользователем')
 			}
 			throw new Error('Ошибка при захвате экрана: ' + error.message)
+		}
+	}
+
+	private setupScreenAudioMixing(screenAudioTrack: MediaStreamTrack) {
+		try {
+			if (typeof window === 'undefined') return
+			const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
+			if (!AudioContextClass) return
+
+			this.screenAudioMixerContext = new AudioContextClass({ sampleRate: 48000 })
+			const ctx = this.screenAudioMixerContext
+			const destination = ctx.createMediaStreamDestination()
+
+			// Connect system/game audio with high volume
+			const screenSource = ctx.createMediaStreamSource(new MediaStream([screenAudioTrack]))
+			const screenGain = ctx.createGain()
+			screenGain.gain.value = 0.95
+			screenSource.connect(screenGain)
+			screenGain.connect(destination)
+
+			// Connect microphone audio
+			const micTrack = this.localStream?.getAudioTracks()[0]
+			if (micTrack) {
+				this.rawMicTrackBeforeScreenShare = micTrack
+				const micSource = ctx.createMediaStreamSource(new MediaStream([micTrack]))
+				const micGain = ctx.createGain()
+				micGain.gain.value = 1.0
+				micSource.connect(micGain)
+				micGain.connect(destination)
+			}
+
+			const mixedAudioTrack = destination.stream.getAudioTracks()[0]
+			if (mixedAudioTrack) {
+				for (const pc of this.peerConnections.values()) {
+					const audioSender = pc.getSenders().find(s => s.track?.kind === 'audio')
+					if (audioSender) {
+						void audioSender.replaceTrack(mixedAudioTrack)
+					}
+				}
+				console.log('[WebRTC] Mixed system audio and microphone stream for Discord-grade screen sound')
+			}
+		} catch (e) {
+			console.warn('[WebRTC] Could not mix system audio with microphone:', e)
 		}
 	}
 
@@ -301,12 +374,13 @@ export class WebRTCService {
 			}
 			if (track.kind === 'video') {
 				if (this.isSharingScreen && this.screenStream?.getVideoTracks()[0] === track) {
-					// High quality screen share (14 Mbps, crisp text resolution)
-					params.encodings[0].maxBitrate = 14_000_000
+					const preset = SCREEN_SHARE_PRESETS[this.screenSharePreset] || SCREEN_SHARE_PRESETS.screen1080p60
+					params.encodings[0].maxBitrate = preset.maxBitrate
+					params.encodings[0].maxFramerate = preset.frameRate
+					params.encodings[0].scaleResolutionDownBy = 1.0
 					params.encodings[0].degradationPreference = 'maintain-resolution'
-					console.log('[WebRTC] Applied High Quality Screen Share bitrate limit: 14 Mbps (maintain-resolution)')
+					console.log(`[WebRTC] Applied High Quality Screen Share (${preset.shortLabel}): ${Math.round(preset.maxBitrate / 1000)} kbps (maintain-resolution)`)
 				} else {
-					// 720p/1080p camera quality.
 					params.encodings[0].maxBitrate = 2_500_000
 					params.encodings[0].degradationPreference = 'balanced'
 					console.log('[WebRTC] Applied camera bitrate limit: 2.5 Mbps')
@@ -327,16 +401,58 @@ export class WebRTCService {
 	public optimizeSessionDescription(desc: RTCSessionDescriptionInit): RTCSessionDescriptionInit {
 		if (!desc || !desc.sdp) return desc
 		const targetBitrate = AUDIO_BITRATE_PRESETS[this.audioQualityPreset].bitrate
-		const optimizedSdp = optimizeOpusSdp(desc.sdp, {
+		let optimizedSdp = optimizeOpusSdp(desc.sdp, {
 			bitrate: targetBitrate,
 			stereo: true,
 			useFec: true,
 			useDtx: true,
 			minPtime: 10,
 		})
+
+		const preset = SCREEN_SHARE_PRESETS[this.screenSharePreset] || SCREEN_SHARE_PRESETS.screen1080p60
+		optimizedSdp = optimizeVideoSdp(optimizedSdp, preset.maxBitrate)
+
 		return {
 			type: desc.type,
 			sdp: optimizedSdp,
+		}
+	}
+
+	public preferVideoCodecs(pc: RTCPeerConnection) {
+		try {
+			const transceivers = pc.getTransceivers()
+			const videoTransceiver = transceivers.find(
+				t => (t.sender && t.sender.track && t.sender.track.kind === 'video') ||
+				     (t.receiver && t.receiver.track && t.receiver.track.kind === 'video')
+			)
+			if (videoTransceiver && typeof RTCRtpReceiver !== 'undefined' && 'getCapabilities' in RTCRtpReceiver) {
+				const capabilities = RTCRtpReceiver.getCapabilities('video')
+				if (capabilities && capabilities.codecs) {
+					// Приоритет: H264 (High Profile) -> VP9 -> AV1 -> VP8
+					const h264Codecs = capabilities.codecs.filter(c => c.mimeType.toLowerCase() === 'video/h264')
+					const vp9Codecs = capabilities.codecs.filter(c => c.mimeType.toLowerCase() === 'video/vp9')
+					const av1Codecs = capabilities.codecs.filter(c => c.mimeType.toLowerCase() === 'video/av01')
+					const otherCodecs = capabilities.codecs.filter(c => 
+						!['video/h264', 'video/vp9', 'video/av01'].includes(c.mimeType.toLowerCase())
+					)
+
+					h264Codecs.sort((a, b) => {
+						const aFmtp = a.sdpFmtpLine || ''
+						const bFmtp = b.sdpFmtpLine || ''
+						if (aFmtp.includes('profile-level-id=640c') || aFmtp.includes('profile-level-id=42e0')) return -1
+						if (bFmtp.includes('profile-level-id=640c') || bFmtp.includes('profile-level-id=42e0')) return 1
+						return 0
+					})
+
+					const sorted = [...h264Codecs, ...vp9Codecs, ...av1Codecs, ...otherCodecs]
+					if (sorted.length > 0) {
+						videoTransceiver.setCodecPreferences(sorted)
+						console.log('[WebRTC] Preferred hardware-accelerated video codecs (H264 High Profile / VP9 / AV1)')
+					}
+				}
+			}
+		} catch (e) {
+			// Set codec preferences fallback
 		}
 	}
 
@@ -413,8 +529,6 @@ export class WebRTCService {
 	async startScreenShare(): Promise<void> {
 		const stream = await this.ensureScreenStream()
 		const videoTrack = stream.getVideoTracks()[0]
-		// Note: We do NOT capture system audio from screen share to avoid replacing microphone audio
-		// Users will hear each other through microphone audio while screen sharing
 		if (!videoTrack) return
 
 		const tasks: Promise<void>[] = []
@@ -429,58 +543,62 @@ export class WebRTCService {
 
 			// Replace/add video track with screen share
 			let videoSender = pc.getSenders().find(s => s.track?.kind === 'video')
+			let needsRenegotiation = false
+
 			if (videoSender) {
 				try {
 					await videoSender.replaceTrack(videoTrack)
-					console.log(`[WebRTC] Replaced video track with screen share for ${socketId}`)
+					console.log(`[WebRTC] Replaced video track with screen share seamlessly for ${socketId}`)
 				} catch (e) {
 					console.error(`[WebRTC] Failed to replace video track for ${socketId}:`, e)
 				}
 			} else {
 				try {
 					videoSender = pc.addTrack(videoTrack, stream)
-					console.log(`[WebRTC] Added screen share video track for ${socketId}`)
+					needsRenegotiation = true
+					console.log(`[WebRTC] Added screen share video track for ${socketId} (initial renegotiation needed)`)
 				} catch (e) {
 					console.error(`[WebRTC] Failed to add video track for ${socketId}:`, e)
 				}
 			}
+
 			if (videoSender) {
+				this.preferVideoCodecs(pc)
 				void this.applyBitrateConstraints(videoSender, videoTrack)
 			}
 
-			// Keep microphone audio - do NOT replace with system audio
-			// This ensures users can still talk while screen sharing
-
-			tasks.push(
-				(async () => {
-					try {
-						// Check state again before creating offer
-						if (pc.signalingState !== 'stable') {
-							console.log(`[WebRTC] State changed, skipping screen share offer for ${socketId}`)
-							return
+			if (needsRenegotiation) {
+				tasks.push(
+					(async () => {
+						try {
+							if (pc.signalingState !== 'stable') {
+								console.log(`[WebRTC] State changed, skipping screen share offer for ${socketId}`)
+								return
+							}
+							const rawOffer = await pc.createOffer()
+							if (pc.signalingState !== 'stable') {
+								console.log(`[WebRTC] State changed during offer creation, skipping screen share offer for ${socketId}`)
+								return
+							}
+							const offer = this.optimizeSessionDescription(rawOffer)
+							await pc.setLocalDescription(offer)
+							this.socket.emit('offer', {
+								target_socket_id: socketId,
+								offer,
+								caller_user_id: this.userId,
+							})
+							console.log(`[WebRTC] Screen share offer sent to ${socketId}`)
+						} catch (e) {
+							console.error(`[WebRTC] Screen share offer failed for ${socketId}:`, e)
 						}
-						const rawOffer = await pc.createOffer()
-						// Double-check state before setting local description
-						if (pc.signalingState !== 'stable') {
-							console.log(`[WebRTC] State changed during offer creation, skipping screen share offer for ${socketId}`)
-							return
-						}
-						const offer = this.optimizeSessionDescription(rawOffer)
-						await pc.setLocalDescription(offer)
-						this.socket.emit('offer', {
-							target_socket_id: socketId,
-							offer,
-							caller_user_id: this.userId,
-						})
-						console.log(`[WebRTC] Screen share offer sent to ${socketId}`)
-					} catch (e) {
-						console.error(`[WebRTC] Screen share offer failed for ${socketId}:`, e)
-					}
-				})(),
-			)
+					})(),
+				)
+			}
 		}
-		await Promise.allSettled(tasks)
-		console.log(`[WebRTC] Screen share started to ${tasks.length} peer(s)`)
+		if (tasks.length > 0) {
+			await Promise.allSettled(tasks)
+		}
+		console.log(`[WebRTC] Screen share started (renegotiated ${tasks.length} peer(s))`)
 		
 		// Emit screen share state change to notify other participants
 		this.socket.emit('screen_share_state_changed', {
@@ -503,59 +621,66 @@ export class WebRTCService {
 		this.isSharingScreen = false
 		this.notifyScreenShareState()
 
+		// Cleanup screen audio mixing and restore microphone
+		if (this.screenAudioMixerContext) {
+			try {
+				void this.screenAudioMixerContext.close().catch(() => {})
+			} catch {}
+			this.screenAudioMixerContext = null
+		}
+		if (this.rawMicTrackBeforeScreenShare) {
+			const micTrack = this.rawMicTrackBeforeScreenShare
+			this.rawMicTrackBeforeScreenShare = null
+			for (const pc of this.peerConnections.values()) {
+				const audioSender = pc.getSenders().find(s => s.track?.kind === 'audio')
+				if (audioSender && micTrack.readyState === 'live') {
+					void audioSender.replaceTrack(micTrack).catch(() => {})
+				}
+			}
+		}
+
 		const tasks: Promise<void>[] = []
 		for (const [socketId, pc] of this.peerConnections.entries()) {
 			if (!this.isSocketKey(socketId)) continue
 
-			// Check if we can renegotiate - must be in stable state
-			if (pc.signalingState !== 'stable') {
-				console.log(`[WebRTC] Cannot stop screen share: PC for ${socketId} is in ${pc.signalingState}, waiting for stable state`)
-				continue
-			}
-
-			// Remove screen share video track
+			// Revert video track: if camera video exists, revert to camera, otherwise null
+			const cameraTrack = this.videoStream?.getVideoTracks()[0] || null
 			const videoSender = pc.getSenders().find(s => s.track?.kind === 'video')
 			if (videoSender) {
 				try {
-					await videoSender.replaceTrack(null)
-					console.log(`[WebRTC] Removed screen share track for ${socketId}`)
+					await videoSender.replaceTrack(cameraTrack)
+					console.log(`[WebRTC] Reverted video track to ${cameraTrack ? 'camera' : 'null'} for ${socketId}`)
 				} catch (e) {
-					console.error(`[WebRTC] Failed to replace video track with null for ${socketId}:`, e)
+					console.error(`[WebRTC] Failed to revert video track for ${socketId}:`, e)
 				}
 			}
 
-			// Microphone audio was never replaced, so nothing to restore
-
-			tasks.push(
-				(async () => {
-					try {
-						// Check state again before creating offer
-						if (pc.signalingState !== 'stable') {
-							console.log(`[WebRTC] State changed, skipping stop screen share offer for ${socketId}`)
-							return
+			if (!cameraTrack && pc.signalingState === 'stable') {
+				tasks.push(
+					(async () => {
+						try {
+							if (pc.signalingState !== 'stable') return
+							const rawOffer = await pc.createOffer()
+							if (pc.signalingState !== 'stable') return
+							const offer = this.optimizeSessionDescription(rawOffer)
+							await pc.setLocalDescription(offer)
+							this.socket.emit('offer', {
+								target_socket_id: socketId,
+								offer,
+								caller_user_id: this.userId,
+							})
+							console.log(`[WebRTC] Screen share stop offer sent to ${socketId}`)
+						} catch (e) {
+							console.error(`[WebRTC] Stop screen share offer failed for ${socketId}:`, e)
 						}
-						const rawOffer = await pc.createOffer()
-						// Double-check state before setting local description
-						if (pc.signalingState !== 'stable') {
-							console.log(`[WebRTC] State changed during offer creation, skipping stop screen share offer for ${socketId}`)
-							return
-						}
-						const offer = this.optimizeSessionDescription(rawOffer)
-						await pc.setLocalDescription(offer)
-						this.socket.emit('offer', {
-							target_socket_id: socketId,
-							offer,
-							caller_user_id: this.userId,
-						})
-						console.log(`[WebRTC] Screen share stop offer sent to ${socketId}`)
-					} catch (e) {
-						console.error(`[WebRTC] Stop screen share offer failed for ${socketId}:`, e)
-					}
-				})(),
-			)
+					})(),
+				)
+			}
 		}
-		await Promise.allSettled(tasks)
-		console.log(`[WebRTC] Screen share stopped for ${tasks.length} peer(s)`)
+		if (tasks.length > 0) {
+			await Promise.allSettled(tasks)
+		}
+		console.log(`[WebRTC] Screen share stopped for ${this.peerConnections.size} peer(s)`)
 		
 		// Emit screen share state change to notify other participants
 		this.socket.emit('screen_share_state_changed', {

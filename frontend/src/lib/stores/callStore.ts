@@ -2,7 +2,7 @@ import { Socket } from 'socket.io-client'
 import { create } from 'zustand'
 import { CallManager, CallRecord, CallState } from '../services/CallManager'
 import { WebRTCService } from '../services/WebRTCService'
-import { AudioBitratePreset, NetworkQualityStats } from '../services/AudioProcessor'
+import { AudioBitratePreset, NetworkQualityStats, ScreenSharePresetKey } from '../services/AudioProcessor'
 
 interface CallStore {
 	
@@ -12,6 +12,8 @@ interface CallStore {
 	localStream: MediaStream | null
 	screenStream: MediaStream | null
 	remoteStreams: Map<string, MediaStream>
+	remoteScreenShare: { socketId: string; userId?: string; isSharing: boolean } | null
+	screenSharePreset: ScreenSharePresetKey
 	activeCalls: Map<string, CallState>
 	activeGroupCallId: string | null
 	activeVoiceChannelId: string | null
@@ -56,6 +58,7 @@ interface CallStore {
 	toggleVideo: () => Promise<void>
 	isVideoEnabled: () => boolean
 	setAudioQualityPreset: (preset: AudioBitratePreset) => void
+	setScreenSharePreset: (preset: ScreenSharePresetKey) => void
 	toggleKrisp: () => boolean
 
 	
@@ -95,6 +98,8 @@ export const useCallStore = create<CallStore>((set, get) => ({
 	videoStream: null,
 	isVideoActive: false,
 	remoteStreams: new Map(),
+	remoteScreenShare: null,
+	screenSharePreset: 'screen1080p60',
 	activeCalls: new Map(),
 	activeGroupCallId: null,
 	activeVoiceChannelId: null,
@@ -104,7 +109,7 @@ export const useCallStore = create<CallStore>((set, get) => ({
 	isScreenSharing: false,
 	callHistory: [],
 	audioQualityPreset: 'boost1',
-	isKrispEnabled: true,
+	isKrispEnabled: false,
 	networkStats: null,
 
 	
@@ -156,23 +161,14 @@ export const useCallStore = create<CallStore>((set, get) => ({
 			
 			let streamUpdateTimeout: NodeJS.Timeout | null = null
 			callManager.onRemoteStream = (socketId: string, stream: MediaStream) => {
-				
 				if (streamUpdateTimeout) {
 					clearTimeout(streamUpdateTimeout)
 				}
-				
 				
 				streamUpdateTimeout = setTimeout(() => {
 					const { activeCalls, remoteStreams } = get()
 					const call = activeCalls.get(socketId)
 
-					
-					const existingStream = remoteStreams.get(socketId)
-					if (existingStream === stream) {
-						return 
-					}
-
-					
 					const newStreams = new Map(remoteStreams)
 					newStreams.set(socketId, stream)
 
@@ -185,7 +181,11 @@ export const useCallStore = create<CallStore>((set, get) => ({
 						set({ remoteStreams: newStreams })
 					}
 					streamUpdateTimeout = null
-				}, 150)
+				}, 100)
+			}
+
+			callManager.onRemoteScreenShareChange = (info) => {
+				set({ remoteScreenShare: info })
 			}
 
 			callManager.onIncomingCall = (call: CallState) => {
@@ -547,6 +547,14 @@ export const useCallStore = create<CallStore>((set, get) => ({
 			webRTCService.setAudioQualityLevel(preset)
 		}
 		set({ audioQualityPreset: preset })
+	},
+
+	setScreenSharePreset: (preset: ScreenSharePresetKey) => {
+		const { webRTCService } = get()
+		if (webRTCService) {
+			webRTCService.setScreenSharePreset(preset)
+		}
+		set({ screenSharePreset: preset })
 	},
 
 	toggleKrisp: () => {

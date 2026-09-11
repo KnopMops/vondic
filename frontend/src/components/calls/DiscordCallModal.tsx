@@ -15,12 +15,41 @@ import {
 	ZapIcon,
 	CheckIcon,
 	ActivityIcon,
+	CrownIcon,
 } from 'lucide-react'
 import {
 	AudioBitratePreset,
 	AUDIO_BITRATE_PRESETS,
 	NetworkQualityStats,
+	ScreenSharePresetKey,
+	SCREEN_SHARE_PRESETS,
 } from '../../lib/services/AudioProcessor'
+
+// Stable video stream player component (defined at module level with memo to eliminate unmounting and 1-second drops)
+const StreamVideo = React.memo(({
+	stream,
+	muted = false,
+	className = 'w-full h-full object-cover',
+}: {
+	stream: MediaStream
+	muted?: boolean
+	className?: string
+}) => {
+	const videoRef = useRef<HTMLVideoElement>(null)
+	useEffect(() => {
+		const video = videoRef.current
+		if (!video || !stream) return
+		if (video.srcObject !== stream) {
+			video.srcObject = stream
+		}
+		video.play().catch(() => {
+			// Auto-play might be pending or need user interaction
+		})
+	}, [stream])
+
+	return <video ref={videoRef} autoPlay playsInline muted={muted} className={className} />
+})
+StreamVideo.displayName = 'StreamVideo'
 
 interface Participant {
 	id: string
@@ -40,16 +69,20 @@ interface DiscordCallModalProps {
 	videoStream: MediaStream | null
 	screenStream: MediaStream | null
 	remoteStreams: Map<string, MediaStream>
+	remoteScreenShare?: { socketId: string; userId?: string; isSharing: boolean } | null
+	screenSharePreset?: ScreenSharePresetKey
 	isMuted: boolean
 	isVideoEnabled: boolean
 	isScreenSharing: boolean
 	isScreenShareSupported: boolean
 	isKrispEnabled?: boolean
+	isPremium?: boolean
 	audioQualityPreset?: AudioBitratePreset
 	networkStats?: NetworkQualityStats | null
 	onMuteToggle: () => void
 	onVideoToggle: () => void
 	onScreenShareToggle: () => void
+	onScreenSharePresetChange?: (preset: ScreenSharePresetKey) => void
 	onKrispToggle?: () => void
 	onAudioQualityChange?: (preset: AudioBitratePreset) => void
 	onDisconnect: () => void
@@ -63,51 +96,44 @@ export const DiscordCallModal: React.FC<DiscordCallModalProps> = ({
 	videoStream,
 	screenStream,
 	remoteStreams,
+	remoteScreenShare,
+	screenSharePreset = 'screen1080p60',
 	isMuted,
 	isVideoEnabled,
 	isScreenSharing,
 	isScreenShareSupported,
-	isKrispEnabled = true,
+	isKrispEnabled = false,
+	isPremium = false,
 	audioQualityPreset = 'boost1',
 	networkStats,
 	onMuteToggle,
 	onVideoToggle,
 	onScreenShareToggle,
+	onScreenSharePresetChange,
 	onKrispToggle,
 	onAudioQualityChange,
 	onDisconnect,
 }) => {
 	const [isFullscreen, setIsFullscreen] = useState(false)
 	const [isQualityMenuOpen, setIsQualityMenuOpen] = useState(false)
+	const [isScreenQualityMenuOpen, setIsScreenQualityMenuOpen] = useState(false)
 	const containerRef = useRef<HTMLDivElement>(null)
 	const qualityMenuRef = useRef<HTMLDivElement>(null)
+	const screenQualityMenuRef = useRef<HTMLDivElement>(null)
 
-	// Закрытие меню выбора битрейта при клике вне его
+	// Закрытие меню выбора битрейта и качества экрана при клике вне их
 	useEffect(() => {
 		const handleClickOutside = (e: MouseEvent) => {
 			if (qualityMenuRef.current && !qualityMenuRef.current.contains(e.target as Node)) {
 				setIsQualityMenuOpen(false)
 			}
+			if (screenQualityMenuRef.current && !screenQualityMenuRef.current.contains(e.target as Node)) {
+				setIsScreenQualityMenuOpen(false)
+			}
 		}
 		document.addEventListener('mousedown', handleClickOutside)
 		return () => document.removeEventListener('mousedown', handleClickOutside)
 	}, [])
-
-	// Stream video ref component
-	const StreamVideo: React.FC<{ stream: MediaStream; muted?: boolean; className?: string }> = ({
-		stream,
-		muted = false,
-		className = 'w-full h-full object-cover',
-	}) => {
-		const videoRef = useRef<HTMLVideoElement>(null)
-		useEffect(() => {
-			if (videoRef.current && stream) {
-				videoRef.current.srcObject = stream
-			}
-		}, [stream])
-
-		return <video ref={videoRef} autoPlay playsInline muted={muted} className={className} />
-	}
 
 	const toggleFullscreen = () => {
 		if (!document.fullscreenElement) {
@@ -119,13 +145,17 @@ export const DiscordCallModal: React.FC<DiscordCallModalProps> = ({
 		}
 	}
 
+	// Точное определение активного экрана
 	const activeScreenStream =
 		screenStream ||
-		Array.from(remoteStreams.values()).find(s =>
-			s.getVideoTracks().some(t => t.label.toLowerCase().includes('screen') || t.label.toLowerCase().includes('display')),
-		)
+		(remoteScreenShare?.isSharing && remoteScreenShare.socketId
+			? remoteStreams.get(remoteScreenShare.socketId) || null
+			: null) ||
+		Array.from(remoteStreams.values()).find(s => s.getVideoTracks().length > 0 && !isVideoEnabled) ||
+		null
 
 	const currentPresetInfo = AUDIO_BITRATE_PRESETS[audioQualityPreset] || AUDIO_BITRATE_PRESETS.boost1
+	const currentScreenPresetInfo = SCREEN_SHARE_PRESETS[screenSharePreset] || SCREEN_SHARE_PRESETS.screen1080p60
 
 	return (
 		<div
@@ -223,6 +253,77 @@ export const DiscordCallModal: React.FC<DiscordCallModalProps> = ({
 						</div>
 					)}
 
+					{/* Discord-style Screen Share Quality Selector */}
+					{onScreenSharePresetChange && (isScreenSharing || activeScreenStream) && (
+						<div className="relative" ref={screenQualityMenuRef}>
+							<button
+								onClick={() => setIsScreenQualityMenuOpen(!isScreenQualityMenuOpen)}
+								className="flex items-center gap-1.5 px-3 py-1 text-xs rounded-full bg-[#313338] hover:bg-[#383a40] text-emerald-300 hover:text-emerald-200 border border-emerald-500/30 transition-all font-semibold shadow-sm cursor-pointer"
+								title="Качество демонстрации экрана (FPS и разрешение)"
+							>
+								<MonitorIcon className="w-3.5 h-3.5 text-emerald-400" />
+								<span>{currentScreenPresetInfo.shortLabel}</span>
+								{currentScreenPresetInfo.isPremium && (
+									<CrownIcon className="w-3 h-3 text-amber-400 fill-amber-400 ml-0.5" />
+								)}
+							</button>
+
+							{/* Dropdown Menu */}
+							{isScreenQualityMenuOpen && (
+								<div className="absolute right-0 mt-2 w-64 bg-[#2b2d31] border border-white/10 rounded-xl shadow-2xl p-2 z-50 flex flex-col gap-1 backdrop-blur-lg">
+									<div className="px-3 py-1.5 border-b border-white/5 mb-1">
+										<div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+											Качество трансляции экрана
+										</div>
+										<div className="text-[10px] text-gray-500">
+											H.264 / NVENC аппаратное ускорение
+										</div>
+									</div>
+
+									{(Object.entries(SCREEN_SHARE_PRESETS) as [ScreenSharePresetKey, typeof currentScreenPresetInfo][]).map(
+										([presetKey, info]) => {
+											const isSelected = screenSharePreset === presetKey
+											return (
+												<button
+													key={presetKey}
+													onClick={() => {
+														if (info.isPremium && !isPremium) {
+															if (onKrispToggle) onKrispToggle() // triggers premium modal in GlobalCallUI
+															setIsScreenQualityMenuOpen(false)
+															return
+														}
+														onScreenSharePresetChange(presetKey)
+														setIsScreenQualityMenuOpen(false)
+													}}
+													className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center justify-between ${
+														isSelected
+															? 'bg-emerald-600/20 text-emerald-300 font-semibold'
+															: 'hover:bg-white/5 text-gray-300'
+													}`}
+												>
+													<div className="flex flex-col gap-0.5">
+														<div className="flex items-center gap-1.5">
+															<span className="font-medium text-gray-200">{info.label}</span>
+															{info.isPremium && (
+																<span className="text-[9px] px-1 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+																	PREMIUM
+																</span>
+															)}
+														</div>
+														<span className="text-[10px] text-gray-400">
+															{info.description}
+														</span>
+													</div>
+													{isSelected && <CheckIcon className="w-4 h-4 text-emerald-400 shrink-0 ml-2" />}
+												</button>
+											)
+										},
+									)}
+								</div>
+							)}
+						</div>
+					)}
+
 					<span className="px-2.5 py-1 text-xs rounded-full bg-[#313338] text-gray-300 font-medium">
 						👥 {participants.length}
 					</span>
@@ -252,9 +353,12 @@ export const DiscordCallModal: React.FC<DiscordCallModalProps> = ({
 					<div className="w-full h-full flex flex-col gap-4">
 						<div className="flex-1 bg-black/60 rounded-2xl overflow-hidden border border-white/10 relative shadow-2xl flex items-center justify-center">
 							<StreamVideo stream={activeScreenStream} className="w-full h-full object-contain" />
-							<div className="absolute top-4 left-4 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-xs font-semibold text-white flex items-center gap-2 border border-white/10">
+							<div className="absolute top-4 left-4 bg-black/70 backdrop-blur-md px-3 py-1.5 rounded-lg text-xs font-semibold text-white flex items-center gap-2 border border-white/10 shadow-lg">
 								<MonitorIcon className="w-4 h-4 text-emerald-400" />
-								<span>Демонстрация экрана HD</span>
+								<span>Демонстрация экрана {currentScreenPresetInfo.shortLabel}</span>
+								<span className="text-[10px] text-emerald-400/90 font-mono">
+									{Math.round(currentScreenPresetInfo.maxBitrate / 1000000)} Mbps
+								</span>
 							</div>
 						</div>
 
@@ -386,7 +490,7 @@ export const DiscordCallModal: React.FC<DiscordCallModalProps> = ({
 					{isMuted ? <MicOffIcon className="w-5 h-5" /> : <MicIcon className="w-5 h-5" />}
 				</button>
 
-				{/* Discord-style Krisp AI Noise Suppression Button */}
+				{/* Discord-style Krisp AI Noise Suppression Button (Vondic Premium) */}
 				{onKrispToggle && (
 					<button
 						onClick={onKrispToggle}
@@ -397,11 +501,14 @@ export const DiscordCallModal: React.FC<DiscordCallModalProps> = ({
 						}`}
 						title={
 							isKrispEnabled
-								? 'Шумоподавление Krisp AI: ВКЛЮЧЕНО (фильтрует клики, вентиляторы, эхо)'
-								: 'Шумоподавление Krisp AI: ВЫКЛЮЧЕНО'
+								? 'Шумоподавление Krisp AI: ВКЛЮЧЕНО (Вондик Premium)'
+								: 'Шумоподавление Krisp AI (Доступно с Вондик Premium)'
 						}
 					>
 						<SparklesIcon className="w-5 h-5" />
+						<span className="absolute -bottom-1 -right-1 text-[9px] px-1 rounded-full bg-amber-500/30 text-amber-300 font-bold border border-amber-500/40 flex items-center">
+							👑
+						</span>
 						{isKrispEnabled && (
 							<span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full ring-2 ring-[#2b2d31]" />
 						)}
