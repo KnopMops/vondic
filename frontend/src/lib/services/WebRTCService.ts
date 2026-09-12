@@ -112,20 +112,20 @@ export class WebRTCService {
 			iceServers: configuredIceServers.length ? configuredIceServers : [
 				{
 					urls: [
+						'stun:call.vondic.ru:3478',
+						'stun:192.168.140.11:3478',
 						'stun:stun.l.google.com:19302',
 						'stun:stun1.l.google.com:19302',
-						'stun:webrtc.vondic.ru:3478',
-						'stun:vondic.ru:3478',
 						'stun:95.165.96.208:3478',
 						`stun:${this.internalTurnHostResolved}:3478`,
 					],
 				},
 				{
 					urls: [
-						'turn:vondic.ru:3478?transport=udp',
-						'turn:vondic.ru:3478?transport=tcp',
-						'turn:webrtc.vondic.ru:3478?transport=udp',
-						'turn:webrtc.vondic.ru:3478?transport=tcp',
+						'turn:call.vondic.ru:3478?transport=udp',
+						'turn:call.vondic.ru:3478?transport=tcp',
+						'turn:192.168.140.11:3478?transport=udp',
+						'turn:192.168.140.11:3478?transport=tcp',
 						'turn:95.165.96.208:3478?transport=udp',
 						'turn:95.165.96.208:3478?transport=tcp',
 						`turn:${this.internalTurnHostResolved}:3478?transport=udp`,
@@ -1163,7 +1163,7 @@ export class WebRTCService {
 			})
 		} else if (routingSettings.ice_source === 'vondic') {
 			const publicStunServers: RTCIceServer[] = [
-				{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:webrtc.vondic.ru:3478', 'stun:vondic.ru:3478'] },
+				{ urls: ['stun:call.vondic.ru:3478', 'stun:192.168.140.11:3478', 'stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
 			]
 			iceServers = [...publicStunServers, ...iceServers]
 		}

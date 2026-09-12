@@ -12,7 +12,6 @@ import {
 	LuChevronLeft as ChevronLeft,
 	LuChevronRight as ChevronRight,
 	LuWrench as Wrench,
-	LuPhoneCall as PhoneCall,
 } from 'react-icons/lu'
 
 export default function Sidebar() {
@@ -35,6 +34,13 @@ export default function Sidebar() {
 		localStorage.setItem('sidebar_expanded', String(newState))
 	}
 
+	const isItemActive = (href: string) => {
+		if (href === '/feed') {
+			return pathname === '/feed'
+		}
+		return pathname?.startsWith(href)
+	}
+
 	const items = sidebarItems
 		.map(item => {
 			if (item.href === '/feed/profile' && user?.id) {
@@ -47,11 +53,10 @@ export default function Sidebar() {
 		})
 		.filter(item => !(item.label === 'Почта' && !user?.premium))
 
-	// Add Admin panel and Call routing for Admin / Support roles
+	// Add Admin panel for Admin / Support roles
 	const roleLower = String(user?.role || '').toLowerCase()
 	if (roleLower === 'support' || roleLower === 'admin' || roleLower === 'superadmin' || user?.role === 'Admin' || user?.role === 'Support') {
 		items.push({ label: 'Админка', icon: Wrench, href: '/feed/admin' })
-		items.push({ label: 'Маршрутизация', icon: PhoneCall, href: '/feed/admin?tab=routing' })
 	}
 
 	return (

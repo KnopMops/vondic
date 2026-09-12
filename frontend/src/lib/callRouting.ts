@@ -53,17 +53,17 @@ export interface CallRoutingSettings {
 export const DEFAULT_VONDIC_ICE_SERVERS: RTCIceServer[] = [
 	{
 		urls: [
-			'stun:vondic.ru:3478',
-			'stun:webrtc.vondic.ru:3478',
+			'stun:call.vondic.ru:3478',
+			'stun:192.168.140.11:3478',
 			'stun:stun.l.google.com:19302',
 		],
 	},
 	{
 		urls: [
-			'turn:vondic.ru:3478?transport=udp',
-			'turn:vondic.ru:3478?transport=tcp',
-			'turn:webrtc.vondic.ru:3478?transport=udp',
-			'turn:webrtc.vondic.ru:3478?transport=tcp',
+			'turn:call.vondic.ru:3478?transport=udp',
+			'turn:call.vondic.ru:3478?transport=tcp',
+			'turn:192.168.140.11:3478?transport=udp',
+			'turn:192.168.140.11:3478?transport=tcp',
 		],
 		username: 'vondic',
 		credential: 'Dim4566212Len',
@@ -78,15 +78,15 @@ export const DEFAULT_CALL_ROUTING: CallRoutingSettings = {
 		signaling_url: 'https://vondic.ru',
 		webrtc_url: 'https://webrtc.vondic.ru',
 		stun_urls: [
-			'stun:vondic.ru:3478',
-			'stun:webrtc.vondic.ru:3478',
+			'stun:call.vondic.ru:3478',
+			'stun:192.168.140.11:3478',
 			'stun:stun.l.google.com:19302',
 		],
 		turn_urls: [
-			'turn:vondic.ru:3478?transport=udp',
-			'turn:vondic.ru:3478?transport=tcp',
-			'turn:webrtc.vondic.ru:3478?transport=udp',
-			'turn:webrtc.vondic.ru:3478?transport=tcp',
+			'turn:call.vondic.ru:3478?transport=udp',
+			'turn:call.vondic.ru:3478?transport=tcp',
+			'turn:192.168.140.11:3478?transport=udp',
+			'turn:192.168.140.11:3478?transport=tcp',
 		],
 		turn_username: 'vondic',
 		turn_password: 'Dim4566212Len',

@@ -65,10 +65,12 @@ class WebRTCService {
   void _compileIceConfiguration() {
     final List<Map<String, dynamic>> iceServers = [
       {
-        'urls': ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302']
-      },
-      {
-        'urls': ['stun:${AppConfig.internalTurnHost}:3478']
+        'urls': [
+          'stun:call.vondic.ru:3478',
+          'stun:${AppConfig.internalTurnHost}:3478',
+          'stun:stun.l.google.com:19302',
+          'stun:stun1.l.google.com:19302',
+        ]
       }
     ];
 
