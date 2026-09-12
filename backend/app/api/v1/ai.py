@@ -1,4 +1,5 @@
 from datetime import datetime
+import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -6,6 +7,8 @@ import httpx
 
 from app.core.deps import get_current_user
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 ai_router = APIRouter(prefix="/api/v1/ai", tags=["AI"])
 
@@ -74,7 +77,21 @@ async def autocorrect_text(
                 json=request_body,
             )
 
+            # Fallback if the configured model is deprecated (410) or not found (404)
+            if resp.status_code in (404, 410) and request_body.get("model") != "z-ai/glm-5.3-flash":
+                logger.warning(
+                    f"[AI AutoCorrect] Model {request_body.get('model')} returned status {resp.status_code}. "
+                    "Falling back to z-ai/glm-5.3-flash"
+                )
+                request_body["model"] = "z-ai/glm-5.3-flash"
+                resp = await client.post(
+                    f"{settings.NVIDIA_BASE_URL}/chat/completions",
+                    headers=headers,
+                    json=request_body,
+                )
+
         if resp.status_code != 200:
+            logger.error(f"[AI AutoCorrect] NVIDIA NIM error {resp.status_code}: {resp.text}")
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=f"Ошибка ИИ-сервиса (статус {resp.status_code})"
@@ -83,6 +100,7 @@ async def autocorrect_text(
         data = resp.json()
         choices = data.get("choices") or []
         if not choices:
+            logger.error(f"[AI AutoCorrect] Empty choices from NVIDIA NIM: {resp.text}")
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail="ИИ-сервис вернул пустой ответ"
@@ -95,6 +113,7 @@ async def autocorrect_text(
         return AutoCorrectResponse(corrected=corrected, original=raw_text)
 
     except httpx.TimeoutException:
+        logger.error("[AI AutoCorrect] NVIDIA NIM timeout")
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail="Время ожидания ответа ИИ истекло"
@@ -102,6 +121,7 @@ async def autocorrect_text(
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"[AI AutoCorrect] Unexpected error: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Ошибка обработки ИИ: {str(e)}"

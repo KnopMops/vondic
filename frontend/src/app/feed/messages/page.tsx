@@ -1316,7 +1316,11 @@ export default function MessengerPage() {
 					showToast(data.detail || 'ИИ-функции доступны только для Premium', 'info')
 					setIsAiPremiumModalOpen(true)
 				} else {
-					throw new Error(data.detail || 'Ошибка исправления текста')
+					const errorMsg =
+						typeof data.detail === 'string'
+							? data.detail
+							: data.error || data.message || 'Ошибка исправления текста'
+					throw new Error(errorMsg)
 				}
 				return
 			}

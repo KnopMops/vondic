@@ -101,7 +101,7 @@ class Settings(BaseSettings):
     NVIDIA_API_KEY: str = os.environ.get(
         "NVIDIA_API_KEY", "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")
     NVIDIA_BASE_URL: str = os.environ.get("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1")
-    NVIDIA_MODEL: str = os.environ.get("NVIDIA_MODEL", "z-ai/glm-5.2")
+    NVIDIA_MODEL: str = os.environ.get("NVIDIA_MODEL", "z-ai/glm-5.3-flash")
 
     CACHE_REDIS_URL: str | None = _build_redis_url()
 
