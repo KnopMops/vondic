@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package vondic.v1;
+
+enum NetworkConnectionType {
+  CONNECTION_UNKNOWN = 0;
+  CONNECTION_WIFI = 1;
+  CONNECTION_CELLULAR = 2;
+  CONNECTION_ETHERNET = 3;
+  CONNECTION_SLOW_2G = 4;
+  CONNECTION_2G = 5;
+  CONNECTION_3G = 6;
+  CONNECTION_4G = 7;
+}
+
+enum DataSaverLevel {
+  DATA_SAVER_OFF = 0;
+  DATA_SAVER_LOW = 1;
+  DATA_SAVER_MEDIUM = 2;
+  DATA_SAVER_AGGRESSIVE = 3;
+}
+
+message AutoDownloadRule {
+  bool download_photos = 1;
+  bool download_audio = 2;
+  bool download_video = 3;
+  bool download_files = 4;
+  int64 max_photo_bytes = 5;
+  int64 max_video_bytes = 6;
+  int64 max_file_bytes = 7;
+}
+
+message DataSaverSettings {
+  DataSaverLevel level = 1;
+  AutoDownloadRule cellular_rule = 2;
+  AutoDownloadRule wifi_rule = 3;
+  AutoDownloadRule roaming_rule = 4;
+  int32 media_retention_days = 5; // 0 = keep forever, 3, 7, 30
+  bool compress_audio_messages = 6;
+  bool debounce_network_events = 7;
+}
+
+message StorageUsageStats {
+  int64 messages_bytes = 1;
+  int64 photos_bytes = 2;
+  int64 videos_bytes = 3;
+  int64 audio_bytes = 4;
+  int64 files_bytes = 5;
+  int64 total_bytes = 6;
+}

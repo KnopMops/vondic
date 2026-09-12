@@ -5,6 +5,8 @@ import AudioPlayer from '@/components/social/AudioPlayer'
 import PostDetailsModal from '@/components/social/PostDetailsModal'
 import VideoPlayer from '@/components/social/VideoPlayer'
 import { AppleEmoji } from '@/components/ui/AppleEmoji'
+import { BlurHashPreview } from '@/components/ui/BlurHashPreview'
+import { shouldAutoDownloadMedia } from '@/lib/traffic/trafficManager'
 import { Attachment, User } from '@/lib/types'
 import { MessageGroupPosition } from '@/lib/chatMessageLayout'
 import {
@@ -1095,12 +1097,15 @@ const MessageBubble = memo(
 											/>
 										)
 									}
+									const autoDownload = shouldAutoDownloadMedia('photo', a.size)
 									return (
-										<img
+										<BlurHashPreview
 											key={a.url}
 											src={imgUrl}
 											alt={a.name}
-											className='w-full rounded-lg object-cover'
+											sizeBytes={a.size}
+											isAutoDownloadAllowed={autoDownload}
+											className='w-full rounded-lg'
 										/>
 									)
 								}

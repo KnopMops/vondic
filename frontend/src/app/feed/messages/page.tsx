@@ -117,7 +117,9 @@ import {
 	LuLifeBuoy as LifeBuoyIcon,
 	LuStar as StarIcon,
 	LuSparkles as SparklesIcon,
+	LuSliders as SlidersIcon,
 } from 'react-icons/lu'
+import { DataStorageSettingsModal } from '@/components/settings/DataStorageSettingsModal'
 import ChannelSettingsModal from './ChannelSettingsModal'
 import ChatDateSeparator from './ChatDateSeparator'
 import CommunitySettingsModal from './CommunitySettingsModal'
@@ -1357,6 +1359,7 @@ export default function MessengerPage() {
 	const [isCommunitySettingsOpen, setIsCommunitySettingsOpen] = useState(false)
 	const [isGroupInfoOpen, setIsGroupInfoOpen] = useState(false)
 	const [isCommunityInfoOpen, setIsCommunityInfoOpen] = useState(false)
+	const [isDataStorageOpen, setIsDataStorageOpen] = useState(false)
 
 	// Channel Forms State
 	const [newChannelName, setNewChannelName] = useState('')
@@ -5791,6 +5794,14 @@ export default function MessengerPage() {
 								</span>
 							</h2>
 						</div>
+						<button
+							type='button'
+							onClick={() => setIsDataStorageOpen(true)}
+							className='p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 border border-white/5 hover:border-indigo-500/40 transition-all flex items-center gap-1.5 text-xs'
+							title='Данные и память (Трафик как в Telegram, кэш)'
+						>
+							<SlidersIcon className='w-4 h-4 text-indigo-400' />
+						</button>
 					</div>
 
 					<div className='flex p-1 bg-black/20 rounded-lg border border-white/6 relative'>
@@ -9662,6 +9673,10 @@ export default function MessengerPage() {
 		<PremiumModal
 			isOpen={isAiPremiumModalOpen}
 			onClose={() => setIsAiPremiumModalOpen(false)}
+		/>
+		<DataStorageSettingsModal
+			isOpen={isDataStorageOpen}
+			onClose={() => setIsDataStorageOpen(false)}
 		/>
 		</div>
 	)

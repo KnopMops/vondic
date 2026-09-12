@@ -17,6 +17,15 @@ import {
 } from '@/lib/e2eKeySync'
 import { e2ePairs } from '@/lib/e2eGlobalExchange'
 import { getEncProxyClient, isEncProxyEnabled } from '@/lib/encproxy'
+import {
+	getCachedMessagesForChat,
+	saveCachedMessages,
+	saveCachedMessage,
+} from '@/lib/cache/indexedDbStorage'
+import {
+	enforceMediaRetentionPolicy,
+	networkBatcher,
+} from '@/lib/traffic/trafficManager'
 
 const hasCryptoSubtle = () =>
 	typeof crypto !== 'undefined' && typeof crypto.subtle !== 'undefined'
@@ -759,6 +768,10 @@ export const useChat = (
 	}, [decryptMessage])
 
 	useEffect(() => {
+		enforceMediaRetentionPolicy()
+	}, [])
+
+	useEffect(() => {
 		if (!secretChatEnabled) return
 		if (!socket || !e2eKeyId || !currentUserId || !targetUserId) {
 			console.log('[E2E] Skipping key exchange - missing params:', {
@@ -942,6 +955,9 @@ export const useChat = (
 									new Date(b.timestamp).getTime(),
 							)
 							setMessages(decryptedHistory as Message[])
+							if (groupId) {
+								void saveCachedMessages(decryptedHistory as Message[], `group_${groupId}`)
+							}
 							setOffset(HISTORY_PAGE_SIZE)
 							setHasMore(decryptedHistory.length >= HISTORY_PAGE_SIZE)
 							setIsLoading(false)
@@ -1037,7 +1053,28 @@ export const useChat = (
 						(a, b) =>
 							new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
 					)
-					setMessages(decryptedHistory as Message[])
+
+					const activeChatId = groupId
+						? `group_${groupId}`
+						: channelId
+							? `channel_${channelId}`
+							: targetUserId
+								? `dm_${[currentUserId, targetUserId].sort().join('_')}`
+								: null
+
+					setMessages(prev => {
+						const map = new Map<string, Message>()
+						for (const m of prev) if (m.id) map.set(m.id, m)
+						for (const m of decryptedHistory) if (m.id) map.set(m.id, m)
+						const merged = Array.from(map.values()).sort(
+							(a, b) =>
+								new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+						)
+						if (activeChatId) {
+							void saveCachedMessages(merged, activeChatId)
+						}
+						return merged
+					})
 					setOffset(HISTORY_PAGE_SIZE)
 					setHasMore(decryptedHistory.length >= HISTORY_PAGE_SIZE)
 				}
@@ -1048,10 +1085,27 @@ export const useChat = (
 			}
 		}
 
+		const activeChatId = groupId
+			? `group_${groupId}`
+			: channelId
+				? `channel_${channelId}`
+				: targetUserId
+					? `dm_${[currentUserId, targetUserId].sort().join('_')}`
+					: null
+
 		if (targetUserId || channelId || groupId) {
-			setMessages([])
 			setOffset(0)
 			setHasMore(true)
+
+			// Telegram-like instant 0ms render from IndexedDB cache
+			if (activeChatId) {
+				void getCachedMessagesForChat(activeChatId, 50).then(cached => {
+					if (cached && cached.length > 0) {
+						setMessages(cached)
+						setIsLoading(false)
+					}
+				})
+			}
 			fetchHistory()
 		} else {
 			setMessages([])
@@ -1236,6 +1290,7 @@ export const useChat = (
 				}
 				const decrypted = decryptMessage(newMessage)
 				setMessages(prevMessages => [...prevMessages, decrypted as Message])
+				void saveCachedMessage(decrypted as Message, `channel_${channelId}`)
 				return
 			}
 
@@ -1257,6 +1312,7 @@ export const useChat = (
 				}
 				const decrypted = decryptMessage(newMessage)
 				setMessages(prevMessages => [...prevMessages, decrypted as Message])
+				void saveCachedMessage(decrypted as Message, `group_${groupId}`)
 				return
 			}
 
@@ -1287,6 +1343,9 @@ export const useChat = (
 				}
 				const decrypted = decryptMessage(newMessage)
 				setMessages(prevMessages => [...prevMessages, decrypted as Message])
+				if (currentUserId && targetUserId) {
+					void saveCachedMessage(decrypted as Message, `dm_${[currentUserId, targetUserId].sort().join('_')}`)
+				}
 			}
 		}
 
@@ -1311,6 +1370,7 @@ export const useChat = (
 				}
 				const decrypted = decryptMessage(newMessage)
 				setMessages(prevMessages => [...prevMessages, decrypted as Message])
+				void saveCachedMessage(decrypted as Message, `channel_${channelId}`)
 				return
 			}
 
@@ -1331,6 +1391,7 @@ export const useChat = (
 				}
 				const decrypted = decryptMessage(newMessage)
 				setMessages(prevMessages => [...prevMessages, decrypted as Message])
+				void saveCachedMessage(decrypted as Message, `group_${groupId}`)
 				return
 			}
 
@@ -1360,6 +1421,9 @@ export const useChat = (
 				}
 				const decrypted = decryptMessage(newMessage)
 				setMessages(prevMessages => [...prevMessages, decrypted as Message])
+				if (currentUserId && targetUserId) {
+					void saveCachedMessage(decrypted as Message, `dm_${[currentUserId, targetUserId].sort().join('_')}`)
+				}
 			}
 		}
 

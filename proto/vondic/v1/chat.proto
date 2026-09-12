@@ -1,0 +1,82 @@
+syntax = "proto3";
+
+package vondic.v1;
+
+enum MessageType {
+  MESSAGE_TYPE_UNSPECIFIED = 0;
+  MESSAGE_TYPE_TEXT = 1;
+  MESSAGE_TYPE_IMAGE = 2;
+  MESSAGE_TYPE_VOICE = 3;
+  MESSAGE_TYPE_VIDEO = 4;
+  MESSAGE_TYPE_FILE = 5;
+  MESSAGE_TYPE_CALL = 6;
+  MESSAGE_TYPE_SYSTEM = 7;
+}
+
+message Attachment {
+  string id = 1;
+  string url = 2;
+  string name = 3;
+  int64 size_bytes = 4;
+  string mime_type = 5;
+  string blur_hash = 6;
+  int32 width = 7;
+  int32 height = 8;
+  int32 duration_seconds = 9;
+}
+
+message Message {
+  string id = 1;
+  string chat_id = 2;
+  string sender_id = 3;
+  string target_user_id = 4;
+  string group_id = 5;
+  string channel_id = 6;
+  string content = 7;
+  MessageType type = 8;
+  int64 timestamp_ms = 9;
+  bool is_read = 10;
+  bool is_deleted = 11;
+  string reply_to_id = 12;
+  repeated Attachment attachments = 13;
+  string forwarded_from = 14;
+  string client_msg_id = 15;
+}
+
+message ChatSyncRequest {
+  string chat_id = 1;
+  int64 since_timestamp_ms = 2;
+  int32 limit = 3;
+  string last_message_id = 4;
+}
+
+message ChatSyncResponse {
+  string chat_id = 1;
+  repeated Message messages = 2;
+  bool has_more = 3;
+  int64 latest_timestamp_ms = 4;
+}
+
+message SendMessageRequest {
+  string chat_id = 1;
+  string target_user_id = 2;
+  string group_id = 3;
+  string channel_id = 4;
+  string content = 5;
+  MessageType type = 6;
+  repeated Attachment attachments = 7;
+  string reply_to_id = 8;
+  string client_msg_id = 9;
+}
+
+message SendMessageResponse {
+  bool success = 1;
+  Message message = 2;
+  string error = 3;
+}
+
+message BatchReadReceipt {
+  string chat_id = 1;
+  repeated string message_ids = 2;
+  int64 read_timestamp_ms = 3;
+}
