@@ -60,6 +60,7 @@ sysctl --system > /dev/null 2>&1 || sysctl -p "$SYSCTL_CONF"
 echo "[+] Параметры ядра успешно применены."
 
 # Настройка системных лимитов (ulimits)
+# Coturn при установке через apt обычно запускается от пользователя 'turnserver' или 'coturn'
 LIMITS_CONF="/etc/security/limits.d/99-vondic-turn.conf"
 cat << 'EOF' > "$LIMITS_CONF"
 * soft nofile 1048576
@@ -68,26 +69,106 @@ cat << 'EOF' > "$LIMITS_CONF"
 * hard nproc 524288
 root soft nofile 1048576
 root hard nofile 1048576
+turnserver soft nofile 1048576
+turnserver hard nofile 1048576
+turnserver soft nproc 524288
+turnserver hard nproc 524288
+coturn soft nofile 1048576
+coturn hard nofile 1048576
+coturn soft nproc 524288
+coturn hard nproc 524288
 EOF
 
 echo "[+] Файл лимитов $LIMITS_CONF создан (1,048,576 дескрипторов файлов)."
 
-# Настройка systemd limits для Docker
-DOCKER_SERVICE_D="/etc/systemd/system/docker.service.d"
-mkdir -p "$DOCKER_SERVICE_D"
-cat << 'EOF' > "$DOCKER_SERVICE_D/limits.conf"
+# Настройка systemd limits для нативного сервиса Coturn (coturn.service / turnserver.service)
+for SVC in coturn turnserver docker; do
+    SVC_DIR="/etc/systemd/system/${SVC}.service.d"
+    mkdir -p "$SVC_DIR"
+    cat << 'EOF' > "$SVC_DIR/limits.conf"
 [Service]
 LimitNOFILE=1048576
 LimitNPROC=524288
+TasksMax=infinity
+EOF
+    echo "[+] Лимиты systemd для ${SVC}.service сохранены ($SVC_DIR/limits.conf)."
+done
+
+# Включение демона Coturn в /etc/default/coturn (для Debian / Ubuntu)
+if [ -f "/etc/default/coturn" ]; then
+    sed -i 's/#*TURNSERVER_ENABLED=.*/TURNSERVER_ENABLED=1/' /etc/default/coturn || true
+    echo "[+] Включен TURNSERVER_ENABLED=1 в /etc/default/coturn."
+fi
+
+# Создание оптимизированного конфига /etc/turnserver.conf.recommended
+RECOMMENDED_CONF="/etc/turnserver.conf.recommended"
+cat << 'EOF' > "$RECOMMENDED_CONF"
+# ==============================================================================
+# Vondic Coturn 10,000+ Concurrent Voice Calls High-Load Configuration
+# Размещение: /etc/turnserver.conf
+# ==============================================================================
+
+# Порт и интерфейсы
+listening-port=3478
+listening-ip=0.0.0.0
+
+# ------------------------------------------------------------------------------
+# ВАЖНО ДЛЯ NAT И СЕТИ:
+# Если сервер находится за NAT (проброс портов на роутере), раскомментируйте external-ip:
+# Формат: external-ip=ПУБЛИЧНЫЙ_IP/ЛОКАЛЬНЫЙ_IP (например: call.vondic.ru/192.168.140.11)
+# ------------------------------------------------------------------------------
+# external-ip=call.vondic.ru/192.168.140.11
+
+# Диапазон UDP портов для медиа-реле (убедитесь, что он проброшен на роутере!)
+min-port=49152
+max-port=65535
+
+# Аутентификация и Realm
+realm=call.vondic.ru
+user=vondic:Dim4566212Len
+lt-cred-mech
+fingerprint
+
+# Оптимизация производительности для 10,000+ голосовых потоков
+bps-capacity=0
+max-bps=0
+no-tcp-relay
+stale-nonce=600
+max-allocate-timeout=60
+mobility
+no-cli
+no-tls
+no-dtls
+no-multicast-peers
+
+# Логирование
+simple-log
+log-file=/var/log/turnserver.log
+verbose
 EOF
 
-echo "[+] Конфигурация лимитов для docker.service сохранена."
+echo "[+] Рекомендованный конфиг сохранен в $RECOMMENDED_CONF"
+
+# Если /etc/turnserver.conf не существует или пуст, копируем
+if [ ! -s "/etc/turnserver.conf" ]; then
+    cp "$RECOMMENDED_CONF" "/etc/turnserver.conf"
+    echo "[+] Скопирован в /etc/turnserver.conf"
+fi
 
 echo ""
 echo "=============================================================================="
-echo "[SUCCESS] Сервер оптимизирован для обработки 10,000+ голосовых потоков WebRTC!"
-echo "Рекомендации:"
-echo " 1. Убедитесь, что в docker-compose coturn запускается с 'network_mode: host'"
-echo " 2. Диапазон портов в coturn: 49152-65535"
-echo " 3. Перезапустите docker daemon: systemctl daemon-reload && systemctl restart docker"
+echo "[SUCCESS] Сервер оптимизирован для 10,000+ потоков WebRTC (нативный Coturn)!"
+echo "Команды для применения и проверки:"
+echo " 1. Применить лимиты systemd:"
+echo "    sudo systemctl daemon-reload"
+echo ""
+echo " 2. Перезапустить сервис Coturn:"
+echo "    sudo systemctl restart coturn || sudo systemctl restart turnserver"
+echo ""
+echo " 3. Проверить статус:"
+echo "    sudo systemctl status coturn"
+echo ""
+echo " 4. Проверить лимит дескрипторов запущенного процесса:"
+echo "    cat /proc/\$(pgrep turnserver | head -n1)/limits | grep 'Max open files'"
+echo "    (должно быть 1048576)"
 echo "=============================================================================="
