@@ -112,24 +112,17 @@ export class WebRTCService {
 			iceServers: configuredIceServers.length ? configuredIceServers : [
 				{
 					urls: [
-						'stun:call.vondic.ru:3478',
 						'stun:192.168.140.11:3478',
+						'stun:call.vondic.ru:3478',
 						'stun:stun.l.google.com:19302',
-						'stun:stun1.l.google.com:19302',
-						'stun:95.165.96.208:3478',
-						`stun:${this.internalTurnHostResolved}:3478`,
 					],
 				},
 				{
 					urls: [
-						'turn:call.vondic.ru:3478?transport=udp',
-						'turn:call.vondic.ru:3478?transport=tcp',
 						'turn:192.168.140.11:3478?transport=udp',
 						'turn:192.168.140.11:3478?transport=tcp',
-						'turn:95.165.96.208:3478?transport=udp',
-						'turn:95.165.96.208:3478?transport=tcp',
-						`turn:${this.internalTurnHostResolved}:3478?transport=udp`,
-						`turn:${this.internalTurnHostResolved}:3478?transport=tcp`,
+						'turn:call.vondic.ru:3478?transport=udp',
+						'turn:call.vondic.ru:3478?transport=tcp',
 					],
 					username: turnUser,
 					credential: turnPass,
@@ -1161,11 +1154,6 @@ export class WebRTCService {
 					String(url).includes('turn:') || String(url).includes('turns:'),
 				)
 			})
-		} else if (routingSettings.ice_source === 'vondic') {
-			const publicStunServers: RTCIceServer[] = [
-				{ urls: ['stun:call.vondic.ru:3478', 'stun:192.168.140.11:3478', 'stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
-			]
-			iceServers = [...publicStunServers, ...iceServers]
 		}
 
 		const shouldForceRelay = this.forceRelay || this.isIpPrivacyMode || routingSettings.force_relay

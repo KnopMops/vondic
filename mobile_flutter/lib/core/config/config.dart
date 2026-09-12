@@ -41,12 +41,12 @@ class AppConfig {
 
   static const String turnUrl = String.fromEnvironment(
     'TURN_URL',
-    defaultValue: 'turn:call.vondic.ru:3478?transport=udp',
+    defaultValue: 'turn:192.168.140.11:3478?transport=udp',
   );
 
   static const String turnUrls = String.fromEnvironment(
     'TURN_URLS',
-    defaultValue: 'turn:call.vondic.ru:3478?transport=udp,turn:call.vondic.ru:3478?transport=tcp,turn:192.168.140.11:3478?transport=udp,turn:192.168.140.11:3478?transport=tcp,turn:95.165.96.208:3478?transport=udp,turn:95.165.96.208:3478?transport=tcp',
+    defaultValue: 'turn:192.168.140.11:3478?transport=udp,turn:192.168.140.11:3478?transport=tcp,turn:call.vondic.ru:3478?transport=udp,turn:call.vondic.ru:3478?transport=tcp',
   );
 
   static const String turnUsername = String.fromEnvironment(
