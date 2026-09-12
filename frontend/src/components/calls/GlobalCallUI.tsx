@@ -144,7 +144,7 @@ export const GlobalCallUI: React.FC = () => {
 			)}
 
 			
-			{activeGroupCallId && (
+			{activeGroupCallId && !activeVoiceChannelId && (
 				<DiscordCallModal
 					title="Групповой звонок"
 					subtitle="Vondic Group Call"

@@ -680,17 +680,37 @@ export const useCallStore = create<CallStore>((set, get) => ({
 		callerSocketId: string,
 		callerInfo?: { userId: string; userName: string },
 	) => {
-		const { callManager, incomingCall } = get()
+		const { callManager, incomingCall, activeCalls } = get()
 		if (!callManager) {
 			throw new Error('CallManager не инициализирован')
 		}
 
 		if (incomingCall?.isGroupCall && incomingCall.callId) {
 			await callManager.joinGroupCall(incomingCall.callId)
+			set({ incomingCall: null })
 		} else {
+			// Optimistically set the connected call in activeCalls so UI smoothly switches without blank frame
+			const baseCall = incomingCall || {
+				socketId: callerSocketId,
+				userId: callerInfo?.userId || callerSocketId,
+				userName: callerInfo?.userName || 'Собеседник',
+				status: 'connected',
+				startTime: new Date(),
+			}
+			const connectedCall: CallState = {
+				...baseCall,
+				socketId: callerSocketId,
+				userId: callerInfo?.userId || baseCall.userId,
+				userName: callerInfo?.userName || baseCall.userName,
+				status: 'connected',
+				startTime: new Date(),
+			}
+			const newCalls = new Map(activeCalls)
+			newCalls.set(callerSocketId, connectedCall)
+			set({ activeCalls: newCalls, incomingCall: null })
+
 			await callManager.acceptIncomingCall(callerSocketId, callerInfo)
 		}
-		set({ incomingCall: null })
 	},
 
 	rejectCall: (callerSocketId: string) => {

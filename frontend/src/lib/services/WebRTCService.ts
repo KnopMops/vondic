@@ -1020,12 +1020,12 @@ export class WebRTCService {
 		targetSocketId: string,
 	) {
 		const routingSettings = getStoredCallRoutingSettings()
-		const isIpPrivacyActive = this.isIpPrivacyMode || this.forceRelay || routingSettings.force_relay
+		const isIpPrivacyActive = this.isIpPrivacyMode
 
 		// Обработка ICE кандидатов
 		pc.onicecandidate = event => {
 			if (event.candidate) {
-				// В режиме скрытия IP отбрасываем все кандидаты, кроме relay (защита от утечки реального IP)
+				// В явном режиме скрытия IP отбрасываем все кандидаты, кроме relay (защита от утечки реального IP)
 				if (isIpPrivacyActive) {
 					const candStr = event.candidate.candidate || ''
 					if (!candStr.includes('typ relay')) {
@@ -1123,8 +1123,8 @@ export class WebRTCService {
 		try {
 			;(pc as any).oniceconnectionstatechange = () => {
 				console.log(`[WebRTC] ICE connection state changed for ${targetSocketId}: ${pc.iceConnectionState}`)
-				if (this.onConnectionStateChange) {
-					this.onConnectionStateChange(targetSocketId, pc.connectionState)
+				if (pc.iceConnectionState === 'connected' && this.onConnectionStateChange) {
+					this.onConnectionStateChange(targetSocketId, 'connected')
 				}
 
 				// Clear any existing timeout
@@ -1411,7 +1411,11 @@ export class WebRTCService {
 
 		// Ensure local audio track is available and added to the connection
 		if (!this.localStream) {
-			await this.initializeLocalStream();
+			try {
+				await this.initializeLocalStream()
+			} catch (err) {
+				console.log('[WebRTC] Microphone not yet available on incoming offer, will acquire upon answer:', err)
+			}
 		}
 		
 		// Add local audio track if not already present
@@ -1517,6 +1521,9 @@ export class WebRTCService {
 				JSON.stringify(answerPayload, null, 2),
 			)
 			this.socket.emit('answer', answerPayload)
+
+			// Immediately process any buffered ICE candidates that arrived during call setup
+			await this.processBufferedCandidates(callerSocketId)
 		} catch (error) {
 			console.error('Failed to accept call:', error)
 			// Handle failed ICE negotiation by forcing internal TURN and renegotiation

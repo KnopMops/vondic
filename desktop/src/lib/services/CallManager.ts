@@ -27,6 +27,7 @@ export class CallManager {
 		null
 	private listenersInitialized = false
 	private callTimeouts: Map<string, NodeJS.Timeout> = new Map()
+	private connectionDisconnectGraceTimers: Map<string, NodeJS.Timeout> = new Map()
 
 	
 	public onIncomingCall?: (call: CallState) => void
@@ -949,15 +950,64 @@ export class CallManager {
 			socketId: string,
 			state: RTCPeerConnectionState,
 		) => {
+			console.log(`[CallManager] onConnectionStateChange for ${socketId}: ${state}`)
 			const call = this.currentCalls.get(socketId)
-			if (call) {
-				if (
-					state === 'disconnected' ||
-					state === 'failed' ||
-					state === 'closed'
-				) {
-					this.handleCallEnded(socketId)
+
+			// Clear disconnect grace timer if connection is restored or alive
+			if (state === 'connected') {
+				const graceTimer = this.connectionDisconnectGraceTimers.get(socketId)
+				if (graceTimer) {
+					clearTimeout(graceTimer)
+					this.connectionDisconnectGraceTimers.delete(socketId)
+					console.log(`[CallManager] Connection restored for ${socketId}, cleared grace timer`)
 				}
+				if (call && call.status !== 'connected') {
+					call.status = 'connected'
+					this.updateCallState(socketId, call)
+				}
+				return
+			}
+
+			if (state === 'closed') {
+				const graceTimer = this.connectionDisconnectGraceTimers.get(socketId)
+				if (graceTimer) {
+					clearTimeout(graceTimer)
+					this.connectionDisconnectGraceTimers.delete(socketId)
+				}
+				this.handleCallEnded(socketId)
+				return
+			}
+
+			if (state === 'disconnected') {
+				console.warn(`[CallManager] Connection disconnected for ${socketId}, starting 12s grace timer for ICE reconnection...`)
+				if (!this.connectionDisconnectGraceTimers.has(socketId)) {
+					const timer = setTimeout(() => {
+						this.connectionDisconnectGraceTimers.delete(socketId)
+						const c = this.currentCalls.get(socketId)
+						if (c) {
+							console.warn(`[CallManager] Grace period expired for ${socketId}, ending call`)
+							this.handleCallEnded(socketId)
+						}
+					}, 12000)
+					this.connectionDisconnectGraceTimers.set(socketId, timer)
+				}
+				return
+			}
+
+			if (state === 'failed') {
+				console.warn(`[CallManager] Connection failed for ${socketId}, starting 8s recovery timer...`)
+				if (!this.connectionDisconnectGraceTimers.has(socketId)) {
+					const timer = setTimeout(() => {
+						this.connectionDisconnectGraceTimers.delete(socketId)
+						const c = this.currentCalls.get(socketId)
+						if (c) {
+							console.warn(`[CallManager] Recovery period expired after failed connection for ${socketId}, ending call`)
+							this.handleCallEnded(socketId)
+						}
+					}, 8000)
+					this.connectionDisconnectGraceTimers.set(socketId, timer)
+				}
+				return
 			}
 		}
 
@@ -1261,21 +1311,36 @@ export class CallManager {
 			}
 			await this.webRTCService.acceptCall(callerSocketId)
 
+			const incoming = this.incomingCall
 			// Clear incoming call state immediately
 			if (this.incomingCall && this.incomingCall.socketId === callerSocketId) {
 				this.incomingCall = null
 			}
 
-			const call = this.currentCalls.get(callerSocketId)
-			if (call) {
-				call.status = 'connected'
-				call.startTime = new Date()
-				if (callerInfo) {
-					call.userId = callerInfo.userId
-					call.userName = callerInfo.userName
-				}
-				this.updateCallState(callerSocketId, call)
+			let call = this.currentCalls.get(callerSocketId)
+			if (!call && callerInfo?.userId) {
+				call = this.currentCalls.get(callerInfo.userId)
 			}
+			if (!call && incoming) {
+				call = incoming
+			}
+			if (!call) {
+				call = {
+					socketId: callerSocketId,
+					userId: callerInfo?.userId || callerSocketId,
+					userName: callerInfo?.userName || 'Собеседник',
+					status: 'connected',
+					startTime: new Date(),
+				}
+			}
+			call.status = 'connected'
+			call.startTime = call.startTime || new Date()
+			if (callerInfo) {
+				call.userId = callerInfo.userId || call.userId
+				call.userName = callerInfo.userName || call.userName
+			}
+			this.currentCalls.set(callerSocketId, call)
+			this.updateCallState(callerSocketId, call)
 		} catch (error) {
 			console.error('Failed to accept call:', error)
 			throw error
@@ -1308,7 +1373,16 @@ export class CallManager {
 		let call = this.currentCalls.get(socketId)
 		let resourceKey = socketId
 
-		// If call not found by socketId, check if we have a pending call keyed by userId
+		// If call not found by socketId, check if we have a call matching userId or pending calling
+		if (!call) {
+			for (const [key, state] of this.currentCalls.entries()) {
+				if (key === socketId || state.socketId === socketId || state.userId === socketId) {
+					call = state
+					resourceKey = key
+					break
+				}
+			}
+		}
 		if (!call) {
 			for (const [key, state] of this.currentCalls.entries()) {
 				if (state.status === 'calling') {
@@ -1324,12 +1398,17 @@ export class CallManager {
 			}
 		}
 
-		// Clear any pending timeout for this call
+		// Clear any pending timeout or grace timers for this call
 		for (const key of [socketId, resourceKey]) {
 			const timeout = this.callTimeouts.get(key)
 			if (timeout) {
 				clearTimeout(timeout)
 				this.callTimeouts.delete(key)
+			}
+			const graceTimer = this.connectionDisconnectGraceTimers.get(key)
+			if (graceTimer) {
+				clearTimeout(graceTimer)
+				this.connectionDisconnectGraceTimers.delete(key)
 			}
 		}
 
@@ -1403,6 +1482,8 @@ export class CallManager {
 		// Clear all pending call timeouts
 		this.callTimeouts.forEach(timeout => clearTimeout(timeout))
 		this.callTimeouts.clear()
+		this.connectionDisconnectGraceTimers.forEach(timer => clearTimeout(timer))
+		this.connectionDisconnectGraceTimers.clear()
 
 		this.webRTCService.cleanup()
 		this.currentCalls.clear()
