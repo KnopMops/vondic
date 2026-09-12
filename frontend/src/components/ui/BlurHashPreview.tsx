@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { ArrowDown, Check, Loader2 } from 'lucide-react'
+import { ArrowDown, Loader2 } from 'lucide-react'
 
 interface BlurHashPreviewProps {
 	src?: string
