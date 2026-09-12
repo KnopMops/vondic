@@ -979,34 +979,29 @@ export class CallManager {
 			}
 
 			if (state === 'disconnected') {
-				console.warn(`[CallManager] Connection disconnected for ${socketId}, starting 12s grace timer for ICE reconnection...`)
+				console.warn(`[CallManager] Connection disconnected for ${socketId}, starting 10s grace timer for ICE reconnection...`)
 				if (!this.connectionDisconnectGraceTimers.has(socketId)) {
 					const timer = setTimeout(() => {
 						this.connectionDisconnectGraceTimers.delete(socketId)
 						const c = this.currentCalls.get(socketId)
 						if (c) {
-							console.warn(`[CallManager] Grace period expired for ${socketId}, ending call`)
-							this.handleCallEnded(socketId)
+							console.warn(`[CallManager] Grace period expired for ${socketId}, ending call with failure message`)
+							this.handleCallFailed('Не удалось установить соединение с сервером, устанавливающем звонки', socketId)
 						}
-					}, 12000)
+					}, 10000)
 					this.connectionDisconnectGraceTimers.set(socketId, timer)
 				}
 				return
 			}
 
 			if (state === 'failed') {
-				console.warn(`[CallManager] Connection failed for ${socketId}, starting 8s recovery timer...`)
-				if (!this.connectionDisconnectGraceTimers.has(socketId)) {
-					const timer = setTimeout(() => {
-						this.connectionDisconnectGraceTimers.delete(socketId)
-						const c = this.currentCalls.get(socketId)
-						if (c) {
-							console.warn(`[CallManager] Recovery period expired after failed connection for ${socketId}, ending call`)
-							this.handleCallEnded(socketId)
-						}
-					}, 8000)
-					this.connectionDisconnectGraceTimers.set(socketId, timer)
+				console.warn(`[CallManager] Connection failed for ${socketId}, terminating call immediately and notifying failure`)
+				const graceTimer = this.connectionDisconnectGraceTimers.get(socketId)
+				if (graceTimer) {
+					clearTimeout(graceTimer)
+					this.connectionDisconnectGraceTimers.delete(socketId)
 				}
+				this.handleCallFailed('Не удалось установить соединение с сервером, устанавливающем звонки', socketId)
 				return
 			}
 		}
@@ -1343,6 +1338,7 @@ export class CallManager {
 			this.updateCallState(callerSocketId, call)
 		} catch (error) {
 			console.error('Failed to accept call:', error)
+			this.handleCallFailed('Не удалось установить соединение с сервером, устанавливающем звонки', callerSocketId)
 			throw error
 		}
 	}
@@ -1440,18 +1436,47 @@ export class CallManager {
 		}
 	}
 
-	private handleCallFailed(message: string): void {
-		// Find relevant call if possible, or notify generic error
+	private handleCallFailed(message: string, targetSocketId?: string): void {
 		console.error('Call failed:', message)
-		// If we have a single call in 'calling' state, it's likely that one
-		for (const [key, state] of this.currentCalls.entries()) {
-			if (state.status === 'calling') {
-				state.status = 'failed'
-				this.updateCallState(key, state)
-				if (this.onCallFailed) {
-					this.onCallFailed(state, message)
+		let call: CallState | undefined
+		let keyFound = targetSocketId
+
+		if (targetSocketId) {
+			call = this.currentCalls.get(targetSocketId)
+		}
+		if (!call && targetSocketId) {
+			for (const [key, state] of this.currentCalls.entries()) {
+				if (key === targetSocketId || state.socketId === targetSocketId || state.userId === targetSocketId) {
+					call = state
+					keyFound = key
+					break
 				}
 			}
+		}
+		if (!call) {
+			for (const [key, state] of this.currentCalls.entries()) {
+				if (state.status === 'calling' || state.status === 'connected') {
+					call = state
+					keyFound = key
+					break
+				}
+			}
+		}
+
+		if (keyFound) {
+			this.handleCallEnded(keyFound, 'ended')
+		}
+
+		if (this.onCallFailed) {
+			const failedCall = call || {
+				socketId: targetSocketId || '',
+				userId: targetSocketId || '',
+				userName: 'Собеседник',
+				status: 'failed',
+				startTime: new Date(),
+			}
+			failedCall.status = 'failed'
+			this.onCallFailed(failedCall, message)
 		}
 	}
 

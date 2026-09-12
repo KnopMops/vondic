@@ -55,9 +55,18 @@ export const GlobalCallUI: React.FC = () => {
 		isIpPrivacy,
 		toggleDataSaver,
 		toggleIpPrivacy,
+		callError,
+		clearCallError,
 	} = useCallStore()
 
 	const { showToast } = useToast()
+
+	React.useEffect(() => {
+		if (callError) {
+			showToast(callError, 'error')
+			clearCallError()
+		}
+	}, [callError, showToast, clearCallError])
 
 	const handleKrispToggle = () => {
 		if (!user?.premium) {
@@ -82,7 +91,7 @@ export const GlobalCallUI: React.FC = () => {
 			showToast('Звонок принят', 'success')
 		} catch (error) {
 			console.error('Failed to accept call in GlobalCallUI:', error)
-			showToast('Не удалось принять звонок', 'error')
+			showToast('Не удалось установить соединение с сервером, устанавливающем звонки', 'error')
 		}
 	}
 

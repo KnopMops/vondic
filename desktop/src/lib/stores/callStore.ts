@@ -66,6 +66,9 @@ interface CallStore {
 	rejectCall: (callerSocketId: string) => void
 	endCall: (targetSocketId: string) => void
 	endAllCalls: () => void
+	callError: string | null
+	setCallError: (error: string | null) => void
+	clearCallError: () => void
 
 	
 	getCallBySocketId: (socketId: string) => CallState | undefined
@@ -97,6 +100,9 @@ export const useCallStore = create<CallStore>((set, get) => ({
 	isMuted: false,
 	isScreenSharing: false,
 	callHistory: [],
+	callError: null,
+	setCallError: (error: string | null) => set({ callError: error }),
+	clearCallError: () => set({ callError: null }),
 
 	
 	webRTCService: null,
@@ -276,10 +282,17 @@ export const useCallStore = create<CallStore>((set, get) => ({
 				console.error('Call failed:', error)
 				const { activeCalls } = get()
 				const newCalls = new Map(activeCalls)
-				if (call.socketId) {
-					newCalls.set(call.socketId, { ...call, status: 'failed' })
+				if (call?.socketId) {
+					newCalls.delete(call.socketId)
 				}
-				set({ activeCalls: newCalls })
+				if (call?.userId) {
+					newCalls.delete(call.userId)
+				}
+				set({
+					activeCalls: newCalls,
+					incomingCall: null,
+					callError: error || 'Не удалось установить соединение с сервером, устанавливающем звонки',
+				})
 			}
 
 			callManager.onCallStateChange = (socketId: string, state: CallState) => {
@@ -545,7 +558,14 @@ export const useCallStore = create<CallStore>((set, get) => ({
 			throw new Error('CallManager не инициализирован')
 		}
 
-		await callManager.initiateDirectCall(targetUserId, targetUserName, targetAvatarUrl)
+		try {
+			await callManager.initiateDirectCall(targetUserId, targetUserName, targetAvatarUrl)
+		} catch (err) {
+			console.error('[CallStore] initiateCall error:', err)
+			set({
+				callError: 'Не удалось установить соединение с сервером, устанавливающем звонки',
+			})
+		}
 	},
 
 	initiateGroupCall: async (groupId: string) => {
@@ -594,31 +614,42 @@ export const useCallStore = create<CallStore>((set, get) => ({
 			throw new Error('CallManager не инициализирован')
 		}
 
-		if (incomingCall?.isGroupCall && incomingCall.callId) {
-			await callManager.joinGroupCall(incomingCall.callId)
-			set({ incomingCall: null })
-		} else {
-			// Optimistically set the connected call in activeCalls so UI smoothly switches without blank frame
-			const baseCall = incomingCall || {
-				socketId: callerSocketId,
-				userId: callerInfo?.userId || callerSocketId,
-				userName: callerInfo?.userName || 'Собеседник',
-				status: 'connected',
-				startTime: new Date(),
-			}
-			const connectedCall: CallState = {
-				...baseCall,
-				socketId: callerSocketId,
-				userId: callerInfo?.userId || baseCall.userId,
-				userName: callerInfo?.userName || baseCall.userName,
-				status: 'connected',
-				startTime: new Date(),
-			}
-			const newCalls = new Map(activeCalls)
-			newCalls.set(callerSocketId, connectedCall)
-			set({ activeCalls: newCalls, incomingCall: null })
+		try {
+			if (incomingCall?.isGroupCall && incomingCall.callId) {
+				await callManager.joinGroupCall(incomingCall.callId)
+				set({ incomingCall: null })
+			} else {
+				// Optimistically set the connected call in activeCalls so UI smoothly switches without blank frame
+				const baseCall = incomingCall || {
+					socketId: callerSocketId,
+					userId: callerInfo?.userId || callerSocketId,
+					userName: callerInfo?.userName || 'Собеседник',
+					status: 'connected',
+					startTime: new Date(),
+				}
+				const connectedCall: CallState = {
+					...baseCall,
+					socketId: callerSocketId,
+					userId: callerInfo?.userId || baseCall.userId,
+					userName: callerInfo?.userName || baseCall.userName,
+					status: 'connected',
+					startTime: new Date(),
+				}
+				const newCalls = new Map(activeCalls)
+				newCalls.set(callerSocketId, connectedCall)
+				set({ activeCalls: newCalls, incomingCall: null })
 
-			await callManager.acceptIncomingCall(callerSocketId, callerInfo)
+				await callManager.acceptIncomingCall(callerSocketId, callerInfo)
+			}
+		} catch (err: any) {
+			console.error('[CallStore] acceptCall error:', err)
+			const newCalls = new Map(get().activeCalls)
+			newCalls.delete(callerSocketId)
+			set({
+				activeCalls: newCalls,
+				incomingCall: null,
+				callError: 'Не удалось установить соединение с сервером, устанавливающем звонки',
+			})
 		}
 	},
 

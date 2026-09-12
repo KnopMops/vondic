@@ -1098,15 +1098,11 @@ export class WebRTCService {
 			} else if (pc.connectionState === 'failed') {
 				console.error(`[WebRTC] ❌ Connection FAILED for ${targetSocketId}`)
 				console.error(`[WebRTC] ICE: ${pc.iceConnectionState}, Signaling: ${pc.signalingState}`)
-				console.error(`[WebRTC] Local candidates: ${pc.localDescription ? JSON.parse(pc.localDescription).candidates?.length || 0 : 0}`)
-				
-				// Try ICE restart
-				console.log(`[WebRTC] Attempting ICE restart for ${targetSocketId}`)
-				this.attemptIceRestart(targetSocketId).catch(e =>
-					console.error('[WebRTC] ICE restart failed:', e)
-				)
+				if (this.onConnectionStateChange) {
+					this.onConnectionStateChange(targetSocketId, 'failed')
+				}
 			} else if (pc.connectionState === 'disconnected') {
-				console.warn(`[WebRTC] ⚠️ Connection DISCONNECTED for ${targetSocketId}. Will attempt reconnect...`)
+				console.warn(`[WebRTC] ⚠️ Connection DISCONNECTED for ${targetSocketId}`)
 			}
 		}
 		
@@ -1134,26 +1130,12 @@ export class WebRTCService {
 					this.iceDisconnectTimeouts.delete(targetSocketId)
 				}
 
-				// Handle ICE failures with restart
+				// Handle ICE failures directly without restarting the call
 				if (pc.iceConnectionState === 'failed') {
-					console.log(`[WebRTC] ICE failed for ${targetSocketId}, attempting ICE restart`)
-					this.attemptIceRestart(targetSocketId).catch(e =>
-						console.error('ICE restart failed:', e)
-					)
-				}
-
-				// If disconnected, wait a bit then restart ICE if still disconnected
-				if (pc.iceConnectionState === 'disconnected') {
-					console.log(`[WebRTC] ICE disconnected for ${targetSocketId}, waiting for reconnection...`)
-					const timeout = setTimeout(() => {
-						if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
-							console.log(`[WebRTC] ICE still disconnected for ${targetSocketId}, attempting ICE restart`)
-							this.attemptIceRestart(targetSocketId).catch(e =>
-								console.error('ICE restart failed:', e)
-							)
-						}
-					}, 12000) // Wait 12 seconds before attempting restart
-					this.iceDisconnectTimeouts.set(targetSocketId, timeout)
+					console.log(`[WebRTC] ICE failed for ${targetSocketId}`)
+					if (this.onConnectionStateChange) {
+						this.onConnectionStateChange(targetSocketId, 'failed')
+					}
 				}
 
 				// Clear timeout on connected/checking
@@ -1526,17 +1508,6 @@ export class WebRTCService {
 			await this.processBufferedCandidates(callerSocketId)
 		} catch (error) {
 			console.error('Failed to accept call:', error)
-			// Handle failed ICE negotiation by forcing internal TURN and renegotiation
-			if (this.hasTurn) {
-					console.log(
-						`[WebRTC] Accept call failed, переключение на internal TURN (${this.internalTurnHostResolved}) для ${callerSocketId}`,
-					)
-				this.useInternalTurnOnly = true
-				this.renegotiateWithRelay(callerSocketId).catch(err =>
-					console.error('Relay fallback failed:', err),
-				)
-			}
-
 			throw error
 		}
 	}
@@ -1701,52 +1672,11 @@ export class WebRTCService {
 					}
 				} catch {}
 
-				try {
-					const hasAudioReceiver = pc
-						.getReceivers()
-						.some(r => r.track && r.track.kind === 'audio')
-					if (!hasAudioReceiver && this.hasTurn) {
-						setTimeout(() => {
-							const againPc = this.peerConnections.get(data.sender_socket_id)
-							if (againPc) {
-								const stillNoAudio = !againPc
-									.getReceivers()
-									.some(r => r.track && r.track.kind === 'audio')
-								if (stillNoAudio) {
-									console.log(
-										`[WebRTC] No audio receiver, internal TURN (${this.internalTurnHostResolved}) для ${data.sender_socket_id}`,
-									)
-									this.useInternalTurnOnly = true
-									this.renegotiateWithRelay(data.sender_socket_id).catch(err =>
-										console.error(
-											'Relay fallback (no audio receiver) failed:',
-											err,
-										),
-									)
-								}
-							}
-						}, 1500)
-					}
-				} catch {}
-
-				if (this.hasTurn) {
-					setTimeout(() => {
-						const current = this.peerConnections.get(data.sender_socket_id)
-						if (current && current.connectionState === 'failed') {
-							console.log(
-								`[WebRTC] Connection failed, attempting TURN relay fallback for ${data.sender_socket_id}`,
-							)
-							console.log(
-								`[WebRTC] Connection failed, internal TURN (${this.internalTurnHostResolved}) для ${data.sender_socket_id}`,
-							)
-							this.useInternalTurnOnly = true
-							this.renegotiateWithRelay(data.sender_socket_id).catch(err =>
-								console.error('Relay fallback failed:', err),
-							)
-						} else if (current) {
-							console.log(`[WebRTC] Connection state after answer: ${current.connectionState}, ICE: ${(current as any).iceConnectionState}`)
-						}
-					}, 8000)
+				const hasAudioReceiver = pc
+					.getReceivers()
+					.some(r => r.track && r.track.kind === 'audio')
+				if (!hasAudioReceiver) {
+					console.warn('[WebRTC] No audio receiver after answer')
 				}
 			} catch (err: any) {
 				// Check if it's a state error - this can happen in race conditions
@@ -1907,18 +1837,6 @@ export class WebRTCService {
 		this.cleanupCall(targetSocketId)
 	}
 
-	private async renegotiateWithRelay(targetSocketId: string): Promise<void> {
-		this.cleanupCall(targetSocketId)
-		const pc = this.createPeerConnectionWithPolicy(targetSocketId, 'relay')
-		const rawOffer = await pc.createOffer()
-		const offer = this.optimizeSessionDescription(rawOffer)
-		await pc.setLocalDescription(offer)
-		this.socket.emit('offer', {
-			target_socket_id: targetSocketId,
-			offer,
-		})
-	}
-
 	// Attempt ICE restart to recover from connection failures
 	private async attemptIceRestart(targetSocketId: string): Promise<void> {
 		const pc = this.peerConnections.get(targetSocketId)
@@ -1927,8 +1845,6 @@ export class WebRTCService {
 			return
 		}
 
-		// Check if we're in a stable state to send a new offer
-		// Both offerer and answerer can initiate ICE restart by creating a new offer
 		if (pc.signalingState === 'stable' || pc.signalingState === 'have-local-offer') {
 			console.log(`[WebRTC] Restarting ICE for ${targetSocketId}`)
 			try {
@@ -1942,17 +1858,9 @@ export class WebRTCService {
 				console.log(`[WebRTC] ICE restart offer sent to ${targetSocketId}`)
 			} catch (e: any) {
 				console.error('[WebRTC] ICE restart failed:', e)
-				// Fall back to full reconnect with internal TURN only
-				if (this.hasTurn) {
-					console.log(
-						`[WebRTC] ICE restart failed, internal TURN (${this.internalTurnHostResolved}) для ${targetSocketId}`,
-					)
-					this.useInternalTurnOnly = true
-					await this.renegotiateWithRelay(targetSocketId)
-				}
 			}
 		} else {
-			console.log(`[WebRTC] Cannot restart ICE in signaling state: ${pc.signalingState}, waiting for stable state`)
+			console.log(`[WebRTC] Cannot restart ICE in signaling state: ${pc.signalingState}`)
 		}
 	}
 
