@@ -313,32 +313,49 @@ export async function clearCache(
 	try {
 		const db = await getIndexedDb()
 		if (!category || category === 'all') {
-			const tx = db.transaction(['messages', 'media'], 'readwrite')
-			tx.objectStore('messages').clear()
-			tx.objectStore('media').clear()
-			return
+			const storeNames = ['messages', 'media']
+			if (db.objectStoreNames.contains('dialogs')) {
+				storeNames.push('dialogs')
+			}
+			return new Promise((resolve, reject) => {
+				const tx = db.transaction(storeNames, 'readwrite')
+				tx.objectStore('messages').clear()
+				tx.objectStore('media').clear()
+				if (db.objectStoreNames.contains('dialogs')) {
+					tx.objectStore('dialogs').clear()
+				}
+				tx.oncomplete = () => resolve()
+				tx.onerror = () => reject(tx.error)
+			})
 		}
 
 		if (category === 'messages') {
-			const tx = db.transaction('messages', 'readwrite')
-			tx.objectStore('messages').clear()
-			return
+			return new Promise((resolve, reject) => {
+				const tx = db.transaction('messages', 'readwrite')
+				tx.objectStore('messages').clear()
+				tx.oncomplete = () => resolve()
+				tx.onerror = () => reject(tx.error)
+			})
 		}
 
 		// Clear specific media category
-		const tx = db.transaction('media', 'readwrite')
-		const store = tx.objectStore('media')
-		const index = store.index('category')
-		const range = IDBKeyRange.only(category)
-		const req = index.openCursor(range)
+		return new Promise((resolve, reject) => {
+			const tx = db.transaction('media', 'readwrite')
+			const store = tx.objectStore('media')
+			const index = store.index('category')
+			const range = IDBKeyRange.only(category)
+			const req = index.openCursor(range)
 
-		req.onsuccess = e => {
-			const cursor = (e.target as IDBRequest<IDBCursorWithValue>).result
-			if (cursor) {
-				cursor.delete()
-				cursor.continue()
+			req.onsuccess = e => {
+				const cursor = (e.target as IDBRequest<IDBCursorWithValue>).result
+				if (cursor) {
+					cursor.delete()
+					cursor.continue()
+				}
 			}
-		}
+			tx.oncomplete = () => resolve()
+			tx.onerror = () => reject(tx.error)
+		})
 	} catch (e) {
 		console.warn('[Cache] Failed to clear cache category:', category, e)
 	}

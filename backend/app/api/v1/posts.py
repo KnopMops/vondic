@@ -186,6 +186,22 @@ async def delete_post(
     return {"message": "Post deleted"}
 
 
+@posts_router.delete("", response_model=Dict[str, Any])
+@posts_router.delete("/", response_model=Dict[str, Any])
+@posts_router.delete("/admin", response_model=Dict[str, Any])
+async def delete_post_payload(
+    payload: Optional[Dict[str, Any]] = None,
+    current_user: User = Depends(get_current_user)
+):
+    post_id = (payload or {}).get("post_id") or (payload or {}).get("id")
+    if not post_id:
+        raise HTTPException(status_code=400, detail="post_id is required")
+    ok, err = PostService.delete_post(str(post_id), current_user.id)
+    if not ok:
+        raise HTTPException(status_code=400, detail=err or "Cannot delete post")
+    return {"message": "Post deleted"}
+
+
 @posts_router.post("/{post_id}/like", response_model=Dict[str, Any])
 async def like_post(
     post_id: str,

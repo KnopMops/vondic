@@ -13,6 +13,7 @@ import {
 
 import {
 	clearCache,
+	evictOldMedia,
 	getCacheStorageSummary,
 	type CacheStorageSummary,
 } from '@/lib/cache/indexedDbStorage'
@@ -93,6 +94,9 @@ export const DataStorageSettingsModal: React.FC<DataStorageSettingsModalProps> =
 		const updated = { ...settings, ...partial }
 		setSettings(updated)
 		saveDataStorageSettings(updated)
+		if (partial.mediaRetentionDays !== undefined) {
+			void evictOldMedia(partial.mediaRetentionDays).then(() => updateStorageSummary())
+		}
 		setSaveNotice(true)
 		setTimeout(() => setSaveNotice(false), 2000)
 	}
@@ -102,6 +106,14 @@ export const DataStorageSettingsModal: React.FC<DataStorageSettingsModalProps> =
 		setIsClearing(true)
 		try {
 			await clearCache('all')
+			setCacheSummary({
+				messagesCount: 0,
+				photosBytes: 0,
+				videosBytes: 0,
+				audioBytes: 0,
+				filesBytes: 0,
+				totalBytes: 0,
+			})
 			await updateStorageSummary()
 		} finally {
 			setIsClearing(false)
@@ -129,9 +141,6 @@ export const DataStorageSettingsModal: React.FC<DataStorageSettingsModalProps> =
 							<h3 className="text-base font-semibold text-white tracking-tight">
 								Данные и память
 							</h3>
-							<p className="text-xs text-slate-400">
-								Оптимизация трафика в стиле Telegram, кэш и автозагрузка
-							</p>
 						</div>
 					</div>
 					<button
@@ -224,7 +233,7 @@ export const DataStorageSettingsModal: React.FC<DataStorageSettingsModalProps> =
 						</div>
 
 						{/* Legend */}
-						<div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-xs text-slate-300">
+						<div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1 text-xs text-slate-300">
 							<div className="flex items-center gap-1.5">
 								<div className="w-2.5 h-2.5 rounded-full bg-purple-500" />
 								<span>Фото: {formatBytes(cacheSummary.photosBytes)}</span>
@@ -236,6 +245,10 @@ export const DataStorageSettingsModal: React.FC<DataStorageSettingsModalProps> =
 							<div className="flex items-center gap-1.5">
 								<div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
 								<span>Аудио: {formatBytes(cacheSummary.audioBytes)}</span>
+							</div>
+							<div className="flex items-center gap-1.5">
+								<div className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+								<span>Файлы: {formatBytes(cacheSummary.filesBytes)}</span>
 							</div>
 							<div className="flex items-center gap-1.5">
 								<div className="w-2.5 h-2.5 rounded-full bg-blue-500" />

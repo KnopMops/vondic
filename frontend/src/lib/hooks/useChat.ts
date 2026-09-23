@@ -913,6 +913,15 @@ export const useChat = (
 		})()
 	}, [e2eKeyId, loadStoredKey, hydrateKeysFromLocalStorage, decryptMessage, secretChatEnabled])
 
+	const decryptMessageRef = useRef(decryptMessage)
+	decryptMessageRef.current = decryptMessage
+	const loadStoredKeyRef = useRef(loadStoredKey)
+	loadStoredKeyRef.current = loadStoredKey
+	const ensureKeyExchangeRef = useRef(ensureKeyExchange)
+	ensureKeyExchangeRef.current = ensureKeyExchange
+	const hydrateKeysRef = useRef(hydrateKeysFromLocalStorage)
+	hydrateKeysRef.current = hydrateKeysFromLocalStorage
+
 	// 1. Load history when chat opens
 	useEffect(() => {
 		const activeChatId = groupId
@@ -920,7 +929,7 @@ export const useChat = (
 			: channelId
 				? `channel_${channelId}`
 				: targetUserId
-					? `dm_${[currentUserId, targetUserId].sort().join('_')}`
+					? (currentUserId ? `dm_${[currentUserId, targetUserId].sort().join('_')}` : `dm_${targetUserId}`)
 					: null
 
 		activeChatKeyRef.current = activeChatId
@@ -934,12 +943,10 @@ export const useChat = (
 			return
 		}
 
-		let cancelled = false
-
 		// Telegram-like instant 0ms render from IndexedDB cache for this specific chat
 		if (activeChatId) {
 			void getCachedMessagesForChat(activeChatId, 50).then(cached => {
-				if (!cancelled && activeChatKeyRef.current === activeChatId && cached && cached.length > 0) {
+				if (activeChatKeyRef.current === activeChatId && cached && cached.length > 0) {
 					setMessages(cached)
 					setIsLoading(false)
 				}
@@ -960,7 +967,7 @@ export const useChat = (
 					})
 
 					const handleHistory = (data: any) => {
-						if (cancelled || activeChatKeyRef.current !== `group_${groupId}`) return
+						if (activeChatKeyRef.current !== `group_${groupId}`) return
 						if (data.group_id === groupId) {
 							const history: Message[] = Array.isArray(data.messages)
 								? data.messages.map((msg: any) => ({
@@ -980,14 +987,14 @@ export const useChat = (
 										attachments: msg.is_deleted ? undefined : msg.attachments,
 									}))
 								: []
-							const decryptedHistory = history.map(msg => decryptMessage(msg))
+							const decryptedHistory = history.map(msg => decryptMessageRef.current(msg))
 
 							decryptedHistory.sort(
 								(a, b) =>
 									new Date(a.timestamp).getTime() -
 									new Date(b.timestamp).getTime(),
 							)
-							if (cancelled || activeChatKeyRef.current !== `group_${groupId}`) return
+							if (activeChatKeyRef.current !== `group_${groupId}`) return
 							setMessages(decryptedHistory as Message[])
 							void saveCachedMessages(decryptedHistory as Message[], `group_${groupId}`)
 							setOffset(HISTORY_PAGE_SIZE)
@@ -1026,7 +1033,7 @@ export const useChat = (
 					}),
 				})
 
-				if (cancelled || activeChatKeyRef.current !== activeChatId) return
+				if (activeChatKeyRef.current !== activeChatId) return
 
 				if (response.ok) {
 					const data = await response.json()
@@ -1048,7 +1055,7 @@ export const useChat = (
 								forwarded_from: msg.forwarded_from || undefined,
 							}))
 						: []
-					hydrateKeysFromLocalStorage()
+					hydrateKeysRef.current()
 					if (
 						accessToken &&
 						currentUserId &&
@@ -1060,8 +1067,8 @@ export const useChat = (
 					) {
 						await beginServerKeysRestore(accessToken, currentUserId)
 					}
-					await loadStoredKey()
-					let decryptedHistory = history.map(msg => decryptMessage(msg))
+					await loadStoredKeyRef.current()
+					let decryptedHistory = history.map(msg => decryptMessageRef.current(msg))
 					const stillEncrypted = decryptedHistory.some(
 						m =>
 							typeof m.content === 'string' &&
@@ -1079,8 +1086,8 @@ export const useChat = (
 								// ignore
 							}
 						}
-						decryptedHistory = history.map(msg => decryptMessage(msg))
-						ensureKeyExchange()
+						decryptedHistory = history.map(msg => decryptMessageRef.current(msg))
+						ensureKeyExchangeRef.current()
 					}
 
 					decryptedHistory.sort(
@@ -1088,7 +1095,7 @@ export const useChat = (
 							new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
 					)
 
-					if (cancelled || activeChatKeyRef.current !== activeChatId) return
+					if (activeChatKeyRef.current !== activeChatId) return
 
 					setMessages(decryptedHistory as Message[])
 					if (activeChatId) {
@@ -1100,17 +1107,13 @@ export const useChat = (
 			} catch (err) {
 				console.error('Error loading history:', err)
 			} finally {
-				if (!cancelled && activeChatKeyRef.current === activeChatId && !groupId) {
+				if (activeChatKeyRef.current === activeChatId && !groupId) {
 					setIsLoading(false)
 				}
 			}
 		}
 
 		fetchHistory()
-
-		return () => {
-			cancelled = true
-		}
 	}, [
 		targetUserId,
 		currentUserId,
@@ -1118,12 +1121,7 @@ export const useChat = (
 		groupId,
 		socket,
 		accessToken,
-		loadStoredKey,
-		decryptMessage,
-		hydrateKeysFromLocalStorage,
-		ensureKeyExchange,
 		e2eKeyId,
-		secretChatEnabled,
 	])
 
 	const loadMoreMessages = useCallback(async () => {

@@ -6280,6 +6280,7 @@ export default function MessengerPage() {
 												onClick={() => {
 													setSelectedGroup(group)
 													setSelectedFriend(null)
+													setSelectedChannel(null)
 													setIsChatSearchOpen(false)
 													setChatSearchQuery('')
 													setFoundMessages([])

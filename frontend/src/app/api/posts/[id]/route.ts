@@ -98,32 +98,14 @@ export async function DELETE(
 		const body = await req.json().catch(() => ({}))
 		const { user_id, reason } = body || {}
 
-		if (!user_id) {
-			return NextResponse.json(
-				{ error: 'user_id is required' },
-				{ status: 400 },
-			)
-		}
-
 		const backendUrl = getBackendUrl()
+		const endpoint = `${backendUrl}/api/v1/posts/${id}`
 
-		const isAdminDelete = typeof reason === 'string' && reason.trim().length > 0
-		const endpoint = isAdminDelete
-			? `${backendUrl}/api/v1/posts/admin`
-			: `${backendUrl}/api/v1/posts/`
-
-		const payload = isAdminDelete
-			? {
-					access_token: accessToken,
-					post_id: id,
-					user_id,
-					reason,
-				}
-			: {
-					access_token: accessToken,
-					post_id: id,
-					user_id,
-				}
+		const payload: Record<string, any> = {
+			post_id: id,
+		}
+		if (user_id) payload.user_id = user_id
+		if (reason) payload.reason = reason
 
 		const res = await fetch(endpoint, {
 			method: 'DELETE',
