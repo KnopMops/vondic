@@ -101,9 +101,13 @@ class FriendshipService:
             return None, str(e)
 
     @staticmethod
-    def accept_request(user_id, requester_id):
-        request = Friendship.query.filter_by(
-            requester_id=requester_id, addressee_id=user_id, status="pending"
+    def accept_request(user_id, requester_or_friendship_id):
+        user_id = str(user_id)
+        rf_id = str(requester_or_friendship_id)
+        request = Friendship.query.filter(
+            or_(Friendship.id == rf_id, Friendship.requester_id == rf_id),
+            Friendship.addressee_id == user_id,
+            Friendship.status == "pending",
         ).first()
 
         if not request:
@@ -118,9 +122,13 @@ class FriendshipService:
             return None, str(e)
 
     @staticmethod
-    def reject_request(user_id, requester_id):
-        request = Friendship.query.filter_by(
-            requester_id=requester_id, addressee_id=user_id, status="pending"
+    def reject_request(user_id, requester_or_friendship_id):
+        user_id = str(user_id)
+        rf_id = str(requester_or_friendship_id)
+        request = Friendship.query.filter(
+            or_(Friendship.id == rf_id, Friendship.requester_id == rf_id),
+            Friendship.addressee_id == user_id,
+            Friendship.status == "pending",
         ).first()
 
         if not request:

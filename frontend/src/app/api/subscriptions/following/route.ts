@@ -40,7 +40,11 @@ export async function POST(req: NextRequest) {
 		}
 
 		const followingData = await response.json()
-		const following = Array.isArray(followingData) ? followingData : []
+		const following = Array.isArray(followingData)
+			? followingData
+			: Array.isArray(followingData?.following)
+				? followingData.following
+				: []
 
 		// 2. Fetch all users to enrich data (since following list might miss avatar/details)
 		const usersResponse = await fetch(`${backendUrl}/api/v1/users/`, {

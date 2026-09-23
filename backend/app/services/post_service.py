@@ -109,7 +109,7 @@ class PostService:
         )
 
     @staticmethod
-    def get_post_by_id(post_id):
+    def get_post_by_id(post_id, viewer_id=None):
         return (
             Post.query.join(User, Post.posted_by == User.id)
             .filter(
@@ -136,25 +136,38 @@ class PostService:
         )
 
     @staticmethod
-    def create_post(data, user_id, is_blog: bool = False):
-        social_community_id = data.get("social_community_id")
+    def create_post(data=None, user_id=None, is_blog: bool = False, **kwargs):
+        if data is None:
+            data = {}
+        if isinstance(data, dict):
+            payload = dict(data)
+        else:
+            payload = {}
+        payload.update(kwargs)
+
+        actual_user_id = user_id or payload.get("posted_by") or payload.get("user_id")
+        if not actual_user_id:
+            raise ValueError("user_id or posted_by is required")
+        actual_user_id = str(actual_user_id)
+
+        social_community_id = payload.get("social_community_id") or payload.get("community_id")
         if social_community_id:
             community = SocialCommunity.query.get(social_community_id)
-            user = User.query.get(user_id)
+            user = User.query.get(actual_user_id)
             if not community or not SocialCommunityService.user_is_member(
                 community, user
             ):
                 raise ForbiddenError("Нет доступа к сообществу")
-            if str(community.owner_id) != str(user_id):
+            if str(community.owner_id) != str(actual_user_id):
                 raise ForbiddenError("Только администратор может публиковать записи в сообществе")
             is_blog = False
 
         new_post = Post(
-            content=PostService._sanitize_text(data.get("content")),
-            attachments=data.get("attachments"),
-            posted_by=user_id,
+            content=PostService._sanitize_text(payload.get("content")),
+            attachments=payload.get("attachments"),
+            posted_by=actual_user_id,
             social_community_id=social_community_id,
-            is_blog=is_blog,
+            is_blog=bool(is_blog or payload.get("is_blog", False)),
         )
         db.session.add(new_post)
         db_commit()
@@ -326,3 +339,39 @@ class PostService:
 
         db_commit()
         return post
+
+    @staticmethod
+    def delete_post(post_id, user_id):
+        try:
+            PostService.delete_post_by_user(post_id, user_id)
+            return True, None
+        except Exception as e:
+            return False, str(e)
+
+    @staticmethod
+    def toggle_like(user_id, post_id):
+        try:
+            post = Post.query.filter_by(id=post_id, deleted=False).first()
+            if not post:
+                return False, 0, "Пост не найден"
+            existing = Like.query.filter_by(user_id=str(user_id), post_id=str(post_id)).first()
+            if existing:
+                db.session.delete(existing)
+                if post.likes and post.likes > 0:
+                    post.likes -= 1
+                else:
+                    post.likes = 0
+                liked = False
+            else:
+                new_like = Like(user_id=str(user_id), post_id=str(post_id))
+                db.session.add(new_like)
+                if post.likes is None:
+                    post.likes = 0
+                post.likes += 1
+                liked = True
+            db_commit()
+            return liked, post.likes, None
+        except Exception as e:
+            db.session.rollback()
+            return False, 0, str(e)
+

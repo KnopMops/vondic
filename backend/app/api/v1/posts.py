@@ -102,13 +102,21 @@ async def create_post(
     current_user: User = Depends(get_current_user),
     db=Depends(get_async_db)
 ):
-    post, err = PostService.create_post(
-        posted_by=current_user.id,
-        content=payload.content,
-        title=payload.title,
-        attachments=payload.attachments,
-        community_id=payload.community_id,
-    )
+    try:
+        res = PostService.create_post(
+            posted_by=current_user.id,
+            content=payload.content,
+            title=payload.title,
+            attachments=payload.attachments,
+            community_id=payload.community_id,
+        )
+        if isinstance(res, tuple):
+            post, err = res
+        else:
+            post, err = res, None
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     if err or not post:
         raise HTTPException(status_code=400, detail=err or "Failed to create post")
     pdict = post.to_dict(viewer_id=current_user.id)
@@ -155,8 +163,12 @@ async def get_post(
     db=Depends(get_async_db)
 ):
     viewer_id = current_user.id if current_user else None
-    post, err = PostService.get_post_by_id(post_id, viewer_id=viewer_id)
-    if err or not post:
+    res = PostService.get_post_by_id(post_id, viewer_id=viewer_id)
+    if isinstance(res, tuple):
+        post, _ = res
+    else:
+        post = res
+    if not post:
         raise HTTPException(status_code=404, detail="Post not found")
     pdict = post.to_dict(viewer_id=viewer_id)
     await _attach_author_to_post_async(db, pdict)

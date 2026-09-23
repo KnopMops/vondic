@@ -25,11 +25,17 @@ export async function proxy(req: NextRequest) {
 	const accessToken = await getAccessToken(req)
 	const refreshToken = await getRefreshToken(req)
 
-	const isPublicRoute = PUBLIC_ROUTES.includes(pathname) || pathname.startsWith('/download') || pathname.startsWith('/login') || pathname.startsWith('/feed/messages/anon') || pathname.startsWith('/reset-verify')
+	const isPublicRoute =
+		PUBLIC_ROUTES.includes(pathname) ||
+		pathname.startsWith('/download') ||
+		pathname.startsWith('/login') ||
+		pathname.startsWith('/feed/messages/anon') ||
+		pathname.startsWith('/reset-verify')
 	const isRootRoute = pathname === ROOT_ROUTE
+	const isPublicProfile = pathname.startsWith('/feed/profile')
 
 	if (!accessToken && !refreshToken) {
-		if (isPublicRoute || isRootRoute) {
+		if (isPublicRoute || isRootRoute || isPublicProfile) {
 			return NextResponse.next()
 		}
 
@@ -39,7 +45,16 @@ export async function proxy(req: NextRequest) {
 		return NextResponse.redirect(url)
 	}
 
-	if (isPublicRoute && pathname !== '/verify' && pathname !== '/login' && !pathname.startsWith('/login') && !pathname.startsWith('/download') && !pathname.startsWith('/feed/messages/anon') && !pathname.startsWith('/reset-verify')) {
+	if (
+		isPublicRoute &&
+		pathname !== '/verify' &&
+		pathname !== '/login' &&
+		!pathname.startsWith('/login') &&
+		!pathname.startsWith('/download') &&
+		!pathname.startsWith('/feed/messages/anon') &&
+		!pathname.startsWith('/reset-verify') &&
+		!isPublicProfile
+	) {
 		const url = req.nextUrl.clone()
 		url.pathname = FEED_ROUTE
 		return NextResponse.redirect(url)

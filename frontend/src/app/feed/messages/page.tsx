@@ -3,7 +3,7 @@
 import BotConsentModal from '@/components/bot/BotConsentModal'
 import BotGameUploadModal from '@/components/bots/BotGameUploadModal'
 import { ChatMenu } from '@/components/calls'
-import { ConnectingModal } from '@/components/calls/ConnectingModal'
+import { ConnectingModal, WEBRTC_CACHE_KEY } from '@/components/calls/ConnectingModal'
 import { FloatingCallBar } from '@/components/calls/FloatingCallBar'
 import { IntegratedCallPanel } from '@/components/calls/IntegratedCallPanel'
 import { ScreenShareViewer } from '@/components/calls/ScreenShareViewer'
@@ -751,6 +751,43 @@ export default function MessengerPage() {
 	const { user } = useAuth()
 	const { socket, isConnected } = useSocket()
 	const [hasConnectedBefore, setHasConnectedBefore] = useState(false)
+	const [isConnectingDismissed, setIsConnectingDismissed] = useState<boolean>(() => {
+		if (typeof window !== 'undefined') {
+			try {
+				return sessionStorage.getItem(WEBRTC_CACHE_KEY) === 'failed'
+			} catch {}
+		}
+		return false
+	})
+	const [forceShowConnectingModal, setForceShowConnectingModal] = useState(false)
+
+	useEffect(() => {
+		if (isConnected) {
+			setIsConnectingDismissed(false)
+			setForceShowConnectingModal(false)
+			try {
+				sessionStorage.setItem(WEBRTC_CACHE_KEY, 'connected')
+			} catch {}
+		}
+	}, [isConnected])
+
+	const shouldShowConnectingModal =
+		!isConnected && (!isConnectingDismissed || forceShowConnectingModal)
+
+	const handleDismissConnecting = () => {
+		setIsConnectingDismissed(true)
+		setForceShowConnectingModal(false)
+		try {
+			sessionStorage.setItem(WEBRTC_CACHE_KEY, 'failed')
+		} catch {}
+	}
+
+	const handleRetryConnecting = () => {
+		try {
+			sessionStorage.removeItem(WEBRTC_CACHE_KEY)
+		} catch {}
+		window.location.reload()
+	}
 	const SUPPORT_API_URL =
 		process.env.NEXT_PUBLIC_SUPPORT_API_URL || 'http://127.0.0.1:8000'
 	const [aiUser, setAiUser] = useState<User>({
@@ -5321,8 +5358,14 @@ export default function MessengerPage() {
 	// WebRTC Handlers
 	const handleCallInitiate = async (userId: string, userName: string, avatarUrl?: string) => {
 		console.log('Call button clicked for:', userId, userName, avatarUrl)
-		console.log('WebRTC initialized:', isInitialized)
-		console.log('WebRTC supported:', isWebRTCSupported)
+		if (!isConnected) {
+			showToast(
+				'Для звонков требуется подключение к серверам связи. Перезагрузите страницу для повторной попытки.',
+				'error',
+			)
+			setForceShowConnectingModal(true)
+			return
+		}
 
 		try {
 			await initiateCall(userId, userName, avatarUrl)
@@ -5331,6 +5374,30 @@ export default function MessengerPage() {
 			console.error('Failed to initiate call:', error)
 			showToast('Не удалось начать звонок', 'error')
 		}
+	}
+
+	const handleGroupCallInitiate = (groupId: string) => {
+		if (!isConnected) {
+			showToast(
+				'Для группового звонка требуется подключение к серверам связи. Перезагрузите страницу для повторной попытки.',
+				'error',
+			)
+			setForceShowConnectingModal(true)
+			return
+		}
+		initiateGroupCall(groupId)
+	}
+
+	const handleJoinVoiceChannel = (channelId: string) => {
+		if (!isConnected) {
+			showToast(
+				'Для входа в голосовой канал требуется подключение к серверам связи. Перезагрузите страницу для повторной попытки.',
+				'error',
+			)
+			setForceShowConnectingModal(true)
+			return
+		}
+		joinVoiceChannel(channelId)
 	}
 
 	// Track first Socket.IO connection
@@ -6273,7 +6340,7 @@ export default function MessengerPage() {
 																type='button'
 																onClick={e => {
 																	e.stopPropagation()
-																	initiateGroupCall(group.id)
+																	handleGroupCallInitiate(group.id)
 																}}
 																className='p-1.5 rounded-full text-emerald-400 hover:text-white hover:bg-emerald-500/20 transition-colors'
 																title='Голосовой звонок в группе'
@@ -6665,7 +6732,7 @@ export default function MessengerPage() {
 														key={ch.id}
 														onClick={() => {
 															if (ch.type === 'voice') {
-																joinVoiceChannel(ch.id)
+																handleJoinVoiceChannel(ch.id)
 																// Clear selection to avoid confusion with text chats
 																setSelectedChannel(null)
 																setSelectedFriend(null)
@@ -6969,6 +7036,22 @@ export default function MessengerPage() {
 						</>
 					) : selectedFriend || selectedChannel || selectedGroup ? (
 						<>
+							{!isConnected && isConnectingDismissed && (
+								<div className='bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 flex items-center justify-between text-xs text-amber-300 z-20'>
+									<div className='flex items-center gap-2'>
+										<span className='w-2 h-2 rounded-full bg-amber-400 animate-pulse' />
+										<span>Автономный режим: WebRTC отключен. Звонки и голосовые каналы недоступны.</span>
+									</div>
+									<button
+										onClick={() => {
+											setForceShowConnectingModal(true)
+										}}
+										className='underline hover:text-white font-medium ml-2 cursor-pointer'
+									>
+										Перезагрузить страницу для подключения
+									</button>
+								</div>
+							)}
 							<div className='h-16 px-6 border-b border-white/6 flex items-center justify-between bg-black/20 backdrop-blur-lg z-10 sticky top-0'>
 								{isChatSearchOpen ? (
 									<div className='flex flex-col gap-2 w-full animate-in fade-in slide-in-from-top-2 duration-200'>
@@ -7210,17 +7293,10 @@ export default function MessengerPage() {
 													</button>
 													<button
 														onClick={() => {
-															if (!isInitialized) {
-																console.warn(
-																	'[Group Call] WebRTC not initialized yet',
-																)
-																return
-															}
-															initiateGroupCall(selectedGroup.id)
+															handleGroupCallInitiate(selectedGroup.id)
 														}}
-														className='ml-2 p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+														className='ml-2 p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors'
 														title='Начать групповой звонок'
-														disabled={!isInitialized}
 													>
 														<PhoneIcon className='w-4 h-4' />
 													</button>
@@ -7821,7 +7897,14 @@ export default function MessengerPage() {
 								</div>
 							)}
 
-							{!isConnected && <ConnectingModal isVisible={!isConnected} />}
+							{shouldShowConnectingModal && (
+								<ConnectingModal
+									isVisible={shouldShowConnectingModal}
+									isConnected={isConnected}
+									onDismiss={handleDismissConnecting}
+									onRetry={handleRetryConnecting}
+								/>
+							)}
 
 							{isCustomBgOpen && (
 								<div
@@ -9422,9 +9505,9 @@ export default function MessengerPage() {
 					onStartCall={() => {
 						setIsTelegramChatInfoOpen(false)
 						if (telegramChatInfoData.type === 'direct') {
-							initiateCall(telegramChatInfoData.data.id, telegramChatInfoData.data.username, telegramChatInfoData.data.avatar_url)
+							handleCallInitiate(telegramChatInfoData.data.id, telegramChatInfoData.data.username, telegramChatInfoData.data.avatar_url)
 						} else if (telegramChatInfoData.type === 'group') {
-							initiateGroupCall(telegramChatInfoData.data.id)
+							handleGroupCallInitiate(telegramChatInfoData.data.id)
 						}
 					}}
 					onUpdateChat={async (updatedData) => {

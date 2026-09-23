@@ -39,7 +39,11 @@ export async function POST(req: NextRequest) {
 		}
 
 		const friendsData = await response.json()
-		const friends = Array.isArray(friendsData) ? friendsData : []
+		const friends = Array.isArray(friendsData)
+			? friendsData
+			: Array.isArray(friendsData?.friends)
+				? friendsData.friends
+				: []
 
 		const sanitized = friends.map((friend: any) => {
 			if (friend.privacy_settings?.show_email === true) {

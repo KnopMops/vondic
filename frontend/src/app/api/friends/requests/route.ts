@@ -34,7 +34,11 @@ export async function POST(req: NextRequest) {
     }
 
     const requestsData = await response.json();
-    const requests = Array.isArray(requestsData) ? requestsData : [];
+    const requests = Array.isArray(requestsData)
+      ? requestsData
+      : Array.isArray(requestsData?.requests)
+        ? requestsData.requests
+        : [];
 
     const sanitized = requests.map((req: any) => {
       if (req.privacy_settings?.show_email === true) {

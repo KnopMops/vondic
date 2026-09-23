@@ -42,7 +42,8 @@ export default function FriendsPage() {
 			})
 			if (reqRes.ok) {
 				const data = await reqRes.json()
-				setRequests(Array.isArray(data) ? data : [])
+				const list = Array.isArray(data) ? data : (data?.requests || [])
+				setRequests(list)
 			}
 
 			
@@ -51,7 +52,8 @@ export default function FriendsPage() {
 			})
 			if (friendsRes.ok) {
 				const data = await friendsRes.json()
-				setFriends(Array.isArray(data) ? data : [])
+				const list = Array.isArray(data) ? data : (data?.friends || [])
+				setFriends(list)
 			}
 
 			
@@ -62,7 +64,8 @@ export default function FriendsPage() {
 			})
 			if (followingRes.ok) {
 				const data = await followingRes.json()
-				setFollowing(Array.isArray(data) ? data : [])
+				const list = Array.isArray(data) ? data : (data?.following || [])
+				setFollowing(list)
 			}
 
 			
@@ -73,7 +76,8 @@ export default function FriendsPage() {
 			})
 			if (followersRes.ok) {
 				const data = await followersRes.json()
-				setFollowers(Array.isArray(data) ? data : [])
+				const list = Array.isArray(data) ? data : (data?.followers || [])
+				setFollowers(list)
 			}
 		} catch (err) {
 			console.error(err)
@@ -129,7 +133,8 @@ export default function FriendsPage() {
 			})
 			if (res.ok) {
 				const data = await res.json()
-				setSearchResults(Array.isArray(data) ? data : [])
+				const list = Array.isArray(data) ? data : (data?.users || data?.results || [])
+				setSearchResults(list)
 			}
 		} catch (error) {
 			console.error(error)

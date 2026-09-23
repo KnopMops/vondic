@@ -18,7 +18,10 @@ class FriendRequestSchema(BaseModel):
 
 
 class FriendActionSchema(BaseModel):
-    friendship_id: str
+    friendship_id: Optional[str] = None
+    requester_id: Optional[str] = None
+    friend_id: Optional[str] = None
+    user_id: Optional[str] = None
 
 
 @friends_router.post("/list")
@@ -56,6 +59,7 @@ async def get_requests(
 
 
 @friends_router.post("/request", status_code=status.HTTP_201_CREATED)
+@friends_router.post("/add", status_code=status.HTTP_201_CREATED)
 async def send_request(
     payload: FriendRequestSchema,
     current_user=Depends(get_current_user)
@@ -71,7 +75,10 @@ async def accept_request(
     payload: FriendActionSchema,
     current_user=Depends(get_current_user)
 ):
-    friendship, error = FriendshipService.accept_request(payload.friendship_id, current_user.id)
+    target_id = payload.friendship_id or payload.requester_id or payload.friend_id
+    if not target_id:
+        raise HTTPException(status_code=400, detail="Missing friendship_id or requester_id")
+    friendship, error = FriendshipService.accept_request(current_user.id, target_id)
     if error:
         raise HTTPException(status_code=400, detail=error)
     return {"message": "Friend request accepted"}
@@ -82,7 +89,24 @@ async def reject_request(
     payload: FriendActionSchema,
     current_user=Depends(get_current_user)
 ):
-    success, error = FriendshipService.reject_request(payload.friendship_id, current_user.id)
+    target_id = payload.friendship_id or payload.requester_id or payload.friend_id
+    if not target_id:
+        raise HTTPException(status_code=400, detail="Missing friendship_id or requester_id")
+    success, error = FriendshipService.reject_request(current_user.id, target_id)
     if error:
         raise HTTPException(status_code=400, detail=error)
     return {"message": "Friend request rejected"}
+
+
+@friends_router.post("/remove")
+async def remove_friend(
+    payload: FriendActionSchema,
+    current_user=Depends(get_current_user)
+):
+    target_id = payload.friend_id or payload.user_id or payload.requester_id or payload.friendship_id
+    if not target_id:
+        raise HTTPException(status_code=400, detail="Missing friend_id")
+    success, error = FriendshipService.remove_friend(current_user.id, target_id)
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+    return {"message": "Friend removed successfully"}

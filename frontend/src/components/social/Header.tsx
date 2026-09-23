@@ -280,35 +280,36 @@ export default function Header({ email, onLogout }: Props) {
 					>
 						<Search className='h-4 w-4' />
 					</button>
-					<div className='relative'>
-						<button
-							onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-							className='flex h-9 w-9 items-center justify-center rounded-full bg-black/30 ring-1 ring-white/15 transition-all hover:ring-indigo-500 focus:outline-none overflow-hidden'
-						>
-							{user?.avatar_url ? (
-								<img
-									src={getAttachmentUrl(user.avatar_url)}
-									alt={user.username}
-									className='h-full w-full object-cover'
-								/>
-							) : (
-								<span className='text-sm font-medium text-gray-300'>
-									{user?.username?.[0]?.toUpperCase() || '👤'}
-								</span>
-							)}
-						</button>
+					{user ? (
+						<div className='relative'>
+							<button
+								onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+								className='flex h-9 w-9 items-center justify-center rounded-full bg-black/30 ring-1 ring-white/15 transition-all hover:ring-indigo-500 focus:outline-none overflow-hidden'
+							>
+								{user?.avatar_url ? (
+									<img
+										src={getAttachmentUrl(user.avatar_url)}
+										alt={user.username}
+										className='h-full w-full object-cover'
+									/>
+								) : (
+									<span className='text-sm font-medium text-gray-300'>
+										{user?.username?.[0]?.toUpperCase() || '👤'}
+									</span>
+								)}
+							</button>
 
-						{isDropdownOpen && (
-							<div className='absolute right-0 mt-2 w-56 origin-top-right rounded-xl bg-gray-900 py-1 shadow-2xl ring-1 ring-white/10 focus:outline-none z-50'>
-								{showAccountSwitcher ? (
-									<div className='p-2 space-y-1'>
-										<div className='px-2 py-1.5 text-sm font-medium text-gray-200 border-b border-white/10 mb-1'>
-											Выберите аккаунт
-										</div>
-										{savedAccounts.map(account => (
-											<div
-												key={account.id}
-												className='group relative flex items-center gap-3 rounded-lg p-2 hover:bg-white/5 cursor-pointer transition-colors'
+							{isDropdownOpen && (
+								<div className='absolute right-0 mt-2 w-56 origin-top-right rounded-xl bg-gray-900 py-1 shadow-2xl ring-1 ring-white/10 focus:outline-none z-50'>
+									{showAccountSwitcher ? (
+										<div className='p-2 space-y-1'>
+											<div className='px-2 py-1.5 text-sm font-medium text-gray-200 border-b border-white/10 mb-1'>
+												Выберите аккаунт
+											</div>
+											{savedAccounts.map(account => (
+												<div
+													key={account.id}
+													className='group relative flex items-center gap-3 rounded-lg p-2 hover:bg-white/5 cursor-pointer transition-colors'
 													onClick={async () => {
 														if (String(user?.id) === String(account.id)) {
 															setShowAccountSwitcher(false)
@@ -346,138 +347,126 @@ export default function Header({ email, onLogout }: Props) {
 															setSwitchingAccountId(null)
 														}
 													}}
-											>
-												<div className='w-8 h-8 rounded-full overflow-hidden bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm shrink-0'>
-													{account.avatar_url ? (
-														<img
-															src={account.avatar_url}
-															alt={account.username}
-															className='w-full h-full object-cover'
-														/>
-													) : (
-														account.username.charAt(0).toUpperCase()
-													)}
-												</div>
-												<div className='flex-1 min-w-0'>
-													<p className='text-sm text-white font-medium truncate'>
-														{account.username}
-														{String(user?.id) === String(account.id) && (
-															<span className='ml-1 text-xs text-indigo-400'>
-																· сейчас
-															</span>
-														)}
-													</p>
-													<p className='text-xs text-gray-400 truncate'>
-														{switchingAccountId === account.id
-															? 'Переключение…'
-															: account.email}
-													</p>
-												</div>
-												<button
-													type='button'
-													onClick={e => {
-														e.stopPropagation()
-														removeSavedAccount(account.id)
-														setSavedAccounts(prev => prev.filter(a => a.id !== account.id))
-													}}
-													className='p-1 rounded-full text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all'
-													title='Удалить аккаунт'
 												>
+													<div className='w-8 h-8 rounded-full overflow-hidden bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm shrink-0'>
+														{account.avatar_url ? (
+															<img
+																src={account.avatar_url}
+																alt={account.username}
+																className='w-full h-full object-cover'
+															/>
+														) : (
+															account.username.charAt(0).toUpperCase()
+														)}
+													</div>
+													<div className='flex-1 min-w-0'>
+														<div className='text-sm font-medium text-gray-200 truncate'>
+															{account.username}
+														</div>
+														<div className='text-xs text-gray-500 truncate'>
+															{account.email}
+														</div>
+													</div>
+													<button
+														type='button'
+														onClick={e => {
+															e.stopPropagation()
+															removeSavedAccount(account.id)
+															setSavedAccounts(getSavedAccounts())
+														}}
+														className='opacity-0 group-hover:opacity-100 p-1 text-gray-500 hover:text-red-400 transition-opacity'
+														title='Удалить из списка'
+													>
+														×
+													</button>
+												</div>
+											))}
+											<button
+												type='button'
+												onClick={() => {
+													logout('/login')
+												}}
+												className='flex w-full items-center gap-3 rounded-lg p-2 text-left hover:bg-white/5 transition-colors'
+											>
+												<div className='w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0'>
 													<svg
 														xmlns='http://www.w3.org/2000/svg'
-														width='12'
-														height='12'
+														width='16'
+														height='16'
 														viewBox='0 0 24 24'
 														fill='none'
 														stroke='currentColor'
 														strokeWidth='2'
 														strokeLinecap='round'
 														strokeLinejoin='round'
-														>
-														<line x1='18' y1='6' x2='6' y2='18' />
-														<line x1='6' y1='6' x2='18' y2='18' />
+														className='text-gray-400'
+													>
+														<line x1='12' y1='5' x2='12' y2='19' />
+														<line x1='5' y1='12' x2='19' y2='12' />
 													</svg>
-												</button>
-											</div>
-										))}
-										<button
-											type='button'
-											onClick={() => {
-												logout('/login')
-											}}
-											className='flex w-full items-center gap-3 rounded-lg p-2 text-left hover:bg-white/5 transition-colors'
-										>
-											<div className='w-8 h-8 rounded-full bg-white/10 flex items-center justify-center shrink-0'>
-												<svg
-													xmlns='http://www.w3.org/2000/svg'
-													width='16'
-													height='16'
-													viewBox='0 0 24 24'
-													fill='none'
-													stroke='currentColor'
-													strokeWidth='2'
-													strokeLinecap='round'
-													strokeLinejoin='round'
-													className='text-gray-400'
-												>
-													<line x1='12' y1='5' x2='12' y2='19' />
-													<line x1='5' y1='12' x2='19' y2='12' />
-												</svg>
-											</div>
-											<span className='text-sm text-white font-medium'>
-												Войти в другой аккаунт
-											</span>
-										</button>
-										<button
-											type='button'
-											onClick={() => setShowAccountSwitcher(false)}
-											className='w-full text-center text-xs text-indigo-400 hover:text-indigo-300 transition-colors pt-1'
-										>
-											← Назад
-										</button>
-									</div>
-								) : (
-									<>
-										<div className='px-4 py-3 text-sm text-gray-200 border-b border-white/10'>
-											<div className='font-medium'>Привет,</div>
-											<div className='font-bold text-indigo-400 truncate'>
-												{user?.username || 'Гость'}
-											</div>
-										</div>
-										<Link
-											href={`/feed/profile/${user?.id}`}
-											className='block w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors'
-											onClick={() => setIsDropdownOpen(false)}
-										>
-											Моя страница
-										</Link>
-										<Link
-											href='/feed/settings'
-											className='block w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors'
-											onClick={() => setIsDropdownOpen(false)}
-										>
-											Настройки
-										</Link>
-										{savedAccounts.length > 0 && (
+												</div>
+												<span className='text-sm text-white font-medium'>
+													Войти в другой аккаунт
+												</span>
+											</button>
 											<button
 												type='button'
-												onClick={() => setShowAccountSwitcher(true)}
+												onClick={() => setShowAccountSwitcher(false)}
+												className='w-full text-center text-xs text-indigo-400 hover:text-indigo-300 transition-colors pt-1'
+											>
+												← Назад
+											</button>
+										</div>
+									) : (
+										<>
+											<div className='px-4 py-3 text-sm text-gray-200 border-b border-white/10'>
+												<div className='font-medium'>Привет,</div>
+												<div className='font-bold text-indigo-400 truncate'>
+													{user?.username || 'Гость'}
+												</div>
+											</div>
+											<Link
+												href={`/feed/profile/${user?.id}`}
+												className='block w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors'
+												onClick={() => setIsDropdownOpen(false)}
+											>
+												Моя страница
+											</Link>
+											<Link
+												href='/feed/settings'
+												className='block w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors'
+												onClick={() => setIsDropdownOpen(false)}
+											>
+												Настройки
+											</Link>
+											{savedAccounts.length > 0 && (
+												<button
+													type='button'
+													onClick={() => setShowAccountSwitcher(true)}
+													className='block w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors'
+												>
+													Сменить аккаунт
+												</button>
+											)}
+											<button
+												onClick={onLogout}
 												className='block w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors'
 											>
-												Сменить аккаунт
+												Выйти
 											</button>
-										)}
-										<button
-											onClick={onLogout}
-											className='block w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors'
-										>
-											Выйти
-										</button>
-									</>
-								)}
-							</div>
-						)}
-				</div>
+										</>
+									)}
+								</div>
+							)}
+						</div>
+					) : (
+						<Link
+							href={`/login${pathname ? `?returnTo=${encodeURIComponent(pathname)}` : ''}`}
+							className='flex items-center gap-2 px-4 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-sm font-semibold shadow-md shadow-indigo-500/20 transition-all transform hover:scale-[1.02] active:scale-[0.98]'
+						>
+							Войти
+						</Link>
+					)}
 				
 				{isDropdownOpen && (
 					<div
@@ -648,6 +637,15 @@ export default function Header({ email, onLogout }: Props) {
 								}`}
 							>
 								<span className='text-sm font-medium'>Админка</span>
+							</Link>
+						)}
+						{!user && (
+							<Link
+								href={`/login${pathname ? `?returnTo=${encodeURIComponent(pathname)}` : ''}`}
+								onClick={() => setIsMobileMenuOpen(false)}
+								className='mt-3 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-3 text-sm font-semibold text-white shadow-lg transition-all'
+							>
+								Войти
 							</Link>
 						)}
 					</nav>
