@@ -13,10 +13,28 @@ def make_async_database_url(url: str) -> str:
         return url
     if url.startswith("postgresql+psycopg2://"):
         return url.replace("postgresql+psycopg2://", "postgresql+asyncpg://", 1)
+    if url.startswith("postgresql+psycopg://"):
+        return url.replace("postgresql+psycopg://", "postgresql+asyncpg://", 1)
     if url.startswith("postgresql://"):
         return url.replace("postgresql://", "postgresql+asyncpg://", 1)
     if not url.startswith("postgresql+asyncpg://"):
         return f"postgresql+asyncpg://{url.split('://', 1)[-1]}"
+    return url
+
+
+def make_sync_database_url(url: str) -> str:
+    if not url:
+        return url
+    try:
+        import psycopg  # noqa: F401
+        preferred_driver = "postgresql+psycopg://"
+    except ImportError:
+        preferred_driver = "postgresql+psycopg2://"
+
+    if url.startswith("postgresql+asyncpg://"):
+        return url.replace("postgresql+asyncpg://", preferred_driver, 1)
+    if url.startswith("postgresql://") and not url.startswith("postgresql+"):
+        return url.replace("postgresql://", preferred_driver, 1)
     return url
 
 
@@ -60,6 +78,10 @@ class Settings(BaseSettings):
     @property
     def ASYNC_DATABASE_URL(self) -> str:
         return make_async_database_url(self.DATABASE_URL)
+
+    @property
+    def SYNC_DATABASE_URL(self) -> str:
+        return make_sync_database_url(self.DATABASE_URL)
 
     # S3 / MinIO Settings
     S3_ENDPOINT: str = os.environ.get("S3_ENDPOINT", "http://minio:9000")

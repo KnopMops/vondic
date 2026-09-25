@@ -31,7 +31,7 @@ AsyncSessionLocal = async_sessionmaker(
 
 # Synchronous Engine & Scoped Session for legacy service layer compatibility
 sync_engine = create_engine(
-    settings.DATABASE_URL,
+    settings.SYNC_DATABASE_URL,
     echo=False,
     pool_pre_ping=True,
     pool_recycle=120,

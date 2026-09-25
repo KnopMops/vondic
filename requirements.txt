@@ -29,6 +29,7 @@ cryptography
 stripe
 pytz
 psycopg2-binary
+psycopg[binary]>=3.2.0
 user-agents
 prometheus-client
 boto3

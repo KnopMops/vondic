@@ -22,12 +22,16 @@ if [ -z "$SKIP_DB_BOOTSTRAP" ]; then
   echo "[entrypoint] Running DB bootstrap..."
   cd /app/backend
   python -c "
-import os, psycopg2
-# Connect directly to postgres, bypassing pgbouncer
+import os
 dsn = 'postgresql://postgres:4566212@192.168.140.11:5432/vondic'
 try:
-    conn = psycopg2.connect(dsn)
-    conn.autocommit = True
+    try:
+        import psycopg
+        conn = psycopg.connect(dsn, autocommit=True)
+    except Exception:
+        import psycopg2
+        conn = psycopg2.connect(dsn)
+        conn.autocommit = True
     cur = conn.cursor()
 
     migrations = [
