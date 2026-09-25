@@ -38,6 +38,10 @@ def _get_client_ip(request: Request) -> str:
     return request.client.host if request.client else ""
 
 
+def _get_request_host(request: Request) -> str:
+    return request.headers.get("x-forwarded-host") or request.headers.get("host") or ""
+
+
 @auth_router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(
     payload: UserRegisterSchema,
@@ -72,7 +76,11 @@ async def login(
     if error:
         if error in ("TwoFactorEmailRequired", "TwoFactorTotpRequired"):
             return Response(
-                content=json.dumps({"two_factor_required": True, "method": "email"}),
+                content=json.dumps({
+                    "two_factor_required": True,
+                    "method": "email" if error == "TwoFactorEmailRequired" else "totp",
+                    "detail": "Введите 6-значный код подтверждения",
+                }),
                 status_code=401,
                 media_type="application/json",
             )
@@ -624,20 +632,37 @@ async def telegram_login(
 
 @auth_router.post("/passkey/register-options")
 async def passkey_register_options(
+    request: Request,
     payload: Dict[str, Any] = Body(default={}),
+    current_user: Optional[User] = Depends(get_optional_current_user),
 ):
     email = payload.get("email")
     username = payload.get("username")
-    options = PasskeyService.generate_register_options(email=email, username=username)
+    host = _get_request_host(request)
+    options = PasskeyService.generate_register_options(
+        user=current_user,
+        email=email,
+        username=username,
+        host=host,
+    )
     return options
 
 
 @auth_router.post("/passkey/register-verify")
-async def passkey_register_verify(payload: Dict[str, Any]):
+async def passkey_register_verify(
+    request: Request,
+    payload: Dict[str, Any],
+    current_user: Optional[User] = Depends(get_optional_current_user),
+):
     credential = payload.get("credential") or payload
     password = payload.get("password")
     device_name = payload.get("device_name")
-    result, err = PasskeyService.verify_register(credential, password=password, device_name=device_name)
+    result, err = PasskeyService.verify_register(
+        credential,
+        password=password,
+        device_name=device_name,
+        current_user=current_user,
+    )
     if err or not result:
         raise HTTPException(status_code=400, detail=err or "Ошибка регистрации Passkey")
     user = result["user"]
@@ -650,8 +675,9 @@ async def passkey_register_verify(payload: Dict[str, Any]):
 
 
 @auth_router.post("/passkey/login-options")
-async def passkey_login_options():
-    options = PasskeyService.generate_login_options()
+async def passkey_login_options(request: Request):
+    host = _get_request_host(request)
+    options = PasskeyService.generate_login_options(host=host)
     return options
 
 
@@ -671,14 +697,22 @@ async def passkey_login_verify(payload: Dict[str, Any]):
 
 
 @auth_router.post("/passkey/migrate/create")
-async def passkey_migrate_create(current_user: User = Depends(get_current_user)):
-    data = PasskeyService.create_migration_session(current_user)
+async def passkey_migrate_create(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    host = _get_request_host(request)
+    data = PasskeyService.create_migration_session(current_user, host=host)
     return data
 
 
 @auth_router.get("/passkey/migrate/info")
-async def passkey_migrate_info(token: str = Query(...)):
-    info, err = PasskeyService.get_migration_info(token)
+async def passkey_migrate_info(
+    request: Request,
+    token: str = Query(...),
+):
+    host = _get_request_host(request)
+    info, err = PasskeyService.get_migration_info(token, host=host)
     if err or not info:
         raise HTTPException(status_code=400, detail=err or "Неверный или просроченный токен миграции")
     return info
@@ -695,6 +729,22 @@ async def passkey_migrate_complete(payload: Dict[str, Any]):
     user = result["user"]
     return {
         "message": "Migration completed successfully",
+        "access_token": result["access_token"],
+        "refresh_token": result["refresh_token"],
+        "user": user.to_dict(),
+    }
+
+
+@auth_router.post("/passkey/migrate/exchange")
+async def passkey_migrate_exchange(payload: Dict[str, Any]):
+    token = payload.get("token") or payload.get("migration_token")
+    device_name = payload.get("device_name")
+    result, err = PasskeyService.exchange_migration_token(token, device_name=device_name)
+    if err or not result:
+        raise HTTPException(status_code=400, detail=err or "Не удалось выполнить вход по QR-коду")
+    user = result["user"]
+    return {
+        "message": "Login via QR migration successful",
         "access_token": result["access_token"],
         "refresh_token": result["refresh_token"],
         "user": user.to_dict(),

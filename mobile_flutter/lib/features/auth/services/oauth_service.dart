@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:math';
 import 'package:dio/dio.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:logger/logger.dart';
@@ -8,6 +7,15 @@ import '../../../core/network/api_client.dart';
 import '../../../core/utils/storage_service.dart';
 import '../models/user.dart';
 
+class TwoFactorRequiredException implements Exception {
+  final String method;
+  final String message;
+  TwoFactorRequiredException({required this.method, required this.message});
+
+  @override
+  String toString() => message;
+}
+
 class OAuthService {
   final ApiClient _apiClient;
   final StorageService _storageService;
@@ -15,29 +23,36 @@ class OAuthService {
 
   OAuthService(this._apiClient, this._storageService);
 
-  /// Login with email/username and password via Vondic backend.
-  Future<User?> loginWithEmail(String email, String password) async {
+  /// Login with email/username and password via Vondic backend, with optional 2FA code.
+  Future<User?> loginWithEmail(
+    String email,
+    String password, {
+    String? twoFactorCode,
+  }) async {
     try {
+      final requestData = <String, dynamic>{
+        'email': email.trim(),
+        'password': password,
+        'device_type': 'mobile',
+      };
+      if (twoFactorCode != null && twoFactorCode.trim().isNotEmpty) {
+        requestData['two_factor_code'] = twoFactorCode.trim();
+        requestData['email_code'] = twoFactorCode.trim();
+        requestData['totp_code'] = twoFactorCode.trim();
+      }
+
       Response response;
       try {
         response = await _apiClient.publicDio.post(
           '${AppConfig.backendUrl}/api/v1/auth/login',
-          data: {
-            'email': email,
-            'password': password,
-            'device_type': 'mobile',
-          },
+          data: requestData,
         );
       } on DioException catch (dioErr) {
         // If 404 or 502 on /api/v1/auth/login, try Next.js /api/auth/login proxy
         if (dioErr.response?.statusCode == 404 || dioErr.response?.statusCode == 502) {
           response = await _apiClient.publicDio.post(
             '${AppConfig.backendUrl}/api/auth/login',
-            data: {
-              'email': email,
-              'password': password,
-              'device_type': 'mobile',
-            },
+            data: requestData,
           );
         } else {
           rethrow;
@@ -75,7 +90,10 @@ class OAuthService {
       if (e.response?.data is Map) {
         final map = e.response!.data as Map;
         if (map['two_factor_required'] == true) {
-          throw Exception('Для аккаунта включена двухфакторная аутентификация (2FA)');
+          throw TwoFactorRequiredException(
+            method: (map['method'] as String?) ?? 'email',
+            message: (map['detail'] as String?) ?? 'Введите 6-значный код подтверждения',
+          );
         }
         final detail = map['detail'] ?? map['error'] ?? map['message'];
         if (detail != null) {
@@ -86,6 +104,98 @@ class OAuthService {
         throw Exception('Неверный логин или пароль');
       }
       throw Exception(e.message ?? 'Ошибка авторизации');
+    }
+  }
+
+  /// Register new user account.
+  Future<User?> registerUser({
+    required String username,
+    required String email,
+    required String password,
+  }) async {
+    try {
+      final response = await _apiClient.publicDio.post(
+        '${AppConfig.backendUrl}/api/v1/auth/register',
+        data: {
+          'username': username.trim(),
+          'email': email.trim().toLowerCase(),
+          'password': password,
+        },
+      );
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final data = response.data as Map<String, dynamic>;
+        final accessToken = data['access_token'] as String?;
+        final refreshToken = data['refresh_token'] as String?;
+
+        if (accessToken != null) {
+          await _storageService.writeSecure('access_token', accessToken);
+        }
+        if (refreshToken != null) {
+          await _storageService.writeSecure('refresh_token', refreshToken);
+        }
+
+        final userData = data['user'] as Map<String, dynamic>?;
+        if (userData != null) {
+          final user = User.fromJson(userData);
+          await _storageService.writeString('user', jsonEncode(user.toJson()));
+          return user;
+        }
+      }
+      throw Exception('Ошибка при создании аккаунта');
+    } on DioException catch (e) {
+      _logger.e('[Auth] Register failed: ${e.message}');
+      final detail = e.response?.data is Map
+          ? (e.response?.data['detail'] ?? e.response?.data['error'] ?? e.response?.data['message'])
+          : null;
+      if (detail != null) {
+        throw Exception(detail.toString());
+      }
+      throw Exception(e.message ?? 'Ошибка регистрации');
+    }
+  }
+
+  /// Exchange a scanned QR / migration token for session tokens.
+  Future<User?> loginWithMigrationToken(String migrationToken) async {
+    try {
+      final cleanToken = migrationToken.trim();
+      final response = await _apiClient.publicDio.post(
+        '${AppConfig.backendUrl}/api/v1/auth/passkey/migrate/exchange',
+        data: {
+          'token': cleanToken,
+          'device_name': 'Мобильное приложение (QR вход)',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = response.data as Map<String, dynamic>;
+        final accessToken = data['access_token'] as String?;
+        final refreshToken = data['refresh_token'] as String?;
+
+        if (accessToken != null) {
+          await _storageService.writeSecure('access_token', accessToken);
+        }
+        if (refreshToken != null) {
+          await _storageService.writeSecure('refresh_token', refreshToken);
+        }
+
+        final userData = data['user'] as Map<String, dynamic>?;
+        if (userData != null) {
+          final user = User.fromJson(userData);
+          await _storageService.writeString('user', jsonEncode(user.toJson()));
+          return user;
+        }
+      }
+      throw Exception('Неверный или устаревший QR-код');
+    } on DioException catch (e) {
+      _logger.e('[Auth] Migration exchange failed: ${e.message}');
+      final detail = e.response?.data is Map
+          ? (e.response?.data['detail'] ?? e.response?.data['error'] ?? e.response?.data['message'])
+          : null;
+      if (detail != null) {
+        throw Exception(detail.toString());
+      }
+      throw Exception('QR-код устарел или недействителен');
     }
   }
 

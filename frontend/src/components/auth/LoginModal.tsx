@@ -159,62 +159,74 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 		<div className='fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200'>
 			<div className='absolute inset-0' onClick={onClose} />
 
-			<div className='relative w-full max-w-md space-y-6 rounded-2xl bg-gray-900 p-8 shadow-2xl border border-gray-800 animate-in zoom-in-95 duration-200'>
+			<div className='relative w-full max-w-[420px] space-y-5 rounded-2xl bg-[#161b22] p-7 shadow-2xl border border-[#30363d] animate-in zoom-in-95 duration-200'>
 				<button
 					onClick={onClose}
-					className='absolute top-4 right-4 text-gray-500 hover:text-white transition-colors'
+					className='absolute top-4 right-4 text-[#8b949e] hover:text-white transition-colors'
 					aria-label='Закрыть'
 				>
-					<X className='w-6 h-6' />
+					<X className='w-5 h-5' />
 				</button>
 
-				<div className='flex items-center justify-center gap-3'>
-					<BrandLogo size={32} />
-					<h2 className='text-2xl font-bold text-white'>Вход в Вондик</h2>
+				<div className='flex flex-col items-center justify-center gap-2'>
+					<div className='flex items-center justify-center w-10 h-10 rounded-xl bg-[#0077FF] text-white font-bold text-lg'>
+						V
+					</div>
+					<h2 className='text-lg font-bold text-white'>Вход в Vondic</h2>
+					<p className='text-xs text-[#8b949e]'>Единый аккаунт для всех сервисов</p>
 				</div>
 
 				<form
-					className='mt-8 space-y-4'
+					className='mt-4 space-y-3.5'
 					onSubmit={twoFactorRequired ? handleEmailTwoFactor : handleEmailLogin}
 				>
-					<div className='space-y-4'>
+					<div className='space-y-3'>
 						<div>
-							<label htmlFor='email-address' className='sr-only'>
-								Email address
+							<label htmlFor='email-address' className='block text-xs font-medium text-[#8b949e] mb-1.5'>
+								Электронная почта или логин
 							</label>
 							<input
 								id='email-address'
 								name='email'
-								type='email'
+								type='text'
 								autoComplete='email'
 								required
-								className='relative block w-full rounded-xl border-0 bg-gray-800/50 py-3.5 px-4 text-white ring-1 ring-inset ring-gray-700/50 placeholder:text-gray-500 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-indigo-500/50 transition-all hover:bg-gray-800'
-								placeholder='Электронная почта'
+								className='relative block w-full rounded-lg border border-[#30363d] bg-[#0d1117] py-2.5 px-3.5 text-sm text-white placeholder:text-[#8b949e]/50 focus:border-[#0077FF] focus:ring-1 focus:ring-[#0077FF] transition-all outline-none'
+								placeholder='name@example.com'
 								value={email}
 								onChange={e => setEmail(e.target.value)}
 							/>
 						</div>
 						{!twoFactorRequired ? (
 							<div>
-								<label htmlFor='password' className='sr-only'>
-									Password
-								</label>
+								<div className='flex items-center justify-between mb-1.5'>
+									<label htmlFor='password' className='block text-xs font-medium text-[#8b949e]'>
+										Пароль
+									</label>
+									<Link
+										href='/forgot-password'
+										className='text-xs text-[#58a6ff] hover:underline transition-colors'
+										onClick={onClose}
+									>
+										Забыли пароль?
+									</Link>
+								</div>
 								<PasswordInput
 									id='password'
 									name='password'
 									autoComplete='current-password'
 									required
 									wrapperClassName='w-full'
-									className='relative block w-full rounded-xl border-0 bg-gray-800/50 py-3.5 px-4 text-white ring-1 ring-inset ring-gray-700/50 placeholder:text-gray-500 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-indigo-500/50 transition-all hover:bg-gray-800'
-									placeholder='Пароль'
+									className='relative block w-full rounded-lg border border-[#30363d] bg-[#0d1117] py-2.5 px-3.5 text-sm text-white placeholder:text-[#8b949e]/50 focus:border-[#0077FF] focus:ring-1 focus:ring-[#0077FF] transition-all outline-none'
+									placeholder='••••••••'
 									value={password}
 									onChange={e => setPassword(e.target.value)}
 								/>
 							</div>
 						) : (
-							<div className='space-y-3'>
-								<label htmlFor='twofactor' className='sr-only'>
-									Two Factor Code
+							<div className='space-y-2 p-3.5 rounded-lg border border-[#30363d] bg-[#0d1117]'>
+								<label htmlFor='twofactor' className='block text-xs font-semibold text-white'>
+									Подтверждение двухфакторной защиты (2FA)
 								</label>
 								<input
 									id='twofactor'
@@ -222,7 +234,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 									type='text'
 									autoComplete='one-time-code'
 									required
-									className='relative block w-full rounded-xl border-0 bg-gray-800/50 py-3.5 px-4 text-white ring-1 ring-inset ring-gray-700/50 placeholder:text-gray-500 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-indigo-500/50 transition-all hover:bg-gray-800'
+									className='relative block w-full rounded-lg border border-[#30363d] bg-[#161b22] py-2.5 px-3.5 text-center text-lg tracking-widest font-mono text-white placeholder:text-[#8b949e]/40 focus:border-[#0077FF] focus:ring-1 focus:ring-[#0077FF] transition-all outline-none'
 									placeholder={
 										twoFactorMethod === 'email'
 											? 'Код из письма'
@@ -231,18 +243,18 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 									value={twoFactorCode}
 									onChange={e => setTwoFactorCode(e.target.value)}
 								/>
-								<p className='text-xs text-gray-400 px-1'>
+								<p className='text-xs text-[#8b949e]'>
 									{twoFactorMethod === 'email'
-										? 'Введите 6-значный код, отправленный на вашу почту.'
+										? 'Мы отправили 6-значный код на вашу почту.'
 										: 'Введите 6-значный код из приложения аутентификации.'}
 								</p>
 								{twoFactorMethod === 'email' && (
 									<button
 										type='button'
 										onClick={sendLoginEmailCode}
-										className='mt-2 text-xs text-indigo-400 hover:text-indigo-300 transition-colors px-1'
+										className='text-xs text-[#58a6ff] hover:underline transition-colors'
 									>
-										Отправить код на почту
+										Отправить код на почту повторно
 									</button>
 								)}
 							</div>
@@ -255,7 +267,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 						)}
 					</div>
 
-					<div className='space-y-4 pt-2'>
+					<div className='space-y-3 pt-1'>
 						<button
 							type='submit'
 							disabled={
@@ -264,61 +276,62 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 									!!captchaSiteKey &&
 									!captchaToken.trim())
 							}
-							className='group relative flex w-full justify-center rounded-xl bg-indigo-600 px-4 py-3.5 text-sm font-bold text-white hover:bg-indigo-500 disabled:opacity-50 transition-all shadow-lg shadow-indigo-500/20 active:scale-[0.98]'
+							className='w-full rounded-lg bg-[#0077FF] hover:bg-[#0066dd] py-2.5 text-sm font-medium text-white transition-all shadow-sm active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed'
 						>
 							{isLoading
 								? 'Вход...'
 								: twoFactorRequired
-									? 'Подтвердить'
-									: 'Войти'}
+									? 'Подтвердить вход'
+									: 'Войти в аккаунт'}
 						</button>
 						{loginError && (
-							<p className='text-center text-sm text-red-400'>{loginError}</p>
+							<p className='text-center text-xs text-[#f85149] bg-[#f85149]/10 border border-[#f85149]/30 rounded-lg p-2.5'>{loginError}</p>
 						)}
 
-						<div className='relative flex items-center justify-center my-6'>
+						<div className='relative flex items-center justify-center my-3'>
 							<div className='absolute inset-0 flex items-center'>
-								<div className='w-full border-t border-gray-800'></div>
+								<div className='w-full border-t border-[#30363d]'></div>
 							</div>
-							<span className='relative bg-gray-900 px-3 text-xs font-medium text-gray-500 uppercase tracking-wider'>
+							<span className='relative bg-[#161b22] px-2 text-xs text-[#8b949e]'>
 								или
 							</span>
 						</div>
 
 						<button
 							type='button'
-							onClick={() => loginWithYandex()}
-							className='group relative flex w-full items-center justify-center gap-3 rounded-xl border border-white/20 bg-transparent px-4 py-3.5 text-sm font-semibold text-white hover:bg-white/5 transition-all active:scale-[0.98]'
+							onClick={handlePasskeyLogin}
+							disabled={passkeyLoading}
+							className='w-full flex items-center justify-center gap-2 rounded-lg border border-[#30363d] bg-[#21262d] hover:bg-[#30363d] hover:border-[#8b949e]/40 py-2.5 text-sm font-medium text-white transition-all active:scale-[0.99] disabled:opacity-50'
 						>
-							Яндекс
-							<Yandex className='h-5 w-5 text-[#FC3F1D]' />
+							<LuKey className='h-4 w-4 text-[#58a6ff]' />
+							{passkeyLoading ? 'Вход по Passkey...' : 'Войти через Passkey (Ключ доступа)'}
 						</button>
 
 						<button
 							type='button'
-							onClick={handlePasskeyLogin}
-							disabled={passkeyLoading}
-							className='group relative flex w-full items-center justify-center gap-3 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-4 py-3.5 text-sm font-semibold text-indigo-300 hover:bg-indigo-500/20 hover:border-indigo-500/50 transition-all active:scale-[0.98] disabled:opacity-50'
+							onClick={() => loginWithYandex()}
+							className='w-full flex items-center justify-center gap-2 rounded-lg bg-[#ffcc00] hover:bg-[#e6b800] py-2.5 text-sm font-semibold text-black transition-all active:scale-[0.99]'
 						>
-							<LuKey className='h-5 w-5 text-indigo-400' />
-							{passkeyLoading ? 'Вход по Passkey...' : 'Войти с помощью Passkey'}
+							<span className='w-4 h-4 rounded-full bg-[#fc3f1d] text-white flex items-center justify-center text-[10px] font-bold'>Я</span>
+							Войти с Яндекс ID
 						</button>
-						<p className='text-center text-xs text-gray-500'>
-							Входя через соцсети, вы соглашаетесь с{' '}
+
+						<p className='text-center text-[11px] text-[#8b949e] leading-relaxed pt-1'>
+							Входя в аккаунт, вы соглашаетесь с{' '}
 							<a
 								href={`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'}/static/docs/privacy_policy.rtf`}
 								target='_blank'
 								rel='noopener noreferrer'
-								className='text-indigo-400 hover:text-indigo-300 transition-colors'
+								className='text-[#58a6ff] hover:underline'
 							>
 								политикой конфиденциальности
-							</a>{' '}
-							и{' '}
+							</a>
+							{' '}и{' '}
 							<a
 								href={`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'}/static/docs/consent_to_processing_personal_data.rtf`}
 								target='_blank'
 								rel='noopener noreferrer'
-								className='text-indigo-400 hover:text-indigo-300 transition-colors'
+								className='text-[#58a6ff] hover:underline'
 							>
 								согласием на обработку данных
 							</a>
@@ -327,11 +340,12 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 					</div>
 				</form>
 
-				<p className='mt-2 text-center text-sm text-gray-500'>
+				<p className='mt-3 text-center text-xs text-[#8b949e]'>
 					Нет аккаунта?{' '}
 					<Link
 						href='/register'
-						className='font-medium text-indigo-400 hover:text-indigo-300 transition-colors'
+						className='font-semibold text-[#58a6ff] hover:underline transition-colors'
+						onClick={onClose}
 					>
 						Зарегистрироваться
 					</Link>

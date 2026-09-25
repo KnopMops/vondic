@@ -19,11 +19,24 @@ async function proxyPasskey(req: NextRequest, params: { path?: string[] }) {
 			'User-Agent': req.headers.get('user-agent') || '',
 			'X-Forwarded-For': req.headers.get('x-forwarded-for') || '',
 			'X-Real-IP': req.headers.get('x-real-ip') || '',
+			'X-Forwarded-Host': req.headers.get('x-forwarded-host') || req.headers.get('host') || '',
+			'X-Forwarded-Proto': req.headers.get('x-forwarded-proto') || url.protocol.replace(':', ''),
+			'Origin': req.headers.get('origin') || url.origin,
 		}
 
+		// Forward Cookie header
+		const cookieHeader = req.headers.get('cookie')
+		if (cookieHeader) {
+			headers['Cookie'] = cookieHeader
+		}
+
+		// Forward Authorization header or extract access_token from cookies
 		const authHeader = req.headers.get('authorization')
+		const cookieAccessToken = req.cookies.get('access_token')?.value
 		if (authHeader) {
 			headers['Authorization'] = authHeader
+		} else if (cookieAccessToken) {
+			headers['Authorization'] = `Bearer ${cookieAccessToken}`
 		}
 
 		let body: any = null

@@ -160,7 +160,11 @@ export default function SettingsPage() {
 
 	const loadPasskeys = async () => {
 		try {
-			const res = await fetch('/api/auth/passkey/list')
+			const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
+			const res = await fetch('/api/auth/passkey/list', {
+				credentials: 'include',
+				headers: token ? { Authorization: `Bearer ${token}` } : {},
+			})
 			const data = await res.json()
 			if (data?.passkeys) {
 				setPasskeysList(data.passkeys)
@@ -197,7 +201,12 @@ export default function SettingsPage() {
 	const handleDeletePasskey = async (id: string) => {
 		if (!confirm('Удалить этот Passkey?')) return
 		try {
-			const res = await fetch(`/api/auth/passkey/${id}`, { method: 'DELETE' })
+			const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
+			const res = await fetch(`/api/auth/passkey/${id}`, {
+				method: 'DELETE',
+				credentials: 'include',
+				headers: token ? { Authorization: `Bearer ${token}` } : {},
+			})
 			if (res.ok) {
 				showToast('Passkey удален', 'success')
 				loadPasskeys()

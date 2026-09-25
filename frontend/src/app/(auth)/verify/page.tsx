@@ -38,64 +38,50 @@ export default function VerifyPage() {
 	}, [token])
 
 	return (
-		<div className='flex min-h-screen items-center justify-center bg-black overflow-hidden relative'>
-			
-			<div className='absolute inset-0 z-0 overflow-hidden pointer-events-none'>
-				<div className='absolute top-[20%] left-[20%] w-[40%] h-[40%] rounded-full bg-indigo-900/20 blur-[120px]' />
-				<div className='absolute bottom-[20%] right-[20%] w-[40%] h-[40%] rounded-full bg-purple-900/20 blur-[120px]' />
-			</div>
-
+		<div className='flex min-h-screen items-center justify-center bg-[#0e1117] p-4 text-[#e6edf3] selection:bg-[#0077FF] selection:text-white relative'>
 			<motion.div
-				initial={{ opacity: 0, y: 20 }}
+				initial={{ opacity: 0, y: 14 }}
 				animate={{ opacity: 1, y: 0 }}
-				transition={{ duration: 0.8, ease: 'easeOut' }}
-				className='w-full max-w-md space-y-6 rounded-3xl bg-white/5 border border-white/10 p-8 shadow-2xl backdrop-blur-xl relative z-10 text-center'
+				transition={{ duration: 0.35, ease: 'easeOut' }}
+				className='w-full max-w-[420px] space-y-6 rounded-2xl bg-[#161b22] border border-[#30363d] p-7 shadow-xl relative z-10 text-center'
 			>
-				<div className='flex flex-col items-center justify-center gap-4'>
-					<motion.div
-						initial={{ scale: 0.8, opacity: 0 }}
-						animate={{ scale: 1, opacity: 1 }}
-						transition={{ delay: 0.2, duration: 0.5 }}
-					>
-						<BrandLogo size={48} />
-					</motion.div>
-					<motion.h2
-						initial={{ opacity: 0 }}
-						animate={{ opacity: 1 }}
-						transition={{ delay: 0.3 }}
-						className='text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400'
-					>
+				<div className='flex flex-col items-center justify-center gap-2'>
+					<div className='flex items-center justify-center w-11 h-11 rounded-xl bg-[#0077FF] shadow-sm'>
+						<span className='text-xl font-bold text-white tracking-wide'>V</span>
+					</div>
+					<h1 className='text-xl font-bold text-white tracking-tight mt-1'>
 						{status === 'success'
 							? 'Готово!'
 							: status === 'error'
 								? 'Ошибка'
 								: 'Подтвердите Email'}
-					</motion.h2>
+					</h1>
+					<p className='text-xs text-[#8b949e] text-center'>
+						{status === 'success'
+							? 'Ваш email успешно подтвержден'
+							: 'Проверка ссылки подтверждения'}
+					</p>
 				</div>
 
-				<div className='space-y-4 text-gray-300'>
+				<div className='space-y-4 py-2'>
 					{status === 'loading' && (
-						<motion.div
-							initial={{ opacity: 0 }}
-							animate={{ opacity: 1 }}
-							className='flex flex-col items-center gap-4'
-						>
-							<div className='w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin' />
-							<p>Подтверждаем вашу почту...</p>
-						</motion.div>
+						<div className='flex flex-col items-center gap-3 py-4'>
+							<div className='w-8 h-8 border-2 border-[#0077FF] border-t-transparent rounded-full animate-spin' />
+							<p className='text-xs text-[#8b949e]'>Подтверждаем вашу почту...</p>
+						</div>
 					)}
 
 					{status === 'success' && (
 						<motion.div
-							initial={{ opacity: 0, scale: 0.9 }}
+							initial={{ opacity: 0, scale: 0.95 }}
 							animate={{ opacity: 1, scale: 1 }}
 							className='space-y-4'
 						>
-							<div className='w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4'>
-								<Check className='w-8 h-8 text-green-500' />
+							<div className='w-12 h-12 bg-emerald-500/10 border border-emerald-500/20 rounded-full flex items-center justify-center mx-auto'>
+								<Check className='w-6 h-6 text-emerald-400' />
 							</div>
-							<p className='text-white text-lg font-medium'>{message}</p>
-							<p className='text-sm text-gray-400'>
+							<p className='text-white text-sm font-medium'>{message}</p>
+							<p className='text-xs text-[#8b949e]'>
 								Теперь вы можете войти в свой аккаунт.
 							</p>
 						</motion.div>
@@ -103,42 +89,33 @@ export default function VerifyPage() {
 
 					{status === 'error' && (
 						<motion.div
-							initial={{ opacity: 0, scale: 0.9 }}
+							initial={{ opacity: 0, scale: 0.95 }}
 							animate={{ opacity: 1, scale: 1 }}
 							className='space-y-4'
 						>
-							<div className='w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4'>
-								<X className='w-8 h-8 text-red-500' />
+							<div className='w-12 h-12 bg-red-500/10 border border-red-500/20 rounded-full flex items-center justify-center mx-auto'>
+								<X className='w-6 h-6 text-red-400' />
 							</div>
-							<p className='text-red-400 font-medium'>{message}</p>
+							<p className='text-red-400 text-sm font-medium'>{message}</p>
 						</motion.div>
 					)}
 
 					{status === 'idle' && (
-						<>
-							<motion.p
-								initial={{ opacity: 0, x: -20 }}
-								animate={{ opacity: 1, x: 0 }}
-								transition={{ delay: 0.4 }}
-							>
+						<div className='space-y-2 text-xs text-[#8b949e]'>
+							<p>
 								Мы отправили письмо с подтверждением на вашу электронную почту.
-							</motion.p>
-							<motion.p
-								initial={{ opacity: 0, x: 20 }}
-								animate={{ opacity: 1, x: 0 }}
-								transition={{ delay: 0.5 }}
-							>
-								Пожалуйста, перейдите по ссылке в письме, чтобы активировать
-								аккаунт.
-							</motion.p>
-						</>
+							</p>
+							<p>
+								Пожалуйста, перейдите по ссылке в письме, чтобы активировать аккаунт.
+							</p>
+						</div>
 					)}
 				</div>
 
-				<div className='mt-8'>
+				<div className='pt-2'>
 					<Link
 						href='/login'
-						className='group relative flex w-full justify-center rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-3 text-sm font-semibold text-white hover:shadow-lg hover:shadow-indigo-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all'
+						className='w-full inline-flex items-center justify-center rounded-lg bg-[#0077FF] hover:bg-[#0066dd] px-4 py-2.5 text-sm font-semibold text-white transition-all shadow-sm'
 					>
 						{status === 'success' ? 'Войти в аккаунт' : 'Вернуться ко входу'}
 					</Link>

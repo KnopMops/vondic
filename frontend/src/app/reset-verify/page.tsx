@@ -1,20 +1,24 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { LuCheck, LuX, LuShieldAlert } from 'react-icons/lu'
 
-export default function ResetVerifyPage() {
+function ResetVerifyContent() {
 	const searchParams = useSearchParams()
 	const router = useRouter()
 	const token = searchParams.get('token')
-	const [status, setStatus] = useState<'loading' | 'success' | 'error' | 'ip_block'>('loading')
+	const [status, setStatus] = useState<
+		'loading' | 'success' | 'error' | 'ip_block'
+	>('loading')
 	const [message, setMessage] = useState('')
 	const [resetToken, setResetToken] = useState('')
 
 	useEffect(() => {
 		if (!token) {
 			setStatus('error')
-			setMessage('Токен не найден')
+			setMessage('Токен не найден или устарел')
 			return
 		}
 		verifyToken()
@@ -33,71 +37,99 @@ export default function ResetVerifyPage() {
 				setResetToken(data.reset_token)
 				setTimeout(() => {
 					router.push(`/reset-password?token=${data.reset_token}`)
-				}, 2000)
+				}, 1800)
 			} else {
 				if (res.status === 403) {
 					setStatus('ip_block')
 				} else {
 					setStatus('error')
 				}
-				setMessage(data.error || 'Ошибка')
+				setMessage(data.error || 'Ошибка проверки токена')
 			}
 		} catch {
 			setStatus('error')
-			setMessage('Ошибка сети')
+			setMessage('Ошибка сети при проверке токена')
 		}
 	}
 
 	return (
-		<div className='min-h-screen bg-gray-950 flex items-center justify-center p-4'>
-			<div className='w-full max-w-md text-center'>
+		<div className='flex min-h-screen items-center justify-center bg-[#0e1117] p-4 text-[#e6edf3] selection:bg-[#0077FF] selection:text-white relative'>
+			<div className='w-full max-w-[420px] space-y-6 rounded-2xl bg-[#161b22] border border-[#30363d] p-7 shadow-xl relative z-10 text-center'>
+				<div className='flex flex-col items-center justify-center gap-2.5'>
+					<div className='relative flex items-center justify-center w-14 h-14 rounded-2xl bg-[#0d1117] border border-[#30363d] shadow-lg shadow-black/40 overflow-hidden p-1.5'>
+						<img
+							src='/logo.png'
+							alt='Вондик'
+							className='w-full h-full object-contain drop-shadow'
+						/>
+					</div>
+					<h1 className='text-2xl font-bold text-white tracking-tight mt-1'>
+						Безопасность Вондик
+					</h1>
+				</div>
+
 				{status === 'loading' && (
-					<div>
-						<div className='animate-spin rounded-full h-8 w-8 border-t-2 border-indigo-500 mx-auto mb-4'></div>
-						<p className='text-gray-400'>Подтверждение личности...</p>
+					<div className='space-y-3 py-4'>
+						<div className='h-8 w-8 animate-spin rounded-full border-2 border-[#0077FF] border-t-transparent mx-auto' />
+						<p className='text-xs text-[#8b949e]'>Подтверждение личности...</p>
 					</div>
 				)}
+
 				{status === 'success' && (
-					<div>
-						<div className='rounded-full bg-green-500/10 h-16 w-16 flex items-center justify-center mx-auto mb-4'>
-							<svg className='h-8 w-8 text-green-500' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
-								<path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M5 13l4 4L19 7' />
-							</svg>
+					<div className='space-y-3 py-4'>
+						<div className='w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mx-auto'>
+							<LuCheck className='w-6 h-6' />
 						</div>
-						<h1 className='text-lg font-semibold text-white mb-2'>Личность подтверждена</h1>
-						<p className='text-sm text-gray-400'>Перенаправление на восстановление пароля...</p>
+						<h2 className='text-base font-semibold text-white'>
+							Личность подтверждена
+						</h2>
+						<p className='text-xs text-[#8b949e]'>
+							Перенаправление на восстановление пароля...
+						</p>
 					</div>
 				)}
+
 				{status === 'ip_block' && (
-					<div>
-						<div className='rounded-full bg-red-500/10 h-16 w-16 flex items-center justify-center mx-auto mb-4'>
-							<svg className='h-8 w-8 text-red-500' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
-								<path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M6 18L18 6M6 6l12 12' />
-							</svg>
+					<div className='space-y-3 py-4'>
+						<div className='w-12 h-12 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400 mx-auto'>
+							<LuShieldAlert className='w-6 h-6' />
 						</div>
-						<h1 className='text-lg font-semibold text-white mb-2'>Доступ запрещён</h1>
-						<p className='text-sm text-gray-400 mb-4'>{message}</p>
-						<p className='text-xs text-gray-500'>Восстановление пароля доступно только с IP-адреса, с которого был зарегистрирован аккаунт.</p>
+						<h2 className='text-base font-semibold text-white'>
+							Доступ заблокирован
+						</h2>
+						<p className='text-xs text-[#8b949e] leading-relaxed'>{message}</p>
+						<p className='text-[11px] text-[#8b949e]/70'>
+							Восстановление пароля доступно только с доверенного IP-адреса аккаунта.
+						</p>
 					</div>
 				)}
+
 				{status === 'error' && (
-					<div>
-						<div className='rounded-full bg-red-500/10 h-16 w-16 flex items-center justify-center mx-auto mb-4'>
-							<svg className='h-8 w-8 text-red-500' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
-								<path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z' />
-							</svg>
+					<div className='space-y-3 py-4'>
+						<div className='w-12 h-12 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400 mx-auto'>
+							<LuX className='w-6 h-6' />
 						</div>
-						<h1 className='text-lg font-semibold text-white mb-2'>Ошибка</h1>
-						<p className='text-sm text-gray-400 mb-4'>{message}</p>
-						<button
-							onClick={() => router.push('/feed')}
-							className='rounded-xl bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-500 transition-colors'
-						>
-							На главную
-						</button>
+						<h2 className='text-base font-semibold text-white'>Ошибка</h2>
+						<p className='text-xs text-[#8b949e]'>{message}</p>
+						<div className='pt-2'>
+							<Link
+								href='/login'
+								className='inline-block w-full rounded-lg bg-[#0077FF] hover:bg-[#0066dd] py-2.5 px-4 text-center text-sm font-semibold text-white transition-colors'
+							>
+								Вернуться к авторизации
+							</Link>
+						</div>
 					</div>
 				)}
 			</div>
 		</div>
+	)
+}
+
+export default function ResetVerifyPage() {
+	return (
+		<Suspense fallback={<div className='min-h-screen bg-[#0e1117]' />}>
+			<ResetVerifyContent />
+		</Suspense>
 	)
 }

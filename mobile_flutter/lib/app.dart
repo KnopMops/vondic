@@ -302,6 +302,24 @@ class _VondicAppState extends State<VondicApp> {
 
   void _handleDeepLink(Uri uri) async {
     debugPrint('[DeepLink] Received uri: $uri');
+
+    // 0. Passkey Migration token (from QR scan, universal link, or deep link)
+    final migrationToken = uri.queryParameters['migration_token'] ??
+        (uri.path.contains('migrate') ? uri.queryParameters['token'] : null);
+    if (migrationToken != null && migrationToken.isNotEmpty) {
+      try {
+        final oauthService = OAuthService(widget.apiClient, widget.storageService);
+        final user = await oauthService.loginWithMigrationToken(migrationToken);
+        if (user != null && mounted) {
+          _authBloc.add(AuthSetUserEvent(user));
+          return;
+        }
+      } catch (e) {
+        debugPrint('[DeepLink] Migration token login error: $e');
+        _showErrorSnackBar('Ошибка входа через QR-миграцию: $e');
+      }
+    }
+
     if (uri.scheme == 'vondic') {
       final code = uri.queryParameters['code'];
       final state = uri.queryParameters['state'];

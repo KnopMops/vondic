@@ -621,15 +621,16 @@ class AuthService:
                 if method == "totp" and not user.two_factor_secret:
                     return (None, "TwoFactorTotpNotConfigured")
                 if method == "email":
-                    email_code = data.get("email_code")
+                    email_code = data.get("email_code") or data.get("two_factor_code") or data.get("code")
                     if not email_code:
+                        AuthService.send_2fa_email_code(user, for_login=True)
                         return (None, "TwoFactorEmailRequired")
                     success, err = AuthService.verify_2fa_email_code(
                         user, email_code)
                     if not success:
                         return (None, "InvalidTwoFactorCode")
                 elif method == "totp":
-                    totp_code = data.get("totp_code")
+                    totp_code = data.get("totp_code") or data.get("two_factor_code") or data.get("code")
                     if not totp_code:
                         return (None, "TwoFactorTotpRequired")
                     if not AuthService.verify_totp(

@@ -272,42 +272,38 @@ export default function LoginPage() {
 
 	return (
 		<div
-			className={`flex items-center justify-center text-white selection:bg-indigo-500 selection:text-white relative ${
+			className={`flex items-center justify-center text-[#e6edf3] selection:bg-[#0077FF] selection:text-white relative ${
 				isModal
 					? 'min-h-0 bg-transparent p-1'
-					: 'min-h-screen bg-black overflow-hidden'
+					: 'min-h-screen bg-[#0e1117] p-4'
 			}`}
 		>
-			{!isModal && (
-				<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
-					<div className='absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-indigo-900/20 blur-[120px]' />
-					<div className='absolute top-[40%] -right-[10%] w-[40%] h-[60%] rounded-full bg-purple-900/20 blur-[120px]' />
-					<div className='absolute bottom-[10%] left-[20%] w-[30%] h-[30%] rounded-full bg-emerald-900/10 blur-[100px]' />
-				</div>
-			)}
-
 			<motion.div
-				initial={{ opacity: 0, y: isModal ? 0 : 20 }}
+				initial={{ opacity: 0, y: isModal ? 0 : 14 }}
 				animate={{ opacity: 1, y: 0 }}
-				transition={{ duration: 0.6, ease: 'easeOut' }}
+				transition={{ duration: 0.35, ease: 'easeOut' }}
 				className={`w-full ${
 					isModal
-						? 'max-w-full rounded-2xl bg-zinc-900/80 border border-white/10 p-5 shadow-none'
-						: 'max-w-md space-y-6 rounded-3xl bg-white/5 border border-white/10 p-8 shadow-2xl backdrop-blur-xl'
+						? 'max-w-full rounded-xl bg-[#161b22] border border-[#30363d] p-5 shadow-none'
+						: 'max-w-[420px] space-y-6 rounded-2xl bg-[#161b22] border border-[#30363d] p-7 shadow-xl'
 				} relative z-10`}
 			>
-				<div className='flex flex-col items-center justify-center gap-4'>
-					<div className='flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 shadow-lg shadow-indigo-500/20'>
-						<span className='text-2xl font-bold text-white'>V</span>
+				<div className='flex flex-col items-center justify-center gap-2.5'>
+					<div className='relative flex items-center justify-center w-14 h-14 rounded-2xl bg-[#0d1117] border border-[#30363d] shadow-lg shadow-black/40 overflow-hidden p-1.5 group'>
+						<img
+							src='/logo.png'
+							alt='Вондик'
+							className='w-full h-full object-contain drop-shadow transition-transform duration-300 group-hover:scale-105'
+						/>
 					</div>
-					<h2 className='text-2xl font-bold text-white'>
-						{isOAuthFlow ? 'Выберите аккаунт' : 'Добро пожаловать'}
-					</h2>
-					{isOAuthFlow && (
-						<p className='text-sm text-gray-400 text-center'>
-							Приложение запрашивает доступ к аккаунту Вондик
-						</p>
-					)}
+					<h1 className='text-2xl font-bold text-white tracking-tight mt-1'>
+						{isOAuthFlow ? 'Выберите аккаунт Вондик' : 'Вход в Вондик'}
+					</h1>
+					<p className='text-xs text-[#8b949e] text-center'>
+						{isOAuthFlow
+							? 'Приложение запрашивает доступ к аккаунту Вондик'
+							: 'Единый аккаунт для всех сервисов Вондик'}
+					</p>
 				</div>
 
 				{showAccountPicker && !twoFactorRequired && (
@@ -318,9 +314,9 @@ export default function LoginPage() {
 									type='button'
 									disabled={!!switchingAccountId}
 									onClick={() => void handleSavedAccountClick(account)}
-									className='flex w-full items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-3 text-left hover:bg-white/10 transition-colors disabled:opacity-50'
+									className='flex w-full items-center gap-3 rounded-lg border border-[#30363d] bg-[#0d1117] p-2.5 text-left hover:bg-[#21262d] hover:border-[#8b949e]/40 transition-colors disabled:opacity-50'
 								>
-									<div className='w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold shrink-0'>
+									<div className='w-9 h-9 rounded-full overflow-hidden bg-[#21262d] border border-[#30363d] flex items-center justify-center text-white font-semibold text-xs shrink-0'>
 										{account.avatar_url ? (
 											<img
 												src={getAvatarUrl(account.avatar_url)}
@@ -335,7 +331,7 @@ export default function LoginPage() {
 										<p className='text-sm font-medium text-white truncate'>
 											{account.username}
 										</p>
-										<p className='text-xs text-gray-400 truncate'>
+										<p className='text-xs text-[#8b949e] truncate'>
 											{switchingAccountId === account.id
 												? 'Вход…'
 												: account.email}
@@ -349,7 +345,7 @@ export default function LoginPage() {
 										removeSavedAccount(account.id)
 										setSavedAccounts(getSavedAccounts())
 									}}
-									className='absolute top-2 right-2 w-6 h-6 rounded-full bg-black/50 text-gray-400 hover:text-red-400 hover:bg-red-500/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-xs'
+									className='absolute top-2.5 right-2.5 w-5 h-5 rounded bg-black/60 text-[#8b949e] hover:text-red-400 hover:bg-red-500/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-xs'
 									title='Удалить из списка'
 								>
 									×
@@ -359,17 +355,17 @@ export default function LoginPage() {
 						<button
 							type='button'
 							onClick={() => setShowEmailForm(true)}
-							className='w-full rounded-xl border border-dashed border-white/15 py-2.5 text-sm text-gray-300 hover:bg-white/5 transition-colors'
+							className='w-full rounded-lg border border-dashed border-[#30363d] py-2 text-xs font-medium text-[#8b949e] hover:text-white hover:bg-[#21262d] transition-colors'
 						>
-							Другой аккаунт
+							Войти в другой аккаунт
 						</button>
 						{!isOAuthFlow && (
 							<div className='relative flex items-center justify-center py-2'>
 								<div className='absolute inset-0 flex items-center'>
-									<div className='w-full border-t border-white/10' />
+									<div className='w-full border-t border-[#30363d]' />
 								</div>
-								<span className='relative bg-transparent px-2 text-xs text-gray-500'>
-									или войдите по email
+								<span className='relative bg-[#161b22] px-2 text-xs text-[#8b949e]'>
+									или войдите по логину
 								</span>
 							</div>
 						)}
@@ -377,16 +373,16 @@ export default function LoginPage() {
 							<>
 								<div className='relative flex items-center justify-center py-2'>
 									<div className='absolute inset-0 flex items-center'>
-										<div className='w-full border-t border-white/10' />
+										<div className='w-full border-t border-[#30363d]' />
 									</div>
-									<span className='relative px-2 text-xs text-gray-500'>
+									<span className='relative bg-[#161b22] px-2 text-xs text-[#8b949e]'>
 										или
 									</span>
 								</div>
 								<button
 									type='button'
 									onClick={() => loginWithYandex()}
-									className='w-full rounded-full border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-400 hover:bg-red-500/20 transition-all'
+									className='w-full rounded-lg bg-[#ffcc00] hover:bg-[#e6b800] px-4 py-2.5 text-sm font-semibold text-black transition-all'
 								>
 									Войти через Яндекс
 								</button>
@@ -397,15 +393,15 @@ export default function LoginPage() {
 
 				{(showEmailForm || !showAccountPicker || twoFactorRequired) && (
 				<form
-					className='mt-8 space-y-6'
+					className='mt-6 space-y-4'
 					onSubmit={
 						twoFactorRequired ? handleEmailTwoFactor : handleEmailLogin
 					}
 				>
-						<div className='space-y-4'>
+						<div className='space-y-3'>
 							<div>
-								<label htmlFor='email-address' className='sr-only'>
-									Электронная почта
+								<label htmlFor='email-address' className='block text-xs font-medium text-[#8b949e] mb-1.5'>
+									Электронная почта или логин
 								</label>
 								<EmailInput
 									id='email-address'
@@ -413,45 +409,55 @@ export default function LoginPage() {
 									onChange={setEmail}
 									required
 									listId='login-email-suggestions'
-									className='relative block w-full rounded-xl border border-white/10 bg-white/5 py-3 px-4 text-white placeholder:text-gray-500 focus:z-10 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none'
+									className='relative block w-full rounded-lg border border-[#30363d] bg-[#0d1117] py-2.5 px-3.5 text-sm text-white placeholder:text-[#8b949e]/50 focus:border-[#0077FF] focus:ring-1 focus:ring-[#0077FF] transition-all outline-none'
 								/>
 							</div>
 							{!twoFactorRequired ? (
-								<div className='relative'>
-									<label htmlFor='password' className='sr-only'>
-										Пароль
-									</label>
-									<input
-										id='password'
-										name='password'
-										type={showPassword ? 'text' : 'password'}
-										autoComplete='current-password'
-										required
-										className='relative block w-full rounded-xl border border-white/10 bg-white/5 py-3 px-4 pr-12 text-white placeholder:text-gray-500 focus:z-10 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none'
-										placeholder='Пароль'
-										value={password}
-										onChange={e => setPassword(e.target.value)}
-									/>
-									<button
-										type='button'
-										onClick={() => setShowPassword(v => !v)}
-										className='absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors'
-										tabIndex={-1}
-									>
-										{showPassword ? <LuEyeOff size={20} /> : <LuEye size={20} />}
-									</button>
+								<div>
+									<div className='flex items-center justify-between mb-1.5'>
+										<label htmlFor='password' className='block text-xs font-medium text-[#8b949e]'>
+											Пароль
+										</label>
+										<Link
+											href='/forgot-password'
+											className='text-xs text-[#58a6ff] hover:underline transition-colors'
+										>
+											Забыли пароль?
+										</Link>
+									</div>
+									<div className='relative'>
+										<input
+											id='password'
+											name='password'
+											type={showPassword ? 'text' : 'password'}
+											autoComplete='current-password'
+											required
+											className='relative block w-full rounded-lg border border-[#30363d] bg-[#0d1117] py-2.5 px-3.5 pr-10 text-sm text-white placeholder:text-[#8b949e]/50 focus:border-[#0077FF] focus:ring-1 focus:ring-[#0077FF] transition-all outline-none'
+											placeholder='••••••••'
+											value={password}
+											onChange={e => setPassword(e.target.value)}
+										/>
+										<button
+											type='button'
+											onClick={() => setShowPassword(v => !v)}
+											className='absolute right-3 top-1/2 -translate-y-1/2 text-[#8b949e] hover:text-white transition-colors'
+											tabIndex={-1}
+										>
+											{showPassword ? <LuEyeOff size={16} /> : <LuEye size={16} />}
+										</button>
+									</div>
 								</div>
 							) : (
-								<div>
-									<label htmlFor='twofactor' className='sr-only'>
-										Код двухфакторной аутентификации
+								<div className='space-y-2 p-3.5 rounded-lg border border-[#30363d] bg-[#0d1117]'>
+									<label htmlFor='twofactor' className='block text-xs font-semibold text-white'>
+										Подтверждение двухфакторной защиты (2FA)
 									</label>
 									<input
 										id='twofactor'
 										type='text'
 										autoComplete='one-time-code'
 										required
-										className='relative block w-full rounded-xl border border-white/10 bg-white/5 py-3 px-4 text-white placeholder:text-gray-500 focus:z-10 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none'
+										className='relative block w-full rounded-lg border border-[#30363d] bg-[#161b22] py-2.5 px-3.5 text-center text-lg tracking-widest font-mono text-white placeholder:text-[#8b949e]/40 focus:border-[#0077FF] focus:ring-1 focus:ring-[#0077FF] transition-all outline-none'
 										placeholder={
 											twoFactorMethod === 'email'
 												? 'Код из письма'
@@ -460,18 +466,18 @@ export default function LoginPage() {
 										value={twoFactorCode}
 										onChange={e => setTwoFactorCode(e.target.value)}
 									/>
-									<p className='text-xs text-gray-500 mt-1'>
+									<p className='text-xs text-[#8b949e]'>
 										{twoFactorMethod === 'email'
-											? 'Введите 6-значный код, отправленный на вашу почту.'
-											: 'Введите 6-значный код из приложения аутентификации.'}
+											? 'Мы отправили 6-значный код на вашу почту. Введите его для входа.'
+											: 'Введите 6-значный код из Google Authenticator или другого приложения.'}
 									</p>
 									{twoFactorMethod === 'email' && (
 										<button
 											type='button'
 											onClick={sendLoginEmailCode}
-											className='mt-2 text-xs text-indigo-400 hover:text-indigo-300 transition-colors'
+											className='text-xs text-[#58a6ff] hover:underline transition-colors'
 										>
-											Отправить код на почту
+											Отправить код на почту повторно
 										</button>
 									)}
 								</div>
@@ -482,7 +488,7 @@ export default function LoginPage() {
 							<SmartCaptcha key={`password-${captchaKey}`} onTokenChange={setCaptchaToken} />
 						)}
 
-						<div className='space-y-4'>
+						<div className='space-y-3 pt-1'>
 							<button
 								type='submit'
 								disabled={
@@ -491,78 +497,73 @@ export default function LoginPage() {
 										!!captchaSiteKey &&
 										!captchaToken.trim())
 								}
-								className='group relative flex w-full justify-center rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-3 text-sm font-semibold text-white hover:shadow-lg hover:shadow-indigo-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed'
+								className='w-full rounded-lg bg-[#0077FF] hover:bg-[#0066dd] py-2.5 text-sm font-medium text-white transition-all shadow-sm active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed'
 							>
 								{isLoading
 									? 'Вход...'
 									: twoFactorRequired
-										? 'Подтвердить'
-										: 'Войти'}
+										? 'Подтвердить вход'
+										: 'Войти в аккаунт'}
 							</button>
 							{loginError && (
-								<p className='text-center text-sm text-red-400'>{loginError}</p>
+								<p className='text-center text-xs text-[#f85149] bg-[#f85149]/10 border border-[#f85149]/30 rounded-lg p-2.5'>{loginError}</p>
 							)}
 
-							{!twoFactorRequired && (
-								<div className='flex items-center justify-between'>
-									<Link
-										href='/login/qr'
-										className='text-sm text-gray-400 hover:text-white transition-colors'
-									>
-										Войти по QR-коду
-									</Link>
-									<Link
-										href='/forgot-password'
-										className='text-sm text-indigo-400 hover:text-indigo-300 transition-colors'
-									>
-										Забыли пароль?
-									</Link>
-								</div>
-							)}
-
-							<div className='relative flex items-center justify-center'>
+							<div className='relative flex items-center justify-center my-3'>
 								<div className='absolute inset-0 flex items-center'>
-									<div className='w-full border-t border-white/10'></div>
+									<div className='w-full border-t border-[#30363d]'></div>
 								</div>
-								<span className='relative bg-black/50 px-2 text-sm text-gray-500 rounded backdrop-blur-sm'>
+								<span className='relative bg-[#161b22] px-2 text-xs text-[#8b949e]'>
 									или
 								</span>
 							</div>
 
 							<button
 								type='button'
-								onClick={() => loginWithYandex(email.trim() ? { loginHint: email.trim() } : undefined)}
-								className='group relative flex w-full justify-center rounded-full border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-400 hover:bg-red-500/20 transition-all'
+								onClick={handlePasskeyLogin}
+								disabled={passkeyLoading}
+								className='w-full flex items-center justify-center gap-2 rounded-lg border border-[#30363d] bg-[#21262d] hover:bg-[#30363d] hover:border-[#8b949e]/40 py-2.5 text-sm font-medium text-white transition-all active:scale-[0.99] disabled:opacity-50'
 							>
-								Войти через Яндекс
+								<LuKey className='h-4 w-4 text-[#58a6ff]' />
+								{passkeyLoading ? 'Вход по Passkey...' : 'Войти через Passkey (Ключ доступа)'}
 							</button>
 
 							<button
 								type='button'
-								onClick={handlePasskeyLogin}
-								disabled={passkeyLoading}
-								className='group relative flex w-full items-center justify-center gap-2.5 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-4 py-3 text-sm font-semibold text-indigo-300 hover:bg-indigo-500/20 hover:border-indigo-500/50 transition-all active:scale-[0.98] disabled:opacity-50'
+								onClick={() => loginWithYandex(email.trim() ? { loginHint: email.trim() } : undefined)}
+								className='w-full flex items-center justify-center gap-2 rounded-lg bg-[#ffcc00] hover:bg-[#e6b800] py-2.5 text-sm font-semibold text-black transition-all active:scale-[0.99]'
 							>
-								<LuKey className='h-4 w-4 text-indigo-400' />
-								{passkeyLoading ? 'Вход по Passkey...' : 'Войти с помощью Passkey'}
+								<span className='w-4 h-4 rounded-full bg-[#fc3f1d] text-white flex items-center justify-center text-[10px] font-bold'>Я</span>
+								Войти с Яндекс ID
 							</button>
-							<p className='text-center text-xs text-gray-500'>
-								Входя через соцсети, вы соглашаетесь с{' '}
+
+							{!twoFactorRequired && (
+								<div className='pt-1 text-center'>
+									<Link
+										href='/login/qr'
+										className='text-xs text-[#8b949e] hover:text-white transition-colors'
+									>
+										Войти по QR-коду со смартфона →
+									</Link>
+								</div>
+							)}
+
+							<p className='text-center text-[11px] text-[#8b949e] leading-relaxed pt-2'>
+								Входя в аккаунт, вы соглашаетесь с{' '}
 								<a
 									href={`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'}/static/docs/privacy_policy.rtf`}
 									target='_blank'
 									rel='noopener noreferrer'
-									className='text-indigo-400 hover:text-indigo-300 transition-colors'
+									className='text-[#58a6ff] hover:underline'
 								>
 									политикой конфиденциальности
 								</a>
-								{' '}
-								и{' '}
+								{' '}и{' '}
 								<a
 									href={`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'}/static/docs/consent_to_processing_personal_data.rtf`}
 									target='_blank'
 									rel='noopener noreferrer'
-									className='text-indigo-400 hover:text-indigo-300 transition-colors'
+									className='text-[#58a6ff] hover:underline'
 								>
 									согласием на обработку данных
 								</a>
@@ -572,11 +573,11 @@ export default function LoginPage() {
 					</form>
 				)}
 
-				<p className='mt-4 text-center text-sm text-gray-400'>
+				<p className='mt-4 text-center text-xs text-[#8b949e]'>
 					Нет аккаунта?{' '}
 					<Link
 						href='/register'
-						className='font-medium text-indigo-400 hover:text-indigo-300 transition-colors'
+						className='font-semibold text-[#58a6ff] hover:underline transition-colors'
 					>
 						Зарегистрироваться
 					</Link>

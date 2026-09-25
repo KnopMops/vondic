@@ -4,14 +4,17 @@ import BrandLogo from '@/components/social/BrandLogo'
 import { useAuth } from '@/lib/AuthContext'
 import { motion } from 'framer-motion'
 import {
-	FiGithub as Github,
-	FiMessageCircle as MessageCircle,
-	FiMonitor as Monitor,
-	FiShare2 as Share2,
-	FiShield as Shield,
-	FiSmartphone as Smartphone,
-	FiZap as Zap,
-} from 'react-icons/fi'
+	LuGithub as Github,
+	LuMessageSquare as MessageCircle,
+	LuMonitor as Monitor,
+	LuShare2 as Share2,
+	LuShieldCheck as Shield,
+	LuSmartphone as Smartphone,
+	LuZap as Zap,
+	LuMusic as Music,
+	LuUsers as Users,
+	LuArrowRight as ArrowRight,
+} from 'react-icons/lu'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 
@@ -39,7 +42,7 @@ export default function Home() {
 		const interval = setInterval(fetchOnlineUsers, 60000)
 		return () => clearInterval(interval)
 	}, [])
-	// Cursor glow effect
+
 	useEffect(() => {
 		const handleMove = (e: MouseEvent) => {
 			if (!cursorRef.current) return
@@ -52,239 +55,269 @@ export default function Home() {
 	}, [])
 
 	return (
-		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white overflow-x-hidden'>
-			
+		<div className='min-h-screen bg-[#0e1117] text-[#e6edf3] selection:bg-[#0077FF] selection:text-white overflow-x-hidden font-sans relative'>
+			{/* Cursor glow */}
 			<div
 				ref={cursorRef}
 				className='fixed top-0 left-0 z-[1] pointer-events-none'
 				style={{ transform: 'translate(-1000px, -1000px)' }}
 			>
-				<div className='-translate-x-1/2 -translate-y-1/2 w-40 h-40 rounded-full bg-gradient-to-r from-indigo-500/20 via-purple-500/20 to-pink-500/20 blur-3xl mix-blend-screen' />
-			</div>
-			<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
-				<div className='absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-indigo-900/20 blur-[120px]' />
-				<div className='absolute top-[40%] -right-[10%] w-[40%] h-[60%] rounded-full bg-purple-900/20 blur-[120px]' />
-				<div className='absolute bottom-[10%] left-[20%] w-[30%] h-[30%] rounded-full bg-emerald-900/10 blur-[100px]' />
+				<div className='-translate-x-1/2 -translate-y-1/2 w-48 h-48 rounded-full bg-[#0077FF]/15 blur-3xl mix-blend-screen' />
 			</div>
 
-			<nav className='relative z-50 flex items-center justify-between px-6 py-6 mx-auto max-w-7xl'>
-				<div className='flex items-center gap-3'>
-					<BrandLogo size={40} />
-					<span className='text-2xl font-bold tracking-tight'>Вондик</span>
-				</div>
-				<div className='flex items-center gap-6'>
-					{user ? (
+			{/* Background ambient lighting */}
+			<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
+				<div className='absolute -top-32 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-[#0077FF]/10 blur-[140px] rounded-full' />
+				<div className='absolute top-1/3 -right-40 w-[500px] h-[400px] bg-purple-600/10 blur-[150px] rounded-full' />
+				<div className='absolute bottom-10 -left-40 w-[500px] h-[400px] bg-blue-600/10 blur-[150px] rounded-full' />
+			</div>
+
+			{/* Navigation */}
+			<nav className='relative z-50 border-b border-[#30363d] bg-[#161b22]/80 backdrop-blur-md sticky top-0'>
+				<div className='flex items-center justify-between px-6 py-4 mx-auto max-w-6xl'>
+					<Link href='/' className='flex items-center gap-3 group'>
+						<div className='w-10 h-10 rounded-xl bg-[#0d1117] border border-[#30363d] p-1 flex items-center justify-center shadow-sm group-hover:border-[#0077FF] transition-colors'>
+							<BrandLogo size={32} />
+						</div>
+						<span className='text-xl font-bold tracking-tight text-white'>Вондик</span>
+					</Link>
+
+					<div className='flex items-center gap-3'>
 						<Link
-							href='/feed'
-							className='px-6 py-2.5 text-sm font-medium text-white transition-all bg-indigo-600 rounded-full hover:bg-indigo-500 shadow-lg shadow-indigo-500/20'
+							href='/about'
+							className='px-3.5 py-1.5 text-xs font-medium text-[#8b949e] hover:text-white rounded-lg hover:bg-[#21262d] transition-colors'
 						>
-							Открыть Вондик Web
+							О платформе
 						</Link>
-					) : (
-						<>
+						{user ? (
 							<Link
-								href='/login'
-								className='text-sm font-medium text-gray-300 transition-colors hover:text-white hidden sm:block'
+								href='/feed'
+								className='px-4 py-2 text-xs font-semibold text-white transition-all bg-[#0077FF] rounded-lg hover:bg-[#0066dd] shadow-sm'
 							>
-								Войти
+								Открыть Вондик Web
 							</Link>
-							<Link
-								href='/register'
-								className='px-6 py-2.5 text-sm font-medium text-white transition-all bg-white/10 rounded-full hover:bg-white/20 backdrop-blur-sm border border-white/10 hover:border-white/20'
-							>
-								Регистрация
-							</Link>
-						</>
-					)}
+						) : (
+							<>
+								<Link
+									href='/login'
+									className='px-3.5 py-1.5 text-xs font-medium text-white rounded-lg border border-[#30363d] bg-[#21262d] hover:bg-[#30363d] hover:border-[#8b949e]/40 transition-colors'
+								>
+									Войти
+								</Link>
+								<Link
+									href='/register'
+									className='px-3.5 py-1.5 text-xs font-medium text-white rounded-lg bg-[#0077FF] hover:bg-[#0066dd] shadow-sm transition-colors'
+								>
+									Регистрация
+								</Link>
+							</>
+						)}
+					</div>
 				</div>
 			</nav>
 
-			<main className='relative z-10 flex flex-col items-center justify-center px-4 pt-20 pb-32 text-center'>
+			{/* Main Hero */}
+			<main className='relative z-10 flex flex-col items-center justify-center px-4 pt-16 pb-28 text-center max-w-6xl mx-auto'>
 				<motion.div
-					initial={{ opacity: 0, y: 20 }}
+					initial={{ opacity: 0, y: 16 }}
 					animate={{ opacity: 1, y: 0 }}
-					transition={{ duration: 0.8, ease: 'easeOut' }}
-					className='max-w-4xl space-y-8'
+					transition={{ duration: 0.6, ease: 'easeOut' }}
+					className='max-w-3xl space-y-6'
 				>
-					<motion.div
-						initial={{ opacity: 0, scale: 0.9 }}
-						animate={{ opacity: 1, scale: 1 }}
-						transition={{ delay: 0.2, duration: 0.5 }}
-						className='inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-bold uppercase tracking-widest mb-4'
-					>
-						<span className='w-2 h-2 rounded-full bg-indigo-500 animate-pulse shadow-[0_0_10px_rgba(99,102,241,0.5)]' />
-						Вондик
-					</motion.div>
+					<div className='inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#161b22] border border-[#30363d] text-[#8b949e] text-xs font-medium'>
+						<span className='w-2 h-2 rounded-full bg-emerald-500 animate-pulse' />
+						Версия Вондик · Единая экосистема
+					</div>
 
-					<h1 className='text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight leading-tight'>
+					<h1 className='text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight leading-tight text-white'>
 						Общайся.{' '}
-						<span className='text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 animate-gradient-x'>
+						<span className='text-transparent bg-clip-text bg-gradient-to-r from-[#0077FF] via-indigo-400 to-purple-400'>
 							Делись.
 						</span>{' '}
 						<br />
 						Вдохновляй.
 					</h1>
 
-					<p className='max-w-2xl mx-auto text-lg md:text-xl text-gray-400 leading-relaxed font-light'>
-						Современная социальная платформа для тех, кто ценит свободу общения,
-						минимализм и скорость. Присоединяйся к сообществу будущего уже
-						сегодня.
+					<p className='max-w-2xl mx-auto text-base sm:text-lg text-[#8b949e] leading-relaxed font-normal'>
+						Современная цифровая платформа Вондик: быстрый защищённый мессенджер,
+						аудио- и видеозвонки, персональная лента, музыка и сообщества в едином интерфейсе.
 					</p>
 
-					<div className='flex flex-col sm:flex-row items-center justify-center gap-4 pt-8'>
+					<div className='flex flex-wrap items-center justify-center gap-3 pt-4'>
 						{user ? (
 							<Link
 								href='/feed'
-								className='w-full sm:w-auto px-8 py-4 text-lg font-semibold text-white transition-all bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full hover:shadow-lg hover:shadow-indigo-500/25 hover:scale-105 active:scale-95 flex items-center justify-center gap-2 group'
+								className='px-6 py-3 text-sm font-semibold text-white transition-all bg-[#0077FF] rounded-xl hover:bg-[#0066dd] shadow-md shadow-blue-500/20 flex items-center justify-center gap-2'
 							>
 								Перейти в ленту
-								<Zap className='w-5 h-5 group-hover:fill-current transition-all' />
+								<ArrowRight className='w-4 h-4' />
 							</Link>
 						) : (
 							<Link
 								href='/register'
-								className='w-full sm:w-auto px-8 py-4 text-lg font-semibold text-white transition-all bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full hover:shadow-lg hover:shadow-indigo-500/25 hover:scale-105 active:scale-95 flex items-center justify-center gap-2 group'
+								className='px-6 py-3 text-sm font-semibold text-white transition-all bg-[#0077FF] rounded-xl hover:bg-[#0066dd] shadow-md shadow-blue-500/20 flex items-center justify-center gap-2'
 							>
-								Начать сейчас
-								<Zap className='w-5 h-5 group-hover:fill-current transition-all' />
+								Создать аккаунт
+								<ArrowRight className='w-4 h-4' />
 							</Link>
 						)}
 
 						{!user && (
 							<Link
 								href='/login'
-								className='w-full sm:w-auto px-8 py-4 text-lg font-semibold text-white transition-all bg-gray-800/50 backdrop-blur-sm rounded-full hover:bg-gray-800 border border-gray-700 hover:border-gray-600 flex items-center justify-center'
+								className='px-6 py-3 text-sm font-semibold text-[#e6edf3] transition-all bg-[#161b22] rounded-xl hover:bg-[#21262d] border border-[#30363d] hover:border-[#8b949e]/40 flex items-center justify-center'
 							>
-								У меня есть аккаунт
+								Войти в аккаунт
 							</Link>
 						)}
 
 						<Link
 							href='/about'
-							className='w-full sm:w-auto px-8 py-4 text-lg font-semibold text-white transition-all bg-gray-800/50 backdrop-blur-sm rounded-full hover:bg-gray-800 border border-gray-700 hover:border-gray-600 flex items-center justify-center'
+							className='px-6 py-3 text-sm font-semibold text-[#e6edf3] transition-all bg-[#161b22] rounded-xl hover:bg-[#21262d] border border-[#30363d] hover:border-[#8b949e]/40 flex items-center justify-center'
 						>
 							О нас
 						</Link>
 					</div>
 
-					<div className='flex flex-col sm:flex-row items-center justify-center gap-3 pt-6'>
+					<div className='flex flex-wrap items-center justify-center gap-2 pt-2 text-xs'>
 						<a
 							href='https://github.com/KnopMops/vondic'
 							target='_blank'
 							rel='noreferrer'
-							className='w-full sm:w-auto px-6 py-3 text-sm font-semibold text-white transition-all bg-white/10 rounded-full hover:bg-white/20 border border-white/10 hover:border-white/20 flex items-center justify-center gap-2'
+							className='px-3.5 py-2 rounded-lg bg-[#161b22] border border-[#30363d] text-[#8b949e] hover:text-white hover:border-[#8b949e]/40 transition-colors flex items-center gap-1.5'
 						>
-							<Github className='h-4 w-4' />
+							<Github className='h-3.5 w-3.5' />
+							<span>GitHub</span>
 						</a>
 						<Link
 							href='/api-docs'
-							className='w-full sm:w-auto px-6 py-3 text-sm font-semibold text-white transition-all bg-white/10 rounded-full hover:bg-white/20 border border-white/10 hover:border-white/20 flex items-center justify-center gap-2'
+							className='px-3.5 py-2 rounded-lg bg-[#161b22] border border-[#30363d] text-[#8b949e] hover:text-white hover:border-[#8b949e]/40 transition-colors flex items-center gap-1.5'
 						>
-							<Zap className='h-4 w-4' />
-							<span>Документация API</span>
+							<Zap className='h-3.5 w-3.5 text-[#58a6ff]' />
+							<span>API</span>
 						</Link>
 						<Link
 							href='/download/desktop'
-							className='w-full sm:w-auto px-6 py-3 text-sm font-semibold text-white transition-all bg-white/10 rounded-full hover:bg-white/20 border border-white/10 hover:border-white/20 flex items-center justify-center gap-2'
+							className='px-3.5 py-2 rounded-lg bg-[#161b22] border border-[#30363d] text-[#8b949e] hover:text-white hover:border-[#8b949e]/40 transition-colors flex items-center gap-1.5'
 						>
-							<Monitor className='h-4 w-4' />
+							<Monitor className='h-3.5 w-3.5' />
+							<span>Десктоп</span>
 						</Link>
 						<Link
 							href='/download/mobile'
-							className='w-full sm:w-auto px-6 py-3 text-sm font-semibold text-white transition-all bg-white/10 rounded-full hover:bg-white/20 border border-white/10 hover:border-white/20 flex items-center justify-center gap-2'
+							className='px-3.5 py-2 rounded-lg bg-[#161b22] border border-[#30363d] text-[#8b949e] hover:text-white hover:border-[#8b949e]/40 transition-colors flex items-center gap-1.5'
 						>
-							<Smartphone className='h-4 w-4' />
+							<Smartphone className='h-3.5 w-3.5' />
+							<span>Мобильная</span>
 						</Link>
 					</div>
 				</motion.div>
 
+				{/* Feature Cards in Obsidian Auth Style */}
 				<motion.div
-					initial={{ opacity: 0, y: 40 }}
+					initial={{ opacity: 0, y: 30 }}
 					animate={{ opacity: 1, y: 0 }}
-					transition={{ duration: 0.8, delay: 0.4, ease: 'easeOut' }}
-					className='grid grid-cols-1 md:grid-cols-3 gap-6 mt-32 max-w-6xl w-full px-4'
+					transition={{ duration: 0.6, delay: 0.2, ease: 'easeOut' }}
+					className='grid grid-cols-1 md:grid-cols-3 gap-5 mt-20 w-full text-left'
 				>
 					{[
 						{
-							icon: <MessageCircle className='w-8 h-8 text-indigo-400' />,
+							icon: <MessageCircle className='w-6 h-6 text-[#58a6ff]' />,
 							title: 'Мгновенные сообщения',
-							desc: 'Общайтесь с друзьями в реальном времени с поддержкой статусов и индикаторов набора текста.',
-							color: 'bg-indigo-500/10',
-							border: 'border-indigo-500/20',
+							desc: 'Чаты, голосовые и видеозвонки WebRTC, обмен файлами и синхронизация в реальном времени.',
+							iconBg: 'bg-[#0077FF]/15 border-[#0077FF]/30',
 						},
 						{
-							icon: <Share2 className='w-8 h-8 text-purple-400' />,
-							title: 'Делитесь моментами',
-							desc: 'Публикуйте фото и мысли, делитесь контентом в один клик с красивыми превью.',
-							color: 'bg-purple-500/10',
-							border: 'border-purple-500/20',
+							icon: <Share2 className='w-6 h-6 text-purple-400' />,
+							title: 'Социальная экосистема',
+							desc: 'Публикации, сообщества, персональная лента, друзья и реакции без назойливой рекламы.',
+							iconBg: 'bg-purple-500/15 border-purple-500/30',
 						},
 						{
-							icon: <Shield className='w-8 h-8 text-emerald-400' />,
-							title: 'Приватность',
-							desc: 'Ваши данные под защитой. Мы ценим вашу анонимность, безопасность и свободу.',
-							color: 'bg-emerald-500/10',
-							border: 'border-emerald-500/20',
+							icon: <Shield className='w-6 h-6 text-emerald-400' />,
+							title: 'Приватность и безопасность',
+							desc: 'Сквозное E2E-шифрование, поддержка Passkey и защита персональных данных.',
+							iconBg: 'bg-emerald-500/15 border-emerald-500/30',
 						},
 					].map((feature, i) => (
 						<div
 							key={i}
-							className='group p-8 rounded-3xl bg-gray-900/40 border border-gray-800 backdrop-blur-sm hover:bg-gray-800/60 transition-all duration-300 hover:-translate-y-1'
+							className='group p-6 rounded-2xl bg-[#161b22] border border-[#30363d] hover:border-[#8b949e]/40 hover:bg-[#1c2129] transition-all duration-200'
 						>
 							<div
-								className={`w-16 h-16 rounded-2xl ${feature.color} border ${feature.border} flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300`}
+								className={`w-12 h-12 rounded-xl ${feature.iconBg} border flex items-center justify-center mb-4 transition-transform group-hover:scale-105`}
 							>
 								{feature.icon}
 							</div>
-							<h3 className='text-xl font-bold mb-3 text-white'>
+							<h3 className='text-base font-semibold mb-2 text-white group-hover:text-[#58a6ff] transition-colors'>
 								{feature.title}
 							</h3>
-							<p className='text-gray-400 leading-relaxed'>{feature.desc}</p>
+							<p className='text-xs sm:text-sm text-[#8b949e] leading-relaxed'>{feature.desc}</p>
 						</div>
 					))}
 				</motion.div>
 
-				<motion.div
-					initial={{ opacity: 0 }}
-					whileInView={{ opacity: 1 }}
-					viewport={{ once: true }}
-					transition={{ duration: 1, delay: 0.2 }}
-					className='mt-32 w-full max-w-4xl border-t border-gray-800 pt-16'
-				>
+				{/* Online Counter */}
+				<div className='mt-20 w-full pt-10 border-t border-[#30363d]'>
 					<div className='flex justify-center'>
-						<div className='flex flex-col items-center'>
-							<span className='text-3xl font-bold text-white mb-1'>
-								{onlineCount !== null ? onlineCount : '-'}
+						<div className='flex flex-col items-center bg-[#161b22] border border-[#30363d] rounded-2xl px-8 py-4'>
+							<span className='text-3xl font-extrabold text-white'>
+								{onlineCount !== null ? onlineCount : '1'}
 							</span>
-							<span className='text-sm text-gray-500 uppercase tracking-wider font-medium'>
-								Сейчас онлайн
+							<span className='text-xs text-[#8b949e] uppercase tracking-wider font-medium mt-1 flex items-center gap-1.5'>
+								<span className='w-2 h-2 rounded-full bg-emerald-500' />
+								Сейчас онлайн в Вондик
 							</span>
 						</div>
 					</div>
-				</motion.div>
+				</div>
 			</main>
 
-			<footer className='py-12 relative z-10 border-t border-gray-900'>
-				<div className='max-w-2xl mx-auto px-4 text-center'>
-					<div className='flex items-center justify-center gap-2 mb-4 opacity-50 hover:opacity-100 transition-opacity'>
-						<span className='text-xl font-bold'>В</span>
-						<span className='font-semibold'>Вондик</span>
+			{/* Footer */}
+			<footer className='py-12 relative z-10 border-t border-[#30363d] bg-[#161b22]/50'>
+				<div className='max-w-4xl mx-auto px-6 text-center space-y-6'>
+					<div className='flex items-center justify-center gap-2.5'>
+						<div className='w-8 h-8 rounded-lg bg-[#0d1117] border border-[#30363d] p-1 flex items-center justify-center'>
+							<BrandLogo size={24} />
+						</div>
+						<span className='font-bold text-white text-base'>Вондик</span>
 					</div>
-					<div className='grid grid-cols-2 gap-x-6 gap-y-1 mb-3 text-xs text-gray-500 max-w-md mx-auto'>
-						<a href='https://s3.vondic.ru/uploads/docs/privacy_policy.rtf' target='_blank' rel='noopener' className='hover:text-gray-300 transition-colors text-right'>Политика конфиденциальности</a>
-						<a href='https://s3.vondic.ru/uploads/docs/consent_to_processing_personal_data.rtf' target='_blank' rel='noopener' className='hover:text-gray-300 transition-colors'>Согласие на обработку данных</a>
-						<a href='https://s3.vondic.ru/uploads/docs/data_storage_and_destroyal_order.rtf' target='_blank' rel='noopener' className='hover:text-gray-300 transition-colors text-right'>Порядок хранения данных</a>
-						<a href='https://s3.vondic.ru/uploads/docs/moderation_regulations_and_reasons_for_blocking.rtf' target='_blank' rel='noopener' className='hover:text-gray-300 transition-colors'>Правила модерации</a>
-						<a href='https://s3.vondic.ru/uploads/docs/regulations_for_reviewing_complaints_and_moderating_content.rtf' target='_blank' rel='noopener' className='hover:text-gray-300 transition-colors text-right'>Рассмотрение жалоб</a>
-						<a href='https://s3.vondic.ru/uploads/docs/сommunity_rules.rtf' target='_blank' rel='noopener' className='hover:text-gray-300 transition-colors'>Правила сообщества</a>
-						<a href='https://s3.vondic.ru/uploads/docs/cookie_policy.rtf' target='_blank' rel='noopener' className='hover:text-gray-300 transition-colors text-right'>Политика cookies</a>
-						<a href='https://s3.vondic.ru/uploads/docs/terms_of_service.rtf' target='_blank' rel='noopener' className='hover:text-gray-300 transition-colors'>Пользовательское соглашение</a>
+
+					<div className='grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-[#8b949e] max-w-2xl mx-auto'>
+						<a
+							href='https://s3.vondic.ru/uploads/docs/privacy_policy.rtf'
+							target='_blank'
+							rel='noopener'
+							className='hover:text-white transition-colors'
+						>
+							Конфиденциальность
+						</a>
+						<a
+							href='https://s3.vondic.ru/uploads/docs/terms_of_service.rtf'
+							target='_blank'
+							rel='noopener'
+							className='hover:text-white transition-colors'
+						>
+							Соглашение
+						</a>
+						<a
+							href='https://s3.vondic.ru/uploads/docs/cookie_policy.rtf'
+							target='_blank'
+							rel='noopener'
+							className='hover:text-white transition-colors'
+						>
+							Cookies
+						</a>
+						<Link href='/about' className='hover:text-white transition-colors'>
+							О сервисе
+						</Link>
 					</div>
-					<p className='text-gray-600 text-sm'>&copy; 2026 Вондик</p>
+
+					<p className='text-[#8b949e] text-xs'>
+						© 2026 Вондик. Все права защищены.
+					</p>
 				</div>
 			</footer>
-
-
 		</div>
 	)
 }

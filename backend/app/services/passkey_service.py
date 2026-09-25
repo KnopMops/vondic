@@ -27,6 +27,35 @@ class PasskeyService:
         padding = "=" * ((4 - len(data_str) % 4) % 4)
         return base64.urlsafe_b64decode((data_str + padding).encode("ascii"))
 
+    @staticmethod
+    def get_rp_id(host: Optional[str] = None) -> str:
+        """Определяет RP ID (Relying Party Identifier) для WebAuthn на основе хоста запроса."""
+        if not host:
+            return os.environ.get("WEBAUTHN_RP_ID", "vondic.ru")
+
+        clean_host = host.split(":")[0].strip().lower()
+        if not clean_host:
+            return os.environ.get("WEBAUTHN_RP_ID", "vondic.ru")
+
+        # Для localhost или локальной разработки
+        if clean_host in ("localhost", "127.0.0.1") or clean_host.endswith(".localhost"):
+            return "localhost"
+
+        # Если это IPv4 адрес
+        import ipaddress
+        try:
+            ipaddress.ip_address(clean_host)
+            return clean_host
+        except ValueError:
+            pass
+
+        # Если хост является доменом vondic.ru или поддоменом
+        configured_rp = os.environ.get("WEBAUTHN_RP_ID", "vondic.ru").strip().lower()
+        if clean_host == configured_rp or clean_host.endswith("." + configured_rp):
+            return configured_rp
+
+        return clean_host
+
     # ==========================================
     # 1. РЕГИСТРАЦИЯ PASSKEY
     # ==========================================
@@ -36,16 +65,14 @@ class PasskeyService:
         user: Optional[User] = None,
         email: Optional[str] = None,
         username: Optional[str] = None,
+        host: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Генерирует опции WebAuthn для создания нового Passkey."""
         challenge_bytes = secrets.token_bytes(32)
         challenge_b64 = PasskeyService._b64url_encode(challenge_bytes)
 
-        user_id_bytes = (
-            user.id.encode("utf-8")
-            if user
-            else (email or secrets.token_hex(16)).encode("utf-8")
-        )
+        user_id_str = user.id if user else (email or secrets.token_hex(16))
+        user_id_bytes = str(user_id_str).encode("utf-8")
         user_id_b64 = PasskeyService._b64url_encode(user_id_bytes)
 
         user_name = user.email if user else (email or "user@vondic.ru")
@@ -60,7 +87,7 @@ class PasskeyService:
         }
         cache.set(cache_key, cache_data, timeout=300)
 
-        rp_id = os.environ.get("WEBAUTHN_RP_ID", "vondic.ru")
+        rp_id = PasskeyService.get_rp_id(host)
 
         return {
             "challenge": challenge_b64,
@@ -90,6 +117,7 @@ class PasskeyService:
         credential_data: Dict[str, Any],
         password: Optional[str] = None,
         device_name: Optional[str] = None,
+        current_user: Optional[User] = None,
     ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """Верифицирует создание Passkey и регистрирует/привязывает пользователя."""
         try:
@@ -110,28 +138,34 @@ class PasskeyService:
             except Exception:
                 return None, "Некорректный clientDataJSON"
 
-            challenge = client_data_json.get("challenge")
+            challenge = str(client_data_json.get("challenge", ""))
             if not challenge:
                 return None, "Отсутствует challenge в clientDataJSON"
 
-            cache_key = f"passkey_reg_challenge:{challenge}"
-            saved_ctx = cache.get(cache_key)
+            # Проверяем кэш с учётом/без padding
+            norm_challenge = challenge.rstrip("=")
+            saved_ctx = cache.get(f"passkey_reg_challenge:{norm_challenge}")
+            if not saved_ctx:
+                saved_ctx = cache.get(f"passkey_reg_challenge:{challenge}")
             if not saved_ctx:
                 return None, "Срок действия сессии регистрации истёк. Попробуйте снова."
-            cache.delete(cache_key)
+            cache.delete(f"passkey_reg_challenge:{norm_challenge}")
+            cache.delete(f"passkey_reg_challenge:{challenge}")
 
             user_id = saved_ctx.get("user_id")
             email = saved_ctx.get("email")
             username = saved_ctx.get("username")
 
             user = None
-            if user_id:
+            if current_user:
+                user = current_user
+            elif user_id:
                 user = User.query.get(user_id)
             elif email:
                 user = User.query.filter(db.func.lower(User.email) == email.lower()).first()
 
             if not user:
-                # Создание нового пользователя
+                # Создание нового пользователя при регистрации
                 if not email or not username:
                     return None, "Email и имя пользователя обязательны для создания аккаунта"
 
@@ -153,7 +187,7 @@ class PasskeyService:
                 db.session.add(user)
                 db.session.flush()
 
-            # Сохраняем Passkey
+            # Сохраняем или обновляем Passkey
             existing_passkey = Passkey.query.filter_by(credential_id=cred_id).first()
             if not existing_passkey:
                 public_key_raw = response.get("publicKey") or response.get("attestationObject") or ""
@@ -166,6 +200,11 @@ class PasskeyService:
                     last_used_at=datetime.utcnow(),
                 )
                 db.session.add(new_passkey)
+            else:
+                existing_passkey.user_id = user.id
+                existing_passkey.last_used_at = datetime.utcnow()
+                if device_name:
+                    existing_passkey.device_name = device_name
 
             db.session.commit()
 
@@ -189,7 +228,7 @@ class PasskeyService:
     # ==========================================
 
     @staticmethod
-    def generate_login_options() -> Dict[str, Any]:
+    def generate_login_options(host: Optional[str] = None) -> Dict[str, Any]:
         """Генерирует challenge для входа через Passkey."""
         challenge_bytes = secrets.token_bytes(32)
         challenge_b64 = PasskeyService._b64url_encode(challenge_bytes)
@@ -197,7 +236,7 @@ class PasskeyService:
         cache_key = f"passkey_login_challenge:{challenge_b64}"
         cache.set(cache_key, True, timeout=300)
 
-        rp_id = os.environ.get("WEBAUTHN_RP_ID", "vondic.ru")
+        rp_id = PasskeyService.get_rp_id(host)
 
         return {
             "challenge": challenge_b64,
@@ -228,15 +267,18 @@ class PasskeyService:
             except Exception:
                 return None, "Некорректный clientDataJSON"
 
-            challenge = client_data_json.get("challenge")
+            challenge = str(client_data_json.get("challenge", ""))
             if not challenge:
                 return None, "Отсутствует challenge"
 
-            cache_key = f"passkey_login_challenge:{challenge}"
-            valid_challenge = cache.get(cache_key)
+            norm_challenge = challenge.rstrip("=")
+            valid_challenge = cache.get(f"passkey_login_challenge:{norm_challenge}")
+            if not valid_challenge:
+                valid_challenge = cache.get(f"passkey_login_challenge:{challenge}")
             if not valid_challenge:
                 return None, "Срок действия сессии входа истёк. Попробуйте снова."
-            cache.delete(cache_key)
+            cache.delete(f"passkey_login_challenge:{norm_challenge}")
+            cache.delete(f"passkey_login_challenge:{challenge}")
 
             # Находим Passkey в базе данных
             passkey = Passkey.query.filter_by(credential_id=cred_id).first()
@@ -273,7 +315,7 @@ class PasskeyService:
     # ==========================================
 
     @staticmethod
-    def create_migration_session(current_user: User) -> Dict[str, Any]:
+    def create_migration_session(current_user: User, host: Optional[str] = None) -> Dict[str, Any]:
         """Генерирует одноразовый защищённый токен миграции для сканирования QR-кода."""
         migration_token = secrets.token_urlsafe(32)
         cache_key = f"passkey_migration:{migration_token}"
@@ -288,7 +330,13 @@ class PasskeyService:
         cache.set(cache_key, data, timeout=300)
 
         # Ссылка для QR-кода
-        frontend_url = os.environ.get("FRONTEND_URL", "https://vondic.ru").rstrip("/")
+        frontend_url = os.environ.get("FRONTEND_URL")
+        if not frontend_url and host:
+            proto = "http" if ("localhost" in host or "127.0.0.1" in host) else "https"
+            frontend_url = f"{proto}://{host}"
+        elif not frontend_url:
+            frontend_url = "https://vondic.ru"
+        frontend_url = frontend_url.rstrip("/")
         migrate_url = f"{frontend_url}/auth/passkey-migrate?token={migration_token}"
 
         return {
@@ -298,7 +346,7 @@ class PasskeyService:
         }
 
     @staticmethod
-    def get_migration_info(migration_token: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    def get_migration_info(migration_token: str, host: Optional[str] = None) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """Возвращает информацию о миграции и опции создания Passkey для нового устройства."""
         if not migration_token:
             return None, "Токен миграции отсутствует"
@@ -317,6 +365,7 @@ class PasskeyService:
             user=user,
             email=user.email,
             username=user.username,
+            host=host,
         )
 
         return {
@@ -365,6 +414,11 @@ class PasskeyService:
                 last_used_at=datetime.utcnow(),
             )
             db.session.add(new_passkey)
+        else:
+            existing.user_id = user.id
+            existing.last_used_at = datetime.utcnow()
+            if device_name:
+                existing.device_name = device_name
 
         # Помечаем статус миграции как completed
         data["status"] = "completed"
@@ -372,6 +426,44 @@ class PasskeyService:
 
         # Авторизуем телефон
         raw_access, raw_refresh = AuthService._issue_tokens(user, device_type="mobile")
+        db.session.commit()
+
+        return {
+            "user": user,
+            "access_token": raw_access,
+            "refresh_token": raw_refresh,
+        }, None
+
+    @staticmethod
+    def exchange_migration_token(
+        migration_token: str,
+        device_name: Optional[str] = None,
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+        """Авторизует мобильное устройство напрямую по токену сканирования миграции (QR)."""
+        if not migration_token:
+            return None, "Токен миграции отсутствует"
+
+        cache_key = f"passkey_migration:{migration_token}"
+        data = cache.get(cache_key)
+        if not data:
+            return None, "QR-код устарел или уже был использован"
+
+        user_id = data.get("user_id")
+        user = User.query.get(user_id)
+        if not user:
+            return None, "Пользователь не найден"
+
+        if getattr(user, "is_blocked", False):
+            return None, "Пользователь заблокирован"
+
+        # Помечаем статус миграции как completed
+        data["status"] = "completed"
+        cache.set(cache_key, data, timeout=60)
+
+        # Выдаем токены мобильному приложению
+        raw_access, raw_refresh = AuthService._issue_tokens(
+            user, device_type="mobile", device_name=device_name or "Мобильное устройство (QR вход)"
+        )
         db.session.commit()
 
         return {

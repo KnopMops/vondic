@@ -67,80 +67,81 @@ function PasskeyMigrateContent() {
 	}
 
 	return (
-		<div className='flex min-h-screen items-center justify-center bg-black text-white p-4 relative overflow-hidden'>
-			<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
-				<div className='absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-indigo-900/20 blur-[120px]' />
-				<div className='absolute top-[40%] -right-[10%] w-[40%] h-[60%] rounded-full bg-purple-900/20 blur-[120px]' />
-			</div>
-
+		<div className='flex min-h-screen items-center justify-center bg-[#0e1117] text-[#e6edf3] p-4 relative'>
 			<motion.div
-				initial={{ opacity: 0, y: 20 }}
+				initial={{ opacity: 0, y: 14 }}
 				animate={{ opacity: 1, y: 0 }}
-				className='w-full max-w-md rounded-3xl bg-white/5 border border-white/10 p-8 shadow-2xl backdrop-blur-xl relative z-10 text-center space-y-6'
+				transition={{ duration: 0.35, ease: 'easeOut' }}
+				className='w-full max-w-[420px] rounded-2xl bg-[#161b22] border border-[#30363d] p-7 shadow-xl relative z-10 text-center space-y-6'
 			>
-				<div className='mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-500/20 border border-indigo-500/30 text-indigo-400'>
-					<LuKey className='h-8 w-8' />
+				<div className='mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-[#0077FF]/10 border border-[#0077FF]/30 text-[#0077FF]'>
+					<LuKey className='h-6 w-6' />
 				</div>
 
-				<h1 className='text-2xl font-bold'>Миграция Passkey</h1>
+				<div>
+					<h1 className='text-xl font-bold tracking-tight text-white'>Миграция Passkey</h1>
+					<p className='text-xs text-[#8b949e] mt-1'>
+						Привязка ключа доступа к этому устройству
+					</p>
+				</div>
 
 				{loading ? (
-					<div className='flex flex-col items-center gap-3 py-6 text-gray-400'>
-						<LuLoader className='h-8 w-8 animate-spin text-indigo-500' />
-						<p className='text-sm'>Проверка QR-кода...</p>
+					<div className='flex flex-col items-center gap-3 py-6 text-[#8b949e]'>
+						<LuLoader className='h-6 w-6 animate-spin text-[#0077FF]' />
+						<p className='text-xs'>Проверка сессии QR-кода...</p>
 					</div>
 				) : error ? (
-					<div className='space-y-4 py-4'>
-						<div className='mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10 text-red-400'>
-							<LuCircleAlert className='h-6 w-6' />
+					<div className='space-y-4 py-2'>
+						<div className='mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-[#f85149]/10 text-[#f85149]'>
+							<LuCircleAlert className='h-5 w-5' />
 						</div>
-						<p className='text-sm text-red-400'>{error}</p>
+						<p className='text-xs text-[#f85149] bg-[#f85149]/10 border border-[#f85149]/30 rounded-lg p-2.5'>{error}</p>
 						<button
 							onClick={() => router.push('/login')}
-							className='w-full rounded-full bg-white/10 px-4 py-2.5 text-sm font-semibold hover:bg-white/20 transition-all'
+							className='w-full rounded-lg border border-[#30363d] bg-[#21262d] hover:bg-[#30363d] px-4 py-2.5 text-xs font-semibold text-white transition-all'
 						>
 							Перейти ко входу
 						</button>
 					</div>
 				) : success ? (
-					<div className='space-y-4 py-4'>
-						<div className='mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400'>
-							<LuCheck className='h-6 w-6' />
+					<div className='space-y-3 py-2'>
+						<div className='mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-[#2ea043]/10 text-[#3fb950]'>
+							<LuCheck className='h-5 w-5' />
 						</div>
-						<p className='text-base font-semibold text-emerald-400'>
+						<p className='text-sm font-semibold text-[#3fb950]'>
 							Passkey успешно сохранён на этом устройстве!
 						</p>
-						<p className='text-xs text-gray-400'>Перенаправляем в ленту...</p>
+						<p className='text-xs text-[#8b949e]'>Перенаправляем в приложение...</p>
 					</div>
 				) : (
-					<div className='space-y-6'>
-						<div className='rounded-2xl border border-white/10 bg-white/5 p-4 text-left space-y-1'>
-							<div className='text-xs text-gray-400'>Аккаунт для миграции:</div>
-							<div className='text-base font-semibold text-white'>
+					<div className='space-y-5'>
+						<div className='rounded-lg border border-[#30363d] bg-[#0d1117] p-3 text-left space-y-1'>
+							<div className='text-[11px] text-[#8b949e]'>Аккаунт для миграции:</div>
+							<div className='text-sm font-semibold text-white'>
 								{info?.user?.username || 'Пользователь'}
 							</div>
-							<div className='text-xs text-gray-400'>{info?.user?.email}</div>
+							<div className='text-xs text-[#8b949e] font-mono'>{info?.user?.email}</div>
 						</div>
 
-						<p className='text-xs text-gray-400 leading-relaxed'>
-							Нажмите кнопку ниже и подтвердите TouchID, FaceID или пин-код устройства.
-							Passkey запишется в чип безопасности вашего телефона для мгновенного входа в будущем.
+						<p className='text-xs text-[#8b949e] leading-relaxed'>
+							Нажмите кнопку ниже и подтвердите Touch ID, Face ID или пин-код устройства.
+							Ключ запишется в чип безопасности вашего смартфона для быстрого входа без пароля.
 						</p>
 
 						<button
 							onClick={handleMigrate}
 							disabled={migrating}
-							className='group relative flex w-full items-center justify-center gap-2.5 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-3.5 text-sm font-semibold text-white hover:shadow-lg hover:shadow-indigo-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50'
+							className='w-full flex items-center justify-center gap-2 rounded-lg bg-[#0077FF] hover:bg-[#0066dd] py-2.5 text-sm font-medium text-white transition-all shadow-sm active:scale-[0.99] disabled:opacity-50'
 						>
 							{migrating ? (
 								<>
-									<LuLoader className='h-5 w-5 animate-spin' />
-									Ожидание биометрии...
+									<LuLoader className='h-4 w-4 animate-spin' />
+									<span>Ожидание биометрии...</span>
 								</>
 							) : (
 								<>
-									<LuKey className='h-5 w-5' />
-									Подтвердить перенос биометрией
+									<LuKey className='h-4 w-4' />
+									<span>Подтвердить биометрией</span>
 								</>
 							)}
 						</button>
@@ -155,8 +156,8 @@ export default function PasskeyMigratePage() {
 	return (
 		<Suspense
 			fallback={
-				<div className='flex min-h-screen items-center justify-center bg-black text-white'>
-					<LuLoader className='h-8 w-8 animate-spin text-indigo-500' />
+				<div className='flex min-h-screen items-center justify-center bg-[#0e1117] text-white'>
+					<LuLoader className='h-8 w-8 animate-spin text-[#0077FF]' />
 				</div>
 			}
 		>

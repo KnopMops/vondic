@@ -56,73 +56,64 @@ export default function ResetPasswordPage() {
 	}
 
 	return (
-		<div className='flex min-h-screen items-center justify-center bg-black overflow-hidden relative'>
-			<div className='absolute inset-0 z-0 overflow-hidden pointer-events-none'>
-				<div className='absolute top-[20%] left-[20%] w-[40%] h-[40%] rounded-full bg-indigo-900/20 blur-[120px]' />
-				<div className='absolute bottom-[20%] right-[20%] w-[40%] h-[40%] rounded-full bg-purple-900/20 blur-[120px]' />
-			</div>
-
+		<div className='flex min-h-screen items-center justify-center bg-[#0e1117] p-4 text-[#e6edf3] selection:bg-[#0077FF] selection:text-white relative'>
 			<motion.div
-				initial={{ opacity: 0, y: 20 }}
+				initial={{ opacity: 0, y: 14 }}
 				animate={{ opacity: 1, y: 0 }}
-				transition={{ duration: 0.8, ease: 'easeOut' }}
-				className='w-full max-w-md space-y-6 rounded-3xl bg-white/5 border border-white/10 p-8 shadow-2xl backdrop-blur-xl relative z-10 text-center'
+				transition={{ duration: 0.35, ease: 'easeOut' }}
+				className='w-full max-w-[420px] space-y-6 rounded-2xl bg-[#161b22] border border-[#30363d] p-7 shadow-xl relative z-10 text-center'
 			>
-				<div className='flex flex-col items-center justify-center gap-4'>
-					<motion.div
-						initial={{ scale: 0.8, opacity: 0 }}
-						animate={{ scale: 1, opacity: 1 }}
-						transition={{ delay: 0.2, duration: 0.5 }}
-					>
-						<BrandLogo size={48} />
-					</motion.div>
-					<motion.h2
-						initial={{ opacity: 0 }}
-						animate={{ opacity: 1 }}
-						transition={{ delay: 0.3 }}
-						className='text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400'
-					>
+				<div className='flex flex-col items-center justify-center gap-2'>
+					<div className='flex items-center justify-center w-11 h-11 rounded-xl bg-[#0077FF] shadow-sm'>
+						<span className='text-xl font-bold text-white tracking-wide'>V</span>
+					</div>
+					<h1 className='text-xl font-bold text-white tracking-tight mt-1'>
 						{status === 'success' ? 'Готово!' : 'Новый пароль'}
-					</motion.h2>
+					</h1>
+					<p className='text-xs text-[#8b949e] text-center'>
+						{status === 'success'
+							? 'Ваш пароль успешно обновлен'
+							: 'Придумайте надежный пароль для входа'}
+					</p>
 				</div>
 
 				{status === 'success' ? (
 					<motion.div
-						initial={{ opacity: 0, scale: 0.9 }}
+						initial={{ opacity: 0, scale: 0.95 }}
 						animate={{ opacity: 1, scale: 1 }}
-						className='space-y-4'
+						className='space-y-4 py-2'
 					>
-						<div className='w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4'>
-							<Check className='w-8 h-8 text-green-500' />
+						<div className='w-12 h-12 bg-emerald-500/10 border border-emerald-500/20 rounded-full flex items-center justify-center mx-auto'>
+							<Check className='w-6 h-6 text-emerald-400' />
 						</div>
-						<p className='text-white text-lg font-medium'>{message}</p>
-						<p className='text-sm text-gray-400'>
-							Теперь вы можете войти с новым паролем.
+						<p className='text-white text-sm font-medium'>{message}</p>
+						<p className='text-xs text-[#8b949e]'>
+							Теперь вы можете войти в аккаунт с новым паролем.
 						</p>
 					</motion.div>
 				) : (
-					<form onSubmit={handleSubmit} className='space-y-4 text-left'>
+					<form onSubmit={handleSubmit} className='space-y-4 text-left mt-2'>
 						<div>
-							<label htmlFor='password' className='sr-only'>
+							<label htmlFor='password' className='block text-xs font-medium text-[#8b949e] mb-1.5'>
 								Новый пароль
 							</label>
 							<div className='relative'>
-								<KeyRound className='absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 z-10 pointer-events-none' />
+								<KeyRound className='absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8b949e] z-10 pointer-events-none' />
 								<PasswordInput
 									id='password'
 									name='password'
 									autoComplete='new-password'
 									required
 									wrapperClassName='w-full'
-									className='block w-full rounded-xl border border-white/10 bg-white/5 py-3 pl-10 pr-11 text-white placeholder:text-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none'
-									placeholder='Новый пароль'
+									className='block w-full rounded-lg border border-[#30363d] bg-[#0d1117] py-2.5 pl-9 pr-11 text-sm text-white placeholder:text-[#8b949e]/50 focus:border-[#0077FF] focus:ring-1 focus:ring-[#0077FF] transition-all outline-none'
+									placeholder='Минимум 6 символов'
 									value={password}
 									onChange={e => setPassword(e.target.value)}
 								/>
 							</div>
 						</div>
 						<div>
-							<label htmlFor='confirm-password' className='sr-only'>
+							<label htmlFor='confirm-password' className='block text-xs font-medium text-[#8b949e] mb-1.5'>
 								Подтвердите пароль
 							</label>
 							<PasswordInput
@@ -131,31 +122,31 @@ export default function ResetPasswordPage() {
 								autoComplete='new-password'
 								required
 								wrapperClassName='w-full'
-								className='block w-full rounded-xl border border-white/10 bg-white/5 py-3 px-4 text-white placeholder:text-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none'
-								placeholder='Подтвердите пароль'
+								className='block w-full rounded-lg border border-[#30363d] bg-[#0d1117] py-2.5 px-3.5 text-sm text-white placeholder:text-[#8b949e]/50 focus:border-[#0077FF] focus:ring-1 focus:ring-[#0077FF] transition-all outline-none'
+								placeholder='Повторите пароль'
 								value={confirmPassword}
 								onChange={e => setConfirmPassword(e.target.value)}
 							/>
 						</div>
 
 						{status === 'error' && (
-							<p className='text-center text-sm text-red-400'>{message}</p>
+							<p className='text-center text-xs text-red-400'>{message}</p>
 						)}
 
 						<button
 							type='submit'
 							disabled={status === 'loading'}
-							className='group relative flex w-full justify-center rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-3 text-sm font-semibold text-white hover:shadow-lg hover:shadow-indigo-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed'
+							className='w-full rounded-lg bg-[#0077FF] hover:bg-[#0066dd] px-4 py-2.5 text-sm font-semibold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm'
 						>
 							{status === 'loading' ? 'Сохранение...' : 'Сменить пароль'}
 						</button>
 					</form>
 				)}
 
-				<div className='mt-4 text-center text-sm text-gray-400'>
+				<div className='pt-2 text-center text-xs text-[#8b949e]'>
 					<Link
 						href='/login'
-						className='font-medium text-indigo-400 hover:text-indigo-300 transition-colors'
+						className='font-medium text-[#58a6ff] hover:underline transition-colors'
 					>
 						{status === 'success' ? 'Войти в аккаунт' : 'Вернуться ко входу'}
 					</Link>

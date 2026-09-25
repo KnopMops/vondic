@@ -99,31 +99,34 @@ export default function RegisterPage() {
 	}
 
 	return (
-		<div className='flex min-h-screen items-center justify-center bg-black text-white selection:bg-indigo-500 selection:text-white overflow-hidden relative'>
-			<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
-				<div className='absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-indigo-900/20 blur-[120px]' />
-				<div className='absolute top-[40%] -right-[10%] w-[40%] h-[60%] rounded-full bg-purple-900/20 blur-[120px]' />
-				<div className='absolute bottom-[10%] left-[20%] w-[30%] h-[30%] rounded-full bg-emerald-900/10 blur-[100px]' />
-			</div>
-
+		<div className='flex min-h-screen items-center justify-center bg-[#0e1117] p-4 text-[#e6edf3] selection:bg-[#0077FF] selection:text-white relative'>
 			<motion.div
-				initial={{ opacity: 0, y: 20 }}
+				initial={{ opacity: 0, y: 14 }}
 				animate={{ opacity: 1, y: 0 }}
-				transition={{ duration: 0.8, ease: 'easeOut' }}
-				className='w-full max-w-md space-y-6 rounded-3xl bg-white/5 border border-white/10 p-8 shadow-2xl backdrop-blur-xl relative z-10'
+				transition={{ duration: 0.35, ease: 'easeOut' }}
+				className='w-full max-w-[420px] space-y-6 rounded-2xl bg-[#161b22] border border-[#30363d] p-7 shadow-xl relative z-10'
 			>
-				<div className='flex flex-col items-center justify-center gap-4'>
-					<div className='flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 shadow-lg shadow-indigo-500/20'>
-						<span className='text-2xl font-bold text-white'>V</span>
+				<div className='flex flex-col items-center justify-center gap-2.5'>
+					<div className='relative flex items-center justify-center w-14 h-14 rounded-2xl bg-[#0d1117] border border-[#30363d] shadow-lg shadow-black/40 overflow-hidden p-1.5 group'>
+						<img
+							src='/logo.png'
+							alt='Вондик'
+							className='w-full h-full object-contain drop-shadow transition-transform duration-300 group-hover:scale-105'
+						/>
 					</div>
-					<h2 className='text-2xl font-bold text-white'>Создать аккаунт</h2>
+					<h1 className='text-2xl font-bold text-white tracking-tight mt-1'>
+						Регистрация в Вондик
+					</h1>
+					<p className='text-xs text-[#8b949e] text-center'>
+						Присоединяйтесь к Вондику для общения и работы
+					</p>
 				</div>
 
-				<form className='mt-8 space-y-6' onSubmit={handleSubmit}>
-					<div className='space-y-4'>
+				<form className='mt-6 space-y-4' onSubmit={handleSubmit}>
+					<div className='space-y-3'>
 						<div>
-							<label htmlFor='email-address' className='sr-only'>
-								Email address
+							<label htmlFor='email-address' className='block text-xs font-medium text-[#8b949e] mb-1.5'>
+								Электронная почта
 							</label>
 							<EmailInput
 								id='email-address'
@@ -131,11 +134,11 @@ export default function RegisterPage() {
 								onChange={setEmail}
 								required
 								listId='register-email-suggestions'
-								className='relative block w-full rounded-xl border border-white/10 bg-white/5 py-3 px-4 text-white placeholder:text-gray-500 focus:z-10 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none'
+								className='relative block w-full rounded-lg border border-[#30363d] bg-[#0d1117] py-2.5 px-3.5 text-sm text-white placeholder:text-[#8b949e]/50 focus:border-[#0077FF] focus:ring-1 focus:ring-[#0077FF] transition-all outline-none'
 							/>
 							{emailHint ? (
 								<p
-									className={`mt-1 text-xs ${
+									className={`mt-1.5 text-xs ${
 										emailOk ? 'text-emerald-400' : 'text-red-400'
 									}`}
 								>
@@ -144,8 +147,8 @@ export default function RegisterPage() {
 							) : null}
 						</div>
 						<div>
-							<label htmlFor='username' className='sr-only'>
-								Username
+							<label htmlFor='username' className='block text-xs font-medium text-[#8b949e] mb-1.5'>
+								Имя пользователя
 							</label>
 							<input
 								id='username'
@@ -153,15 +156,15 @@ export default function RegisterPage() {
 								type='text'
 								autoComplete='username'
 								required
-								className='relative block w-full rounded-xl border border-white/10 bg-white/5 py-3 px-4 text-white placeholder:text-gray-500 focus:z-10 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none'
-								placeholder='Имя пользователя'
+								className='relative block w-full rounded-lg border border-[#30363d] bg-[#0d1117] py-2.5 px-3.5 text-sm text-white placeholder:text-[#8b949e]/50 focus:border-[#0077FF] focus:ring-1 focus:ring-[#0077FF] transition-all outline-none'
+								placeholder='username'
 								value={username}
 								onChange={e => setUsername(e.target.value)}
 							/>
 						</div>
 						<div>
-							<label htmlFor='password' className='sr-only'>
-								Password
+							<label htmlFor='password' className='block text-xs font-medium text-[#8b949e] mb-1.5'>
+								Пароль
 							</label>
 							<PasswordInput
 								id='password'
@@ -169,8 +172,8 @@ export default function RegisterPage() {
 								autoComplete='new-password'
 								required
 								wrapperClassName='w-full'
-								className='relative block w-full rounded-xl border border-white/10 bg-white/5 py-3 px-4 text-white placeholder:text-gray-500 focus:z-10 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none'
-								placeholder='Пароль'
+								className='relative block w-full rounded-lg border border-[#30363d] bg-[#0d1117] py-2.5 px-3.5 text-sm text-white placeholder:text-[#8b949e]/50 focus:border-[#0077FF] focus:ring-1 focus:ring-[#0077FF] transition-all outline-none'
+								placeholder='Минимум 6 символов'
 								value={password}
 								onChange={e => setPassword(e.target.value)}
 							/>
@@ -178,7 +181,7 @@ export default function RegisterPage() {
 					</div>
 					<SmartCaptcha key={`register-${captchaKey}`} onTokenChange={setCaptchaToken} />
 
-					<div className='space-y-3'>
+					<div className='space-y-3 pt-2'>
 						<button
 							type='submit'
 							disabled={
@@ -186,16 +189,16 @@ export default function RegisterPage() {
 								emailOk === false ||
 								(!!captchaSiteKey && !captchaToken.trim())
 							}
-							className='group relative flex w-full justify-center rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-3 text-sm font-semibold text-white hover:shadow-lg hover:shadow-indigo-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed'
+							className='w-full rounded-lg bg-[#0077FF] hover:bg-[#0066dd] px-4 py-2.5 text-sm font-semibold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm'
 						>
 							{isLoading ? 'Создание...' : 'Зарегистрироваться'}
 						</button>
 
 						<div className='relative flex items-center justify-center my-2'>
 							<div className='absolute inset-0 flex items-center'>
-								<div className='w-full border-t border-white/10'></div>
+								<div className='w-full border-t border-[#30363d]' />
 							</div>
-							<span className='relative bg-black/60 px-3 text-xs text-gray-500 uppercase tracking-wider rounded'>
+							<span className='relative bg-[#161b22] px-2 text-xs text-[#8b949e]'>
 								или
 							</span>
 						</div>
@@ -204,22 +207,22 @@ export default function RegisterPage() {
 							type='button'
 							onClick={handlePasskeyRegister}
 							disabled={passkeyLoading || emailOk === false}
-							className='group relative flex w-full items-center justify-center gap-2.5 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-4 py-3 text-sm font-semibold text-indigo-300 hover:bg-indigo-500/20 hover:border-indigo-500/50 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/10'
+							className='w-full flex items-center justify-center gap-2 rounded-lg border border-[#30363d] bg-[#21262d] hover:bg-[#30363d] px-4 py-2.5 text-sm font-medium text-[#c9d1d9] transition-all disabled:opacity-50 disabled:cursor-not-allowed'
 						>
-							<LuKey className='h-4 w-4 text-indigo-400' />
-							{passkeyLoading ? 'Создание Passkey...' : 'Зарегистрировать с помощью Passkey'}
+							<LuKey className='h-4 w-4 text-[#58a6ff]' />
+							{passkeyLoading ? 'Создание Passkey...' : 'Регистрация с Passkey'}
 						</button>
 						{passkeyError && (
 							<p className='text-center text-xs text-red-400 mt-1'>{passkeyError}</p>
 						)}
 					</div>
-					<p className='mt-3 text-center text-xs text-gray-500'>
+					<p className='mt-3 text-center text-[11px] text-[#8b949e] leading-relaxed'>
 						Регистрируясь, вы соглашаетесь с{' '}
 						<a
 							href={`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'}/static/docs/privacy_policy.rtf`}
 							target='_blank'
 							rel='noopener noreferrer'
-							className='text-indigo-400 hover:text-indigo-300 transition-colors'
+							className='text-[#58a6ff] hover:underline transition-colors'
 						>
 							политикой конфиденциальности
 						</a>
@@ -229,7 +232,7 @@ export default function RegisterPage() {
 							href={`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5050'}/static/docs/consent_to_processing_personal_data.rtf`}
 							target='_blank'
 							rel='noopener noreferrer'
-							className='text-indigo-400 hover:text-indigo-300 transition-colors'
+							className='text-[#58a6ff] hover:underline transition-colors'
 						>
 							согласием на обработку данных
 						</a>
@@ -237,11 +240,11 @@ export default function RegisterPage() {
 					</p>
 				</form>
 
-				<p className='mt-4 text-center text-sm text-gray-400'>
+				<p className='mt-4 text-center text-xs text-[#8b949e]'>
 					Уже есть аккаунт?{' '}
 					<Link
 						href='/login'
-						className='font-medium text-indigo-400 hover:text-indigo-300 transition-colors'
+						className='font-medium text-[#58a6ff] hover:underline transition-colors'
 					>
 						Войти
 					</Link>

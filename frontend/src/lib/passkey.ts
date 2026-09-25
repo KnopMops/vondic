@@ -34,6 +34,19 @@ export function base64UrlToBuffer(base64url: string): ArrayBuffer {
 	return bytes.buffer
 }
 
+function getAuthHeaders(): Record<string, string> {
+	const headers: Record<string, string> = {
+		'Content-Type': 'application/json',
+	}
+	if (typeof window !== 'undefined') {
+		const token = localStorage.getItem('access_token')
+		if (token) {
+			headers['Authorization'] = `Bearer ${token}`
+		}
+	}
+	return headers
+}
+
 export interface RegisterPasskeyParams {
 	email: string
 	username: string
@@ -49,7 +62,8 @@ export async function registerWithPasskey(params: RegisterPasskeyParams) {
 	// 1. Запрос опций регистрации с сервера
 	const optRes = await fetch('/api/auth/passkey/register-options', {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
+		credentials: 'include',
+		headers: getAuthHeaders(),
 		body: JSON.stringify({
 			email: params.email,
 			username: params.username,
@@ -95,7 +109,8 @@ export async function registerWithPasskey(params: RegisterPasskeyParams) {
 	// 4. Верификация на бэкенде
 	const verifyRes = await fetch('/api/auth/passkey/register-verify', {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
+		credentials: 'include',
+		headers: getAuthHeaders(),
 		body: JSON.stringify({
 			credential: credentialPayload,
 			password: params.password,
@@ -111,6 +126,7 @@ export async function registerWithPasskey(params: RegisterPasskeyParams) {
 	// Сохраняем аккаунт локально
 	if (data.user && data.access_token) {
 		localStorage.setItem('user', JSON.stringify(data.user))
+		localStorage.setItem('access_token', data.access_token)
 		saveAccount({
 			id: data.user.id,
 			email: data.user.email,
@@ -134,7 +150,8 @@ export async function loginWithPasskey() {
 	// 1. Запрос challenge для входа
 	const optRes = await fetch('/api/auth/passkey/login-options', {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
+		credentials: 'include',
+		headers: getAuthHeaders(),
 	})
 
 	const options = await optRes.json()
@@ -176,7 +193,8 @@ export async function loginWithPasskey() {
 	// 4. Верификация на бэкенде
 	const verifyRes = await fetch('/api/auth/passkey/login-verify', {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
+		credentials: 'include',
+		headers: getAuthHeaders(),
 		body: JSON.stringify({
 			credential: credentialPayload,
 		}),
@@ -190,6 +208,7 @@ export async function loginWithPasskey() {
 	// Сохраняем аккаунт
 	if (data.user && data.access_token) {
 		localStorage.setItem('user', JSON.stringify(data.user))
+		localStorage.setItem('access_token', data.access_token)
 		saveAccount({
 			id: data.user.id,
 			email: data.user.email,
@@ -208,7 +227,8 @@ export async function loginWithPasskey() {
 export async function createPasskeyMigration() {
 	const res = await fetch('/api/auth/passkey/migrate/create', {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
+		credentials: 'include',
+		headers: getAuthHeaders(),
 	})
 	const data = await res.json()
 	if (!res.ok) {
@@ -220,6 +240,10 @@ export async function createPasskeyMigration() {
 export async function checkPasskeyMigrationStatus(token: string) {
 	const res = await fetch(
 		`/api/auth/passkey/migrate/status?token=${encodeURIComponent(token)}`,
+		{
+			credentials: 'include',
+			headers: getAuthHeaders(),
+		},
 	)
 	const data = await res.json()
 	return data.status as 'pending' | 'completed' | 'expired'
@@ -233,6 +257,10 @@ export async function completePasskeyMigration(migrationToken: string) {
 	// 1. Получаем инфо и опции
 	const infoRes = await fetch(
 		`/api/auth/passkey/migrate/info?token=${encodeURIComponent(migrationToken)}`,
+		{
+			credentials: 'include',
+			headers: getAuthHeaders(),
+		},
 	)
 	const info = await infoRes.json()
 	if (!infoRes.ok) {
@@ -272,7 +300,8 @@ export async function completePasskeyMigration(migrationToken: string) {
 	// 3. Завершаем миграцию на бэкенде
 	const completeRes = await fetch('/api/auth/passkey/migrate/complete', {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
+		credentials: 'include',
+		headers: getAuthHeaders(),
 		body: JSON.stringify({
 			token: migrationToken,
 			credential: credentialPayload,
@@ -288,6 +317,7 @@ export async function completePasskeyMigration(migrationToken: string) {
 	// Сохраняем сессию на телефоне
 	if (data.user && data.access_token) {
 		localStorage.setItem('user', JSON.stringify(data.user))
+		localStorage.setItem('access_token', data.access_token)
 		saveAccount({
 			id: data.user.id,
 			email: data.user.email,

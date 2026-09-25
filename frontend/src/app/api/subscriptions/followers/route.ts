@@ -46,44 +46,15 @@ export async function POST(req: NextRequest) {
 				? followersData.followers
 				: []
 
-		// 2. Fetch all users to enrich data (since followers list might miss avatar/details)
-		const usersResponse = await fetch(`${backendUrl}/api/v1/users/`, {
-			method: 'GET',
-			headers: {
-				'Content-Type': 'application/json',
-				Authorization: `Bearer ${token}`,
-			},
+		const sanitized = followers.map((item: any) => {
+			if (item.privacy_settings?.show_email === true) {
+				return item
+			}
+			const { email: _e, ...rest } = item
+			return rest
 		})
 
-		let usersMap: Record<string, any> = {}
-		if (usersResponse.ok) {
-			const users = await usersResponse.json()
-			if (Array.isArray(users)) {
-				users.forEach((u: any) => {
-					usersMap[u.id] = u
-				})
-			}
-		}
-
-		// 3. Enrich followers list
-		const enrichedFollowers = followers.map((item: any) => {
-			// Assume item is a user object or has an id field
-			const userId = item.id
-			const userDetails = usersMap[userId]
-
-			if (userDetails) {
-				return {
-					...item,
-					...userDetails, // Overwrite with full user details
-					avatar_url: userDetails.avatar_url || item.avatar_url,
-					username: userDetails.username || item.username,
-					email: userDetails.email || item.email,
-				}
-			}
-			return item
-		})
-
-		return NextResponse.json(enrichedFollowers)
+		return NextResponse.json(sanitized)
 	} catch (error) {
 		console.error('Subscriptions followers proxy error:', error)
 		return NextResponse.json(
