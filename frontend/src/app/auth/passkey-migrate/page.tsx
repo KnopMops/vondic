@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { completePasskeyMigration, isPasskeySupported } from '@/lib/passkey'
-import { LuKey, LuCheck, LuAlertCircle, LuLoader } from 'react-icons/lu'
+import { LuKey, LuCheck, LuCircleAlert, LuLoader } from 'react-icons/lu'
 
-export default function PasskeyMigratePage() {
+function PasskeyMigrateContent() {
 	const searchParams = useSearchParams()
 	const router = useRouter()
 	const token = searchParams.get('token')
@@ -92,7 +92,7 @@ export default function PasskeyMigratePage() {
 				) : error ? (
 					<div className='space-y-4 py-4'>
 						<div className='mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10 text-red-400'>
-							<LuAlertCircle className='h-6 w-6' />
+							<LuCircleAlert className='h-6 w-6' />
 						</div>
 						<p className='text-sm text-red-400'>{error}</p>
 						<button
@@ -148,5 +148,19 @@ export default function PasskeyMigratePage() {
 				)}
 			</motion.div>
 		</div>
+	)
+}
+
+export default function PasskeyMigratePage() {
+	return (
+		<Suspense
+			fallback={
+				<div className='flex min-h-screen items-center justify-center bg-black text-white'>
+					<LuLoader className='h-8 w-8 animate-spin text-indigo-500' />
+				</div>
+			}
+		>
+			<PasskeyMigrateContent />
+		</Suspense>
 	)
 }

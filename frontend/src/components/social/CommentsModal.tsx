@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
 	LuCornerUpLeft as Reply,
 	LuHeart as Heart,
-	LuMoreVertical as MoreVertical,
+	LuEllipsisVertical as MoreVertical,
 	LuPencil as Pencil,
 	LuSend as Send,
 	LuTrash2 as Trash2,
