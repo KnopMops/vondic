@@ -122,11 +122,11 @@ class PostService:
 
     @staticmethod
     def search_posts(query_str, is_blog: bool | None = False):
-        search = f"%{query_str}%"
+        clean_id = (query_str or "").strip()
         return (
             Post.query.join(User, Post.posted_by == User.id)
             .filter(
-                Post.content.ilike(search),
+                Post.id == clean_id,
                 Post.deleted.is_(False),
                 User.is_blocked == 0,
                 Post.is_blog.is_(True) if is_blog else Post.is_blog.is_(False),

@@ -11,7 +11,7 @@ from app.models.user import User
 from app.models.user_session import UserSession
 from app.services.email_service import EmailService
 from email_validator import EmailNotValidError, validate_email
-from werkzeug.security import check_password_hash, generate_password_hash
+from app.core.crypto import hash_password, verify_password, needs_rehash
 
 
 class AuthService:
@@ -48,9 +48,9 @@ class AuthService:
             device_name=device_name,
             ip_address=ip_address,
             access_token_lookup=raw_access.split(".", 1)[0],
-            access_token_hash=generate_password_hash(raw_access),
+            access_token_hash=hash_password(raw_access),
             refresh_token_lookup=raw_refresh.split(".", 1)[0],
-            refresh_token_hash=generate_password_hash(raw_refresh),
+            refresh_token_hash=hash_password(raw_refresh),
             expires_at=expires_at,
         )
         db.session.add(session)
@@ -181,7 +181,7 @@ class AuthService:
                         except Exception:
                             pass
                         session = None
-                if session and session.access_token_hash and check_password_hash(session.access_token_hash, token):
+                if session and session.access_token_hash and verify_password(token, session.access_token_hash):
                     if session.is_expired():
                         db.session.delete(session)
                         db.session.commit()
@@ -207,7 +207,7 @@ class AuthService:
                     if (
                         cand
                         and cand.access_token
-                        and check_password_hash(cand.access_token, token)
+                        and verify_password(token, cand.access_token)
                     ):
                         user = cand
         if not user:
@@ -226,7 +226,7 @@ class AuthService:
                 legacy = None
             if legacy:
                 try:
-                    legacy.access_token = generate_password_hash(token)
+                    legacy.access_token = hash_password(token)
                     legacy.access_token_lookup = (
                         token.split(".", 1)[0] if "." in token else None
                     )
@@ -271,7 +271,7 @@ class AuthService:
             lookup, _, _sec = token.partition(".")
             if lookup and _sec and "." not in _sec:
                 session = UserSession.query.filter_by(refresh_token_lookup=lookup).first()
-                if session and session.refresh_token_hash and check_password_hash(session.refresh_token_hash, token):
+                if session and session.refresh_token_hash and verify_password(token, session.refresh_token_hash):
                     if session.is_expired():
                         db.session.delete(session)
                         db.session.commit()
@@ -283,7 +283,7 @@ class AuthService:
                     if (
                         cand
                         and cand.refresh_token
-                        and check_password_hash(cand.refresh_token, token)
+                        and verify_password(token, cand.refresh_token)
                     ):
                         user = cand
         if not user:

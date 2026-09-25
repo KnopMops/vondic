@@ -5,12 +5,13 @@ from sqlalchemy import Column, ForeignKey, BOOLEAN, INTEGER, JSON, TEXT, TIMESTA
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
+from app.core.crypto import EncryptedText
 
 
 class Post(Base):
     __tablename__ = "posts"
     id = Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
-    content = Column(TEXT, nullable=True)
+    content = Column(EncryptedText, nullable=True)
     attachments = Column(JSON, nullable=True)
     likes = Column(INTEGER, default=0)
     created_at = Column(TIMESTAMP, default=datetime.utcnow)

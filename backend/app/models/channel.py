@@ -5,6 +5,7 @@ from sqlalchemy import Table, Column, ForeignKey, TEXT, TIMESTAMP, CheckConstrai
 from sqlalchemy.orm import relationship, backref
 
 from app.core.database import Base
+from app.core.crypto import EncryptedText
 
 channel_participants = Table(
     "channel_participants",
@@ -19,8 +20,8 @@ class Channel(Base):
     __tablename__ = "channels"
 
     id = Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
-    name = Column(TEXT, nullable=False)
-    description = Column(TEXT, nullable=True)
+    name = Column(EncryptedText, nullable=False)
+    description = Column(EncryptedText, nullable=True)
     avatar_url = Column(TEXT, nullable=True)
     invite_code = Column(
         TEXT, unique=True, default=lambda: str(uuid.uuid4())[:8])

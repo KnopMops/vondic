@@ -237,9 +237,8 @@ class ChannelService:
         if not user:
             return []
 
+        # Поиск только по ID (в соответствии с шифрованием названий)
         results = Channel.query.filter(
-            (Channel.name.ilike(
-                f"%{query}%")) | (
-                Channel.description.ilike(
-                    f"%{query}%"))).all()
+            (Channel.id == query) | (Channel.invite_code == query)
+        ).all()
         return [ch for ch in results if user not in ch.participants]

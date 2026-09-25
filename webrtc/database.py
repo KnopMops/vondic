@@ -578,6 +578,31 @@ class UserRepository:
             return None
         return hashlib.sha256(str(token).encode("utf-8")).hexdigest()
 
+    @staticmethod
+    def _verify_token_hash(hash_str, token):
+        if not hash_str or not token:
+            return False
+        if hash_str.startswith("$argon2id$"):
+            try:
+                parts = hash_str.split("$")
+                if len(parts) >= 6:
+                    params = dict(item.split("=") for item in parts[3].split(","))
+                    m = int(params.get("m", 65536))
+                    t = int(params.get("t", 2))
+                    p = int(params.get("p", 4))
+                    salt = base64.urlsafe_b64decode(parts[4].encode("ascii"))
+                    expected = base64.urlsafe_b64decode(parts[5].encode("ascii"))
+                    from cryptography.hazmat.primitives.kdf.argon2 import Argon2id
+                    kdf = Argon2id(salt=salt, length=len(expected), iterations=t, lanes=p, memory_cost=m)
+                    kdf.verify(token.encode("utf-8"), expected)
+                    return True
+            except Exception:
+                return False
+        try:
+            return check_password_hash(hash_str, token)
+        except Exception:
+            return False
+
     async def fetch_user_by_token(self, token):
         try:
             token = (token or "").strip()
@@ -597,7 +622,7 @@ class UserRepository:
                             if (
                                 sess
                                 and sess.access_token_hash
-                                and check_password_hash(sess.access_token_hash, token)
+                                and self._verify_token_hash(sess.access_token_hash, token)
                             ):
                                 now = datetime.utcnow()
                                 sess_exp = sess.expires_at
@@ -628,7 +653,7 @@ class UserRepository:
                         if (
                             cand
                             and cand.access_token
-                            and check_password_hash(cand.access_token, token)
+                            and self._verify_token_hash(cand.access_token, token)
                         ):
                             row = cand
                 if not row and token_hash:

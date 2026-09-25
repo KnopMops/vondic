@@ -5,13 +5,14 @@ from sqlalchemy import Column, ForeignKey, Boolean, Integer, JSON, TEXT, TIMESTA
 from sqlalchemy.orm import relationship, backref
 
 from app.core.database import Base
+from app.core.crypto import EncryptedText
 
 
 class Message(Base):
     __tablename__ = "messages"
 
     id = Column(TEXT, primary_key=True, default=lambda: str(uuid.uuid4()))
-    content = Column(TEXT, nullable=False)
+    content = Column(EncryptedText, nullable=False)
     attachments = Column(JSON, nullable=True)
     type = Column(TEXT, default="text", nullable=False)
     sender_id = Column(TEXT, ForeignKey("users.id"), nullable=False)

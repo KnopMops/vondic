@@ -4,6 +4,7 @@ from datetime import datetime
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, Table, Text
 from sqlalchemy.orm import backref, relationship
 from app.core.database import Base
+from app.core.crypto import EncryptedText
 
 social_community_members = Table(
     "social_community_members",
@@ -21,8 +22,8 @@ class SocialCommunity(Base):
     __tablename__ = "social_communities"
 
     id = Column(Text, primary_key=True, default=lambda: str(uuid.uuid4()))
-    name = Column(Text, nullable=False)
-    description = Column(Text, nullable=True)
+    name = Column(EncryptedText, nullable=False)
+    description = Column(EncryptedText, nullable=True)
     avatar_url = Column(Text, nullable=True)
     cover_url = Column(Text, nullable=True)
     invite_code = Column(Text, unique=True, default=lambda: str(uuid.uuid4())[:8])

@@ -1,4 +1,4 @@
-from werkzeug.security import check_password_hash, generate_password_hash
+from app.core.crypto import hash_password, verify_password, needs_rehash
 from sqlalchemy.exc import IntegrityError
 import json
 import os
@@ -159,7 +159,7 @@ class UserService:
         if user.api_key and not rotate:
             return user.api_key, None
         token = secrets.token_urlsafe(32)
-        user.api_key_hash = generate_password_hash(token)
+        user.api_key_hash = hash_password(token)
         user.api_key = token
         user.is_developer = 1
         try:
@@ -182,8 +182,8 @@ class UserService:
             return None
         users = User.query.filter(User.api_key_hash.isnot(None)).all()
         for user in users:
-            if user.api_key_hash and check_password_hash(
-                    user.api_key_hash, api_key):
+            if user.api_key_hash and verify_password(
+                    api_key, user.api_key_hash):
                 return user
         return None
 
@@ -194,7 +194,7 @@ class UserService:
         now = datetime.utcnow()
         month_key = now.year * 100 + now.month
         if not user.cloud_password_hash:
-            user.cloud_password_hash = generate_password_hash(new_password)
+            user.cloud_password_hash = hash_password(new_password)
             if user.cloud_password_reset_month is None:
                 user.cloud_password_reset_month = month_key
                 user.cloud_password_reset_count = 0
@@ -206,7 +206,7 @@ class UserService:
             user.cloud_password_reset_count = 0
         if user.cloud_password_reset_count >= 3:
             return "Cloud password reset limit reached"
-        user.cloud_password_hash = generate_password_hash(new_password)
+        user.cloud_password_hash = hash_password(new_password)
         user.cloud_password_reset_count += 1
         return None
 

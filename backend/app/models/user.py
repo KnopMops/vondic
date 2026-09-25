@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import Column, TEXT, INTEGER, JSON, TIMESTAMP, BigInteger, Float
-from werkzeug.security import check_password_hash, generate_password_hash
+from app.core.crypto import hash_password, verify_password, needs_rehash
 
 from app.core.database import Base
 
@@ -84,10 +84,19 @@ class User(Base):
         return base + (self.storage_bonus or 0)
 
     def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
+        self.password_hash = hash_password(password)
 
     def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
+        valid = verify_password(password, self.password_hash)
+        if valid and needs_rehash(self.password_hash):
+            try:
+                self.password_hash = hash_password(password)
+                from app.core.database import SyncScopedSession
+                SyncScopedSession.add(self)
+                SyncScopedSession.commit()
+            except Exception:
+                pass
+        return valid
 
     def check_and_clean_expired_premium(self):
         """Reset premium to 0 and clear start/expire dates if subscription expired."""

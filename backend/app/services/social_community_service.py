@@ -135,10 +135,10 @@ class SocialCommunityService:
                 SocialCommunity.is_public.is_(True)
             ).all()
         else:
-            q = f"%{str(query).strip()}%"
+            # Поиск только по ID (в соответствии с шифрованием названий)
+            clean_q = str(query).strip()
             results = SocialCommunity.query.filter(
                 SocialCommunity.is_public.is_(True),
-                (SocialCommunity.name.ilike(q))
-                | (SocialCommunity.description.ilike(q)),
+                (SocialCommunity.id == clean_q) | (SocialCommunity.invite_code == clean_q),
             ).all()
         return [c for c in results if user not in c.members]

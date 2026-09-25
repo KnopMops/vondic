@@ -4,6 +4,7 @@ from datetime import datetime
 from sqlalchemy import Column, DateTime, ForeignKey, String, Table, Text, Boolean
 from sqlalchemy.orm import backref, relationship
 from app.core.database import Base
+from app.core.crypto import EncryptedText
 
 group_participants = Table(
     "group_participants",
@@ -18,8 +19,8 @@ class Group(Base):
     __tablename__ = "groups"
 
     id = Column(Text, primary_key=True, default=lambda: str(uuid.uuid4()))
-    name = Column(Text, nullable=False)
-    description = Column(Text, nullable=True)
+    name = Column(EncryptedText, nullable=False)
+    description = Column(EncryptedText, nullable=True)
     avatar_url = Column(Text, nullable=True)
     invite_code = Column(Text, unique=True, default=lambda: str(uuid.uuid4())[:8])
     owner_id = Column(Text, ForeignKey("users.id"), nullable=False)

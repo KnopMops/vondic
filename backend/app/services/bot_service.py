@@ -4,7 +4,7 @@ from app.core.extensions import db
 from app.models.bot import Bot
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
-from werkzeug.security import check_password_hash, generate_password_hash
+from app.core.crypto import hash_password, verify_password
 
 
 class BotService:
@@ -109,7 +109,7 @@ class BotService:
         if not bot:
             return None, "Bot not found"
         token = secrets.token_urlsafe(32)
-        bot.bot_token_hash = generate_password_hash(token)
+        bot.bot_token_hash = hash_password(token)
         try:
             db.session.commit()
             return token, None
@@ -125,7 +125,7 @@ class BotService:
             bot = Bot.query.get(bot_id)
             if not bot or not bot.bot_token_hash:
                 return False
-            return check_password_hash(bot.bot_token_hash, token)
+            return verify_password(token, bot.bot_token_hash)
         except Exception:
             try:
                 db.session.rollback()
@@ -133,7 +133,7 @@ class BotService:
                 bot = Bot.query.get(bot_id)
                 if not bot or not bot.bot_token_hash:
                     return False
-                return check_password_hash(bot.bot_token_hash, token)
+                return verify_password(token, bot.bot_token_hash)
             except Exception:
                 db.session.rollback()
                 return False

@@ -2,6 +2,7 @@ from datetime import datetime
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 from app.core.database import Base
+from app.core.crypto import EncryptedText
 
 
 class SupportChatMessage(Base):
@@ -10,6 +11,6 @@ class SupportChatMessage(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     escalation_id = Column(Integer, ForeignKey("escalations.id"), nullable=False)
     sender = Column(Text, nullable=False)
-    content = Column(Text, nullable=False)
+    content = Column(EncryptedText, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     read = Column(Boolean, default=False)

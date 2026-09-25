@@ -4,13 +4,14 @@ from datetime import datetime
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import backref, relationship
 from app.core.database import Base
+from app.core.crypto import EncryptedText
 
 
 class Playlist(Base):
     __tablename__ = "playlists"
     id = Column(Text, primary_key=True, default=lambda: str(uuid.uuid4()))
-    name = Column(Text, nullable=False)
-    description = Column(Text, nullable=True)
+    name = Column(EncryptedText, nullable=False)
+    description = Column(EncryptedText, nullable=True)
     cover_image = Column(Text, nullable=True)
     owner_id = Column(Text, ForeignKey("users.id"), nullable=False)
     is_public = Column(Boolean, default=True)

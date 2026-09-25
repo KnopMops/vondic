@@ -3,6 +3,7 @@ from datetime import datetime
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 from app.core.database import Base
+from app.core.crypto import EncryptedText
 
 
 class Video(Base):
@@ -10,8 +11,8 @@ class Video(Base):
 
     id = Column(Text, primary_key=True, default=lambda: str(uuid.uuid4()))
     author_id = Column(Text, ForeignKey("users.id"), nullable=False)
-    title = Column(Text, nullable=False)
-    description = Column(Text, nullable=True)
+    title = Column(EncryptedText, nullable=False)
+    description = Column(EncryptedText, nullable=True)
     url = Column(Text, nullable=False)
     poster = Column(Text, nullable=True)
     duration = Column(Integer, nullable=True)

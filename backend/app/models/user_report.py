@@ -2,6 +2,7 @@ from datetime import datetime
 
 from sqlalchemy import Column, DateTime, Integer, String, Text
 from app.core.database import Base
+from app.core.crypto import EncryptedText
 
 
 class UserReport(Base):
@@ -12,7 +13,7 @@ class UserReport(Base):
     reporter_login = Column(Text, nullable=True)
     target_user_id = Column(Text, nullable=False)
     target_user_login = Column(Text, nullable=True)
-    description = Column(Text, nullable=True)
+    description = Column(EncryptedText, nullable=True)
     attachments = Column(Text, nullable=True)
     status = Column(Text, default="pending")
     created_at = Column(DateTime, default=datetime.utcnow)

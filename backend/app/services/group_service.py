@@ -189,9 +189,8 @@ class GroupService:
         user = User.query.get(user_id)
         if not user:
             return []
+        # Поиск только по ID (в соответствии с шифрованием названий)
         results = Group.query.filter(
-            (Group.name.ilike(
-                f"%{query}%")) | (
-                Group.description.ilike(
-                    f"%{query}%"))).all()
+            (Group.id == query) | (Group.invite_code == query)
+        ).all()
         return [g for g in results if user not in g.participants]

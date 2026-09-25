@@ -4,12 +4,13 @@ from datetime import datetime
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import backref, relationship
 from app.core.database import Base
+from app.core.crypto import EncryptedText
 
 
 class Comment(Base):
     __tablename__ = "comments"
     id = Column(Text, primary_key=True, default=lambda: str(uuid.uuid4()))
-    content = Column(Text, nullable=False)
+    content = Column(EncryptedText, nullable=False)
     posted_by = Column(Text, ForeignKey("users.id"), nullable=False)
     post_id = Column(Text, ForeignKey("posts.id"), nullable=False)
     parent_id = Column(Text, ForeignKey("comments.id"), nullable=True)
