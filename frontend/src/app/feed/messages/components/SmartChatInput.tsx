@@ -283,9 +283,9 @@ export default function SmartChatInput({
       {showPopup && (
         <div
           ref={popupRef}
-          className="absolute bottom-full left-0 mb-2 w-full max-w-xs bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto custom-scrollbar"
+          className="absolute bottom-full left-0 mb-2 w-full max-w-xs bg-[#161b22] border border-[#30363d] rounded-2xl shadow-2xl z-50 max-h-60 overflow-y-auto custom-scrollbar p-1"
         >
-          <div className="px-3 py-2 text-xs text-gray-500 border-b border-gray-800">
+          <div className="px-3 py-2 text-xs font-semibold text-[#8b949e] border-b border-[#30363d]">
             {suggestionType === 'mention'
               ? 'Упомянуть пользователя'
               : 'Медиа в чате'}
@@ -295,18 +295,18 @@ export default function SmartChatInput({
               <button
                 key={u.id}
                 onClick={() => insertSuggestion(u)}
-                className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
-                  idx === selectedIndex ? 'bg-gray-800' : 'hover:bg-gray-800/50'
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-colors ${
+                  idx === selectedIndex ? 'bg-[#21262d]' : 'hover:bg-[#21262d]/50'
                 }`}
               >
                 <img
                   src={getAvatarUrl(u.avatar_url)}
                   alt={u.username}
-                  className="w-8 h-8 rounded-full object-cover bg-gray-800"
+                  className="w-8 h-8 rounded-full object-cover bg-[#0e1117] ring-1 ring-[#30363d]"
                 />
                 <div>
                   <div className="text-sm text-white font-medium">{u.username}</div>
-                  <div className="text-xs text-gray-500">{u.id.slice(0, 8)}...</div>
+                  <div className="text-xs text-[#8b949e]">{u.id.slice(0, 8)}...</div>
                 </div>
               </button>
             ))}
@@ -327,16 +327,16 @@ export default function SmartChatInput({
                 <button
                   key={m.id}
                   onClick={() => insertSuggestion(m)}
-                  className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
-                    idx === selectedIndex ? 'bg-gray-800' : 'hover:bg-gray-800/50'
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-colors ${
+                    idx === selectedIndex ? 'bg-[#21262d]' : 'hover:bg-[#21262d]/50'
                   }`}
                 >
-                  <div className="w-8 h-8 rounded-lg bg-gray-800 flex items-center justify-center text-sm shrink-0">
+                  <div className="w-8 h-8 rounded-lg bg-[#21262d] flex items-center justify-center text-sm shrink-0 border border-[#30363d]">
                     {label.split(' ')[0]}
                   </div>
                   <div className="min-w-0">
-                    <div className="text-sm text-white truncate">{label}</div>
-                    <div className="text-xs text-gray-500 truncate">{preview}</div>
+                    <div className="text-sm text-white font-medium truncate">{label}</div>
+                    <div className="text-xs text-[#8b949e] truncate">{preview}</div>
                   </div>
                 </button>
               )

@@ -676,22 +676,22 @@ const STICKERS = Array.from({ length: 13 }, (_, index) => ({
 const BACKGROUNDS = [
 	{
 		id: 'default',
-		name: 'Стандартный',
-		class: 'bg-[#1a2232]',
-		preview: 'bg-[#1a2232]',
-		accentColor: 'text-[#2dd4a8]',
-		buttonBg: 'bg-[#2dd4a8]',
-		buttonHover: 'hover:bg-[#25c49d]',
+		name: 'Vondic Obsidian',
+		class: 'bg-[#0e1117]',
+		preview: 'bg-[#161b22]',
+		accentColor: 'text-[#0077FF]',
+		buttonBg: 'bg-[#0077FF]',
+		buttonHover: 'hover:bg-[#0066dd]',
 		ownMessageBg: 'chat-bubble-own',
-		borderColor: 'border-[#2dd4a8]/20',
-		ringColor: 'focus:ring-[#2dd4a8]/50',
-		gradientText: 'from-[#2dd4a8] to-[#22b893]',
+		borderColor: 'border-[#30363d]',
+		ringColor: 'focus:ring-[#0077FF]/50',
+		gradientText: 'from-[#0077FF] to-[#0066dd]',
 	},
 	{
 		id: 'blue',
 		name: 'Синий',
-		class: 'bg-gradient-to-br from-blue-900 via-[#1a2232] to-[#1a2232]',
-		preview: 'bg-gradient-to-tr from-blue-600 to-[#1a2232]',
+		class: 'bg-gradient-to-br from-blue-950/60 via-[#0e1117] to-[#0e1117]',
+		preview: 'bg-gradient-to-tr from-blue-600 to-[#161b22]',
 		accentColor: 'text-blue-400',
 		buttonBg: 'bg-blue-600',
 		buttonHover: 'hover:bg-blue-700',
@@ -703,8 +703,8 @@ const BACKGROUNDS = [
 	{
 		id: 'purple',
 		name: 'Фиолетовый',
-		class: 'bg-gradient-to-br from-purple-900 via-[#1a2232] to-[#1a2232]',
-		preview: 'bg-gradient-to-tr from-purple-600 to-[#1a2232]',
+		class: 'bg-gradient-to-br from-purple-950/60 via-[#0e1117] to-[#0e1117]',
+		preview: 'bg-gradient-to-tr from-purple-600 to-[#161b22]',
 		accentColor: 'text-purple-400',
 		buttonBg: 'bg-purple-600',
 		buttonHover: 'hover:bg-purple-700',
@@ -716,21 +716,21 @@ const BACKGROUNDS = [
 	{
 		id: 'emerald',
 		name: 'Изумрудный',
-		class: 'bg-gradient-to-br from-emerald-900 via-[#1a2232] to-[#1a2232]',
-		preview: 'bg-gradient-to-tr from-emerald-600 to-[#1a2232]',
-		accentColor: 'text-[#2dd4a8]',
-		buttonBg: 'bg-[#2dd4a8]',
-		buttonHover: 'hover:bg-[#25c49d]',
+		class: 'bg-gradient-to-br from-emerald-950/60 via-[#0e1117] to-[#0e1117]',
+		preview: 'bg-gradient-to-tr from-emerald-600 to-[#161b22]',
+		accentColor: 'text-emerald-400',
+		buttonBg: 'bg-emerald-600',
+		buttonHover: 'hover:bg-emerald-700',
 		ownMessageBg: 'chat-bubble-own-emerald',
-		borderColor: 'border-[#2dd4a8]/20',
-		ringColor: 'focus:ring-[#2dd4a8]/50',
-		gradientText: 'from-[#2dd4a8] to-teal-500',
+		borderColor: 'border-emerald-500/20',
+		ringColor: 'focus:ring-emerald-500/50',
+		gradientText: 'from-emerald-400 to-teal-500',
 	},
 	{
 		id: 'rose',
 		name: 'Розовый',
-		class: 'bg-gradient-to-br from-rose-900 via-[#1a2232] to-[#1a2232]',
-		preview: 'bg-gradient-to-tr from-rose-600 to-[#1a2232]',
+		class: 'bg-gradient-to-br from-rose-950/60 via-[#0e1117] to-[#0e1117]',
+		preview: 'bg-gradient-to-tr from-rose-600 to-[#161b22]',
 		accentColor: 'text-rose-400',
 		buttonBg: 'bg-rose-600',
 		buttonHover: 'hover:bg-rose-700',
@@ -5867,107 +5867,109 @@ export default function MessengerPage() {
 	return (
 		<div className='flex h-[100dvh] w-full overflow-hidden bg-[color:var(--app-bg)] text-[color:var(--app-fg)] font-sans'>
 			<div
-				className={`w-full md:w-80 border-r border-white/10 bg-[#151326] flex-shrink-0 z-30 shadow-2xl flex-col backdrop-blur-2xl ${
+				className={`w-full md:w-[320px] lg:w-[360px] border-r border-[#30363d] bg-[#161b22] flex-shrink-0 z-30 shadow-2xl flex-col ${
 					hasActiveChat ? 'hidden md:flex' : 'flex'
 				}`}
 			>
-				<div className='p-4 border-b border-white/6 bg-black/20 backdrop-blur-sm'>
-					<div className='flex justify-between items-center mb-4'>
-						<div className='flex items-center gap-3'>
+				<div className='p-3.5 border-b border-[#30363d] bg-[#161b22]'>
+					<div className='flex justify-between items-center mb-3'>
+						<div className='flex items-center gap-2.5'>
 							<Link
 								href='/feed'
-								className='p-2 -ml-2 text-[var(--app-muted)] hover:text-[var(--app-fg)] hover:bg-white/5 rounded-full transition-colors'
+								className='p-1.5 -ml-1 text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#21262d] rounded-lg transition-colors'
+								title='В ленту'
 							>
 								<ArrowLeftIcon className='w-5 h-5' />
 							</Link>
-							<h2 className='text-xl font-bold tracking-tight text-[var(--app-fg)] flex items-center gap-2'>
-								<span className='bg-gradient-to-r from-[#2dd4a8] to-[#22b893] bg-clip-text text-transparent transition-all duration-500'>
+							<div className='flex items-center gap-2'>
+								<h2 className='text-lg font-bold tracking-tight text-white flex items-center gap-1.5'>
 									Вондик
+								</h2>
+								<span className='text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#0077FF]/15 text-[#0077FF] border border-[#0077FF]/30'>
+									Чаты
 								</span>
-							</h2>
+							</div>
 						</div>
 						<button
 							type='button'
 							onClick={() => setIsDataStorageOpen(true)}
-							className='p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 border border-white/5 hover:border-indigo-500/40 transition-all flex items-center gap-1.5 text-xs'
-							title='Данные и память (Трафик как в Telegram, кэш)'
+							className='p-2 rounded-xl text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#21262d] border border-[#30363d]/60 hover:border-[#0077FF]/50 transition-all flex items-center gap-1.5 text-xs'
+							title='Данные и память'
 						>
-							<SlidersIcon className='w-4 h-4 text-indigo-400' />
+							<SlidersIcon className='w-4 h-4 text-[#0077FF]' />
 						</button>
 					</div>
 
-					<div className='flex p-1 bg-black/20 rounded-lg border border-white/6 relative'>
-						<div
-							className={`absolute top-1 bottom-1 w-[calc(33.33%-3px)] bg-white/8 rounded-md transition-all duration-300 ease-out ${
-								activeTab === 'direct' ? 'left-1' : activeTab === 'community' ? 'left-[calc(33.33%+2px)]' : 'left-[calc(66.66%+3px)]'
-							}`}
-						/>
+					<div className='flex p-1 bg-[#0e1117] rounded-xl border border-[#30363d] relative'>
 						<button
 							onClick={() => setActiveTab('direct')}
-							className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md relative z-10 transition-colors ${
+							className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold rounded-lg transition-all ${
 								activeTab === 'direct'
-									? 'text-[var(--app-fg)]'
-									: 'text-[var(--app-muted)] hover:text-[var(--app-fg)]'
+									? 'bg-[#21262d] text-white shadow-sm border border-[#30363d]'
+									: 'text-[#8b949e] hover:text-[#e6edf3]'
 							}`}
 						>
-							<MessageSquareIcon className='w-4 h-4' />
+							<MessageSquareIcon className='w-3.5 h-3.5' />
 							Директ
 						</button>
 						<button
 							onClick={() => setActiveTab('community')}
-							className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md relative z-10 transition-colors ${
+							className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold rounded-lg transition-all ${
 								activeTab === 'community'
-									? 'text-[var(--app-fg)]'
-									: 'text-[var(--app-muted)] hover:text-[var(--app-fg)]'
+									? 'bg-[#21262d] text-white shadow-sm border border-[#30363d]'
+									: 'text-[#8b949e] hover:text-[#e6edf3]'
 							}`}
-							title='Каналы (Telegram) и серверы (Discord)'
+							title='Каналы и серверы'
 						>
-							<HashIcon className='w-4 h-4' />
+							<HashIcon className='w-3.5 h-3.5' />
 							Каналы
 						</button>
 						<button
 							onClick={() => setActiveTab('support')}
-							className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md relative z-10 transition-colors ${
+							className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold rounded-lg transition-all ${
 								activeTab === 'support'
-									? 'text-[var(--app-fg)]'
-									: 'text-[var(--app-muted)] hover:text-[var(--app-fg)]'
+									? 'bg-[#21262d] text-white shadow-sm border border-[#30363d]'
+									: 'text-[#8b949e] hover:text-[#e6edf3]'
 							}`}
 						>
-							<LifeBuoyIcon className='w-4 h-4' />
+							<LifeBuoyIcon className='w-3.5 h-3.5' />
 							Поддержка
 						</button>
 					</div>
 				</div>
 
 				{activeTab === 'direct' && (
-					<div className='px-4 py-3'>
+					<div className='px-3 pt-3 pb-2 border-b border-[#30363d]/60'>
 						<div className='relative'>
-							<SearchIcon className='absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--app-muted)]' />
+							<SearchIcon className='absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8b949e]' />
 							<input
 								type='text'
 								placeholder='Поиск чатов...'
 								value={searchQuery}
 								onChange={e => setSearchQuery(e.target.value)}
-								className={`w-full bg-white/5 rounded-xl py-2 pl-10 pr-4 text-sm text-[var(--app-fg)] placeholder-[var(--app-muted)] focus:outline-none focus:ring-2 transition-all duration-300 ${currentBackground.ringColor}`}
+								className='w-full bg-[#0e1117] border border-[#30363d] rounded-xl py-2 pl-9 pr-8 text-sm text-[#e6edf3] placeholder-[#8b949e] focus:outline-none focus:border-[#0077FF] focus:ring-1 focus:ring-[#0077FF]/40 transition-all'
 							/>
 							{isSearchingUsers && (
-								<div
-									className={`absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-t-transparent rounded-full animate-spin ${currentBackground.borderColor.replace(
-										'/20',
-										'',
-									)}`}
-								/>
+								<div className='absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-[#0077FF] border-t-transparent rounded-full animate-spin' />
+							)}
+							{searchQuery && !isSearchingUsers && (
+								<button
+									onClick={() => setSearchQuery('')}
+									className='absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8b949e] hover:text-[#e6edf3]'
+								>
+									<XIcon className='w-3.5 h-3.5' />
+								</button>
 							)}
 						</div>
 						{!normalizedSearch && (
-							<div className='flex items-center gap-1.5 mt-3 overflow-x-auto custom-scrollbar pb-0.5'>
+							<div className='flex items-center gap-1.5 mt-2.5 overflow-x-auto custom-scrollbar pb-1'>
 								<button
 									type='button'
 									onClick={() => setActiveFolderId('all')}
-									className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+									className={`shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-all ${
 										activeFolderId === 'all'
-											? 'bg-[var(--app-accent)]/15 text-[var(--app-accent)]'
-											: 'bg-white/5 text-[var(--app-muted)] hover:text-[var(--app-fg)]'
+											? 'bg-[#0077FF] text-white shadow-sm shadow-[#0077FF]/25'
+											: 'bg-[#0e1117] text-[#8b949e] border border-[#30363d] hover:text-[#e6edf3] hover:border-[#8b949e]/50'
 									}`}
 								>
 									Все
@@ -5977,10 +5979,10 @@ export default function MessengerPage() {
 										key={folder.id}
 										type='button'
 										onClick={() => setActiveFolderId(folder.id)}
-										className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+										className={`shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-all ${
 											activeFolderId === folder.id
-												? 'bg-[var(--app-accent)]/15 text-[var(--app-accent)]'
-												: 'bg-white/5 text-[var(--app-muted)] hover:text-[var(--app-fg)]'
+												? 'bg-[#0077FF] text-white shadow-sm shadow-[#0077FF]/25'
+												: 'bg-[#0e1117] text-[#8b949e] border border-[#30363d] hover:text-[#e6edf3] hover:border-[#8b949e]/50'
 										}`}
 									>
 										{folder.icon ? `${folder.icon} ` : ''}
@@ -5990,10 +5992,10 @@ export default function MessengerPage() {
 								<button
 									type='button'
 									onClick={() => setIsFoldersManageOpen(true)}
-									className='shrink-0 p-1.5 rounded-lg bg-white/5 text-[var(--app-muted)] hover:text-[var(--app-fg)] transition-colors'
+									className='shrink-0 p-1 rounded-full bg-[#0e1117] border border-[#30363d] text-[#8b949e] hover:text-[#e6edf3] transition-colors'
 									title='Управление папками'
 								>
-									<Folder className='w-4 h-4' />
+									<Folder className='w-3.5 h-3.5' />
 								</button>
 							</div>
 						)}
@@ -6014,43 +6016,31 @@ export default function MessengerPage() {
 										setChatSearchQuery('')
 										setFoundMessages([])
 									}}
-									className={`group p-3 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-200 border border-transparent ${
+									className={`group px-3 py-2.5 mx-1.5 my-0.5 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-150 border-l-[3px] select-none ${
 										selectedFriend?.id === botFriend.id
-											? `bg-white/8 ${currentBackground.borderColor} shadow-sm`
-											: 'hover:bg-white/5 border-transparent'
+											? 'bg-[#21262d] text-white shadow-sm border-[#0077FF]'
+											: 'hover:bg-[#21262d]/50 text-[#e6edf3] border-transparent'
 									}`}
 								>
-									<div className='relative'>
+									<div className='relative shrink-0'>
 										<img
 											src={getAvatarUrl(botFriend.avatar_url)}
 											alt={botFriend.username}
-											className={`w-12 h-12 rounded-full object-cover bg-white/5 ring-2 transition-all duration-300 ${
-												selectedFriend?.id === botFriend.id
-													? currentBackground.accentColor.replace(
-															'text-',
-															'ring-',
-														)
-													: 'ring-[var(--app-bg)]'
-											}`}
+											className='w-12 h-12 rounded-full object-cover bg-[#0e1117] ring-1 ring-[#30363d]'
 										/>
-										<div className='absolute bottom-0 right-0 w-3.5 h-3.5 bg-[var(--app-bg)] rounded-full flex items-center justify-center'>
-											<div className='w-2.5 h-2.5 rounded-full bg-[var(--app-accent)]' />
+										<div className='absolute bottom-0 right-0 w-3.5 h-3.5 bg-[#161b22] rounded-full flex items-center justify-center ring-1 ring-[#161b22]'>
+											<div className='w-2.5 h-2.5 rounded-full bg-[#23a55a]' />
 										</div>
 									</div>
-									<div className='flex flex-col flex-1 min-w-0'>
-										<div className='flex justify-between items-baseline'>
-											<span
-												className={`font-semibold truncate transition-colors duration-300 ${
-													selectedFriend?.id === botFriend.id
-														? currentBackground.accentColor
-														: 'text-[var(--app-fg)] group-hover:text-[var(--app-fg)]'
-												}`}
-											>
+									<div className='flex flex-col flex-1 min-w-0 justify-center'>
+										<div className='flex justify-between items-baseline mb-0.5'>
+											<span className='font-semibold text-sm truncate text-white flex items-center gap-1.5'>
 												{botFriend.username}
+												<span className='text-[10px] font-bold px-1.5 py-0.2 rounded bg-[#0077FF]/15 text-[#0077FF] border border-[#0077FF]/30'>BOT</span>
 											</span>
-											<span className='text-[10px] text-[var(--app-muted)]'>BOT</span>
+											<span className='text-[10px] text-[#8b949e]'>Всегда</span>
 										</div>
-										<span className='text-xs text-[var(--app-muted)] truncate group-hover:text-[var(--app-muted)] transition-colors'>
+										<span className='text-xs text-[#8b949e] truncate leading-tight'>
 											Всегда онлайн
 										</span>
 									</div>
@@ -6060,8 +6050,8 @@ export default function MessengerPage() {
 							{folderFilteredSidebarList.length === 0 &&
 								(!aiFriend || searchQuery) &&
 								!showBotInHistory && (
-									<div className='p-8 text-center text-[var(--app-muted)] flex flex-col items-center gap-3'>
-										<div className='w-12 h-12 bg-white/5 rounded-full flex items-center justify-center text-[var(--app-muted)]'>
+									<div className='p-8 text-center text-[#8b949e] flex flex-col items-center gap-3'>
+										<div className='w-12 h-12 bg-[#0e1117] border border-[#30363d] rounded-full flex items-center justify-center text-[#8b949e]'>
 											<SearchIcon className='w-6 h-6' />
 										</div>
 										<span className='text-sm'>
@@ -6083,68 +6073,62 @@ export default function MessengerPage() {
 										setChatSearchQuery('')
 										setFoundMessages([])
 									}}
-									className={`group p-3 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-200 border border-transparent hover:bg-white/5 ${
+									className={`group px-3 py-2.5 mx-1.5 my-0.5 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-150 border-l-[3px] select-none ${
 										selectedFriend?.id === friend.id
-											? `bg-white/8 ${currentBackground.borderColor} shadow-sm`
-											: 'bg-transparent'
+											? 'bg-[#21262d] text-white shadow-sm border-[#0077FF]'
+											: 'hover:bg-[#21262d]/50 text-[#e6edf3] border-transparent'
 									}`}
 								>
-									<div className='relative'>
+									<div className='relative shrink-0'>
 										<img
 											src={getAvatarUrl(friend.avatar_url)}
-											className={`w-12 h-12 rounded-full object-cover bg-white/5 ring-2 transition-all duration-300 ${
-												selectedFriend?.id === friend.id
-													? currentBackground.accentColor.replace(
-															'text-',
-															'ring-',
-														)
-													: 'ring-[var(--app-bg)]'
-											}`}
+											className='w-12 h-12 rounded-full object-cover bg-[#0e1117] ring-1 ring-[#30363d]'
 											alt={friend.username}
 										/>
 
 										{!friend.is_bot && (
-											<div className='absolute bottom-0 right-0 w-3.5 h-3.5 bg-[var(--app-bg)] rounded-full flex items-center justify-center'>
+											<div className='absolute bottom-0 right-0 w-3.5 h-3.5 bg-[#161b22] rounded-full flex items-center justify-center ring-1 ring-[#161b22]'>
 												<div
 													className={`w-2.5 h-2.5 rounded-full ${
 														friend.status?.toLowerCase() === 'online'
-															? 'bg-[var(--app-accent)]'
-															: 'bg-[var(--app-muted)]'
+															? 'bg-[#23a55a]'
+															: 'bg-[#8b949e]'
 													}`}
 												/>
 											</div>
 										)}
 									</div>
-									<div className='flex flex-col flex-1 min-w-0'>
-										<div className='flex justify-between items-baseline'>
-											<span
-												className={`font-semibold truncate transition-colors duration-300 flex items-center gap-1 ${
-													selectedFriend?.id === friend.id
-														? currentBackground.accentColor
-														: 'text-[var(--app-fg)] group-hover:text-[var(--app-fg)]'
-												}`}
-											>
+									<div className='flex flex-col flex-1 min-w-0 justify-center'>
+										<div className='flex justify-between items-baseline mb-0.5'>
+											<span className='font-semibold text-sm truncate flex items-center gap-1 text-white'>
 												{pinnedChatIds.includes(friend.id) && (
-													<span className='text-amber-400 text-[10px]'>📌</span>
+													<span className='text-amber-400 text-xs shrink-0' title='Закреплено'>📌</span>
 												)}
-												{friend.username}
+												<span className='truncate'>{friend.username}</span>
 												{friend.is_bot && (
-													<span className='text-[9px] px-1 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 ml-1'>BOT</span>
+													<span className='text-[9px] px-1.5 py-0.2 rounded bg-[#0077FF]/20 text-[#0077FF] border border-[#0077FF]/30 ml-1'>BOT</span>
 												)}
 												{friend.premium && (
-													<span className='text-amber-400'>★</span>
+													<span className='text-amber-400 text-xs shrink-0'>★</span>
 												)}
 											</span>
-											<span className='text-[10px] text-[var(--app-muted)]'>
+											<span className='text-[10px] text-[#8b949e] shrink-0 ml-1.5'>
 												{getSidebarPreviewTime(friend)}
 											</span>
 										</div>
-										<span className='text-xs text-[var(--app-muted)] truncate group-hover:text-[var(--app-muted)] transition-colors'>
-											{getSidebarPreview(friend)}
-										</span>
+										<div className='flex justify-between items-center gap-2'>
+											<span className='text-xs text-[#8b949e] truncate leading-tight'>
+												{getSidebarPreview(friend)}
+											</span>
+											{friend.unread_count && friend.unread_count > 0 ? (
+												<span className='shrink-0 px-2 py-0.5 rounded-full bg-[#0077FF] text-white text-[11px] font-bold min-w-[20px] text-center shadow-sm shadow-[#0077FF]/30'>
+													{friend.unread_count}
+												</span>
+											) : null}
+										</div>
 									</div>
 
-									<div className='opacity-0 group-hover:opacity-100 transition-opacity'>
+									<div className='opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-1'>
 										<ChatMenu
 											chatId={friend.id}
 											chatType='user'
@@ -6236,39 +6220,39 @@ export default function MessengerPage() {
 							))}
 
 							{!searchQuery && (
-								<div className='mt-4 px-2'>
+								<div className='mt-4 px-1'>
 									<button
 										type='button'
 										onClick={() => setShowArchivedChats(v => !v)}
-										className='w-full mb-3 px-3 py-2.5 rounded-xl bg-gray-900 hover:bg-gray-800 text-gray-200 flex items-center justify-between transition-colors'
+										className='w-full mb-3 px-3.5 py-2.5 rounded-xl bg-[#0e1117] border border-[#30363d] hover:bg-[#21262d] text-[#e6edf3] flex items-center justify-between transition-colors select-none'
 										title='Показать/скрыть архив'
 									>
 										<span className='text-sm font-medium'>
-											{showArchivedChats ? 'Все чаты' : 'Архив'}
+											{showArchivedChats ? 'Все чаты' : 'Архив чатов'}
 										</span>
-										<span className='text-xs text-gray-400'>
+										<span className='text-xs font-semibold px-2 py-0.5 rounded-full bg-[#21262d] text-[#8b949e] border border-[#30363d]'>
 											{archivedChatIds.length}
 										</span>
 									</button>
-									<div className='flex items-center justify-between mb-2 px-2'>
-										<h3 className='text-xs font-semibold text-gray-500 uppercase tracking-wider'>
+									<div className='flex items-center justify-between mb-2 px-1'>
+										<h3 className='text-xs font-semibold text-[#8b949e] uppercase tracking-wider'>
 											Группы
 										</h3>
-										<div className='flex gap-1'>
+										<div className='flex gap-1.5'>
 											<button
 												onClick={() => setIsJoinGroupOpen(true)}
-												className='px-3 py-2 hover:bg-gray-800 rounded-lg transition-colors text-gray-200 hover:text-white text-xs font-semibold flex items-center gap-2'
+												className='px-2.5 py-1.5 bg-[#0e1117] border border-[#30363d] hover:bg-[#21262d] rounded-lg transition-colors text-[#e6edf3] text-xs font-semibold flex items-center gap-1.5'
 												title='Вступить в группу'
 											>
-												<LogInIcon className='w-4 h-4' />
+												<LogInIcon className='w-3.5 h-3.5 text-[#0077FF]' />
 												<span>Вступить</span>
 											</button>
 											<button
 												onClick={() => setIsCreateGroupOpen(true)}
-												className='px-3 py-2 hover:bg-gray-800 rounded-lg transition-colors text-gray-200 hover:text-white text-xs font-semibold flex items-center gap-2'
+												className='px-2.5 py-1.5 bg-[#0e1117] border border-[#30363d] hover:bg-[#21262d] rounded-lg transition-colors text-[#e6edf3] text-xs font-semibold flex items-center gap-1.5'
 												title='Создать группу'
 											>
-												<PlusIcon className='w-4 h-4' />
+												<PlusIcon className='w-3.5 h-3.5 text-[#0077FF]' />
 												<span>Создать</span>
 											</button>
 										</div>
@@ -6285,55 +6269,37 @@ export default function MessengerPage() {
 													setChatSearchQuery('')
 													setFoundMessages([])
 												}}
-												className={`group p-3 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-200 border border-transparent ${
+												className={`group px-3 py-2.5 mx-1.5 my-0.5 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-150 border-l-[3px] select-none ${
 													selectedGroup?.id === group.id
-														? `bg-gray-800/50 ${currentBackground.borderColor} shadow-sm`
-														: 'hover:bg-gray-900 border-transparent'
+														? 'bg-[#21262d] text-white shadow-sm border-[#0077FF]'
+														: 'hover:bg-[#21262d]/50 text-[#e6edf3] border-transparent'
 												}`}
 											>
-												<div className='relative'>
+												<div className='relative shrink-0'>
 													{group.avatar_url ? (
 														<img
 															src={getAvatarUrl(group.avatar_url)}
 															alt={group.name}
-															className={`w-12 h-12 rounded-full object-cover bg-gray-800 ring-2 transition-all duration-300 ${
-																selectedGroup?.id === group.id
-																	? currentBackground.accentColor.replace(
-																			'text-',
-																			'ring-',
-																		)
-																	: 'ring-gray-950'
-															}`}
+															className='w-12 h-12 rounded-full object-cover bg-[#0e1117] ring-1 ring-[#30363d]'
 														/>
 													) : (
 														<div
-															className={`w-12 h-12 rounded-full flex items-center justify-center bg-gray-800 ring-2 transition-all duration-300 ${
-																selectedGroup?.id === group.id
-																	? currentBackground.accentColor.replace(
-																			'text-',
-																			'ring-',
-																		)
-																	: 'ring-gray-950'
-															}`}
+															className='w-12 h-12 rounded-full flex items-center justify-center bg-[#21262d] text-[#8b949e] ring-1 ring-[#30363d]'
 														>
-															<UsersIcon className='w-6 h-6 text-gray-400' />
+															<UsersIcon className='w-6 h-6' />
 														</div>
 													)}
 												</div>
-												<div className='flex flex-col flex-1 min-w-0'>
-													<div className='flex justify-between items-center gap-2'>
+												<div className='flex flex-col flex-1 min-w-0 justify-center'>
+													<div className='flex justify-between items-center mb-0.5'>
 														<span
-															className={`font-semibold truncate transition-colors duration-300 ${
-																selectedGroup?.id === group.id
-																	? currentBackground.accentColor
-																	: 'text-gray-200 group-hover:text-white'
-															}`}
+															className='font-semibold text-sm truncate text-white'
 														>
 															{group.name}
 														</span>
-														<div className='flex items-center gap-1.5 shrink-0'>
+														<div className='flex items-center gap-1.5 shrink-0 ml-1.5'>
 															{getGroupLastMessageTime(group.id, messages) && (
-																<span className='text-[10px] text-gray-500'>
+																<span className='text-[10px] text-[#8b949e]'>
 																	{getGroupLastMessageTime(group.id, messages)}
 																</span>
 															)}
@@ -6343,13 +6309,16 @@ export default function MessengerPage() {
 																	e.stopPropagation()
 																	handleGroupCallInitiate(group.id)
 																}}
-																className='p-1.5 rounded-full text-emerald-400 hover:text-white hover:bg-emerald-500/20 transition-colors'
+																className='p-1 rounded-full text-[#8b949e] hover:text-[#0077FF] hover:bg-[#161b22] opacity-0 group-hover:opacity-100 transition-all'
 																title='Голосовой звонок в группе'
 															>
-																<PhoneIcon className='w-4 h-4' />
+																<PhoneIcon className='w-3.5 h-3.5' />
 															</button>
 														</div>
 													</div>
+													<span className='text-xs text-[#8b949e] truncate'>
+														Группа
+													</span>
 												</div>
 											</div>
 										))}
@@ -6362,29 +6331,29 @@ export default function MessengerPage() {
 						<div className='flex flex-col gap-2'>
 							{!selectedCommunity && (
 								<div className='mt-2 space-y-3 px-2'>
-									<div className='flex rounded-lg bg-gray-900/80 p-0.5'>
+									<div className='flex rounded-xl bg-[#0e1117] p-1 border border-[#30363d]'>
 										<button
 											type='button'
 											onClick={() => setHubTab('channels')}
-											className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-md transition-colors ${
+											className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-lg transition-all ${
 												hubTab === 'channels'
-													? 'bg-gray-800 text-white'
-													: 'text-gray-500 hover:text-gray-300'
+													? 'bg-[#21262d] text-white shadow-sm border border-[#30363d]'
+													: 'text-[#8b949e] hover:text-[#e6edf3]'
 											}`}
 										>
-											<HashIcon className='w-3.5 h-3.5' />
+											<HashIcon className='w-3.5 h-3.5 text-[#0077FF]' />
 											Каналы
 										</button>
 										<button
 											type='button'
 											onClick={() => setHubTab('servers')}
-											className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-md transition-colors ${
+											className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-lg transition-all ${
 												hubTab === 'servers'
-													? 'bg-gray-800 text-white'
-													: 'text-gray-500 hover:text-gray-300'
+													? 'bg-[#21262d] text-white shadow-sm border border-[#30363d]'
+													: 'text-[#8b949e] hover:text-[#e6edf3]'
 											}`}
 										>
-											<Server className='w-3.5 h-3.5' />
+											<Server className='w-3.5 h-3.5 text-[#0077FF]' />
 											Серверы
 										</button>
 									</div>
@@ -6396,7 +6365,7 @@ export default function MessengerPage() {
 													<button
 														type='button'
 														onClick={() => setActiveFolderId('all')}
-														className='shrink-0 px-2 py-1 rounded-md text-[10px] font-medium bg-gray-900 text-gray-400 hover:text-gray-200'
+														className='shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#0e1117] text-[#8b949e] hover:text-white border border-[#30363d]'
 													>
 														Все
 													</button>
@@ -6405,7 +6374,7 @@ export default function MessengerPage() {
 														.map(folder => (
 															<span
 																key={folder.id}
-																className='shrink-0 px-2 py-1 rounded-md text-[10px] font-medium bg-emerald-500/20 text-emerald-300'
+																className='shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#0077FF]/15 text-[#0077FF] border border-[#0077FF]/30'
 															>
 																{folder.icon ? `${folder.icon} ` : ''}
 																{folder.name}
@@ -6413,19 +6382,19 @@ export default function MessengerPage() {
 														))}
 												</div>
 											)}
-											<div className='flex items-center justify-between mb-2 px-1'>
-												<h3 className='text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5'>
-													<HashIcon className='w-3.5 h-3.5' />
+											<div className='flex items-center justify-between mb-2 px-2'>
+												<h3 className='text-[11px] font-semibold text-[#8b949e] uppercase tracking-wider flex items-center gap-1.5'>
+													<HashIcon className='w-3.5 h-3.5 text-[#0077FF]' />
 													Мои каналы
 												</h3>
 												<div className='flex gap-1'>
 													<button
 														type='button'
 														onClick={() => setIsJoinChannelOpen(true)}
-														className='p-1 hover:bg-gray-800 rounded-md transition-colors text-gray-400 hover:text-white'
+														className='w-7 h-7 flex items-center justify-center hover:bg-[#21262d] rounded-lg transition-colors text-[#8b949e] hover:text-white'
 														title='Вступить по ссылке'
 													>
-														<LogInIcon className='w-3 h-3' />
+														<LogInIcon className='w-3.5 h-3.5' />
 													</button>
 													<button
 														type='button'
@@ -6434,10 +6403,10 @@ export default function MessengerPage() {
 															setNewChannelName('')
 															setNewChannelDesc('')
 														}}
-														className='p-1 hover:bg-gray-800 rounded-md transition-colors text-gray-400 hover:text-white'
+														className='w-7 h-7 flex items-center justify-center hover:bg-[#21262d] rounded-lg transition-colors text-[#8b949e] hover:text-white'
 														title='Создать канал'
 													>
-														<PlusIcon className='w-3 h-3' />
+														<PlusIcon className='w-3.5 h-3.5' />
 													</button>
 												</div>
 											</div>
@@ -6447,59 +6416,43 @@ export default function MessengerPage() {
 															<div
 																key={channel.id}
 																onClick={() => openStandaloneChannel(channel)}
-																className={`group p-3 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-200 border border-transparent ${(channel as any).is_pending_approval ? 'opacity-50 grayscale' : ''} ${
+																className={`group px-3 py-2.5 mx-1.5 my-0.5 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-150 border-l-[3px] select-none ${(channel as any).is_pending_approval ? 'opacity-50 grayscale' : ''} ${
 																	selectedChannel?.id === channel.id
-																		? `bg-gray-800/50 ${currentBackground.borderColor} shadow-sm`
-																		: 'hover:bg-gray-900 border-transparent'
+																		? 'bg-[#21262d] border-[#0077FF] shadow-sm'
+																		: 'border-transparent hover:bg-[#21262d]/60'
 																}`}
 															>
 																{channel.avatar_url ? (
 																	<img
 																		src={getAvatarUrl(channel.avatar_url)}
 																		alt={channel.name}
-																		className={`w-12 h-12 rounded-full object-cover bg-gray-800 ring-2 transition-all duration-300 ${
-																			selectedChannel?.id === channel.id
-																				? currentBackground.accentColor.replace(
-																						'text-',
-																						'ring-',
-																					)
-																				: 'ring-gray-950'
-																		}`}
+																		className='w-11 h-11 rounded-full object-cover bg-[#21262d] ring-1 ring-[#30363d] shrink-0'
 																	/>
 																) : (
-																	<div
-																		className={`w-12 h-12 rounded-2xl flex items-center justify-center bg-sky-950/80 ring-2 transition-all duration-300 ${
-																			selectedChannel?.id === channel.id
-																				? currentBackground.accentColor.replace(
-																						'text-',
-																						'ring-',
-																					)
-																				: 'ring-gray-950'
-																		}`}
-																	>
-																		<RadioIcon className='w-6 h-6 text-sky-300' />
+																	<div className='w-11 h-11 rounded-full flex items-center justify-center bg-gradient-to-tr from-[#0077FF]/20 to-sky-500/20 ring-1 ring-[#30363d] text-[#0077FF] shrink-0 font-bold'>
+																		<RadioIcon className='w-5 h-5' />
 																	</div>
 																)}
 																<div className='flex flex-col flex-1 min-w-0'>
 																	<div className='flex justify-between items-center gap-2'>
 																		<span
-																			className={`font-semibold truncate transition-colors duration-300 ${
+																			className={`font-semibold text-sm truncate transition-colors ${
 																				selectedChannel?.id === channel.id
-																					? currentBackground.accentColor
-																					: 'text-gray-200 group-hover:text-white'
+																					? 'text-[#58a6ff]'
+																					: 'text-[#e6edf3] group-hover:text-white'
 																			}`}
 																		>
 																			{channel.name}
 																		</span>
 																		{getChannelLastMessageTime(channel.id, messages) && (
-																			<span className='text-[10px] text-gray-500 shrink-0'>
+																			<span className='text-[11px] text-[#8b949e] shrink-0'>
 																				{getChannelLastMessageTime(channel.id, messages)}
 																			</span>
 																		)}
 																	</div>
-																	<span className='text-xs text-gray-500 truncate flex items-center gap-1.5'>
+																	<span className='text-xs text-[#8b949e] truncate flex items-center gap-1.5'>
 																		{(channel as any).is_pending_approval ? (
-																			<span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-medium border border-amber-500/30">⏳ В процессе заявки</span>
+																			<span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-medium border border-amber-500/30">⏳ В процессе заявки</span>
 																		) : (
 																			'Публичный канал'
 																		)}
@@ -6509,8 +6462,8 @@ export default function MessengerPage() {
 														))}
 												</div>
 											) : (
-												<div className='rounded-xl border border-dashed border-gray-700 p-4 text-center text-sm text-gray-500'>
-													<p className='mb-2'>Нет каналов</p>
+												<div className='rounded-xl border border-dashed border-[#30363d] bg-[#0e1117]/50 p-6 text-center text-sm text-[#8b949e]'>
+													<p className='mb-2 text-xs'>Нет каналов</p>
 													<button
 														type='button'
 														onClick={() => {
@@ -6518,7 +6471,7 @@ export default function MessengerPage() {
 															setNewChannelName('')
 															setNewChannelDesc('')
 														}}
-														className='text-indigo-400 hover:text-indigo-300 text-xs'
+														className='text-[#0077FF] hover:underline text-xs font-medium'
 													>
 														Создать канал
 													</button>
@@ -6527,32 +6480,32 @@ export default function MessengerPage() {
 										</div>
 									) : (
 										<div>
-											<div className='flex items-center justify-between mb-2 px-1'>
-												<h3 className='text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5'>
-													<Server className='w-3.5 h-3.5' />
+											<div className='flex items-center justify-between mb-2 px-2'>
+												<h3 className='text-[11px] font-semibold text-[#8b949e] uppercase tracking-wider flex items-center gap-1.5'>
+													<Server className='w-3.5 h-3.5 text-[#0077FF]' />
 													Мои серверы
 												</h3>
 												<div className='flex gap-1'>
 													<button
 														onClick={() => setIsDiscoveryOpen(true)}
-														className='p-1 hover:bg-gray-800 rounded-md transition-colors text-gray-400 hover:text-white'
+														className='w-7 h-7 flex items-center justify-center hover:bg-[#21262d] rounded-lg transition-colors text-[#8b949e] hover:text-white'
 														title='Найти сервер'
 													>
-														<SearchIcon className='w-3 h-3' />
+														<SearchIcon className='w-3.5 h-3.5' />
 													</button>
 													<button
 														onClick={() => setIsJoinCommunityOpen(true)}
-														className='p-1 hover:bg-gray-800 rounded-md transition-colors text-gray-400 hover:text-white'
+														className='w-7 h-7 flex items-center justify-center hover:bg-[#21262d] rounded-lg transition-colors text-[#8b949e] hover:text-white'
 														title='Вступить по ссылке'
 													>
-														<LogInIcon className='w-3 h-3' />
+														<LogInIcon className='w-3.5 h-3.5' />
 													</button>
 													<button
 														onClick={() => setIsCreateCommunityOpen(true)}
-														className='p-1 hover:bg-gray-800 rounded-md transition-colors text-gray-400 hover:text-white'
+														className='w-7 h-7 flex items-center justify-center hover:bg-[#21262d] rounded-lg transition-colors text-[#8b949e] hover:text-white'
 														title='Создать сервер'
 													>
-														<PlusIcon className='w-3 h-3' />
+														<PlusIcon className='w-3.5 h-3.5' />
 													</button>
 												</div>
 											</div>
@@ -6561,37 +6514,28 @@ export default function MessengerPage() {
 													<div
 														key={comm.id}
 														onClick={() => selectCommunity(comm)}
-														className={`group p-3 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-200 border border-transparent ${
+														className={`group px-3 py-2.5 mx-1.5 my-0.5 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-150 border-l-[3px] select-none ${
 															selectedCommunity?.id === comm.id
-																? `bg-gray-800/50 ${currentBackground.borderColor} shadow-sm`
-																: 'hover:bg-gray-900 border-transparent'
+																? 'bg-[#21262d] border-[#0077FF] shadow-sm'
+																: 'border-transparent hover:bg-[#21262d]/60'
 														}`}
 													>
 														<div className='relative shrink-0'>
-															<div
-																className={`w-12 h-12 rounded-2xl flex items-center justify-center bg-indigo-950/80 ring-2 transition-all duration-300 ${
-																	selectedCommunity?.id === comm.id
-																		? currentBackground.accentColor.replace(
-																				'text-',
-																				'ring-',
-																			)
-																		: 'ring-gray-950'
-																}`}
-															>
-																<Server className='w-6 h-6 text-indigo-300' />
+															<div className='w-11 h-11 rounded-full flex items-center justify-center bg-gradient-to-tr from-indigo-500/20 to-purple-500/20 ring-1 ring-[#30363d] text-indigo-400'>
+																<Server className='w-5 h-5' />
 															</div>
 														</div>
 														<div className='flex flex-col flex-1 min-w-0'>
 															<span
-																className={`font-semibold truncate transition-colors duration-300 ${
+																className={`font-semibold text-sm truncate transition-colors ${
 																	selectedCommunity?.id === comm.id
-																		? currentBackground.accentColor
-																		: 'text-gray-200 group-hover:text-white'
+																		? 'text-[#58a6ff]'
+																		: 'text-[#e6edf3] group-hover:text-white'
 																}`}
 															>
 																{comm.name}
 															</span>
-															<span className='text-xs text-gray-500 truncate'>
+															<span className='text-xs text-[#8b949e] truncate'>
 																{comm.members_count && comm.members_count > 0
 																	? `${comm.members_count} участников`
 																	: 'Сервер'}
@@ -6600,12 +6544,12 @@ export default function MessengerPage() {
 													</div>
 												))}
 												{myCommunities.length === 0 && (
-													<div className='rounded-xl border border-dashed border-gray-700 p-4 text-center text-sm text-gray-500'>
-														<p className='mb-2'>Нет серверов</p>
+													<div className='rounded-xl border border-dashed border-[#30363d] bg-[#0e1117]/50 p-6 text-center text-sm text-[#8b949e]'>
+														<p className='mb-2 text-xs'>Нет серверов</p>
 														<button
 															type='button'
 															onClick={() => setIsCreateCommunityOpen(true)}
-															className='text-indigo-400 hover:text-indigo-300 text-xs'
+															className='text-[#0077FF] hover:underline text-xs font-medium'
 														>
 															Создать первый сервер
 														</button>
@@ -6626,19 +6570,19 @@ export default function MessengerPage() {
 													setSelectedCommunity(null)
 													setSelectedCommunityId('')
 												}}
-												className='p-1 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors'
+												className='w-7 h-7 flex items-center justify-center text-[#8b949e] hover:text-white hover:bg-[#21262d] rounded-lg transition-colors'
 												title='К списку серверов'
 											>
 												<ArrowLeftIcon className='w-4 h-4' />
 											</button>
-											<h3 className='text-xs font-semibold text-gray-500 uppercase tracking-wider'>
+											<h3 className='text-xs font-semibold text-[#e6edf3] truncate'>
 												{selectedCommunity.name}
 											</h3>
 										</div>
-										<div className='flex gap-1'>
+										<div className='flex gap-1.5'>
 											<button
 												onClick={handleShowInviteCode}
-												className='px-2 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors'
+												className='px-2.5 py-1 text-xs bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] text-white rounded-lg transition-colors font-medium'
 												title='Ссылка-приглашение на сервер'
 											>
 												Пригласить
@@ -6648,14 +6592,14 @@ export default function MessengerPage() {
 													setSelectedCommunityId(selectedCommunity?.id || '')
 													setIsCreateCommChannelOpen(true)
 												}}
-												className='px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors'
+												className='px-2.5 py-1 text-xs bg-[#0077FF] hover:bg-[#0066dd] text-white rounded-lg transition-colors font-medium shadow-sm shadow-[#0077FF]/20'
 											>
-												Создать канал
+												+ Канал
 											</button>
 										</div>
 									</div>
 									<div className='mb-3'>
-										<h4 className='text-[10px] font-semibold text-gray-500 uppercase tracking-wider px-2 mb-1'>
+										<h4 className='text-[10px] font-semibold text-[#8b949e] uppercase tracking-wider px-2 mb-1'>
 											Текстовые
 										</h4>
 										<div className='space-y-1'>
@@ -6684,29 +6628,33 @@ export default function MessengerPage() {
 															setChatSearchQuery('')
 															setFoundMessages([])
 														}}
-														className={`group p-3 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-200 border border-transparent ${
+														className={`group px-3 py-2 mx-1.5 my-0.5 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-150 border-l-[3px] select-none ${
 															selectedChannel?.id === ch.id
-																? `bg-gray-800/50 ${currentBackground.borderColor} shadow-sm`
-																: 'hover:bg-gray-900 border-transparent'
+																? 'bg-[#21262d] border-[#0077FF] shadow-sm'
+																: 'border-transparent hover:bg-[#21262d]/60'
 														}`}
 													>
 														<div className='relative'>
-															<div className='w-12 h-12 rounded-full flex items-center justify-center bg-gray-800 ring-2 ring-gray-950'>
-																<HashIcon className='w-6 h-6 text-gray-400' />
+															<div className='w-9 h-9 rounded-lg flex items-center justify-center bg-[#0e1117] ring-1 ring-[#30363d] text-[#8b949e] group-hover:text-white'>
+																<HashIcon className='w-4 h-4' />
 															</div>
 														</div>
 														<div className='flex flex-col flex-1 min-w-0'>
 															<div className='flex justify-between items-baseline'>
-																<span className='font-semibold truncate text-gray-200 group-hover:text-white transition-colors'>
+																<span className={`font-medium text-sm truncate transition-colors ${
+																	selectedChannel?.id === ch.id
+																		? 'text-[#58a6ff]'
+																		: 'text-[#e6edf3] group-hover:text-white'
+																}`}>
 																	{ch.name}
 																</span>
 																{getChannelLastMessageTime(ch.id, messages) && (
-																	<span className='text-[10px] text-gray-500 shrink-0 ml-2'>
+																	<span className='text-[10px] text-[#8b949e] shrink-0 ml-2'>
 																		{getChannelLastMessageTime(ch.id, messages)}
 																	</span>
 																)}
 															</div>
-															<span className='text-xs text-gray-500 truncate group-hover:text-gray-400 transition-colors'>
+															<span className='text-[11px] text-[#8b949e] truncate'>
 																Текстовый
 															</span>
 														</div>
@@ -6715,14 +6663,14 @@ export default function MessengerPage() {
 											{communityChannels.filter(
 												ch => (ch.type || 'text') === 'text',
 											).length === 0 && (
-												<div className='p-2 text-center text-gray-500'>
+												<div className='p-2 text-center text-xs text-[#8b949e]'>
 													Нет текстовых каналов
 												</div>
 											)}
 										</div>
 									</div>
 									<div>
-										<h4 className='text-[10px] font-semibold text-gray-500 uppercase tracking-wider px-2 mb-1'>
+										<h4 className='text-[10px] font-semibold text-[#8b949e] uppercase tracking-wider px-2 mb-1'>
 											Голосовые
 										</h4>
 										<div className='space-y-1'>
@@ -6762,24 +6710,24 @@ export default function MessengerPage() {
 																setFoundMessages([])
 															}
 														}}
-														className={`group p-3 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-200 border border-transparent ${
+														className={`group px-3 py-2 mx-1.5 my-0.5 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-150 border-l-[3px] select-none ${
 															selectedChannel?.id === ch.id
-																? `bg-gray-800/50 ${currentBackground.borderColor} shadow-sm`
-																: 'hover:bg-gray-900 border-transparent'
+																? 'bg-[#21262d] border-[#0077FF] shadow-sm'
+																: 'border-transparent hover:bg-[#21262d]/60'
 														}`}
 													>
 														<div className='relative'>
-															<div className='w-12 h-12 rounded-full flex items-center justify-center bg-gray-800 ring-2 ring-gray-950'>
-																<PhoneIcon className='w-6 h-6 text-gray-400' />
+															<div className='w-9 h-9 rounded-lg flex items-center justify-center bg-[#0e1117] ring-1 ring-[#30363d] text-[#8b949e] group-hover:text-emerald-400'>
+																<PhoneIcon className='w-4 h-4' />
 															</div>
 														</div>
 														<div className='flex flex-col flex-1 min-w-0'>
 															<div className='flex justify-between items-baseline'>
-																<span className='font-semibold truncate text-gray-200 group-hover:text-white transition-colors'>
+																<span className='font-medium text-sm truncate text-[#e6edf3] group-hover:text-white transition-colors'>
 																	{ch.name}
 																</span>
 															</div>
-															<span className='text-xs text-gray-500 truncate group-hover:text-gray-400 transition-colors'>
+															<span className='text-[11px] text-emerald-400 truncate'>
 																Голосовой
 															</span>
 
@@ -6792,10 +6740,10 @@ export default function MessengerPage() {
 																		).map((participant, idx) => (
 																			<div
 																				key={`${participant.userId}-${idx}`}
-																				className='flex items-center gap-1 text-[8px] bg-gray-700/50 px-1.5 py-0.5 rounded-full'
+																				className='flex items-center gap-1 text-[9px] bg-[#0e1117] border border-[#30363d] px-1.5 py-0.5 rounded-full text-[#8b949e]'
 																			>
-																				<span className='w-2 h-2 rounded-full bg-green-500'></span>
-																				<span className='truncate max-w-[60px]'>
+																				<span className='w-1.5 h-1.5 rounded-full bg-emerald-500'></span>
+																				<span className='truncate max-w-[60px] text-white'>
 																					{participant.username}
 																				</span>
 																			</div>
@@ -6807,7 +6755,7 @@ export default function MessengerPage() {
 												))}
 											{communityChannels.filter(ch => ch.type === 'voice')
 												.length === 0 && (
-												<div className='p-2 text-center text-gray-500'>
+												<div className='p-2 text-center text-xs text-[#8b949e]'>
 													Нет голосовых каналов
 												</div>
 											)}
@@ -6818,10 +6766,10 @@ export default function MessengerPage() {
 						</div>
 					)}
 					{activeTab === 'support' && (
-						<div className='space-y-1'>
+						<div className='space-y-1 p-1'>
 							{supportChats.length === 0 && (
-								<div className='p-4 text-center text-gray-500 text-sm'>
-									Нет обращений
+								<div className='p-8 text-center text-[#8b949e] text-xs'>
+									Нет активных обращений
 								</div>
 							)}
 							{supportChats.map(chat => (
@@ -6833,30 +6781,30 @@ export default function MessengerPage() {
 										setSelectedChannel(null)
 										setSelectedGroup(null)
 									}}
-									className={`p-3 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-200 border ${
+									className={`px-3 py-2.5 mx-1.5 my-0.5 rounded-xl cursor-pointer flex items-center gap-3 transition-all duration-150 border-l-[3px] select-none ${
 										selectedSupportId === chat.id
-											? `bg-gray-800/50 ${currentBackground.borderColor} shadow-sm`
-											: 'hover:bg-gray-900 border-transparent'
+											? 'bg-[#21262d] border-[#0077FF] shadow-sm'
+											: 'border-transparent hover:bg-[#21262d]/60'
 									}`}
 								>
 									<div className='relative shrink-0'>
-										<div className='w-10 h-10 rounded-full bg-emerald-900/60 flex items-center justify-center'>
-											<LifeBuoyIcon className='w-5 h-5 text-emerald-300' />
+										<div className='w-10 h-10 rounded-full bg-[#0077FF]/15 border border-[#0077FF]/30 flex items-center justify-center'>
+											<LifeBuoyIcon className='w-5 h-5 text-[#0077FF]' />
 										</div>
 										{chat.unread_count > 0 && (
-											<div className='absolute -top-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center'>
+											<div className='absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[#0077FF] text-white text-[10px] font-bold flex items-center justify-center shadow'>
 												{chat.unread_count > 9 ? '9+' : chat.unread_count}
 											</div>
 										)}
 									</div>
 									<div className='flex-1 min-w-0'>
 										<div className='flex items-center justify-between'>
-											<span className='text-sm font-medium text-gray-200 truncate'>
-												Заявка #{chat.id}
+											<span className='text-sm font-medium text-[#e6edf3] truncate'>
+												Тикет #{chat.id}
 											</span>
 											<div className='flex items-center gap-1 shrink-0 ml-2'>
 												{chat.status === 'closed' && (
-													<span className='text-[10px] text-gray-500'>закрыта</span>
+													<span className='text-[10px] px-1.5 py-0.5 rounded bg-[#21262d] text-[#8b949e] border border-[#30363d]'>закрыт</span>
 												)}
 												{chat.status === 'closed' && (
 													<button
@@ -6864,7 +6812,7 @@ export default function MessengerPage() {
 															e.stopPropagation()
 															deleteSupportChat(chat.id)
 														}}
-														className='p-1 rounded-md text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-colors'
+														className='p-1 rounded-md text-[#8b949e] hover:text-red-400 hover:bg-red-500/10 transition-colors'
 														title='Удалить чат'
 													>
 														<Trash2Icon className='w-3.5 h-3.5' />
@@ -6872,10 +6820,10 @@ export default function MessengerPage() {
 												)}
 											</div>
 										</div>
-										<div className='text-xs text-gray-500 truncate mt-0.5'>
+										<div className='text-xs text-[#8b949e] truncate mt-0.5'>
 											{chat.question?.slice(0, 40)}
 										</div>
-										<div className='text-[10px] text-gray-600 truncate mt-0.5'>
+										<div className='text-[10px] text-[#8b949e]/80 truncate mt-0.5'>
 											{chat.last_message?.slice(0, 50)}
 										</div>
 									</div>
@@ -7053,11 +7001,11 @@ export default function MessengerPage() {
 									</button>
 								</div>
 							)}
-							<div className='h-16 px-6 border-b border-white/6 flex items-center justify-between bg-black/20 backdrop-blur-lg z-10 sticky top-0'>
+							<div className='h-16 px-4 md:px-6 border-b border-[#30363d] flex items-center justify-between bg-[#161b22]/95 backdrop-blur-md z-10 sticky top-0'>
 								{isChatSearchOpen ? (
 									<div className='flex flex-col gap-2 w-full animate-in fade-in slide-in-from-top-2 duration-200'>
-										<div className='flex items-center gap-2'>
-											<SearchIcon className='w-5 h-5 text-[var(--app-muted)] shrink-0' />
+										<div className='flex items-center gap-2 bg-[#0e1117] border border-[#30363d] rounded-xl px-3 py-1.5 focus-within:border-[#0077FF]'>
+											<SearchIcon className='w-4 h-4 text-[#8b949e] shrink-0' />
 											<form
 												onSubmit={handleMessageSearch}
 												className='flex-1 min-w-0'
@@ -7065,18 +7013,15 @@ export default function MessengerPage() {
 												<input
 													autoFocus
 													type='text'
-													placeholder='Поиск сообщений...'
+													placeholder='Поиск сообщений в этом чате...'
 													value={chatSearchQuery}
 													onChange={e => setChatSearchQuery(e.target.value)}
-													className='w-full bg-transparent border-none text-[color:var(--app-fg)] placeholder:text-[var(--app-muted)] focus:ring-0 text-sm'
+													className='w-full bg-transparent border-none text-[#e6edf3] placeholder:text-[#8b949e] focus:ring-0 text-sm p-0'
 												/>
 											</form>
 											{isSearchingMessages && (
 												<div
-													className={`w-4 h-4 border-2 border-t-transparent rounded-full animate-spin shrink-0 ${currentBackground.borderColor.replace(
-														'/20',
-														'',
-													)}`}
+													className='w-4 h-4 border-2 border-[#0077FF] border-t-transparent rounded-full animate-spin shrink-0'
 												/>
 											)}
 											<button
@@ -7085,9 +7030,9 @@ export default function MessengerPage() {
 													setChatSearchQuery('')
 													setFoundMessages([])
 												}}
-												className='p-2 text-[var(--app-muted)] hover:text-[var(--app-fg)] hover:bg-white/5 rounded-full transition-colors shrink-0'
+												className='p-1 text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#21262d] rounded-lg transition-colors shrink-0'
 											>
-												<XIcon className='w-5 h-5' />
+												<XIcon className='w-4 h-4' />
 											</button>
 										</div>
 										<div className='flex items-center gap-1.5 overflow-x-auto pb-0.5'>
@@ -7105,8 +7050,8 @@ export default function MessengerPage() {
 													onClick={() => setMessageFilter(option.id)}
 													className={`shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
 														messageFilter === option.id
-															? 'bg-[var(--app-accent)]/25 text-[var(--app-accent)]'
-															: 'bg-white/5 text-[var(--app-muted)] hover:text-[var(--app-fg)]'
+															? 'bg-[#0077FF] text-white'
+															: 'bg-[#21262d] text-[#8b949e] hover:text-[#e6edf3] border border-[#30363d]'
 													}`}
 												>
 													{option.label}
@@ -7116,7 +7061,7 @@ export default function MessengerPage() {
 												<button
 													type='button'
 													onClick={() => setMessageFilter('all')}
-													className='shrink-0 px-2 py-1 text-xs text-[var(--app-muted)] hover:text-[var(--app-fg)]'
+													className='shrink-0 px-2 py-1 text-xs text-[#8b949e] hover:text-[#e6edf3]'
 												>
 													Сбросить
 												</button>
@@ -7125,22 +7070,22 @@ export default function MessengerPage() {
 									</div>
 								) : (
 									<>
-										<div className='flex items-center gap-4'>
+										<div className='flex items-center gap-3'>
 											<button
 												onClick={() => {
 													setSelectedFriend(null)
 													setSelectedGroup(null)
 													setSelectedChannel(null)
 												}}
-												className='p-2 text-[var(--app-muted)] hover:text-[var(--app-fg)] hover:bg-white/8 rounded-full transition-colors'
-												title='К списку серверов'
+												className='w-8 h-8 flex items-center justify-center text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#21262d] rounded-xl transition-colors md:hidden'
+												title='Назад к списку'
 											>
 												<ArrowLeftIcon className='w-5 h-5' />
 											</button>
 											{selectedFriend ? (
 												<>
 													<div
-														className='relative cursor-pointer hover:opacity-80 transition-opacity'
+														className='relative cursor-pointer hover:opacity-85 transition-opacity'
 														onClick={() => {
 															setTelegramChatInfoData({ type: 'direct', data: selectedFriend })
 															setIsTelegramChatInfoOpen(true)
@@ -7148,12 +7093,12 @@ export default function MessengerPage() {
 													>
 														<img
 															src={getAvatarUrl(selectedFriend.avatar_url)}
-															className='w-10 h-10 rounded-full object-cover bg-white/5 ring-2 ring-white/10'
+															className='w-10 h-10 rounded-full object-cover bg-[#21262d] ring-1 ring-[#30363d]'
 															alt={selectedFriend.username}
 														/>
 														{!selectedFriend.is_bot && selectedFriend.status?.toLowerCase() ===
 															'online' && (
-															<div className='absolute bottom-0 right-0 w-3 h-3 bg-[var(--app-accent)] border-2 border-[var(--app-bg)] rounded-full animate-pulse' />
+															<div className='absolute bottom-0 right-0 w-3 h-3 bg-[#23a55a] border-2 border-[#161b22] rounded-full' />
 														)}
 													</div>
 													<button
@@ -7161,17 +7106,17 @@ export default function MessengerPage() {
 															setTelegramChatInfoData({ type: 'direct', data: selectedFriend })
 															setIsTelegramChatInfoOpen(true)
 														}}
-														className='flex flex-col text-left hover:bg-white/5 rounded-lg p-2 -ml-2 transition-colors'
-														title='Информация о чате'
+														className='flex flex-col text-left hover:bg-[#21262d]/50 rounded-xl px-2 py-1 transition-colors'
+														title='Информация о собеседнике'
 													>
-														<span className='font-bold text-[var(--app-fg)] text-base leading-tight flex items-center gap-2'>
+														<span className='font-bold text-[#e6edf3] text-sm md:text-base leading-tight flex items-center gap-2 hover:text-[#0077FF] transition-colors'>
 															{selectedFriend.username}
 															{selectedFriend.is_bot && (
 																<span className='text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'>BOT</span>
 															)}
 															{secretChatEnabled && (
 																<span
-																	className='text-[10px] px-1.5 py-0.5 rounded-md bg-[var(--app-accent)]/15 text-[var(--app-accent)] font-medium'
+																	className='text-[10px] px-1.5 py-0.5 rounded-md bg-[#0077FF]/15 text-[#0077FF] font-medium border border-[#0077FF]/30'
 																	title='Секретный чат (E2E)'
 																>
 																	🔐
@@ -7179,30 +7124,30 @@ export default function MessengerPage() {
 															)}
 															{isEncProxyActive && (
 																<span
-																	className='text-[10px] px-1.5 py-0.5 rounded-md bg-violet-500/15 text-violet-400 font-medium'
+																	className='text-[10px] px-1.5 py-0.5 rounded-md bg-violet-500/15 text-violet-400 font-medium border border-violet-500/30'
 																	title='Использует EncProxy'
 																>
-																	Использует EncProxy
+																	EncProxy
 																</span>
 															)}
 															{selectedFriend.premium && (
-																<span className='ml-1 text-amber-400'>★</span>
+																<span className='text-amber-400 text-xs'>★</span>
 															)}
 														</span>
-														<span className='text-xs text-[var(--app-accent)] font-medium flex items-center gap-1.5'>
+														<span className='text-xs text-[#8b949e] font-normal flex items-center gap-1.5 mt-0.5'>
 															{isChatTyping ? (
 																<>
-																	<span className='w-1.5 h-1.5 rounded-full bg-[var(--app-accent)] animate-pulse' />
-																	Печатает...
+																	<span className='w-1.5 h-1.5 rounded-full bg-[#0077FF] animate-pulse' />
+																	<span className='text-[#0077FF] font-medium'>Печатает...</span>
 																</>
 															) : selectedFriend.status?.toLowerCase() ===
 															  'online' ? (
 																<>
-																	<span className='w-1.5 h-1.5 rounded-full bg-emerald-500' />
-																	В сети
+																	<span className='w-1.5 h-1.5 rounded-full bg-[#23a55a]' />
+																	<span className='text-[#23a55a] font-medium'>в сети</span>
 																</>
 															) : (
-																<span className='text-gray-500'>
+																<span>
 																	{formatLastSeen(
 																		selectedFriend.last_seen,
 																		selectedFriend.privacy_settings,
@@ -7215,7 +7160,7 @@ export default function MessengerPage() {
 											) : selectedChannel ? (
 												<>
 													<div
-														className='relative cursor-pointer hover:opacity-80 transition-opacity'
+														className='relative cursor-pointer hover:opacity-85 transition-opacity'
 														onClick={() => {
 															setTelegramChatInfoData({ type: 'channel', data: selectedChannel })
 															setIsTelegramChatInfoOpen(true)
@@ -7225,11 +7170,11 @@ export default function MessengerPage() {
 															<img
 																src={getAvatarUrl(selectedChannel.avatar_url)}
 																alt={selectedChannel.name}
-																className='w-10 h-10 rounded-full object-cover bg-gray-800 ring-2 ring-gray-800/50'
+																className='w-10 h-10 rounded-full object-cover bg-[#21262d] ring-1 ring-[#30363d]'
 															/>
 														) : (
-															<div className='w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center ring-2 ring-gray-800/50'>
-																<RadioIcon className='w-5 h-5 text-sky-400' />
+															<div className='w-10 h-10 rounded-full bg-gradient-to-tr from-[#0077FF]/20 to-sky-500/20 flex items-center justify-center ring-1 ring-[#30363d] text-[#0077FF]'>
+																<RadioIcon className='w-5 h-5' />
 															</div>
 														)}
 													</div>
@@ -7238,13 +7183,13 @@ export default function MessengerPage() {
 															setTelegramChatInfoData({ type: 'channel', data: selectedChannel })
 															setIsTelegramChatInfoOpen(true)
 														}}
-														className='flex flex-col text-left hover:bg-gray-800/50 rounded-lg p-2 -ml-2 transition-colors'
+														className='flex flex-col text-left hover:bg-[#21262d]/50 rounded-xl px-2 py-1 transition-colors'
 														title='Информация о канале'
 													>
-														<span className='font-bold text-white text-base leading-tight flex items-center gap-2'>
+														<span className='font-bold text-[#e6edf3] text-sm md:text-base leading-tight flex items-center gap-2 hover:text-[#0077FF] transition-colors'>
 															{selectedChannel.name}
 														</span>
-														<span className='text-xs text-gray-500 font-medium flex items-center gap-1.5'>
+														<span className='text-xs text-[#8b949e] font-normal flex items-center gap-1.5 mt-0.5'>
 															<UsersIcon className='w-3 h-3' />
 															{isStandaloneChannel
 																? selectedChannel.participants_count &&
@@ -7258,7 +7203,7 @@ export default function MessengerPage() {
 											) : selectedGroup ? (
 												<>
 													<div
-														className='relative cursor-pointer hover:opacity-80 transition-opacity'
+														className='relative cursor-pointer hover:opacity-85 transition-opacity'
 														onClick={() => {
 															setTelegramChatInfoData({ type: 'group', data: selectedGroup })
 															setIsTelegramChatInfoOpen(true)
@@ -7268,11 +7213,11 @@ export default function MessengerPage() {
 															<img
 																src={getAvatarUrl(selectedGroup.avatar_url)}
 																alt={selectedGroup.name}
-																className='w-10 h-10 rounded-full object-cover bg-gray-800 ring-2 ring-gray-800/50'
+																className='w-10 h-10 rounded-full object-cover bg-[#21262d] ring-1 ring-[#30363d]'
 															/>
 														) : (
-															<div className='w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center ring-2 ring-gray-800/50'>
-																<UsersIcon className='w-5 h-5 text-gray-400' />
+															<div className='w-10 h-10 rounded-full bg-gradient-to-tr from-purple-500/20 to-pink-500/20 flex items-center justify-center ring-1 ring-[#30363d] text-purple-400'>
+																<UsersIcon className='w-5 h-5' />
 															</div>
 														)}
 													</div>
@@ -7281,13 +7226,13 @@ export default function MessengerPage() {
 															setTelegramChatInfoData({ type: 'group', data: selectedGroup })
 															setIsTelegramChatInfoOpen(true)
 														}}
-														className='flex flex-col text-left hover:bg-gray-800/50 rounded-lg p-2 -ml-2 transition-colors'
+														className='flex flex-col text-left hover:bg-[#21262d]/50 rounded-xl px-2 py-1 transition-colors'
 														title='Информация о группе'
 													>
-														<span className='font-bold text-white text-base leading-tight flex items-center gap-2'>
+														<span className='font-bold text-[#e6edf3] text-sm md:text-base leading-tight flex items-center gap-2 hover:text-[#0077FF] transition-colors'>
 															{selectedGroup.name}
 														</span>
-														<span className='text-xs text-gray-500 font-medium flex items-center gap-1.5'>
+														<span className='text-xs text-[#8b949e] font-normal flex items-center gap-1.5 mt-0.5'>
 															<UsersIcon className='w-3 h-3' />
 															Группа
 														</span>
@@ -7296,7 +7241,7 @@ export default function MessengerPage() {
 														onClick={() => {
 															handleGroupCallInitiate(selectedGroup.id)
 														}}
-														className='ml-2 p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors'
+														className='w-8 h-8 flex items-center justify-center text-[#8b949e] hover:text-white hover:bg-[#21262d] rounded-xl transition-colors'
 														title='Начать групповой звонок'
 													>
 														<PhoneIcon className='w-4 h-4' />
@@ -7304,7 +7249,7 @@ export default function MessengerPage() {
 													{user?.id === selectedGroup.owner_id && (
 														<button
 															onClick={() => setIsAddMemberOpen(true)}
-															className='ml-2 p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors'
+															className='w-8 h-8 flex items-center justify-center text-[#8b949e] hover:text-white hover:bg-[#21262d] rounded-xl transition-colors'
 															title='Добавить участника'
 														>
 															<UserPlusIcon className='w-4 h-4' />
@@ -7314,7 +7259,7 @@ export default function MessengerPage() {
 											) : null}
 										</div>
 
-										<div className='flex items-center gap-2'>
+										<div className='flex items-center gap-1.5'>
 											{selectedFriend && !isAiChat && !isBotChat && (
 												<button
 													onClick={() =>
@@ -7327,10 +7272,10 @@ export default function MessengerPage() {
 													disabled={
 														isSelectedFriendInCall
 													}
-													className={`p-2 sm:px-3 sm:py-2 rounded-full sm:rounded-lg flex items-center gap-2 transition-colors ${
+													className={`px-3 py-1.5 rounded-xl flex items-center gap-2 transition-all ${
 														isSelectedFriendInCall
-															? 'text-gray-600 cursor-not-allowed'
-															: 'text-emerald-400 hover:text-white hover:bg-emerald-500/20'
+															? 'text-[#8b949e]/50 cursor-not-allowed'
+															: 'text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20'
 													}`}
 													title={
 														isSelectedFriendInCall
@@ -7340,7 +7285,7 @@ export default function MessengerPage() {
 																: 'Позвонить'
 													}
 												>
-													<PhoneIcon className='w-5 h-5' />
+													<PhoneIcon className='w-4 h-4' />
 													<span className='hidden sm:inline text-xs font-medium'>
 														Позвонить
 													</span>
@@ -7362,14 +7307,14 @@ export default function MessengerPage() {
 														!isWebRTCSupported ||
 														!isScreenShareSupported
 													}
-													className={`p-2 sm:px-3 sm:py-2 rounded-full sm:rounded-lg flex items-center gap-2 transition-colors ${
+													className={`px-3 py-1.5 rounded-xl flex items-center gap-2 transition-all ${
 														!isInitialized ||
 														!isWebRTCSupported ||
 														!isScreenShareSupported
-															? 'text-gray-600 cursor-not-allowed'
+															? 'text-[#8b949e]/50 cursor-not-allowed'
 															: isScreenSharing
-																? 'text-emerald-400 hover:text-white hover:bg-emerald-500/20'
-																: 'text-gray-400 hover:text-white hover:bg-gray-800'
+																? 'text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20'
+																: 'text-[#8b949e] hover:text-white hover:bg-[#21262d] border border-[#30363d]'
 													}`}
 													title={
 														!isInitialized ||
@@ -7381,7 +7326,7 @@ export default function MessengerPage() {
 																: 'Демонстрация экрана'
 													}
 												>
-													<ScreenShareIcon className='w-5 h-5' />
+													<ScreenShareIcon className='w-4 h-4' />
 													<span className='hidden sm:inline text-xs font-medium'>
 														{isScreenSharing ? 'Стоп экран' : 'Экран'}
 													</span>
@@ -7389,18 +7334,19 @@ export default function MessengerPage() {
 											)}
 											<button
 												onClick={() => setIsChatSearchOpen(true)}
-												className='p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors'
+												className='w-9 h-9 flex items-center justify-center text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#21262d] rounded-xl transition-colors'
+												title='Поиск по чату'
 											>
-												<SearchIcon className='w-5 h-5' />
+												<SearchIcon className='w-4 h-4' />
 											</button>
 											{!isSelectionMode && (
 												<button
 													onClick={handleToggleSelectionMode}
-													className='p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors'
+													className='w-9 h-9 flex items-center justify-center text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#21262d] rounded-xl transition-colors'
 													title='Выбрать сообщения'
 												>
 													<svg
-														className='w-5 h-5'
+														className='w-4 h-4'
 														viewBox='0 0 24 24'
 														fill='none'
 														stroke='currentColor'
@@ -7416,10 +7362,10 @@ export default function MessengerPage() {
 											{isSelectionMode && (
 												<button
 													onClick={handleClearSelection}
-													className='p-2 text-rose-400 hover:text-white hover:bg-rose-500/20 rounded-full transition-colors'
+													className='w-9 h-9 flex items-center justify-center text-rose-400 hover:text-white hover:bg-rose-500/20 rounded-xl transition-colors'
 													title='Отменить выделение'
 												>
-													<XIcon className='w-5 h-5' />
+													<XIcon className='w-4 h-4' />
 												</button>
 											)}
 
@@ -7429,17 +7375,17 @@ export default function MessengerPage() {
 							</div>
 
 							{pinnedMessage && (
-								<div className='px-6 py-2 border-b border-gray-800/60 bg-gray-900/60 backdrop-blur-md'>
+								<div className='px-4 md:px-6 py-2 border-b border-[#30363d] bg-[#161b22]/90 backdrop-blur-md'>
 									<button
 										onClick={() => jumpToMessage(pinnedMessage.id)}
-										className='w-full flex items-center gap-3 rounded-xl border border-gray-800/60 bg-gray-800/40 px-3 py-2 text-left text-xs text-gray-200 hover:bg-gray-800/70 transition'
+										className='w-full flex items-center gap-3 rounded-xl border border-[#30363d] bg-[#0e1117] px-3.5 py-2 text-left text-xs text-[#e6edf3] hover:bg-[#21262d] transition border-l-4 border-l-[#0077FF]'
 									>
-										<span className='text-amber-400'>📌</span>
+										<span className='text-[#0077FF]'>📌</span>
 										<div className='flex-1 min-w-0'>
-											<div className='text-[10px] uppercase tracking-wider text-gray-400'>
-												Закреплено
+											<div className='text-[10px] uppercase font-bold tracking-wider text-[#0077FF]'>
+												Закрепленное сообщение
 											</div>
-											<div className='truncate'>
+											<div className='truncate text-xs text-[#8b949e] mt-0.5'>
 												{getMessagePreview(pinnedMessage)}
 											</div>
 										</div>
@@ -7468,12 +7414,12 @@ export default function MessengerPage() {
 																			: ''
 																	}
 																	alt={typeof a === 'object' ? a.name : ''}
-																	className='h-10 w-10 rounded-md object-cover'
+																	className='h-10 w-10 rounded-md object-cover ring-1 ring-[#30363d]'
 																/>
 															)
 														}
 														return (
-															<span className='rounded-md border border-gray-700/60 bg-gray-900/60 px-2 py-1 text-[10px] text-gray-300'>
+															<span className='rounded-md border border-[#30363d] bg-[#161b22] px-2 py-1 text-[10px] text-[#8b949e] font-medium'>
 																{a.ext ? a.ext.toUpperCase() : 'FILE'}
 															</span>
 														)
@@ -7485,11 +7431,11 @@ export default function MessengerPage() {
 							)}
 
 							{isSelectionMode && (
-								<div className='px-6 py-3 border-b border-gray-800/60 bg-emerald-900/60 backdrop-blur-md animate-in slide-in-from-top-2 duration-200'>
+								<div className='px-4 md:px-6 py-2.5 border-b border-[#30363d] bg-[#161b22] shadow-sm animate-in slide-in-from-top-2 duration-200'>
 									<div className='max-w-4xl mx-auto flex items-center justify-between'>
 										<div className='flex items-center gap-3'>
 											<div className='flex items-center gap-2'>
-												<div className='w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center'>
+												<div className='w-5 h-5 rounded-full bg-[#0077FF] flex items-center justify-center'>
 													<svg
 														className='w-3 h-3 text-white'
 														viewBox='0 0 24 24'
@@ -7502,7 +7448,7 @@ export default function MessengerPage() {
 														<polyline points='20 6 9 17 4 12'></polyline>
 													</svg>
 												</div>
-												<span className='text-sm font-medium text-emerald-200'>
+												<span className='text-sm font-medium text-[#e6edf3]'>
 													{selectedMessageIds.size} сообще
 													{selectedMessageIds.size % 10 === 1 &&
 													selectedMessageIds.size % 100 !== 11
@@ -7520,13 +7466,13 @@ export default function MessengerPage() {
 										<div className='flex items-center gap-2'>
 											<button
 												onClick={handleSelectAllMessages}
-												className='rounded-lg px-3 py-1.5 text-xs font-medium text-emerald-200 hover:bg-emerald-800/50 transition'
+												className='rounded-xl px-3 py-1.5 text-xs font-medium text-[#8b949e] hover:text-white hover:bg-[#21262d] border border-[#30363d] transition'
 											>
 												Выбрать все
 											</button>
 											<button
 												onClick={handleClearSelection}
-												className='rounded-lg px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-700/50 transition'
+												className='rounded-xl px-3 py-1.5 text-xs font-medium text-[#8b949e] hover:text-white hover:bg-[#21262d] border border-[#30363d] transition'
 											>
 												Отмена
 											</button>
@@ -7536,7 +7482,7 @@ export default function MessengerPage() {
 													setForwardQuery('')
 												}}
 												disabled={selectedMessageIds.size === 0}
-												className='flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition'
+												className='flex items-center gap-2 rounded-xl bg-[#0077FF] px-4 py-1.5 text-xs font-medium text-white hover:bg-[#0066dd] disabled:opacity-50 disabled:cursor-not-allowed transition shadow-sm shadow-[#0077FF]/20'
 											>
 												<svg
 													className='w-4 h-4'
@@ -7558,7 +7504,7 @@ export default function MessengerPage() {
 											<button
 												onClick={handleDeleteSelectedMessages}
 												disabled={selectedMessageIds.size === 0}
-												className='flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed transition'
+												className='flex items-center gap-2 rounded-xl bg-rose-600/20 text-rose-400 border border-rose-500/30 px-4 py-1.5 text-xs font-medium hover:bg-rose-600 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition'
 											>
 												<svg
 													className='w-4 h-4'
@@ -7582,22 +7528,23 @@ export default function MessengerPage() {
 								</div>
 							)}
 
+
 							{isSettingsOpen && (
 								<div
 									className='fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-start justify-center pt-20 p-4'
 									onClick={() => setIsSettingsOpen(false)}
 								>
 									<div
-										className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md shadow-2xl animate-in fade-in zoom-in-95 duration-200 max-h-[85vh] flex flex-col'
+										className='bg-[#161b22] border border-[#30363d] rounded-2xl w-full max-w-md shadow-2xl animate-in fade-in zoom-in-95 duration-200 max-h-[85vh] flex flex-col'
 										onClick={e => e.stopPropagation()}
 									>
-										<div className='flex items-center justify-between p-4 border-b border-gray-800 shrink-0'>
-											<h3 className='text-lg font-bold text-white'>
+										<div className='flex items-center justify-between p-4 border-b border-[#30363d] shrink-0'>
+											<h3 className='text-base font-bold text-[#e6edf3]'>
 												Настройки чата
 											</h3>
 											<button
 												onClick={() => setIsSettingsOpen(false)}
-												className='p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors'
+												className='p-1.5 text-[#8b949e] hover:text-white hover:bg-[#21262d] rounded-lg transition-colors'
 											>
 												<XIcon className='w-5 h-5' />
 											</button>
@@ -7608,15 +7555,15 @@ export default function MessengerPage() {
 												!selectedGroup &&
 												!isAiChat &&
 												!isBotChat && (
-													<div className='rounded-xl border border-gray-800 bg-gray-950/60 p-3'>
+													<div className='rounded-xl border border-[#30363d] bg-[#0e1117] p-3.5'>
 														<div className='flex items-start justify-between gap-3'>
 															<div>
-																<p className='text-sm font-medium text-white'>
+																<p className='text-sm font-semibold text-[#e6edf3]'>
 																	{secretChatEnabled
 																		? '🔐 Секретный чат'
 																		: '☁️ Облачный чат'}
 																</p>
-																<p className='text-xs text-gray-500 mt-1 leading-relaxed'>
+																<p className='text-xs text-[#8b949e] mt-1 leading-relaxed'>
 																	{secretChatEnabled
 																		? 'Сквозное шифрование: ключи только на устройствах, сервер не читает сообщения.'
 																		: 'Стандартное шифрование: сообщения защищены при передаче и хранятся на сервере (как облачные чаты в Telegram).'}
@@ -7627,8 +7574,8 @@ export default function MessengerPage() {
 																onClick={toggleSecretChat}
 																className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${
 																	secretChatEnabled
-																		? 'bg-emerald-600'
-																		: 'bg-gray-700'
+																		? 'bg-[#0077FF]'
+																		: 'bg-[#21262d] border border-[#30363d]'
 																}`}
 																aria-pressed={secretChatEnabled}
 															>
@@ -7646,7 +7593,7 @@ export default function MessengerPage() {
 																	setIsSettingsOpen(false)
 																	setIsE2eKeyModalOpen(true)
 																}}
-																className='mt-3 w-full py-2 px-3 text-xs font-medium text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-lg transition-colors'
+																className='mt-3 w-full py-2 px-3 text-xs font-medium text-[#58a6ff] bg-[#0077FF]/10 hover:bg-[#0077FF]/20 border border-[#0077FF]/30 rounded-xl transition-colors'
 															>
 																Показать ключ шифрования
 															</button>
@@ -7655,7 +7602,7 @@ export default function MessengerPage() {
 												)}
 
 											<div>
-												<label className='text-xs text-gray-500 mb-2 block uppercase tracking-wider font-medium'>
+												<label className='text-[11px] text-[#8b949e] mb-2 block uppercase tracking-wider font-semibold'>
 													Фон чата
 												</label>
 												<div className='grid grid-cols-5 gap-2 mb-2'>
@@ -7667,12 +7614,9 @@ export default function MessengerPage() {
 															className={`w-8 h-8 rounded-full border-2 transition-all ${
 																!chatBackgroundImage &&
 																currentBackground.id === bg.id
-																	? `${bg.borderColor.replace(
-																			'/20',
-																			'',
-																		)} scale-110 shadow-lg`
-																	: 'border-transparent hover:scale-105 hover:border-gray-600'
-															} overflow-hidden ring-1 ring-gray-950/50`}
+																	? 'border-[#0077FF] scale-110 shadow-lg'
+																	: 'border-transparent hover:scale-105 hover:border-[#30363d]'
+															} overflow-hidden ring-1 ring-[#30363d]`}
 														>
 															<div
 																className={`w-full h-full ${bg.preview}`}
@@ -7683,23 +7627,23 @@ export default function MessengerPage() {
 												<div className='flex gap-2'>
 													<button
 														onClick={() => setIsCustomBgOpen(true)}
-														className='flex-1 py-2 px-3 text-xs font-medium text-gray-300 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors'
+														className='flex-1 py-2 px-3 text-xs font-medium text-[#e6edf3] bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] rounded-xl transition-colors'
 													>
-														Картинка
+														Своя картинка
 													</button>
 													{chatBackgroundImage && (
 														<button
 															onClick={handleClearCustomBackground}
-															className='py-2 px-3 text-xs font-medium text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 rounded-lg transition-colors'
+															className='py-2 px-3 text-xs font-medium text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 rounded-xl transition-colors'
 														>
 															Убрать
 														</button>
 													)}
 												</div>
 												{chatBackgroundImage && (
-													<div className='mt-3 space-y-3'>
+													<div className='mt-3 space-y-3 bg-[#0e1117] p-3 rounded-xl border border-[#30363d]'>
 														<div>
-															<label className='text-[10px] text-gray-500 mb-1 block uppercase tracking-wider font-medium'>
+															<label className='text-[10px] text-[#8b949e] mb-1 block uppercase tracking-wider font-medium'>
 																Прозрачность картинки
 															</label>
 															<input
@@ -7713,11 +7657,11 @@ export default function MessengerPage() {
 																		parseFloat(e.target.value),
 																	)
 																}
-																className='w-full'
+																className='w-full accent-[#0077FF]'
 															/>
 														</div>
 														<div>
-															<label className='text-[10px] text-gray-500 mb-1 block uppercase tracking-wider font-medium'>
+															<label className='text-[10px] text-[#8b949e] mb-1 block uppercase tracking-wider font-medium'>
 																Размытие картинки
 															</label>
 															<input
@@ -7731,15 +7675,15 @@ export default function MessengerPage() {
 																		parseInt(e.target.value, 10),
 																	)
 																}
-																className='w-full'
+																className='w-full accent-[#0077FF]'
 															/>
 														</div>
 													</div>
 												)}
 											</div>
 
-											<div className='pt-3 border-t border-gray-800'>
-												<label className='text-xs text-gray-500 mb-2 block uppercase tracking-wider font-medium'>
+											<div className='pt-3 border-t border-[#30363d]'>
+												<label className='text-[11px] text-[#8b949e] mb-2 block uppercase tracking-wider font-semibold'>
 													Стиль сообщений
 												</label>
 												<div className='grid grid-cols-5 gap-2'>
@@ -7750,12 +7694,9 @@ export default function MessengerPage() {
 															title={bg.name}
 															className={`w-8 h-8 rounded-full border-2 transition-all ${
 																messageTheme.id === bg.id
-																	? `${bg.borderColor.replace(
-																			'/20',
-																			'',
-																		)} scale-110 shadow-lg`
-																	: 'border-transparent hover:scale-105 hover:border-gray-600'
-															} overflow-hidden ring-1 ring-gray-950/50`}
+																	? 'border-[#0077FF] scale-110 shadow-lg'
+																	: 'border-transparent hover:scale-105 hover:border-[#30363d]'
+															} overflow-hidden ring-1 ring-[#30363d]`}
 														>
 															<div
 																className={`w-full h-full ${bg.preview}`}
@@ -7765,29 +7706,29 @@ export default function MessengerPage() {
 												</div>
 											</div>
 
-											<div className='pt-3 border-t border-gray-800'>
-												<label className='text-xs text-gray-500 mb-2 block uppercase tracking-wider font-medium'>
+											<div className='pt-3 border-t border-[#30363d]'>
+												<label className='text-[11px] text-[#8b949e] mb-2 block uppercase tracking-wider font-semibold'>
 													Эффекты
 												</label>
 												<button
 													onClick={() => setShowGridPattern(v => !v)}
-													className='w-full flex items-center justify-between rounded-lg bg-gray-800/60 hover:bg-gray-800 px-3 py-2 text-sm text-gray-200 transition-colors'
+													className='w-full flex items-center justify-between rounded-xl bg-[#0e1117] hover:bg-[#21262d] border border-[#30363d] px-3.5 py-2.5 text-xs text-[#e6edf3] transition-colors'
 												>
 													<span>Сетка на фоне</span>
-													<span className='text-xs text-gray-400'>
+													<span className='text-xs font-semibold text-[#0077FF]'>
 														{showGridPattern ? 'Вкл' : 'Выкл'}
 													</span>
 												</button>
 											</div>
 
-											<div className='pt-3 border-t border-gray-800'>
+											<div className='pt-3 border-t border-[#30363d]'>
 												<button
 													type='button'
 													onClick={() => {
 														setIsSettingsOpen(false)
 														setDeleteHistoryModalOpen(true)
 													}}
-													className='w-full text-left text-sm text-rose-500 hover:text-rose-400 hover:bg-rose-500/10 px-3 py-2 rounded-lg transition-colors'
+													className='w-full text-left text-xs text-rose-400 hover:text-white hover:bg-rose-500/10 px-3 py-2.5 rounded-xl border border-rose-500/20 transition-colors font-medium'
 												>
 													Удалить переписку…
 												</button>
@@ -8381,87 +8322,87 @@ export default function MessengerPage() {
 							) : null}
 
 							<div
-								className={`chat-composer-bar p-4 backdrop-blur-md relative transition-all ${
+								className={`chat-composer-bar p-3 md:p-4 bg-[#161b22] border-t border-[#30363d] relative transition-all ${
 									composerDragOver
-										? 'ring-2 ring-indigo-500/40 bg-indigo-950/20'
+										? 'ring-2 ring-[#0077FF]/40 bg-[#0077FF]/10'
 										: ''
 								}`}
 								{...composerDropHandlers}
 							>
 								{composerDragOver && (
-									<div className='pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-indigo-500/10 backdrop-blur-[1px]'>
-										<p className='text-sm font-medium text-indigo-300'>
+									<div className='pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-[#0077FF]/15 backdrop-blur-[1px]'>
+										<p className='text-sm font-medium text-white'>
 											Отпустите файлы для прикрепления
 										</p>
 									</div>
 								)}
 								{replyToMessage && (
-									<div className='max-w-4xl mx-auto mb-3 flex items-center gap-3 rounded-2xl border border-white/10 bg-black/25 px-4 py-2.5 text-xs text-gray-300'>
+									<div className='max-w-4xl mx-auto mb-2 flex items-center gap-3 rounded-xl border border-[#30363d] bg-[#0e1117] px-3.5 py-2 text-xs text-[#e6edf3] border-l-4 border-l-[#0077FF]'>
 										<div className='flex-1 min-w-0'>
-											<div className='text-[10px] uppercase tracking-wider text-gray-400'>
-												Ответ на: {getSenderName(replyToMessage)}
+											<div className='text-[10px] uppercase font-bold tracking-wider text-[#0077FF]'>
+												В ответ для {getSenderName(replyToMessage)}
 											</div>
-											<div className='truncate text-gray-300'>
+											<div className='truncate text-xs text-[#8b949e] mt-0.5'>
 												{getMessagePreview(replyToMessage)}
 											</div>
 										</div>
 										<button
 											onClick={() => setReplyToMessage(null)}
-											className='rounded-full px-2 py-1 text-gray-400 hover:bg-gray-700/60 hover:text-white transition'
+											className='w-6 h-6 flex items-center justify-center rounded-lg text-[#8b949e] hover:text-white hover:bg-[#21262d] transition'
 										>
 											✕
 										</button>
 									</div>
 								)}
 								<div
-									className={`chat-composer-input max-w-4xl mx-auto flex items-end gap-3 p-2.5 rounded-2xl shadow-sm focus-within:ring-2 transition-all duration-300 ${currentBackground.ringColor.replace('focus:', 'focus-within:').replace('/50', '/25')}`}
+									className="chat-composer-input max-w-4xl mx-auto flex items-end gap-2 p-1.5 md:p-2 rounded-2xl bg-[#0e1117] border border-[#30363d] focus-within:border-[#0077FF] focus-within:ring-1 focus-within:ring-[#0077FF]/40 transition-all duration-200"
 								>
 									{isRecording ? (
-										<div className='flex-1 flex items-center justify-between px-4 py-2'>
+										<div className='flex-1 flex items-center justify-between px-3 py-1.5'>
 											<div className='flex items-center gap-3'>
 												<div className='w-3 h-3 bg-red-500 rounded-full animate-pulse' />
-												<span className='text-white font-mono text-lg'>
+												<span className='text-white font-mono text-base font-semibold'>
 													{formatTime(recordingTime)}
 												</span>
 											</div>
 											<div className='flex items-center gap-2'>
 												<button
 													onClick={handleCancelRecording}
-													className='p-2 text-gray-400 hover:text-red-400 hover:bg-gray-700/50 rounded-full transition-all'
+													className='p-2 text-[#8b949e] hover:text-red-400 hover:bg-[#21262d] rounded-xl transition-all'
 													title='Отмена'
 												>
-													<StopIcon className='w-6 h-6' />
+													<StopIcon className='w-5 h-5' />
 												</button>
 												<button
 													onClick={handleSendVoice}
-													className={`p-2 rounded-full transition-all ${currentBackground.buttonBg} ${currentBackground.buttonHover} text-white`}
-													title='Отправить'
+													className='p-2 rounded-xl transition-all bg-[#0077FF] hover:bg-[#0066dd] text-white shadow-md shadow-[#0077FF]/25'
+													title='Отправить голосовое'
 												>
-													<CheckIcon className='w-6 h-6' />
+													<CheckIcon className='w-5 h-5' />
 												</button>
 											</div>
 										</div>
 									) : (
 										<>
-											<div ref={moreMenuRef} className="relative">
+											<div ref={moreMenuRef} className="relative shrink-0">
 												<button
 													onClick={() => setIsMoreOpen(!isMoreOpen)}
 													disabled={isBlockedChat || isBlockedUserChat || !canWriteToSelectedChannel || isUploading}
-													className={`p-2.5 rounded-full transition-all ${isMoreOpen ? 'bg-gray-700/50 text-white' : 'text-gray-400 hover:bg-gray-700/50'} ${currentBackground.accentColor.replace('text-', 'hover:text-')}`}
-													title="Ещё"
+													className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${isMoreOpen ? 'bg-[#21262d] text-[#0077FF]' : 'text-[#8b949e] hover:text-white hover:bg-[#21262d]'}`}
+													title="Прикрепить"
 												>
-													<svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+													<PaperclipIcon className="w-5 h-5" />
 												</button>
 												{isMoreOpen && (
-													<div className="absolute bottom-full left-0 mb-2 w-52 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl overflow-hidden z-50">
-														<button onClick={() => { handlePickFiles(); setIsMoreOpen(false) } } className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-gray-200 hover:bg-white/5 transition-colors">
-															<PaperclipIcon className="w-4 h-4 text-gray-400" /> Прикрепить файл
+													<div className="absolute bottom-full left-0 mb-2 w-56 bg-[#161b22] border border-[#30363d] rounded-2xl shadow-2xl p-1.5 z-50 animate-in fade-in zoom-in-95 duration-150">
+														<button onClick={() => { handlePickFiles(); setIsMoreOpen(false) } } className="flex items-center gap-3 w-full px-3 py-2 text-xs font-medium text-[#e6edf3] hover:bg-[#21262d] rounded-xl transition-colors">
+															<PaperclipIcon className="w-4 h-4 text-[#0077FF]" /> Прикрепить файл
 														</button>
-														<button onClick={() => { setIsPollModalOpen(true); setIsMoreOpen(false) } } className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-gray-200 hover:bg-white/5 transition-colors">
-															<ChartBarIcon className="w-4 h-4 text-gray-400" /> Опрос
+														<button onClick={() => { setIsPollModalOpen(true); setIsMoreOpen(false) } } className="flex items-center gap-3 w-full px-3 py-2 text-xs font-medium text-[#e6edf3] hover:bg-[#21262d] rounded-xl transition-colors">
+															<ChartBarIcon className="w-4 h-4 text-[#0077FF]" /> Опрос
 														</button>
-														<button onClick={() => { setIsScheduleModalOpen(true); setIsMoreOpen(false) } } className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-gray-200 hover:bg-white/5 transition-colors">
-															<Clock className="w-4 h-4 text-gray-400" /> Отложенная отправка
+														<button onClick={() => { setIsScheduleModalOpen(true); setIsMoreOpen(false) } } className="flex items-center gap-3 w-full px-3 py-2 text-xs font-medium text-[#e6edf3] hover:bg-[#21262d] rounded-xl transition-colors">
+															<Clock className="w-4 h-4 text-[#0077FF]" /> Отложенная отправка
 														</button>
 													</div>
 												)}
@@ -8471,7 +8412,7 @@ export default function MessengerPage() {
 
 											{files.length > 0 && (
 												<div className='absolute bottom-full left-0 right-0 mb-2 px-2 z-20'>
-													<div className='flex items-center gap-2 overflow-x-auto p-2.5 rounded-2xl border border-gray-700/60 bg-gray-900/95 shadow-xl backdrop-blur-md custom-scrollbar'>
+													<div className='flex items-center gap-2 overflow-x-auto p-2.5 rounded-2xl border border-[#30363d] bg-[#161b22]/95 shadow-xl backdrop-blur-md custom-scrollbar'>
 														{files.map((f, idx) => {
 															const isImg = f.type.startsWith('image/')
 															const previewUrl = isImg ? URL.createObjectURL(f) : null
@@ -8480,15 +8421,15 @@ export default function MessengerPage() {
 															return (
 																<div
 																	key={`${f.name}-${f.size}-${idx}`}
-																	className='relative flex flex-col items-center justify-between w-20 h-20 shrink-0 rounded-xl overflow-hidden border border-gray-700 bg-gray-800 p-1 group'
+																	className='relative flex flex-col items-center justify-between w-20 h-20 shrink-0 rounded-xl overflow-hidden border border-[#30363d] bg-[#0e1117] p-1 group'
 																>
 																	{isImg && previewUrl ? (
 																		<img src={previewUrl} alt={f.name} className='w-full h-full object-cover rounded-lg' />
 																	) : (
-																		<div className='flex-1 flex flex-col items-center justify-center text-gray-400 p-1 text-center'>
-																			<Paperclip className='w-5 h-5 mb-0.5 text-blue-400' />
-																			<span className='text-[9px] text-gray-300 truncate max-w-[68px] font-medium'>{f.name}</span>
-																			<span className='text-[8px] text-gray-500'>{sizeStr}</span>
+																		<div className='flex-1 flex flex-col items-center justify-center text-[#8b949e] p-1 text-center'>
+																			<Paperclip className='w-5 h-5 mb-0.5 text-[#0077FF]' />
+																			<span className='text-[9px] text-[#e6edf3] truncate max-w-[68px] font-medium'>{f.name}</span>
+																			<span className='text-[8px] text-[#8b949e]'>{sizeStr}</span>
 																		</div>
 																	)}
 																	<button
@@ -8508,7 +8449,7 @@ export default function MessengerPage() {
 											)}
 											{showBotCommandHints && (
 												<div className='absolute bottom-full left-0 right-0 mb-2 px-2'>
-													<div className='rounded-xl border border-gray-700/60 bg-gray-900/95 shadow-xl overflow-hidden'>
+													<div className='rounded-2xl border border-[#30363d] bg-[#161b22]/95 shadow-xl overflow-hidden p-1'>
 														{filteredBotCommands.map(item => (
 															<button
 																key={item.command}
@@ -8520,12 +8461,12 @@ export default function MessengerPage() {
 																	)
 																	messageInputRef.current?.focus()
 																}}
-																className='w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-gray-800 transition-colors flex items-center justify-between gap-3'
+																className='w-full text-left px-3 py-2 text-xs text-[#e6edf3] hover:bg-[#21262d] rounded-xl transition-colors flex items-center justify-between gap-3'
 															>
-																<span className='font-medium'>
-																	{item.title}
+																<span className='font-semibold text-[#0077FF]'>
+																	/{item.command}
 																</span>
-																<span className='text-xs text-gray-500'>
+																<span className='text-xs text-[#8b949e]'>
 																	{item.description}
 																</span>
 															</button>
@@ -8537,25 +8478,25 @@ export default function MessengerPage() {
 											{isPickerOpen && (
 												<div
 													ref={pickerRef}
-													className='absolute bottom-full right-12 mb-2 w-80 rounded-2xl border border-gray-800 bg-gray-900/95 shadow-2xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200 flex flex-col'
+													className='absolute bottom-full right-12 mb-2 w-80 rounded-2xl border border-[#30363d] bg-[#161b22] shadow-2xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-150 flex flex-col'
 												>
-													<div className='flex p-1 bg-gray-950/50 border-b border-gray-800'>
+													<div className='flex p-1 bg-[#0e1117] border-b border-[#30363d]'>
 														<button
 															onClick={() => setPickerTab('emoji')}
-															className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${
+															className={`flex-1 py-1.5 text-xs font-semibold rounded-xl transition-all ${
 																pickerTab === 'emoji'
-																	? 'bg-gray-800 text-white shadow-sm'
-																	: 'text-gray-500 hover:text-gray-300'
+																	? 'bg-[#21262d] text-white shadow-sm border border-[#30363d]'
+																	: 'text-[#8b949e] hover:text-[#e6edf3]'
 															}`}
 														>
 															Эмодзи
 														</button>
 														<button
 															onClick={() => setPickerTab('sticker')}
-															className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${
+															className={`flex-1 py-1.5 text-xs font-semibold rounded-xl transition-all ${
 																pickerTab === 'sticker'
-																	? 'bg-gray-800 text-white shadow-sm'
-																	: 'text-gray-500 hover:text-gray-300'
+																	? 'bg-[#21262d] text-white shadow-sm border border-[#30363d]'
+																	: 'text-[#8b949e] hover:text-[#e6edf3]'
 															}`}
 														>
 															Стикеры
@@ -8571,7 +8512,7 @@ export default function MessengerPage() {
 																		onClick={() =>
 																			setInput(prev => prev + emoji)
 																		}
-																		className='text-2xl p-2 hover:bg-gray-800/50 rounded-xl transition-all hover:scale-110 active:scale-90'
+																		className='text-2xl p-1.5 hover:bg-[#21262d] rounded-xl transition-all hover:scale-110 active:scale-95'
 																	>
 																		<AppleEmoji emoji={emoji} size={28} />
 																	</button>
@@ -8580,12 +8521,12 @@ export default function MessengerPage() {
 														) : (
 															<div className='space-y-4'>
 																<div className='flex items-center justify-between px-1'>
-																	<span className='text-[10px] font-bold uppercase tracking-widest text-gray-500'>
+																	<span className='text-[10px] font-bold uppercase tracking-widest text-[#8b949e]'>
 																		Ваши стикеры
 																	</span>
 																	<button
 																		onClick={handleUploadSticker}
-																		className='text-[10px] font-bold text-indigo-400 hover:text-indigo-300 transition-colors uppercase tracking-widest'
+																		className='text-[10px] font-bold text-[#0077FF] hover:underline transition-colors uppercase tracking-widest'
 																	>
 																		+ Загрузить
 																	</button>
@@ -8597,7 +8538,7 @@ export default function MessengerPage() {
 																			onClick={() =>
 																				handleSendSticker(sticker.url)
 																			}
-																			className='aspect-square rounded-xl bg-gray-800/40 hover:bg-gray-700/60 transition-all p-2 group hover:scale-105 active:scale-95'
+																			className='aspect-square rounded-xl bg-[#0e1117] border border-[#30363d] hover:bg-[#21262d] transition-all p-2 group hover:scale-105 active:scale-95'
 																		>
 																			<img
 																				src={getAttachmentUrl(sticker.url)}
@@ -8612,7 +8553,7 @@ export default function MessengerPage() {
 																			onClick={() =>
 																				handleSendSticker(sticker.url)
 																			}
-																			className='aspect-square rounded-xl bg-gray-800/40 hover:bg-gray-700/60 transition-all p-2 group relative hover:scale-105 active:scale-95'
+																			className='aspect-square rounded-xl bg-[#0e1117] border border-[#30363d] hover:bg-[#21262d] transition-all p-2 group relative hover:scale-105 active:scale-95'
 																		>
 																			<img
 																				src={getAttachmentUrl(sticker.url)}
@@ -8671,7 +8612,7 @@ export default function MessengerPage() {
 												users={mentionUsers}
 												messages={messages}
 												onScrollToMessage={jumpToMessage}
-												className='flex-1 bg-transparent border-none text-white placeholder-gray-500 focus:ring-0 resize-none py-2.5 max-h-32 min-h-[44px] custom-scrollbar'
+												className='flex-1 bg-transparent border-none text-[#e6edf3] placeholder-[#8b949e] focus:ring-0 resize-none py-2 px-1 max-h-32 min-h-[40px] custom-scrollbar text-sm'
 											/>
 
 											<button
@@ -8679,26 +8620,26 @@ export default function MessengerPage() {
 													setIsPickerOpen(!isPickerOpen)
 												}}
 												disabled={isBlockedChat || !canWriteToSelectedChannel}
-												className={`p-2.5 text-gray-400 hover:bg-gray-700/50 rounded-full transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+												className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all disabled:opacity-50 disabled:cursor-not-allowed shrink-0 ${
 													isPickerOpen
-														? 'text-indigo-400 bg-gray-700/50'
-														: 'hover:text-indigo-400'
+														? 'text-[#0077FF] bg-[#21262d]'
+														: 'text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#21262d]'
 												}`}
 												title='Эмодзи и стикеры'
 											>
-												<SmileIcon className='w-6 h-6' />
+												<SmileIcon className='w-5 h-5' />
 											</button>
 
 											<button
 												type='button'
 												onClick={handleAiAutoCorrectText}
 												disabled={isBlockedChat || !canWriteToSelectedChannel || isAiCorrecting}
-												className={`p-2.5 rounded-full transition-all flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed relative group ${
+												className={`w-9 h-9 rounded-xl transition-all flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed shrink-0 relative group ${
 													isAiCorrecting
 														? 'animate-pulse text-amber-300 bg-amber-500/20 ring-1 ring-amber-400/50'
 														: user?.premium
-															? 'text-amber-400 hover:text-amber-300 hover:bg-amber-500/20 hover:scale-110 active:scale-95'
-															: 'text-gray-400 hover:text-amber-400 hover:bg-white/10'
+															? 'text-amber-400 hover:text-amber-300 hover:bg-amber-500/20'
+															: 'text-[#8b949e] hover:text-amber-400 hover:bg-[#21262d]'
 												}`}
 												title={
 													user?.premium
@@ -8707,31 +8648,31 @@ export default function MessengerPage() {
 												}
 											>
 												{isAiCorrecting ? (
-													<div className='w-5 h-5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin' />
+													<div className='w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin' />
 												) : (
 													<div className='relative flex items-center justify-center'>
-														<StarIcon className={`w-6 h-6 ${user?.premium ? 'fill-amber-400/30 text-amber-400' : 'text-amber-400/80'}`} />
-														<SparklesIcon className='w-3 h-3 text-violet-400 absolute -top-1 -right-1.5 animate-bounce' />
+														<StarIcon className={`w-5 h-5 ${user?.premium ? 'fill-amber-400/30 text-amber-400' : 'text-amber-400/80'}`} />
+														<SparklesIcon className='w-2.5 h-2.5 text-violet-400 absolute -top-1 -right-1 animate-bounce' />
 													</div>
 												)}
 											</button>
 
 											{input.trim() || files.length > 0 ? (
-												<>
-													<button
-														onClick={handleSendMessage}
-														disabled={
-															!canWriteToSelectedChannel || isBlockedChat || isBlockedUserChat || isUploading
-														}
-														className={`p-3 rounded-2xl transition-all duration-300 shadow-lg flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed ${currentBackground.buttonBg} ${currentBackground.buttonHover} text-white translate-x-0 rotate-0`}
-													>
-														<SendIcon className='w-5 h-5' />
-													</button>
-												</>
+												<button
+													onClick={handleSendMessage}
+													disabled={
+														!canWriteToSelectedChannel || isBlockedChat || isBlockedUserChat || isUploading
+													}
+													className='w-10 h-10 rounded-full bg-[#0077FF] hover:bg-[#0066dd] text-white shadow-md shadow-[#0077FF]/25 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed shrink-0 transition-transform active:scale-95'
+													title='Отправить'
+												>
+													<SendIcon className='w-5 h-5 ml-0.5' />
+												</button>
 											) : (
 												<button
 													onClick={handleStartRecording}
-													className='p-3 rounded-2xl transition-all duration-300 shadow-lg flex items-center justify-center bg-gray-700 hover:bg-gray-600 text-white translate-x-0 rotate-0'
+													className='w-10 h-10 rounded-full bg-[#21262d] hover:bg-[#30363d] text-[#8b949e] hover:text-white flex items-center justify-center shrink-0 transition-transform active:scale-95'
+													title='Голосовое сообщение'
 												>
 													<MicIcon className='w-5 h-5' />
 												</button>
@@ -8742,23 +8683,29 @@ export default function MessengerPage() {
 							</div>
 						</>
 					) : (
-						<div className='flex-1 flex flex-col items-center justify-center text-[var(--app-muted)] gap-6 p-8 relative overflow-hidden'>
-							<div className='absolute inset-0 bg-gradient-to-tr from-[#2dd4a8]/5 via-transparent to-[#22b893]/5 pointer-events-none' />
+						<div className='flex-1 flex flex-col items-center justify-center p-8 relative overflow-hidden select-none'>
+							<div className='w-full max-w-sm rounded-3xl bg-[#161b22]/90 border border-[#30363d] p-8 text-center shadow-2xl backdrop-blur-md flex flex-col items-center gap-4'>
+								<div className='w-20 h-20 rounded-2xl bg-[#0077FF]/10 border border-[#0077FF]/30 flex items-center justify-center text-[#0077FF] shadow-inner'>
+									<MessageSquareIcon className='w-10 h-10' />
+								</div>
 
-							<div className='w-32 h-32 rounded-[2rem] bg-white/5 shadow-2xl flex items-center justify-center border border-white/6 rotate-12 transition-transform duration-700 hover:rotate-6 group'>
-								<MessageSquareIcon className='w-16 h-16 text-[var(--app-muted)] group-hover:text-[var(--app-accent)]/50 transition-colors duration-500' />
-							</div>
+								<div className='space-y-1.5'>
+									<h3 className='text-lg font-bold text-[#e6edf3]'>
+										Вондик Мессенджер
+									</h3>
+									<p className='text-xs text-[#8b949e] leading-relaxed'>
+										Выберите чат или канал в списке слева, чтобы начать общение.
+									</p>
+								</div>
 
-							<div className='text-center space-y-2 max-w-sm z-10'>
-								<h3 className='text-2xl font-bold text-[var(--app-fg)]'>
-									<span className='bg-gradient-to-r from-[#2dd4a8] to-[#22b893] bg-clip-text text-transparent'>
-										Вондик
-									</span>{' '}
-									Мессенджер
-								</h3>
-								<p className='text-[var(--app-muted)]'>
-									Выберите чат слева или найдите друга, чтобы начать общение.
-								</p>
+								<div className='flex items-center gap-2 pt-2'>
+									<span className='px-3 py-1 rounded-full text-[11px] font-medium bg-[#0e1117] text-[#8b949e] border border-[#30363d]'>
+										🔒 Сквозное шифрование
+									</span>
+									<span className='px-3 py-1 rounded-full text-[11px] font-medium bg-[#0077FF]/15 text-[#0077FF] border border-[#0077FF]/30'>
+										⚡ Мгновенно
+									</span>
+								</div>
 							</div>
 						</div>
 					)}
@@ -8776,10 +8723,10 @@ export default function MessengerPage() {
 			</div>
 
 			{isForwardOpen && (forwardMessage || selectedMessageIds.size > 0) && (
-				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
-					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
+				<div className='fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
+					<div className='bg-[#161b22] border border-[#30363d] rounded-2xl w-full max-w-md p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200'>
 						<div className='flex items-center justify-between mb-4'>
-							<h3 className='text-xl font-bold text-white'>
+							<h3 className='text-lg font-bold text-[#e6edf3]'>
 								Переслать{' '}
 								{selectedMessageIds.size > 0
 									? `${selectedMessageIds.size} сообще${selectedMessageIds.size % 10 === 1 && selectedMessageIds.size % 100 !== 11 ? 'ние' : selectedMessageIds.size % 10 >= 2 && selectedMessageIds.size % 10 <= 4 && (selectedMessageIds.size % 100 < 12 || selectedMessageIds.size % 100 > 14) ? 'ния' : 'ний'}`
@@ -8790,7 +8737,7 @@ export default function MessengerPage() {
 									setIsForwardOpen(false)
 									setForwardMessage(null)
 								}}
-								className='p-1 text-gray-400 hover:text-white transition-colors'
+								className='p-1 text-[#8b949e] hover:text-white transition-colors'
 							>
 								<XIcon className='w-5 h-5' />
 							</button>
@@ -8800,13 +8747,13 @@ export default function MessengerPage() {
 								type='text'
 								value={forwardQuery}
 								onChange={e => setForwardQuery(e.target.value)}
-								className='w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50'
+								className='w-full bg-[#0e1117] border border-[#30363d] rounded-xl px-4 py-2.5 text-[#e6edf3] placeholder-[#8b949e] focus:outline-none focus:border-[#0077FF] text-sm'
 								placeholder='Поиск чатов, групп, каналов...'
 							/>
 						</div>
-						<div className='max-h-80 overflow-y-auto space-y-2 custom-scrollbar'>
+						<div className='max-h-80 overflow-y-auto space-y-1.5 custom-scrollbar'>
 							{forwardTargets.length === 0 && (
-								<div className='text-center text-sm text-gray-500 py-6'>
+								<div className='text-center text-xs text-[#8b949e] py-6'>
 									Ничего не найдено
 								</div>
 							)}
@@ -8820,34 +8767,34 @@ export default function MessengerPage() {
 											handleForwardToTarget(target)
 										}
 									}}
-									className='w-full flex items-center justify-between gap-3 rounded-xl border border-gray-800/60 bg-gray-800/40 px-4 py-3 text-left text-sm text-gray-200 hover:bg-gray-800/70 transition'
+									className='w-full flex items-center justify-between gap-3 rounded-xl border border-[#30363d] bg-[#0e1117] px-3.5 py-2.5 text-left text-xs text-[#e6edf3] hover:bg-[#21262d] transition'
 								>
 									<div className='min-w-0'>
-										<div className='truncate font-medium'>{target.label}</div>
-										<div className='text-[11px] uppercase tracking-wider text-gray-500'>
+										<div className='truncate font-semibold'>{target.label}</div>
+										<div className='text-[10px] uppercase font-medium tracking-wider text-[#8b949e]'>
 											{target.sub}
 										</div>
 									</div>
-									<span className='text-xs text-gray-500'>Отправить</span>
+									<span className='text-xs font-semibold text-[#0077FF]'>Отправить</span>
 								</button>
 							))}
 						</div>
 						{forwardMessage && (
-							<div className='mt-4 rounded-xl border border-gray-800/60 bg-gray-800/30 px-4 py-3 text-xs text-gray-300'>
-								<div className='text-[10px] uppercase tracking-wider text-gray-500 mb-1'>
+							<div className='mt-4 rounded-xl border border-[#30363d] bg-[#0e1117] px-3.5 py-2.5 text-xs text-[#8b949e] border-l-4 border-l-[#0077FF]'>
+								<div className='text-[10px] uppercase font-bold tracking-wider text-[#0077FF] mb-1'>
 									Сообщение
 								</div>
-								<div className='truncate'>
+								<div className='truncate text-[#e6edf3]'>
 									{getMessagePreview(forwardMessage)}
 								</div>
 							</div>
 						)}
 						{selectedMessageIds.size > 0 && (
-							<div className='mt-4 rounded-xl border border-gray-800/60 bg-gray-800/30 px-4 py-3 text-xs text-gray-300'>
-								<div className='text-[10px] uppercase tracking-wider text-gray-500 mb-1'>
+							<div className='mt-4 rounded-xl border border-[#30363d] bg-[#0e1117] px-3.5 py-2.5 text-xs text-[#8b949e] border-l-4 border-l-[#0077FF]'>
+								<div className='text-[10px] uppercase font-bold tracking-wider text-[#0077FF] mb-1'>
 									Выбрано сообщений
 								</div>
-								<div>
+								<div className='text-[#e6edf3] font-semibold'>
 									{selectedMessageIds.size} сообще
 									{selectedMessageIds.size % 10 === 1 &&
 									selectedMessageIds.size % 100 !== 11
@@ -8866,46 +8813,46 @@ export default function MessengerPage() {
 			)}
 
 			{isCreateChannelOpen && (
-				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
-					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
+				<div className='fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
+					<div className='bg-[#161b22] border border-[#30363d] rounded-2xl w-full max-w-md p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200'>
 						<div className='flex items-center justify-between mb-6'>
-							<h3 className='text-xl font-bold text-white'>Создать канал</h3>
+							<h3 className='text-lg font-bold text-[#e6edf3]'>Создать канал</h3>
 							<button
 								onClick={() => setIsCreateChannelOpen(false)}
-								className='p-1 text-gray-400 hover:text-white transition-colors'
+								className='p-1 text-[#8b949e] hover:text-white transition-colors'
 							>
 								<XIcon className='w-5 h-5' />
 							</button>
 						</div>
 						<form onSubmit={handleCreateChannel} className='space-y-4'>
 							<div>
-								<label className='block text-sm font-medium text-gray-400 mb-1'>
+								<label className='block text-xs font-semibold text-[#8b949e] uppercase tracking-wider mb-1.5'>
 									Название
 								</label>
 								<input
 									type='text'
 									value={newChannelName}
 									onChange={e => setNewChannelName(e.target.value)}
-									className='w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50'
+									className='w-full bg-[#0e1117] border border-[#30363d] rounded-xl px-4 py-2.5 text-[#e6edf3] placeholder-[#8b949e] focus:outline-none focus:border-[#0077FF] text-sm'
 									placeholder='Например: Новости'
 									required
 								/>
 							</div>
 							<div>
-								<label className='block text-sm font-medium text-gray-400 mb-1'>
+								<label className='block text-xs font-semibold text-[#8b949e] uppercase tracking-wider mb-1.5'>
 									Описание
 								</label>
 								<textarea
 									value={newChannelDesc}
 									onChange={e => setNewChannelDesc(e.target.value)}
-									className='w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none h-24'
+									className='w-full bg-[#0e1117] border border-[#30363d] rounded-xl px-4 py-2.5 text-[#e6edf3] placeholder-[#8b949e] focus:outline-none focus:border-[#0077FF] text-sm resize-none h-24'
 									placeholder='О чем этот канал?'
 								/>
 							</div>
 							<button
 								type='submit'
 								disabled={!newChannelName.trim()}
-								className='w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+								className='w-full bg-[#0077FF] hover:bg-[#0066dd] text-white font-medium py-2.5 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-[#0077FF]/20 text-sm'
 							>
 								Создать
 							</button>
@@ -8915,50 +8862,50 @@ export default function MessengerPage() {
 			)}
 
 			{isCreateCommunityOpen && (
-				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
-					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
+				<div className='fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
+					<div className='bg-[#161b22] border border-[#30363d] rounded-2xl w-full max-w-md p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200'>
 						<div className='flex items-center justify-between mb-6'>
-							<h3 className='text-xl font-bold text-white'>
+							<h3 className='text-lg font-bold text-[#e6edf3]'>
 								Создать сервер
 							</h3>
 							<button
 								onClick={() => setIsCreateCommunityOpen(false)}
-								className='p-1 text-gray-400 hover:text-white transition-colors'
+								className='p-1 text-[#8b949e] hover:text-white transition-colors'
 							>
 								<XIcon className='w-5 h-5' />
 							</button>
 						</div>
 						<form onSubmit={handleCreateCommunity} className='space-y-4'>
 							<div>
-								<label className='block text-sm font-medium text-gray-400 mb-1'>
+								<label className='block text-xs font-semibold text-[#8b949e] uppercase tracking-wider mb-1.5'>
 									Название
 								</label>
 								<input
 									type='text'
 									value={communityName}
 									onChange={e => setCommunityName(e.target.value)}
-									className='w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50'
+									className='w-full bg-[#0e1117] border border-[#30363d] rounded-xl px-4 py-2.5 text-[#e6edf3] placeholder-[#8b949e] focus:outline-none focus:border-[#0077FF] text-sm'
 									placeholder='Например: Мой сервер'
 									required
 								/>
 							</div>
 							<div>
-								<label className='block text-sm font-medium text-gray-400 mb-1'>
+								<label className='block text-xs font-semibold text-[#8b949e] uppercase tracking-wider mb-1.5'>
 									Описание
 								</label>
 								<textarea
 									value={communityDesc}
 									onChange={e => setCommunityDesc(e.target.value)}
-									className='w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 resize-none h-24'
+									className='w-full bg-[#0e1117] border border-[#30363d] rounded-xl px-4 py-2.5 text-[#e6edf3] placeholder-[#8b949e] focus:outline-none focus:border-[#0077FF] text-sm resize-none h-24'
 									placeholder='О чём этот сервер?'
 								/>
 							</div>
 							<button
 								type='submit'
 								disabled={!communityName.trim()}
-								className='w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+								className='w-full bg-[#0077FF] hover:bg-[#0066dd] text-white font-medium py-2.5 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-[#0077FF]/20 text-sm'
 							>
-								Создать
+								Создать сервер
 							</button>
 						</form>
 					</div>
@@ -8966,28 +8913,28 @@ export default function MessengerPage() {
 			)}
 
 			{isCreateCommChannelOpen && (
-				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
-					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
+				<div className='fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
+					<div className='bg-[#161b22] border border-[#30363d] rounded-2xl w-full max-w-md p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200'>
 						<div className='flex items-center justify-between mb-6'>
-							<h3 className='text-xl font-bold text-white'>
+							<h3 className='text-lg font-bold text-[#e6edf3]'>
 								Создать канал на сервере
 							</h3>
 							<button
 								onClick={() => setIsCreateCommChannelOpen(false)}
-								className='p-1 text-gray-400 hover:text-white transition-colors'
+								className='p-1 text-[#8b949e] hover:text-white transition-colors'
 							>
 								<XIcon className='w-5 h-5' />
 							</button>
 						</div>
 						<form onSubmit={handleCreateCommunityChannel} className='space-y-4'>
 							<div>
-								<label className='block text-sm font-medium text-gray-400 mb-1'>
+								<label className='block text-xs font-semibold text-[#8b949e] uppercase tracking-wider mb-1.5'>
 									Сервер
 								</label>
 								<select
 									value={selectedCommunityId}
 									onChange={e => setSelectedCommunityId(e.target.value)}
-									className='w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50'
+									className='w-full bg-[#0e1117] border border-[#30363d] rounded-xl px-4 py-2.5 text-[#e6edf3] focus:outline-none focus:border-[#0077FF] text-sm'
 								>
 									{myCommunities.map(c => (
 										<option key={c.id} value={c.id}>
@@ -8997,60 +8944,62 @@ export default function MessengerPage() {
 								</select>
 							</div>
 							<div>
-								<label className='block text-sm font-medium text-gray-400 mb-1'>
+								<label className='block text-xs font-semibold text-[#8b949e] uppercase tracking-wider mb-1.5'>
 									Название канала
 								</label>
 								<input
 									type='text'
 									value={commChannelName}
 									onChange={e => setCommChannelName(e.target.value)}
-									className='w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50'
+									className='w-full bg-[#0e1117] border border-[#30363d] rounded-xl px-4 py-2.5 text-[#e6edf3] placeholder-[#8b949e] focus:outline-none focus:border-[#0077FF] text-sm'
 									placeholder='Например: общий-чат'
 									required
 								/>
 							</div>
 							<div>
-								<label className='block text-sm font-medium text-gray-400 mb-1'>
+								<label className='block text-xs font-semibold text-[#8b949e] uppercase tracking-wider mb-1.5'>
 									Описание
 								</label>
 								<textarea
 									value={commChannelDesc}
 									onChange={e => setCommChannelDesc(e.target.value)}
-									className='w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none h-24'
+									className='w-full bg-[#0e1117] border border-[#30363d] rounded-xl px-4 py-2.5 text-[#e6edf3] placeholder-[#8b949e] focus:outline-none focus:border-[#0077FF] text-sm resize-none h-24'
 									placeholder='О чем этот канал?'
 								/>
 							</div>
 							<div>
-								<label className='block text-sm font-medium text-gray-400 mb-1'>
+								<label className='block text-xs font-semibold text-[#8b949e] uppercase tracking-wider mb-1.5'>
 									Тип
 								</label>
-								<div className='flex gap-3'>
-									<label className='text-sm text-gray-300 flex items-center gap-2'>
+								<div className='flex gap-4'>
+									<label className='text-sm text-[#e6edf3] flex items-center gap-2 cursor-pointer'>
 										<input
 											type='radio'
 											name='commChannelType'
 											value='text'
 											checked={commChannelType === 'text'}
 											onChange={() => setCommChannelType('text')}
+											className='accent-[#0077FF]'
 										/>
-										Text
+										Текстовый
 									</label>
-									<label className='text-sm text-gray-300 flex items-center gap-2'>
+									<label className='text-sm text-[#e6edf3] flex items-center gap-2 cursor-pointer'>
 										<input
 											type='radio'
 											name='commChannelType'
 											value='voice'
 											checked={commChannelType === 'voice'}
 											onChange={() => setCommChannelType('voice')}
+											className='accent-[#0077FF]'
 										/>
-										Voice
+										Голосовой
 									</label>
 								</div>
 							</div>
 							<button
 								type='submit'
 								disabled={!commChannelName.trim() || !selectedCommunityId}
-								className='w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+								className='w-full bg-[#0077FF] hover:bg-[#0066dd] text-white font-medium py-2.5 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-[#0077FF]/20 text-sm'
 							>
 								Создать
 							</button>
@@ -9060,38 +9009,38 @@ export default function MessengerPage() {
 			)}
 
 			{isJoinChannelOpen && (
-				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
-					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
+				<div className='fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
+					<div className='bg-[#161b22] border border-[#30363d] rounded-2xl w-full max-w-md p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200'>
 						<div className='flex items-center justify-between mb-6'>
-							<h3 className='text-xl font-bold text-white'>Вступить в канал</h3>
+							<h3 className='text-lg font-bold text-[#e6edf3]'>Вступить в канал</h3>
 							<button
 								onClick={() => setIsJoinChannelOpen(false)}
-								className='p-1 text-gray-400 hover:text-white transition-colors'
+								className='p-1.5 text-[#8b949e] hover:text-white hover:bg-[#21262d] rounded-lg transition-colors'
 							>
 								<XIcon className='w-5 h-5' />
 							</button>
 						</div>
 						<form onSubmit={handleJoinChannel} className='space-y-4'>
 							<div>
-								<label className='block text-sm font-medium text-gray-400 mb-1'>
+								<label className='block text-xs font-semibold text-[#8b949e] uppercase tracking-wider mb-1.5'>
 									Ссылка-приглашение
 								</label>
 								<input
 									type='text'
 									value={joinInviteCode}
 									onChange={e => setJoinInviteCode(e.target.value)}
-									className='w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50'
+									className='w-full bg-[#0e1117] border border-[#30363d] rounded-xl px-4 py-2.5 text-[#e6edf3] placeholder-[#8b949e] focus:outline-none focus:border-[#0077FF] text-sm'
 									placeholder='https://…/feed/messages/join/channel/…'
 									required
 								/>
-								<p className='mt-1 text-xs text-gray-500'>
+								<p className='mt-1.5 text-xs text-[#8b949e]'>
 									Можно вставить полную ссылку или путь /feed/messages/join/channel/…
 								</p>
 							</div>
 							<button
 								type='submit'
 								disabled={!joinInviteCode.trim()}
-								className='w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+								className='w-full bg-[#0077FF] hover:bg-[#0066dd] text-white font-medium py-2.5 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-[#0077FF]/20 text-sm'
 							>
 								Вступить
 							</button>
@@ -9101,46 +9050,46 @@ export default function MessengerPage() {
 			)}
 
 			{isCreateGroupOpen && (
-				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
-					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
+				<div className='fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
+					<div className='bg-[#161b22] border border-[#30363d] rounded-2xl w-full max-w-md p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200'>
 						<div className='flex items-center justify-between mb-6'>
-							<h3 className='text-xl font-bold text-white'>Создать группу</h3>
+							<h3 className='text-lg font-bold text-[#e6edf3]'>Создать группу</h3>
 							<button
 								onClick={() => setIsCreateGroupOpen(false)}
-								className='p-1 text-gray-400 hover:text-white transition-colors'
+								className='p-1.5 text-[#8b949e] hover:text-white hover:bg-[#21262d] rounded-lg transition-colors'
 							>
 								<XIcon className='w-5 h-5' />
 							</button>
 						</div>
 						<form onSubmit={handleCreateGroup} className='space-y-4'>
 							<div>
-								<label className='block text-sm font-medium text-gray-400 mb-1'>
+								<label className='block text-xs font-semibold text-[#8b949e] uppercase tracking-wider mb-1.5'>
 									Название группы
 								</label>
 								<input
 									type='text'
 									value={newGroupName}
 									onChange={e => setNewGroupName(e.target.value)}
-									className='w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50'
+									className='w-full bg-[#0e1117] border border-[#30363d] rounded-xl px-4 py-2.5 text-[#e6edf3] placeholder-[#8b949e] focus:outline-none focus:border-[#0077FF] text-sm'
 									placeholder='Например: Рабочий чат'
 									required
 								/>
 							</div>
 							<div>
-								<label className='block text-sm font-medium text-gray-400 mb-1'>
+								<label className='block text-xs font-semibold text-[#8b949e] uppercase tracking-wider mb-1.5'>
 									Описание (опционально)
 								</label>
 								<textarea
 									value={newGroupDesc}
 									onChange={e => setNewGroupDesc(e.target.value)}
-									className='w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 min-h-[100px] resize-none'
+									className='w-full bg-[#0e1117] border border-[#30363d] rounded-xl px-4 py-2.5 text-[#e6edf3] placeholder-[#8b949e] focus:outline-none focus:border-[#0077FF] text-sm min-h-[100px] resize-none'
 									placeholder='О чем будет эта группа...'
 								/>
 							</div>
 							<button
 								type='submit'
 								disabled={!newGroupName.trim()}
-								className='w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+								className='w-full bg-[#0077FF] hover:bg-[#0066dd] text-white font-medium py-2.5 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-[#0077FF]/20 text-sm'
 							>
 								Создать группу
 							</button>
@@ -9150,40 +9099,40 @@ export default function MessengerPage() {
 			)}
 
 			{isJoinGroupOpen && (
-				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
-					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
+				<div className='fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
+					<div className='bg-[#161b22] border border-[#30363d] rounded-2xl w-full max-w-md p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200'>
 						<div className='flex items-center justify-between mb-6'>
-							<h3 className='text-xl font-bold text-white'>
+							<h3 className='text-lg font-bold text-[#e6edf3]'>
 								Вступить в группу
 							</h3>
 							<button
 								onClick={() => setIsJoinGroupOpen(false)}
-								className='p-1 text-gray-400 hover:text-white transition-colors'
+								className='p-1.5 text-[#8b949e] hover:text-white hover:bg-[#21262d] rounded-lg transition-colors'
 							>
 								<XIcon className='w-5 h-5' />
 							</button>
 						</div>
 						<form onSubmit={handleJoinGroup} className='space-y-4'>
 							<div>
-								<label className='block text-sm font-medium text-gray-400 mb-1'>
+								<label className='block text-xs font-semibold text-[#8b949e] uppercase tracking-wider mb-1.5'>
 									Ссылка-приглашение
 								</label>
 								<input
 									type='text'
 									value={joinGroupInviteCode}
 									onChange={e => setJoinGroupInviteCode(e.target.value)}
-									className='w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50'
+									className='w-full bg-[#0e1117] border border-[#30363d] rounded-xl px-4 py-2.5 text-[#e6edf3] placeholder-[#8b949e] focus:outline-none focus:border-[#0077FF] text-sm'
 									placeholder='https://…/feed/messages/join/group/…'
 									required
 								/>
-								<p className='mt-1 text-xs text-gray-500'>
+								<p className='mt-1.5 text-xs text-[#8b949e]'>
 									Можно вставить полную ссылку или путь /feed/messages/join/group/…
 								</p>
 							</div>
 							<button
 								type='submit'
 								disabled={!joinGroupInviteCode.trim()}
-								className='w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+								className='w-full bg-[#0077FF] hover:bg-[#0066dd] text-white font-medium py-2.5 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-[#0077FF]/20 text-sm'
 							>
 								Вступить
 							</button>
@@ -9193,40 +9142,40 @@ export default function MessengerPage() {
 			)}
 
 			{isJoinCommunityOpen && (
-				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
-					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
+				<div className='fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
+					<div className='bg-[#161b22] border border-[#30363d] rounded-2xl w-full max-w-md p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200'>
 						<div className='flex items-center justify-between mb-6'>
-							<h3 className='text-xl font-bold text-white'>
+							<h3 className='text-lg font-bold text-[#e6edf3]'>
 								Вступить на сервер
 							</h3>
 							<button
 								onClick={() => setIsJoinCommunityOpen(false)}
-								className='p-1 text-gray-400 hover:text-white transition-colors'
+								className='p-1.5 text-[#8b949e] hover:text-white hover:bg-[#21262d] rounded-lg transition-colors'
 							>
 								<XIcon className='w-5 h-5' />
 							</button>
 						</div>
 						<form onSubmit={handleJoinCommunity} className='space-y-4'>
 							<div>
-								<label className='block text-sm font-medium text-gray-400 mb-1'>
+								<label className='block text-xs font-semibold text-[#8b949e] uppercase tracking-wider mb-1.5'>
 									Ссылка-приглашение
 								</label>
 								<input
 									type='text'
 									value={joinCommunityInviteCode}
 									onChange={e => setJoinCommunityInviteCode(e.target.value)}
-									className='w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50'
+									className='w-full bg-[#0e1117] border border-[#30363d] rounded-xl px-4 py-2.5 text-[#e6edf3] placeholder-[#8b949e] focus:outline-none focus:border-[#0077FF] text-sm'
 									placeholder='https://…/feed/messages/join/…'
 									autoFocus
 								/>
 							</div>
-							<p className='text-xs text-gray-500'>
+							<p className='text-xs text-[#8b949e]'>
 								Можно вставить полную ссылку-приглашение на сервер
 							</p>
 							<button
 								type='submit'
 								disabled={!joinCommunityInviteCode.trim()}
-								className='w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+								className='w-full bg-[#0077FF] hover:bg-[#0066dd] text-white font-medium py-2.5 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-[#0077FF]/20 text-sm'
 							>
 								Вступить на сервер
 							</button>
@@ -9236,39 +9185,39 @@ export default function MessengerPage() {
 			)}
 
 			{isAddMemberOpen && (
-				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
-					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
+				<div className='fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
+					<div className='bg-[#161b22] border border-[#30363d] rounded-2xl w-full max-w-md p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200'>
 						<div className='flex items-center justify-between mb-6'>
-							<h3 className='text-xl font-bold text-white'>
+							<h3 className='text-lg font-bold text-[#e6edf3]'>
 								Добавить участника
 							</h3>
 							<button
 								onClick={() => setIsAddMemberOpen(false)}
-								className='p-1 text-gray-400 hover:text-white transition-colors'
+								className='p-1.5 text-[#8b949e] hover:text-white hover:bg-[#21262d] rounded-lg transition-colors'
 							>
 								<XIcon className='w-5 h-5' />
 							</button>
 						</div>
 						<div className='space-y-4'>
 							{friends.length === 0 ? (
-								<p className='text-center text-gray-500 py-8'>
+								<p className='text-center text-[#8b949e] py-8 text-sm'>
 									У вас нет друзей для добавления.
 								</p>
 							) : (
-								<div className='max-h-60 overflow-y-auto custom-scrollbar space-y-2'>
+								<div className='max-h-60 overflow-y-auto custom-scrollbar space-y-1.5'>
 									{friends.map(friend => (
 										<div
 											key={friend.id}
 											onClick={() => handleAddMember(friend.id)}
-											className='flex items-center gap-3 p-3 rounded-xl hover:bg-gray-800 cursor-pointer transition-colors border border-transparent hover:border-gray-700'
+											className='flex items-center gap-3 p-2.5 rounded-xl hover:bg-[#21262d] cursor-pointer transition-colors border border-transparent hover:border-[#30363d] group'
 										>
 											<img
 												src={getAvatarUrl(friend.avatar_url)}
 												alt={friend.username}
-												className='w-10 h-10 rounded-full object-cover bg-gray-800'
+												className='w-10 h-10 rounded-full object-cover bg-[#0e1117] ring-1 ring-[#30363d]'
 											/>
 											<div className='flex-1 min-w-0'>
-												<div className='font-medium text-white truncate'>
+												<div className='font-medium text-sm text-[#e6edf3] group-hover:text-white truncate'>
 													{friend.username}
 													{friend.premium && (
 														<span className='ml-1 text-amber-400'>★</span>
@@ -9276,12 +9225,12 @@ export default function MessengerPage() {
 												</div>
 												{friend.privacy_settings?.show_email === true &&
 													friend.email && (
-														<div className='text-xs text-gray-500 truncate'>
+														<div className='text-xs text-[#8b949e] truncate'>
 															{friend.email}
 														</div>
 													)}
 											</div>
-											<div className='p-2 bg-gray-800 rounded-full text-gray-400 group-hover:text-white group-hover:bg-blue-600 transition-all'>
+											<div className='w-8 h-8 flex items-center justify-center bg-[#0e1117] border border-[#30363d] rounded-full text-[#8b949e] group-hover:text-white group-hover:bg-[#0077FF] group-hover:border-[#0077FF] transition-all'>
 												<PlusIcon className='w-4 h-4' />
 											</div>
 										</div>
@@ -9294,24 +9243,24 @@ export default function MessengerPage() {
 			)}
 
 			{showInviteCode && (
-				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
-					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
+				<div className='fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
+					<div className='bg-[#161b22] border border-[#30363d] rounded-2xl w-full max-w-md p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200'>
 						<div className='flex items-center justify-between mb-6'>
-							<h3 className='text-xl font-bold text-white'>
+							<h3 className='text-lg font-bold text-[#e6edf3]'>
 								Приглашение на сервер
 							</h3>
 							<button
 								onClick={() => setShowInviteCode(false)}
-								className='p-1 text-gray-400 hover:text-white transition-colors'
+								className='p-1.5 text-[#8b949e] hover:text-white hover:bg-[#21262d] rounded-lg transition-colors'
 							>
 								<XIcon className='w-5 h-5' />
 							</button>
 						</div>
 						<div className='space-y-4'>
-							<div className='bg-gray-800 border border-gray-700 rounded-xl p-4 space-y-3'>
+							<div className='bg-[#0e1117] border border-[#30363d] rounded-xl p-4 space-y-3'>
 								<div>
-									<p className='text-xs text-gray-500 mb-1'>Ссылка-приглашение</p>
-									<p className='text-sm text-indigo-300 break-all'>
+									<p className='text-xs text-[#8b949e] mb-1 font-semibold uppercase tracking-wider'>Ссылка-приглашение</p>
+									<p className='text-sm text-[#58a6ff] break-all font-mono'>
 										{serverJoinUrl(communityInviteCode)}
 									</p>
 								</div>
@@ -9324,15 +9273,15 @@ export default function MessengerPage() {
 											)
 											showToast('Ссылка скопирована!', 'success')
 										}}
-										className='w-full rounded-lg bg-indigo-600 py-2 text-sm hover:bg-indigo-500'
+										className='w-full rounded-xl bg-[#0077FF] hover:bg-[#0066dd] py-2 text-sm text-white font-medium shadow-md shadow-[#0077FF]/20 transition-colors'
 									>
 										Копировать ссылку
 									</button>
 								</div>
 							</div>
-							<p className='text-sm text-gray-400 text-center'>
-								Как в Discord: по ссылке откроется{' '}
-								<code className='text-gray-300'>/feed/messages/join/…</code>
+							<p className='text-xs text-[#8b949e] text-center'>
+								По ссылке откроется{' '}
+								<code className='text-[#e6edf3] bg-[#0e1117] px-1.5 py-0.5 rounded border border-[#30363d]'>/feed/messages/join/…</code>
 							</p>
 						</div>
 					</div>
@@ -9340,33 +9289,33 @@ export default function MessengerPage() {
 			)}
 
 			{isChannelInfoOpen && selectedChannel && (
-				<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4'>
-					<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200'>
+				<div className='fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4'>
+					<div className='bg-[#161b22] border border-[#30363d] rounded-2xl w-full max-w-md p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200'>
 						<div className='flex items-center justify-between mb-6'>
-							<h3 className='text-xl font-bold text-white'>
+							<h3 className='text-lg font-bold text-[#e6edf3]'>
 								Информация о канале
 							</h3>
 							<button
 								onClick={() => setIsChannelInfoOpen(false)}
-								className='p-1 text-gray-400 hover:text-white transition-colors'
+								className='p-1.5 text-[#8b949e] hover:text-white hover:bg-[#21262d] rounded-lg transition-colors'
 							>
 								<XIcon className='w-5 h-5' />
 							</button>
 						</div>
 						<div className='space-y-6'>
 							<div className='flex items-center gap-4'>
-								<div className='w-16 h-16 rounded-full bg-gray-800 flex items-center justify-center ring-4 ring-gray-800/50 overflow-hidden'>
+								<div className='w-16 h-16 rounded-full bg-[#0e1117] border border-[#30363d] flex items-center justify-center overflow-hidden'>
 									{selectedChannel.avatar_url ? (
 										<img src={getAvatarUrl(selectedChannel.avatar_url)} alt={selectedChannel.name} className='w-full h-full object-cover' />
 									) : (
-										<HashIcon className='w-8 h-8 text-gray-400' />
+										<HashIcon className='w-8 h-8 text-[#8b949e]' />
 									)}
 								</div>
 								<div className='flex-1 min-w-0'>
-									<h4 className='text-lg font-bold text-white'>
+									<h4 className='text-base font-bold text-[#e6edf3]'>
 										{selectedChannel.name}
 									</h4>
-									<p className='text-sm text-gray-500'>
+									<p className='text-xs text-[#8b949e] mt-0.5'>
 										{selectedChannel.participants_count &&
 										selectedChannel.participants_count > 0
 											? `${selectedChannel.participants_count} участников`
@@ -9379,7 +9328,7 @@ export default function MessengerPage() {
 											setIsChannelInfoOpen(false)
 											setIsChannelSettingsOpen(true)
 										}}
-										className='px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg transition-colors'
+										className='px-3 py-1.5 bg-[#0077FF] hover:bg-[#0066dd] text-white text-xs font-medium rounded-xl transition-colors shadow-sm shadow-[#0077FF]/20'
 									>
 										Редактировать
 									</button>
@@ -9388,20 +9337,20 @@ export default function MessengerPage() {
 
 							{selectedChannel.description && (
 								<div>
-									<label className='block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2'>
+									<label className='block text-xs font-semibold text-[#8b949e] uppercase tracking-wider mb-2'>
 										Описание
 									</label>
-									<p className='text-gray-300 text-sm bg-gray-800/50 p-3 rounded-xl border border-gray-800'>
+									<p className='text-[#e6edf3] text-sm bg-[#0e1117] p-3 rounded-xl border border-[#30363d]'>
 										{selectedChannel.description}
 									</p>
 								</div>
 							)}
 
 							<div>
-								<label className='block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2'>
+								<label className='block text-xs font-semibold text-[#8b949e] uppercase tracking-wider mb-2'>
 									Приглашение
 								</label>
-								<p className='mb-2 text-sm text-indigo-300 break-all'>
+								<p className='mb-2 text-sm text-[#58a6ff] break-all font-mono bg-[#0e1117] p-3 rounded-xl border border-[#30363d]'>
 									{channelJoinUrl(selectedChannel.invite_code)}
 								</p>
 								<div className='flex gap-2'>
@@ -9413,7 +9362,7 @@ export default function MessengerPage() {
 											)
 											showToast('Ссылка скопирована', 'success')
 										}}
-										className='w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-medium'
+										className='w-full px-4 py-2.5 bg-[#0077FF] hover:bg-[#0066dd] text-white rounded-xl text-sm font-medium transition-colors shadow-md shadow-[#0077FF]/20'
 									>
 										Копировать ссылку
 									</button>

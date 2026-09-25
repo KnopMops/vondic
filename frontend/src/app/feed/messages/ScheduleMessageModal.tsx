@@ -58,34 +58,34 @@ export default function ScheduleMessageModal({
 			onClick={onClose}
 		>
 			<div
-				className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md shadow-2xl'
+				className='bg-[#161b22] border border-[#30363d] rounded-2xl w-full max-w-md shadow-2xl animate-in fade-in zoom-in-95 duration-200'
 				onClick={e => e.stopPropagation()}
 			>
-				<div className='flex items-center justify-between p-4 border-b border-gray-800'>
-					<h3 className='text-lg font-bold text-white'>Отложенная отправка</h3>
-					<button onClick={onClose} className='p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg'>
+				<div className='flex items-center justify-between p-4 border-b border-[#30363d]'>
+					<h3 className='text-base font-bold text-[#e6edf3]'>Отложенная отправка</h3>
+					<button onClick={onClose} className='p-1.5 text-[#8b949e] hover:text-white hover:bg-[#21262d] rounded-lg transition-colors'>
 						<XIcon className='w-5 h-5' />
 					</button>
 				</div>
 				<div className='p-4 space-y-4'>
 					{chatLabel && (
-						<p className='text-sm text-gray-400'>
-							Чат: <span className='text-gray-200'>{chatLabel}</span>
+						<p className='text-xs text-[#8b949e]'>
+							Чат: <span className='text-[#e6edf3] font-medium'>{chatLabel}</span>
 						</p>
 					)}
 					<div>
-						<label className='text-xs text-gray-500 mb-2 block uppercase tracking-wider'>Дата и время</label>
+						<label className='text-xs font-semibold text-[#8b949e] mb-1.5 block uppercase tracking-wider'>Дата и время</label>
 						<input
 							type='datetime-local'
 							value={value}
 							onChange={e => { setValue(e.target.value); setError('') }}
-							className='w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50'
+							className='w-full px-4 py-2.5 bg-[#0e1117] border border-[#30363d] rounded-xl text-[#e6edf3] focus:outline-none focus:border-[#0077FF] text-sm'
 						/>
-						{error && <p className='mt-1 text-xs text-red-400'>{error}</p>}
+						{error && <p className='mt-1 text-xs text-rose-400'>{error}</p>}
 					</div>
-					<div className='flex gap-2'>
-						<button type='button' onClick={onClose} className='flex-1 py-2.5 text-sm font-medium text-gray-300 bg-gray-800 hover:bg-gray-700 rounded-xl'>Отмена</button>
-						<button type='button' onClick={handleConfirm} className='flex-1 py-2.5 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl'>Запланировать</button>
+					<div className='flex gap-2 pt-1'>
+						<button type='button' onClick={onClose} className='flex-1 py-2.5 text-xs font-medium text-[#8b949e] hover:text-white bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] rounded-xl transition-colors'>Отмена</button>
+						<button type='button' onClick={handleConfirm} className='flex-1 py-2.5 text-xs font-medium text-white bg-[#0077FF] hover:bg-[#0066dd] rounded-xl shadow-md shadow-[#0077FF]/20 transition-colors'>Запланировать</button>
 					</div>
 				</div>
 			</div>

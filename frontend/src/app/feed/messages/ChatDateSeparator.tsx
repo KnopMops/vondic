@@ -12,9 +12,9 @@ const ChatDateSeparator = memo(({ label }: ChatDateSeparatorProps) => (
 		initial={{ opacity: 0, y: -3 }}
 		animate={{ opacity: 1, y: 0 }}
 		transition={{ duration: 0.2, ease: 'easeOut' }}
-		className='flex justify-center py-3 my-2'
+		className='flex justify-center py-3 my-2 select-none'
 	>
-		<span className='chat-date-pill'>{label}</span>
+		<span className='chat-date-pill shadow-sm'>{label}</span>
 	</motion.div>
 ))
 

@@ -73,29 +73,29 @@ export default function DiscoveryModal({
 	if (!isOpen) return null
 
 	return (
-		<div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
-			<div className='bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-lg p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200 max-h-[80vh] flex flex-col'>
+		<div className='fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4'>
+			<div className='bg-[#161b22] border border-[#30363d] rounded-2xl w-full max-w-lg p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 max-h-[80vh] flex flex-col'>
 				<div className='flex items-center justify-between mb-4'>
-					<h3 className='text-xl font-bold text-white'>Поиск</h3>
+					<h3 className='text-lg font-bold text-[#e6edf3]'>Поиск каналов и серверов</h3>
 					<button
 						onClick={onClose}
-						className='p-1 text-gray-400 hover:text-white transition-colors'
+						className='p-1.5 text-[#8b949e] hover:text-white hover:bg-[#21262d] rounded-lg transition-colors'
 					>
 						<XIcon className='w-5 h-5' />
 					</button>
 				</div>
 
-				<div className='flex gap-2 mb-4'>
+				<div className='flex gap-2 mb-4 bg-[#0e1117] p-1 rounded-xl border border-[#30363d]'>
 					<button
 						onClick={() => {
 							setActiveTab('channels')
 							setResults([])
 							setHasSearched(false)
 						}}
-						className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors ${
+						className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${
 							activeTab === 'channels'
-								? 'bg-blue-600 text-white'
-								: 'bg-gray-800 text-gray-400 hover:text-white'
+								? 'bg-[#21262d] text-white shadow-sm border border-[#30363d]'
+								: 'text-[#8b949e] hover:text-[#e6edf3]'
 						}`}
 					>
 						Каналы
@@ -106,10 +106,10 @@ export default function DiscoveryModal({
 							setResults([])
 							setHasSearched(false)
 						}}
-						className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors ${
+						className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${
 							activeTab === 'communities'
-								? 'bg-blue-600 text-white'
-								: 'bg-gray-800 text-gray-400 hover:text-white'
+								? 'bg-[#21262d] text-white shadow-sm border border-[#30363d]'
+								: 'text-[#8b949e] hover:text-[#e6edf3]'
 						}`}
 					>
 						Серверы
@@ -123,31 +123,31 @@ export default function DiscoveryModal({
 						onChange={e => setQuery(e.target.value)}
 						onKeyDown={e => e.key === 'Enter' && handleSearch()}
 						placeholder={`Поиск ${activeTab === 'channels' ? 'каналов' : 'серверов'}...`}
-						className='flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50'
+						className='flex-1 bg-[#0e1117] border border-[#30363d] rounded-xl px-4 py-2.5 text-[#e6edf3] placeholder-[#8b949e] focus:outline-none focus:border-[#0077FF] text-sm'
 					/>
 					<button
 						onClick={handleSearch}
 						disabled={!query.trim() || isSearching}
-						className='px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors disabled:opacity-50'
+						className='px-4 py-2.5 bg-[#0077FF] hover:bg-[#0066dd] text-white rounded-xl transition-colors disabled:opacity-50 shadow-md shadow-[#0077FF]/20 flex items-center justify-center'
 					>
 						<SearchIcon className='w-4 h-4' />
 					</button>
 				</div>
 
-				<div className='overflow-y-auto flex-1 space-y-2 min-h-0'>
+				<div className='overflow-y-auto flex-1 space-y-2 min-h-0 custom-scrollbar'>
 					{isSearching ? (
-						<div className='text-center text-gray-500 py-8'>Поиск...</div>
+						<div className='text-center text-[#8b949e] py-8 text-sm'>Поиск...</div>
 					) : hasSearched && results.length === 0 ? (
-						<div className='text-center text-gray-500 py-8'>
+						<div className='text-center text-[#8b949e] py-8 text-sm'>
 							Ничего не найдено
 						</div>
 					) : (
 						results.map(item => (
 							<div
 								key={item.id}
-								className='flex items-center gap-3 p-3 rounded-xl bg-gray-800/50 border border-gray-800'
+								className='flex items-center gap-3 p-3 rounded-xl bg-[#0e1117] border border-[#30363d] hover:border-[#0077FF]/40 transition-colors'
 							>
-								<div className='w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center flex-shrink-0'>
+								<div className='w-10 h-10 rounded-full bg-[#161b22] border border-[#30363d] flex items-center justify-center flex-shrink-0'>
 									{item.avatar_url ? (
 										<img
 											src={getAvatarUrl(item.avatar_url)}
@@ -155,28 +155,28 @@ export default function DiscoveryModal({
 											className='w-10 h-10 rounded-full object-cover'
 										/>
 									) : activeTab === 'channels' ? (
-										<HashIcon className='w-5 h-5 text-gray-400' />
+										<HashIcon className='w-5 h-5 text-[#8b949e]' />
 									) : (
-										<UsersIcon className='w-5 h-5 text-gray-400' />
+										<UsersIcon className='w-5 h-5 text-[#8b949e]' />
 									)}
 								</div>
 								<div className='flex-1 min-w-0'>
-									<div className='font-medium text-gray-200 truncate'>
+									<div className='font-medium text-sm text-[#e6edf3] truncate'>
 										{item.name}
 									</div>
 									{item.description && (
-										<div className='text-xs text-gray-500 truncate'>
+										<div className='text-xs text-[#8b949e] truncate'>
 											{item.description}
 										</div>
 									)}
-									<div className='text-xs text-gray-500'>
+									<div className='text-xs text-[#8b949e]/80'>
 										{item.participants_count || 0} участников
 									</div>
 								</div>
 								<button
 									onClick={() => handleJoin(item)}
 									disabled={joiningId === item.id}
-									className='px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1'
+									className='px-3.5 py-1.5 bg-[#0077FF] hover:bg-[#0066dd] text-white text-xs font-medium rounded-xl transition-colors disabled:opacity-50 flex items-center gap-1.5 shadow-sm shadow-[#0077FF]/20'
 								>
 									<LogInIcon className='w-3 h-3' />
 									{joiningId === item.id ? 'Вступаем...' : 'Вступить'}

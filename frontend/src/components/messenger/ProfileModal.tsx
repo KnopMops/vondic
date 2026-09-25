@@ -3,9 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-	LuX as X, LuBell as Bell, LuBellOff as BellOff, LuUserPlus as Follow,
-	LuUserCheck as Unfollow, LuBan as Ban, LuMessageCircle as Message,
-	LuSettings as Settings, LuSearch as Search, LuPhone as Phone, LuTrash2 as Trash,
+	LuX as X, LuBell as Bell, LuBellOff as BellOff,
+	LuSettings as Settings, LuSearch as Search,
 } from 'react-icons/lu'
 import { getAvatarUrl, formatMskDateTime } from '@/lib/utils'
 
@@ -21,7 +20,8 @@ export default function ProfileModal({ userId, onClose, onOpenSettings, onDelete
 	const router = useRouter()
 	const [profile, setProfile] = useState<any>(null)
 	const [loading, setLoading] = useState(true)
-		const [notificationsEnabled, setNotificationsEnabled] = useState(true)
+	const [notificationsEnabled, setNotificationsEnabled] = useState(true)
+	const [isFollowing, setIsFollowing] = useState(false)
 
 	useEffect(() => {
 		fetchProfile()
@@ -43,24 +43,24 @@ export default function ProfileModal({ userId, onClose, onOpenSettings, onDelete
 
 	return (
 		<div className='fixed inset-0 z-[80]' onClick={onClose}>
-			<div className='absolute inset-0 bg-black/40 backdrop-blur-sm' />
+			<div className='absolute inset-0 bg-black/60 backdrop-blur-sm' />
 			<div
-				className='absolute right-0 top-0 bottom-0 w-full max-w-[380px] bg-[var(--app-bg)] border-l border-white/10 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300'
+				className='absolute right-0 top-0 bottom-0 w-full max-w-[380px] bg-[#161b22] border-l border-[#30363d] shadow-2xl flex flex-col animate-in slide-in-from-right duration-300'
 				onClick={e => e.stopPropagation()}
 			>
-				<div className='flex items-center gap-3 p-4 border-b border-white/10'>
-					<button onClick={onClose} className='p-1.5 rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition'>
+				<div className='flex items-center gap-3 p-4 border-b border-[#30363d]'>
+					<button onClick={onClose} className='p-1.5 rounded-full text-[#8b949e] hover:text-white hover:bg-[#21262d] transition'>
 						<X className='h-5 w-5' />
 					</button>
-					<h2 className='text-sm font-semibold text-[var(--app-fg)]'>Профиль</h2>
+					<h2 className='text-sm font-semibold text-[#e6edf3]'>Профиль</h2>
 				</div>
 
 				<div className='flex-1 overflow-y-auto custom-scrollbar'>
 					{loading ? (
 						<div className='p-8 space-y-4'>
-							<div className='w-24 h-24 rounded-full bg-white/5 animate-pulse mx-auto' />
-							<div className='h-5 w-32 bg-white/5 rounded animate-pulse mx-auto' />
-							<div className='h-3 w-48 bg-white/5 rounded animate-pulse mx-auto' />
+							<div className='w-24 h-24 rounded-full bg-[#21262d] animate-pulse mx-auto' />
+							<div className='h-5 w-32 bg-[#21262d] rounded animate-pulse mx-auto' />
+							<div className='h-3 w-48 bg-[#21262d] rounded animate-pulse mx-auto' />
 						</div>
 					) : profile ? (
 						<>
@@ -68,15 +68,15 @@ export default function ProfileModal({ userId, onClose, onOpenSettings, onDelete
 								<img
 									src={getAvatarUrl(profile.avatar_url)}
 									alt={profile.username}
-									className='w-24 h-24 rounded-full object-cover bg-white/5 ring-2 ring-[var(--app-accent)]/30 mb-4'
+									className='w-24 h-24 rounded-full object-cover bg-[#21262d] ring-2 ring-[#0077FF]/30 mb-4'
 								/>
-								<h3 className='text-xl font-bold text-[var(--app-fg)] flex items-center gap-2'>
+								<h3 className='text-xl font-bold text-[#e6edf3] flex items-center gap-2'>
 									{profile.username}
 									{profile.premium && <span className='text-amber-400'>★</span>}
 								</h3>
 								<div className='flex items-center gap-2 mt-2'>
-									<span className={`w-2 h-2 rounded-full ${profile.status?.toLowerCase() === 'online' ? 'bg-[var(--app-accent)]' : 'bg-[var(--app-muted)]'}`} />
-									<span className='text-xs text-[var(--app-muted)]'>
+									<span className={`w-2 h-2 rounded-full ${profile.status?.toLowerCase() === 'online' ? 'bg-[#23a55a]' : 'bg-[#8b949e]'}`} />
+									<span className='text-xs text-[#8b949e]'>
 										{profile.status?.toLowerCase() === 'online'
 											? 'В сети'
 											: profile.last_seen
@@ -85,43 +85,43 @@ export default function ProfileModal({ userId, onClose, onOpenSettings, onDelete
 									</span>
 								</div>
 								{profile.description && (
-									<p className='text-sm text-[var(--app-muted)] mt-3 text-center max-w-[280px]'>{profile.description}</p>
+									<p className='text-sm text-[#8b949e] mt-3 text-center max-w-[280px]'>{profile.description}</p>
 								)}
 							</div>
 
 							<div className='px-4 pb-2'>
 								<button
 									onClick={() => { onClose(); router.push(`/feed/profile/${userId}`) }}
-									className='w-full rounded-xl bg-[var(--app-accent)] hover:opacity-90 text-white text-sm font-medium py-3 transition-opacity'
+									className='w-full rounded-xl bg-[#0077FF] hover:bg-[#0062d6] text-white text-sm font-medium py-3 transition-colors shadow-sm'
 								>
 									Перейти к профилю
 								</button>
 							</div>
 
-							<div className='px-4 py-2 space-y-0.5'>
+							<div className='px-4 py-2 space-y-1'>
 								<button
 									onClick={() => setNotificationsEnabled(!notificationsEnabled)}
-									className='w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-[var(--app-fg)] hover:bg-white/5 transition-colors'
+									className='w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-[#e6edf3] hover:bg-[#21262d] transition-colors'
 								>
-									<div className='w-8 h-8 rounded-full bg-[var(--app-accent)]/15 flex items-center justify-center shrink-0'>
+									<div className='w-8 h-8 rounded-full bg-[#0077FF]/15 flex items-center justify-center shrink-0'>
 										{notificationsEnabled
-											? <Bell className='h-4 w-4 text-[var(--app-accent)]' />
-											: <BellOff className='h-4 w-4 text-[var(--app-muted)]' />}
+											? <Bell className='h-4 w-4 text-[#58a6ff]' />
+											: <BellOff className='h-4 w-4 text-[#8b949e]' />}
 									</div>
 									<div className='flex-1 text-left'>
-										<div className='text-sm text-[var(--app-fg)]'>Уведомления</div>
-										<div className='text-[11px] text-[var(--app-muted)]'>
+										<div className='text-sm text-[#e6edf3]'>Уведомления</div>
+										<div className='text-[11px] text-[#8b949e]'>
 											{notificationsEnabled ? 'Включены' : 'Отключены'}
 										</div>
 									</div>
 								</button>
 
-<button
+								<button
 									onClick={() => { onClose(); onOpenSettings?.() }}
-									className='w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-[var(--app-fg)] hover:bg-white/5 transition-colors'
+									className='w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-[#e6edf3] hover:bg-[#21262d] transition-colors'
 								>
-									<div className='w-8 h-8 rounded-full bg-[var(--app-accent)]/15 flex items-center justify-center shrink-0'>
-										<Settings className='h-4 w-4 text-[var(--app-accent)]' />
+									<div className='w-8 h-8 rounded-full bg-[#0077FF]/15 flex items-center justify-center shrink-0'>
+										<Settings className='h-4 w-4 text-[#58a6ff]' />
 									</div>
 									<div className='text-left'>Настройки чата</div>
 								</button>
@@ -129,20 +129,18 @@ export default function ProfileModal({ userId, onClose, onOpenSettings, onDelete
 								{onDiscovery && (
 									<button
 										onClick={() => { onClose(); onDiscovery() }}
-										className='w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-[var(--app-fg)] hover:bg-white/5 transition-colors'
+										className='w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-[#e6edf3] hover:bg-[#21262d] transition-colors'
 									>
-										<div className='w-8 h-8 rounded-full bg-[var(--app-accent)]/15 flex items-center justify-center shrink-0'>
-											<Search className='h-4 w-4 text-[var(--app-accent)]' />
+										<div className='w-8 h-8 rounded-full bg-[#0077FF]/15 flex items-center justify-center shrink-0'>
+											<Search className='h-4 w-4 text-[#58a6ff]' />
 										</div>
 										<div className='text-left'>Найти каналы</div>
 									</button>
 								)}
 							</div>
-
-
 						</>
 					) : (
-						<div className='p-8 text-center text-[var(--app-muted)] text-sm'>Профиль не найден</div>
+						<div className='p-8 text-center text-[#8b949e] text-sm'>Профиль не найден</div>
 					)}
 				</div>
 			</div>

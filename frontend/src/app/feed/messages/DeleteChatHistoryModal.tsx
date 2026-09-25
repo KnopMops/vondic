@@ -36,33 +36,33 @@ export default function DeleteChatHistoryModal({
 						animate={{ opacity: 1, scale: 1, y: 0 }}
 						exit={{ opacity: 0, scale: 0.96, y: 8 }}
 						transition={{ duration: 0.2 }}
-						className='w-full max-w-md rounded-2xl border border-white/10 bg-[color:var(--app-bg)] p-5 shadow-2xl'
+						className='w-full max-w-md rounded-2xl border border-[#30363d] bg-[#161b22] p-6 shadow-2xl'
 						onClick={e => e.stopPropagation()}
 					>
-						<h3 className='text-lg font-semibold text-[color:var(--app-fg)]'>
+						<h3 className='text-lg font-bold text-white'>
 							Удалить переписку
 						</h3>
-						<p className='mt-2 text-sm text-gray-400 leading-relaxed'>
+						<p className='mt-2 text-sm text-[#8b949e] leading-relaxed'>
 							{chatLabel ? (
 								<>
-									Чат: <span className='text-gray-300'>{chatLabel}</span>.
+									Чат: <span className='text-[#e6edf3] font-medium'>{chatLabel}</span>.
 									<br />
 								</>
 							) : null}
 							Выберите, как удалить историю сообщений.
 						</p>
 
-						<div className='mt-5 flex flex-col gap-2'>
+						<div className='mt-5 flex flex-col gap-2.5'>
 							<button
 								type='button'
 								disabled={isLoading}
 								onClick={() => onConfirm('for_me')}
-								className='w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-left text-sm text-gray-200 hover:bg-black/45 transition disabled:opacity-50'
+								className='w-full rounded-xl border border-[#30363d] bg-[#0e1117] p-4 text-left text-sm text-[#e6edf3] hover:bg-[#21262d] transition disabled:opacity-50'
 							>
-								<span className='font-medium text-[color:var(--app-fg)]'>
+								<span className='font-semibold text-white block'>
 									Только у меня
 								</span>
-								<span className='mt-1 block text-xs text-gray-500'>
+								<span className='mt-1 block text-xs text-[#8b949e] leading-relaxed'>
 									Сообщения исчезнут только в вашем чате. У собеседника они
 									останутся.
 								</span>
@@ -73,12 +73,12 @@ export default function DeleteChatHistoryModal({
 									type='button'
 									disabled={isLoading}
 									onClick={() => onConfirm('for_all')}
-									className='w-full rounded-xl border border-rose-500/25 bg-rose-500/10 px-4 py-3 text-left text-sm hover:bg-rose-500/15 transition disabled:opacity-50'
+									className='w-full rounded-xl border border-rose-500/25 bg-rose-500/10 p-4 text-left text-sm hover:bg-rose-500/15 transition disabled:opacity-50'
 								>
-									<span className='font-medium text-rose-300'>
+									<span className='font-semibold text-rose-300 block'>
 										У всех
 									</span>
-									<span className='mt-1 block text-xs text-rose-200/70'>
+									<span className='mt-1 block text-xs text-rose-200/70 leading-relaxed'>
 										Все сообщения будут удалены без восстановления для всех
 										участников.
 									</span>
@@ -91,14 +91,14 @@ export default function DeleteChatHistoryModal({
 								type='button'
 								disabled={isLoading}
 								onClick={onClose}
-								className='rounded-xl px-4 py-2 text-sm text-gray-400 hover:text-white hover:bg-white/5 transition disabled:opacity-50'
+								className='rounded-xl px-4 py-2 text-sm font-medium text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#21262d] transition disabled:opacity-50'
 							>
 								Отмена
 							</button>
 						</div>
 
 						{isLoading && (
-							<p className='mt-3 text-center text-xs text-gray-500'>
+							<p className='mt-3 text-center text-xs text-[#8b949e]'>
 								Удаление…
 							</p>
 						)}

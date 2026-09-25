@@ -553,14 +553,14 @@ const MessageBubble = memo(
 							<MoreHorizontal className='h-4 w-4' />
 						</button>
 						{isMenuOpen && (
-							<div className='absolute right-0 top-full mt-1 z-50 w-40 rounded-lg border border-white/10 bg-gray-900/95 p-1 shadow-xl'>
+							<div className='absolute right-0 top-full mt-1 z-50 w-44 rounded-xl border border-[#30363d] bg-[#161b22] p-1 shadow-2xl backdrop-blur-md'>
 								{!msg.isOwn && (
 									<button
 										onClick={() => {
 											onReply?.(msg)
 											setIsMenuOpen(false)
 										}}
-										className='w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-200 hover:bg-white/10 whitespace-nowrap'
+										className='w-full rounded-lg px-2.5 py-1.5 text-left text-xs text-[#e6edf3] hover:bg-[#21262d] whitespace-nowrap transition-colors'
 									>
 										Ответить
 									</button>
@@ -570,7 +570,7 @@ const MessageBubble = memo(
 										onPin?.(msg)
 										setIsMenuOpen(false)
 									}}
-									className='w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-200 hover:bg-white/10 whitespace-nowrap'
+									className='w-full rounded-lg px-2.5 py-1.5 text-left text-xs text-[#e6edf3] hover:bg-[#21262d] whitespace-nowrap transition-colors'
 								>
 									{isPinned ? 'Открепить' : 'Закрепить'}
 								</button>
@@ -580,7 +580,7 @@ const MessageBubble = memo(
 											onForward?.(msg)
 											setIsMenuOpen(false)
 										}}
-										className='w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-200 hover:bg-white/10 whitespace-nowrap'
+										className='w-full rounded-lg px-2.5 py-1.5 text-left text-xs text-[#e6edf3] hover:bg-[#21262d] whitespace-nowrap transition-colors'
 									>
 										Переслать
 									</button>
@@ -591,7 +591,7 @@ const MessageBubble = memo(
 											setIsEditing(true)
 											setIsMenuOpen(false)
 										}}
-										className='w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-200 hover:bg-white/10 whitespace-nowrap'
+										className='w-full rounded-lg px-2.5 py-1.5 text-left text-xs text-[#e6edf3] hover:bg-[#21262d] whitespace-nowrap transition-colors'
 									>
 										Изменить
 									</button>
@@ -601,7 +601,7 @@ const MessageBubble = memo(
 										onDelete?.(msg)
 										setIsMenuOpen(false)
 									}}
-									className='w-full rounded-md px-2 py-1.5 text-left text-xs text-rose-200 hover:bg-rose-500/20 whitespace-nowrap'
+									className='w-full rounded-lg px-2.5 py-1.5 text-left text-xs text-rose-400 hover:bg-rose-500/15 whitespace-nowrap transition-colors'
 								>
 									Удалить
 								</button>
@@ -610,7 +610,7 @@ const MessageBubble = memo(
 										setIsReactionsOpen(o => !o)
 										setIsMenuOpen(false)
 									}}
-									className='w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-200 hover:bg-white/10 whitespace-nowrap'
+									className='w-full rounded-lg px-2.5 py-1.5 text-left text-xs text-[#e6edf3] hover:bg-[#21262d] whitespace-nowrap transition-colors'
 								>
 									Реакция
 								</button>
@@ -619,15 +619,15 @@ const MessageBubble = memo(
 										onToggleSelect?.(msg)
 										setIsMenuOpen(false)
 									}}
-									className='w-full rounded-md px-2 py-1.5 text-left text-xs text-emerald-200 hover:bg-emerald-500/20 whitespace-nowrap'
+									className='w-full rounded-lg px-2.5 py-1.5 text-left text-xs text-emerald-400 hover:bg-emerald-500/15 whitespace-nowrap transition-colors'
 								>
 									{isSelected ? 'Снять выделение' : 'Выбрать'}
 								</button>
 							</div>
 						)}
 						{isReactionsOpen && (
-							<div className='absolute right-0 top-6 z-10 rounded-lg border border-white/10 bg-gray-900/95 p-2 shadow-xl'>
-								<div className='flex items-center gap-2'>
+							<div className='absolute right-0 top-6 z-10 rounded-2xl border border-[#30363d] bg-[#161b22] p-2 shadow-2xl'>
+								<div className='flex items-center gap-1.5'>
 									{REACTIONS.map(emoji => (
 										<button
 											key={emoji}
@@ -635,9 +635,9 @@ const MessageBubble = memo(
 												onReact?.(msg, emoji)
 												setIsReactionsOpen(false)
 											}}
-											className='rounded-md px-2 py-1 text-sm hover:bg-white/10'
+											className='rounded-xl p-1.5 hover:bg-[#21262d] transition-all hover:scale-125'
 										>
-											<AppleEmoji emoji={emoji} size={18} />
+											<AppleEmoji emoji={emoji} size={20} />
 										</button>
 									))}
 								</div>
@@ -647,35 +647,57 @@ const MessageBubble = memo(
 					{showSenderName && (
 						<div
 							onClick={(e) => { e.stopPropagation(); onSenderClick?.(msg.sender_id) }}
-							className='text-[13px] font-semibold text-indigo-400/90 mb-1 px-0.5 cursor-pointer hover:text-indigo-300 transition-colors'
+							className='text-[13px] font-semibold text-[#58a6ff] hover:text-[#79b8ff] mb-1 px-0.5 cursor-pointer transition-colors'
 						>
 							{sender?.username || msg.sender_username || 'User'}
 						</div>
 					)}
 					{replyPreview && (
-						<div className='mb-2 rounded-xl border-l-2 border-indigo-500/35 bg-black/20 px-3 py-2 text-xs text-gray-300'>
-							<div className='font-semibold text-indigo-400/90'>
+						<div
+							className={`mb-2 rounded-lg border-l-[3px] px-3 py-1.5 text-xs ${
+								msg.isOwn
+									? 'border-white/80 bg-black/20 text-white/90'
+									: 'border-[#0077FF] bg-[#0e1117]/60 text-[#e6edf3]'
+							}`}
+						>
+							<div
+								className={`font-semibold ${
+									msg.isOwn ? 'text-white' : 'text-[#58a6ff]'
+								}`}
+							>
 								{replyPreview.sender}
 							</div>
-							<div className='truncate text-gray-500'>{replyPreview.text}</div>
+							<div
+								className={`truncate ${
+									msg.isOwn ? 'text-white/70' : 'text-[#8b949e]'
+								}`}
+							>
+								{replyPreview.text}
+							</div>
 						</div>
 					)}
 					{msg.forwarded_from && (
-						<div className='mb-2 flex items-center gap-2 rounded-xl border border-indigo-500/20 bg-indigo-500/10 px-3 py-2 text-xs'>
-							<Repeat2 className='w-3.5 h-3.5 text-indigo-400 flex-shrink-0' />
-							<span className='text-indigo-300/90 truncate'>
+						<div
+							className={`mb-2 flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs ${
+								msg.isOwn
+									? 'border-white/20 bg-white/10 text-white/90'
+									: 'border-[#30363d] bg-[#0e1117]/60 text-[#8b949e]'
+							}`}
+						>
+							<Repeat2 className={`w-3.5 h-3.5 flex-shrink-0 ${msg.isOwn ? 'text-white' : 'text-[#0077FF]'}`} />
+							<span className='truncate'>
 								{'Переслано от '}
 								<a
 									href={`/feed/profile/${msg.forwarded_from.sender_id}`}
 									onClick={e => e.stopPropagation()}
-									className='font-semibold text-gray-200 hover:text-indigo-300 hover:underline cursor-pointer'
+									className={`font-semibold hover:underline cursor-pointer ${msg.isOwn ? 'text-white' : 'text-[#58a6ff]'}`}
 								>
 									{msg.forwarded_from.sender_name}
 								</a>
 								{msg.forwarded_from.chat_name && (
-									<span className='text-gray-400'>
+									<span className='opacity-70'>
 										{' в '}
-										<span className='font-medium text-gray-300'>
+										<span className='font-medium'>
 											{msg.forwarded_from.chat_name}
 										</span>
 									</span>
@@ -861,10 +883,10 @@ const MessageBubble = memo(
 								</div>
 							)}
 							<div
-								className={`text-[11px] mt-1 flex items-center gap-1 justify-end ${
+								className={`text-[11px] mt-1 flex items-center gap-1 justify-end select-none ${
 									msg.isOwn
-										? 'text-white/60'
-										: 'text-[color:var(--app-muted)]'
+										? 'text-white/70'
+										: 'text-[#8b949e]'
 								}`}
 							>
 								{formatMskTime(
@@ -878,9 +900,9 @@ const MessageBubble = memo(
 								{msg.isOwn && (
 									<span className='inline-flex align-middle ml-1'>
 										{msg.is_read ? (
-											<CheckCheck className='h-3.5 w-3.5 text-indigo-300/80' />
+											<CheckCheck className='h-3.5 w-3.5 text-white/95' />
 										) : (
-											<Check className='h-3.5 w-3.5 text-[color:var(--app-fg)]/45' />
+											<Check className='h-3.5 w-3.5 text-white/65' />
 										)}
 									</span>
 								)}
@@ -1301,10 +1323,10 @@ const MessageBubble = memo(
 						</div>
 					)}
 					<div
-						className={`text-[11px] mt-1 flex items-center gap-1 justify-end ${
+						className={`text-[11px] mt-1 flex items-center gap-1 justify-end select-none ${
 							msg.isOwn
-								? 'text-white/60'
-								: 'text-[color:var(--app-muted)]'
+								? 'text-white/70'
+								: 'text-[#8b949e]'
 						}`}
 					>
 						{formatMskTime(
@@ -1331,11 +1353,11 @@ const MessageBubble = memo(
 							</span>
 						)}
 						{msg.isOwn && (
-							<span className='inline-flex'>
+							<span className='inline-flex align-middle ml-1'>
 								{msg.is_read ? (
-									<CheckCheck className='h-3.5 w-3.5 text-indigo-300/80' />
+									<CheckCheck className='h-3.5 w-3.5 text-white/95' />
 								) : (
-									<Check className='h-3.5 w-3.5 text-[color:var(--app-fg)]/45' />
+									<Check className='h-3.5 w-3.5 text-white/65' />
 								)}
 							</span>
 						)}

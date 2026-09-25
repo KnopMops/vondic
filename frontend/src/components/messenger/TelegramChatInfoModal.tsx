@@ -233,19 +233,19 @@ export default function TelegramChatInfoModal({
 		<div className="fixed inset-0 z-[100] flex justify-end" onClick={onClose}>
 			<div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" />
 			<div
-				className="relative w-full max-w-[420px] h-full bg-[#17212b] text-gray-100 shadow-2xl flex flex-col z-10 border-l border-[#0e1621] animate-in slide-in-from-right duration-300 font-sans"
+				className="relative w-full max-w-[420px] h-full bg-[#161b22] text-[#e6edf3] shadow-2xl flex flex-col z-10 border-l border-[#30363d] animate-in slide-in-from-right duration-300 font-sans"
 				onClick={e => e.stopPropagation()}
 			>
 				{/* Top Header Controls */}
-				<div className="h-14 px-4 border-b border-white/5 flex items-center justify-between shrink-0 bg-[#17212b]">
+				<div className="h-14 px-4 border-b border-[#30363d] flex items-center justify-between shrink-0 bg-[#161b22]">
 					<div className="flex items-center gap-3">
 						<button
 							onClick={onClose}
-							className="p-2 rounded-full text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+							className="p-2 rounded-full text-[#8b949e] hover:text-white hover:bg-[#21262d] transition-colors"
 						>
 							<XIcon className="w-5 h-5" />
 						</button>
-						<h3 className="font-semibold text-base text-gray-100">
+						<h3 className="font-semibold text-base text-[#e6edf3]">
 							{isEditing ? 'Редактирование' : 'Информация'}
 						</h3>
 					</div>
@@ -254,7 +254,7 @@ export default function TelegramChatInfoModal({
 						<button
 							onClick={handleSaveSettings}
 							disabled={isSaving}
-							className="px-4 py-1.5 rounded-full bg-[#2481cc] hover:bg-[#1d6fa5] text-white text-xs font-semibold transition-all shadow-md disabled:opacity-50"
+							className="px-4 py-1.5 rounded-full bg-[#0077FF] hover:bg-[#0062d6] text-white text-xs font-semibold transition-all shadow-md disabled:opacity-50"
 						>
 							{isSaving ? 'Сохранение...' : 'Готово'}
 						</button>
@@ -262,7 +262,7 @@ export default function TelegramChatInfoModal({
 						isOwner && onUpdateChat && (
 							<button
 								onClick={() => setIsEditing(true)}
-								className="p-2 rounded-full text-gray-400 hover:text-[#2481cc] hover:bg-white/5 transition-colors"
+								className="p-2 rounded-full text-[#8b949e] hover:text-[#58a6ff] hover:bg-[#21262d] transition-colors"
 								title="Редактировать"
 							>
 								<EditIcon className="w-5 h-5" />
@@ -281,7 +281,7 @@ export default function TelegramChatInfoModal({
 									<img
 										src={getAvatarUrl(editAvatarUrl || data?.avatar_url)}
 										alt="Avatar"
-										className="w-24 h-24 rounded-full object-cover ring-4 ring-white/10 shadow-xl"
+										className="w-24 h-24 rounded-full object-cover ring-4 ring-[#30363d] shadow-xl"
 									/>
 									<div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
 										<EditIcon className="w-6 h-6 text-white" />
@@ -292,46 +292,46 @@ export default function TelegramChatInfoModal({
 									placeholder="Ссылка на аватар (URL)"
 									value={editAvatarUrl}
 									onChange={e => setEditAvatarUrl(e.target.value)}
-									className="w-full px-3 py-2 text-xs bg-[#0e1621] border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-[#2481cc]"
+									className="w-full px-3 py-2 text-xs bg-[#0e1117] border border-[#30363d] rounded-xl text-[#e6edf3] placeholder-[#8b949e] focus:outline-none focus:border-[#0077FF]"
 								/>
 							</div>
 
 							<div className="space-y-1">
-								<label className="text-xs font-medium text-gray-400">Название</label>
+								<label className="text-xs font-medium text-[#8b949e]">Название</label>
 								<input
 									type="text"
 									value={editName}
 									onChange={e => setEditName(e.target.value)}
-									className="w-full px-4 py-2.5 bg-[#0e1621] border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-[#2481cc]"
+									className="w-full px-4 py-2.5 bg-[#0e1117] border border-[#30363d] rounded-xl text-sm text-[#e6edf3] focus:outline-none focus:border-[#0077FF]"
 								/>
 							</div>
 
 							<div className="space-y-1">
-								<label className="text-xs font-medium text-gray-400">Описание</label>
+								<label className="text-xs font-medium text-[#8b949e]">Описание</label>
 								<textarea
 									rows={3}
 									value={editDescription}
 									onChange={e => setEditDescription(e.target.value)}
 									placeholder="Добавьте описание чата..."
-									className="w-full px-4 py-2.5 bg-[#0e1621] border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-[#2481cc] resize-none"
+									className="w-full px-4 py-2.5 bg-[#0e1117] border border-[#30363d] rounded-xl text-sm text-[#e6edf3] placeholder-[#8b949e] focus:outline-none focus:border-[#0077FF] resize-none"
 								/>
 							</div>
 
 							{(chatType === 'group' || chatType === 'channel' || chatType === 'community') && (
-								<div className="p-4 bg-[#0e1621] rounded-2xl border border-white/5 space-y-3">
+								<div className="p-4 bg-[#0e1117] rounded-2xl border border-[#30363d] space-y-3">
 									<div className="flex items-center justify-between">
 										<div className="flex items-center gap-2.5">
-											<LockIcon className="w-4 h-4 text-[#2481cc]" />
+											<LockIcon className="w-4 h-4 text-[#58a6ff]" />
 											<div>
-												<div className="text-sm font-medium text-gray-200">Вход по заявке</div>
-												<div className="text-xs text-gray-500">Админы подтверждают вступление</div>
+												<div className="text-sm font-medium text-[#e6edf3]">Вход по заявке</div>
+												<div className="text-xs text-[#8b949e]">Админы подтверждают вступление</div>
 											</div>
 										</div>
 										<input
 											type="checkbox"
 											checked={editRequireApproval}
 											onChange={e => setEditRequireApproval(e.target.checked)}
-											className="w-5 h-5 accent-[#2481cc] rounded cursor-pointer"
+											className="w-5 h-5 accent-[#0077FF] rounded cursor-pointer"
 										/>
 									</div>
 								</div>
@@ -349,18 +349,18 @@ export default function TelegramChatInfoModal({
 									<img
 										src={getAvatarUrl(data?.avatar_url)}
 										alt={getTitle()}
-										className={`w-28 h-28 rounded-full object-cover ring-4 ring-[#2481cc]/20 shadow-2xl mb-4 transition-transform ${
+										className={`w-28 h-28 rounded-full object-cover ring-4 ring-[#0077FF]/20 shadow-2xl mb-4 transition-transform ${
 											chatType === 'direct' ? 'group-hover:scale-105' : ''
 										}`}
 									/>
-									<h2 className="text-2xl font-bold text-gray-100 text-center leading-tight flex items-center justify-center gap-2">
+									<h2 className="text-2xl font-bold text-[#e6edf3] text-center leading-tight flex items-center justify-center gap-2">
 										{getTitle()}
 										{data?.premium && <span className="text-amber-400 text-lg">★</span>}
 									</h2>
 								</div>
-								<p className="text-xs text-[#2481cc] mt-1.5 font-medium">{getSubtitle()}</p>
+								<p className="text-xs text-[#58a6ff] mt-1.5 font-medium">{getSubtitle()}</p>
 
-								{/* Telegram Quick Action Circles Bar */}
+								{/* Quick Action Circles Bar */}
 								<div className="flex items-center justify-center gap-6 mt-6 w-full max-w-[300px]">
 									<button
 										onClick={() => {
@@ -372,14 +372,14 @@ export default function TelegramChatInfoModal({
 										}}
 										className="flex flex-col items-center gap-1.5 group cursor-pointer"
 									>
-										<div className="w-11 h-11 rounded-full bg-[#2481cc]/15 group-hover:bg-[#2481cc]/25 text-[#2481cc] flex items-center justify-center transition-all">
+										<div className="w-11 h-11 rounded-full bg-[#0077FF]/15 group-hover:bg-[#0077FF]/25 text-[#58a6ff] flex items-center justify-center transition-all">
 											{notificationsMuted ? (
 												<BellOffIcon className="w-5 h-5" />
 											) : (
 												<BellIcon className="w-5 h-5" />
 											)}
 										</div>
-										<span className="text-[11px] text-gray-400 group-hover:text-gray-200">
+										<span className="text-[11px] text-[#8b949e] group-hover:text-[#e6edf3]">
 											{notificationsMuted ? 'Вкл.' : 'Звук'}
 										</span>
 									</button>
@@ -389,10 +389,10 @@ export default function TelegramChatInfoModal({
 											onClick={onOpenSearch}
 											className="flex flex-col items-center gap-1.5 group cursor-pointer"
 										>
-											<div className="w-11 h-11 rounded-full bg-[#2481cc]/15 group-hover:bg-[#2481cc]/25 text-[#2481cc] flex items-center justify-center transition-all">
+											<div className="w-11 h-11 rounded-full bg-[#0077FF]/15 group-hover:bg-[#0077FF]/25 text-[#58a6ff] flex items-center justify-center transition-all">
 												<SearchIcon className="w-5 h-5" />
 											</div>
-											<span className="text-[11px] text-gray-400 group-hover:text-gray-200">
+											<span className="text-[11px] text-[#8b949e] group-hover:text-[#e6edf3]">
 												Поиск
 											</span>
 										</button>
@@ -403,10 +403,10 @@ export default function TelegramChatInfoModal({
 											onClick={onStartCall}
 											className="flex flex-col items-center gap-1.5 group cursor-pointer"
 										>
-											<div className="w-11 h-11 rounded-full bg-[#2481cc]/15 group-hover:bg-[#2481cc]/25 text-[#2481cc] flex items-center justify-center transition-all">
+											<div className="w-11 h-11 rounded-full bg-[#0077FF]/15 group-hover:bg-[#0077FF]/25 text-[#58a6ff] flex items-center justify-center transition-all">
 												<PhoneIcon className="w-5 h-5" />
 											</div>
-											<span className="text-[11px] text-gray-400 group-hover:text-gray-200">
+											<span className="text-[11px] text-[#8b949e] group-hover:text-[#e6edf3]">
 												Звонок
 											</span>
 										</button>
@@ -414,16 +414,16 @@ export default function TelegramChatInfoModal({
 								</div>
 							</div>
 
-							<div className="h-2 bg-[#0e1621]" />
+							<div className="h-1.5 bg-[#0e1117] border-y border-[#30363d]/50" />
 
 							{/* Details List */}
 							<div className="p-4 space-y-3">
 								{(data?.description || data?.bio) && (
-									<div className="p-3.5 bg-[#0e1621]/60 rounded-2xl border border-white/5">
-										<div className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1">
+									<div className="p-3.5 bg-[#0e1117] rounded-2xl border border-[#30363d]">
+										<div className="text-[11px] font-medium text-[#8b949e] uppercase tracking-wider mb-1">
 											О себе / Описание
 										</div>
-										<div className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">
+										<div className="text-sm text-[#e6edf3] leading-relaxed whitespace-pre-wrap">
 											{data.description || data.bio}
 										</div>
 									</div>
@@ -438,14 +438,14 @@ export default function TelegramChatInfoModal({
 												copyToClipboard(`@${data.username}`, 'username')
 											}
 										}}
-										className="p-3.5 bg-[#0e1621]/60 hover:bg-[#0e1621] rounded-2xl border border-white/5 flex items-center justify-between cursor-pointer transition-colors"
+										className="p-3.5 bg-[#0e1117] hover:bg-[#21262d] rounded-2xl border border-[#30363d] flex items-center justify-between cursor-pointer transition-colors"
 									>
 										<div>
-											<div className="text-sm font-medium text-[#2481cc] hover:underline flex items-center gap-1">
+											<div className="text-sm font-medium text-[#58a6ff] hover:underline flex items-center gap-1">
 												@{data.username}
 												{chatType === 'direct' && <ExternalLinkIcon className="w-3.5 h-3.5" />}
 											</div>
-											<div className="text-xs text-gray-500">
+											<div className="text-xs text-[#8b949e]">
 												{chatType === 'direct' ? 'Перейти в профиль пользователя' : 'Имя пользователя'}
 											</div>
 										</div>
@@ -453,7 +453,7 @@ export default function TelegramChatInfoModal({
 											copiedField === 'username' ? (
 												<CheckIcon className="w-4 h-4 text-emerald-400" />
 											) : (
-												<CopyIcon className="w-4 h-4 text-gray-500 hover:text-gray-300" />
+												<CopyIcon className="w-4 h-4 text-[#8b949e] hover:text-[#e6edf3]" />
 											)
 										)}
 									</div>
@@ -462,31 +462,31 @@ export default function TelegramChatInfoModal({
 								{getInviteLink() && (
 									<div
 										onClick={() => copyToClipboard(getInviteLink()!, 'ссылку')}
-										className="p-3.5 bg-[#0e1621]/60 hover:bg-[#0e1621] rounded-2xl border border-white/5 flex items-center justify-between cursor-pointer transition-colors"
+										className="p-3.5 bg-[#0e1117] hover:bg-[#21262d] rounded-2xl border border-[#30363d] flex items-center justify-between cursor-pointer transition-colors"
 									>
 										<div className="min-w-0 pr-2">
-											<div className="text-sm font-medium text-[#2481cc] truncate">
+											<div className="text-sm font-medium text-[#58a6ff] truncate">
 												{getInviteLink()}
 											</div>
-											<div className="text-xs text-gray-500">Пригласительная ссылка</div>
+											<div className="text-xs text-[#8b949e]">Пригласительная ссылка</div>
 										</div>
 										{copiedField === 'ссылку' ? (
 											<CheckIcon className="w-4 h-4 text-emerald-400 shrink-0" />
 										) : (
-											<CopyIcon className="w-4 h-4 text-gray-500 hover:text-gray-300 shrink-0" />
+											<CopyIcon className="w-4 h-4 text-[#8b949e] hover:text-[#e6edf3] shrink-0" />
 										)}
 									</div>
 								)}
 
 								{(chatType === 'group' || chatType === 'channel' || chatType === 'community') && (
-									<div className="p-3.5 bg-[#0e1621]/60 rounded-2xl border border-white/5 flex items-center justify-between">
+									<div className="p-3.5 bg-[#0e1117] rounded-2xl border border-[#30363d] flex items-center justify-between">
 										<div className="flex items-center gap-3">
-											<div className="p-2 rounded-xl bg-[#2481cc]/15 text-[#2481cc]">
+											<div className="p-2 rounded-xl bg-[#0077FF]/15 text-[#58a6ff]">
 												<LockIcon className="w-4 h-4" />
 											</div>
 											<div>
-												<div className="text-sm font-medium text-gray-200">Вход по заявке</div>
-												<div className="text-xs text-gray-500">
+												<div className="text-sm font-medium text-[#e6edf3]">Вход по заявке</div>
+												<div className="text-xs text-[#8b949e]">
 													{data?.require_approval ? 'Включен (админ одобряет заявки)' : 'Выключен (вход по ссылке)'}
 												</div>
 											</div>
@@ -504,7 +504,7 @@ export default function TelegramChatInfoModal({
 														showToast(err.message || 'Ошибка сохранения', 'error')
 													}
 												}}
-												className="w-5 h-5 accent-[#2481cc] rounded cursor-pointer"
+												className="w-5 h-5 accent-[#0077FF] rounded cursor-pointer"
 											/>
 										)}
 									</div>
@@ -512,14 +512,14 @@ export default function TelegramChatInfoModal({
 							</div>
 
 							{/* Navigation Tabs Bar */}
-							<div className="flex border-b border-white/5 px-2 bg-[#17212b] sticky top-0 z-10">
+							<div className="flex border-b border-[#30363d] px-2 bg-[#161b22] sticky top-0 z-10">
 								{(chatType === 'group' || chatType === 'community') && (
 									<button
 										onClick={() => setActiveTab('members')}
 										className={`flex-1 py-3 text-xs font-semibold transition-colors border-b-2 ${
 											activeTab === 'members'
-												? 'border-[#2481cc] text-[#2481cc]'
-												: 'border-transparent text-gray-400 hover:text-gray-200'
+												? 'border-[#0077FF] text-[#58a6ff]'
+												: 'border-transparent text-[#8b949e] hover:text-[#e6edf3]'
 										}`}
 									>
 										Участники
@@ -529,8 +529,8 @@ export default function TelegramChatInfoModal({
 									onClick={() => setActiveTab('media')}
 									className={`flex-1 py-3 text-xs font-semibold transition-colors border-b-2 ${
 										activeTab === 'media'
-											? 'border-[#2481cc] text-[#2481cc]'
-											: 'border-transparent text-gray-400 hover:text-gray-200'
+											? 'border-[#0077FF] text-[#58a6ff]'
+											: 'border-transparent text-[#8b949e] hover:text-[#e6edf3]'
 									}`}
 								>
 									Медиа ({mediaItems.length})
@@ -539,8 +539,8 @@ export default function TelegramChatInfoModal({
 									onClick={() => setActiveTab('files')}
 									className={`flex-1 py-3 text-xs font-semibold transition-colors border-b-2 ${
 										activeTab === 'files'
-											? 'border-[#2481cc] text-[#2481cc]'
-											: 'border-transparent text-gray-400 hover:text-gray-200'
+											? 'border-[#0077FF] text-[#58a6ff]'
+											: 'border-transparent text-[#8b949e] hover:text-[#e6edf3]'
 									}`}
 								>
 									Файлы ({fileItems.length})
@@ -554,7 +554,7 @@ export default function TelegramChatInfoModal({
 										{members.map((m: any, idx: number) => (
 											<div
 												key={m.id || idx}
-												className="p-2.5 rounded-xl hover:bg-[#0e1621] flex items-center justify-between group transition-colors cursor-pointer"
+												className="p-2.5 rounded-xl hover:bg-[#21262d] flex items-center justify-between group transition-colors cursor-pointer"
 												onClick={() => {
 													if (m.id) {
 														onClose()
@@ -566,13 +566,13 @@ export default function TelegramChatInfoModal({
 													<img
 														src={getAvatarUrl(m.avatar_url)}
 														alt={m.name || m.username}
-														className="w-10 h-10 rounded-full object-cover bg-gray-800"
+														className="w-10 h-10 rounded-full object-cover bg-[#21262d] border border-[#30363d]"
 													/>
 													<div className="flex flex-col min-w-0">
-														<span className="text-sm font-medium text-gray-200 truncate">
+														<span className="text-sm font-medium text-[#e6edf3] truncate">
 															{m.name || m.username || 'Участник'}
 														</span>
-														<span className="text-[11px] text-gray-500">
+														<span className="text-[11px] text-[#8b949e]">
 															{String(m.id) === String(data?.owner_id)
 																? 'Владелец'
 																: 'Участник'}
@@ -580,7 +580,7 @@ export default function TelegramChatInfoModal({
 													</div>
 												</div>
 												{String(m.id) === String(data?.owner_id) && (
-													<span className="px-2 py-0.5 rounded-full bg-[#2481cc]/20 text-[#2481cc] text-[10px] font-semibold">
+													<span className="px-2 py-0.5 rounded-full bg-[#0077FF]/20 text-[#58a6ff] text-[10px] font-semibold">
 														Админ
 													</span>
 												)}
@@ -599,7 +599,7 @@ export default function TelegramChatInfoModal({
 														href={item.url}
 														target="_blank"
 														rel="noreferrer"
-														className="relative aspect-square rounded-xl overflow-hidden bg-[#0e1621] border border-white/5 hover:opacity-90 transition-opacity group"
+														className="relative aspect-square rounded-xl overflow-hidden bg-[#0e1117] border border-[#30363d] hover:opacity-90 transition-opacity group"
 													>
 														{item.isVideo ? (
 															<video src={item.url} className="w-full h-full object-cover" />
@@ -610,7 +610,7 @@ export default function TelegramChatInfoModal({
 												))}
 											</div>
 										) : (
-											<div className="py-8 text-center text-gray-500 text-xs">
+											<div className="py-8 text-center text-[#8b949e] text-xs">
 												Раздел медиа пуст
 											</div>
 										)}
@@ -628,25 +628,25 @@ export default function TelegramChatInfoModal({
 														target="_blank"
 														rel="noreferrer"
 														download
-														className="p-3 bg-[#0e1621] hover:bg-[#0e1621]/80 rounded-xl border border-white/5 flex items-center justify-between transition-colors group"
+														className="p-3 bg-[#0e1117] hover:bg-[#21262d] rounded-xl border border-[#30363d] flex items-center justify-between transition-colors group"
 													>
 														<div className="flex items-center gap-3 min-w-0 pr-2">
-															<div className="w-9 h-9 rounded-lg bg-[#2481cc]/20 text-[#2481cc] flex items-center justify-center shrink-0">
+															<div className="w-9 h-9 rounded-lg bg-[#0077FF]/20 text-[#58a6ff] flex items-center justify-center shrink-0">
 																<FileIcon className="w-5 h-5" />
 															</div>
 															<div className="flex flex-col min-w-0">
-																<span className="text-xs font-medium text-gray-200 truncate group-hover:text-[#2481cc] transition-colors">
+																<span className="text-xs font-medium text-[#e6edf3] truncate group-hover:text-[#58a6ff] transition-colors">
 																	{file.name}
 																</span>
-																{file.size && <span className="text-[10px] text-gray-500">{file.size}</span>}
+																{file.size && <span className="text-[10px] text-[#8b949e]">{file.size}</span>}
 															</div>
 														</div>
-														<DownloadIcon className="w-4 h-4 text-gray-500 group-hover:text-white shrink-0" />
+														<DownloadIcon className="w-4 h-4 text-[#8b949e] group-hover:text-white shrink-0" />
 													</a>
 												))}
 											</div>
 										) : (
-											<div className="py-8 text-center text-gray-500 text-xs">
+											<div className="py-8 text-center text-[#8b949e] text-xs">
 												Раздел файлов пуст
 											</div>
 										)}
@@ -655,11 +655,11 @@ export default function TelegramChatInfoModal({
 							</div>
 
 							{/* Footer Actions */}
-							<div className="p-4 border-t border-white/5 space-y-2 bg-[#17212b]">
+							<div className="p-4 border-t border-[#30363d] space-y-2 bg-[#161b22]">
 								{onLeaveChat && (
 									<button
 										onClick={onLeaveChat}
-										className="w-full p-3 rounded-xl hover:bg-red-500/10 text-red-400 text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+										className="w-full p-3 rounded-xl hover:bg-red-500/10 text-red-400 text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer border border-transparent hover:border-red-500/20"
 									>
 										<LeaveIcon className="w-4 h-4" />
 										{chatType === 'direct' ? 'Удалить чат' : 'Покинуть чат'}
