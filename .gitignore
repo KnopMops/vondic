@@ -80,7 +80,7 @@ strip_comments_and_format_pep8.sh
 
 *.dump
 
-docker-entrypoint.sh
+/docker-entrypoint.sh
 
 .qwen/
 
