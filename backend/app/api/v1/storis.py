@@ -100,6 +100,7 @@ async def user_stories(
 
 @storis_router.post("", status_code=status.HTTP_201_CREATED)
 @storis_router.post("/", status_code=status.HTTP_201_CREATED)
+@storis_router.post("/create", status_code=status.HTTP_201_CREATED)
 async def create_story(
     payload: StoryCreateSchema,
     current_user: User = Depends(get_current_user),
@@ -114,8 +115,10 @@ async def create_story(
     media_url = payload.media_url or payload.url or ""
     new_story = {
         "id": str(uuid.uuid4()),
+        "url": media_url,
         "media_url": media_url,
-        "caption": payload.caption,
+        "caption": payload.caption or "",
+        "text": payload.caption or "",
         "visibility": payload.visibility or "public",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "reactions": []
@@ -127,28 +130,67 @@ async def create_story(
     return {"story": new_story, "message": "Story published"}
 
 
+@storis_router.post("/react")
 @storis_router.post("/reaction")
 async def add_story_reaction(
     payload: Dict[str, Any],
     current_user: User = Depends(get_current_user),
     db=Depends(get_async_db)
 ):
-    story_id = payload.get("story_id")
-    reaction = payload.get("reaction") or "❤️"
+    story_id = payload.get("story_id") or payload.get("id")
+    owner_id = payload.get("owner_id") or current_user.id
+    reaction = payload.get("emoji") or payload.get("reaction") or "❤️"
     if not story_id:
         raise HTTPException(status_code=400, detail="story_id is required")
 
-    return {"ok": True, "message": "Reaction added"}
+    res = await db.execute(select(User).where(User.id == owner_id))
+    owner = res.scalar_one_or_none()
+    if not owner:
+        return {"ok": True, "message": "Reaction recorded"}
+
+    storis = list(owner.storis or [])
+    matched_story = None
+    for s in storis:
+        if isinstance(s, dict) and s.get("id") == story_id:
+            reactions = list(s.get("reactions") or [])
+            # toggle or append
+            user_existing = [r for r in reactions if isinstance(r, dict) and r.get("user_id") == current_user.id]
+            if user_existing:
+                reactions = [r for r in reactions if not (isinstance(r, dict) and r.get("user_id") == current_user.id)]
+                if user_existing[0].get("emoji") != reaction:
+                    reactions.append({"user_id": current_user.id, "emoji": reaction, "username": current_user.username})
+            else:
+                reactions.append({"user_id": current_user.id, "emoji": reaction, "username": current_user.username})
+            s["reactions"] = reactions
+            matched_story = s
+            break
+
+    owner.storis = storis
+    await db.commit()
+
+    return {"ok": True, "message": "Reaction updated", "story": matched_story or {"id": story_id, "reactions": []}}
 
 
 @storis_router.delete("/{story_id}")
+@storis_router.post("/delete")
+@storis_router.delete("")
+@storis_router.delete("/")
 async def delete_story(
-    story_id: str,
+    story_id: Optional[str] = None,
+    payload: Optional[Dict[str, Any]] = None,
     current_user: User = Depends(get_current_user),
     db=Depends(get_async_db)
 ):
-    storis = list(current_user.storis or [])
-    updated = [s for s in storis if isinstance(s, dict) and s.get("id") != story_id]
-    current_user.storis = updated
+    target_id = story_id or (payload.get("story_id") if payload else None) or (payload.get("id") if payload else None)
+    if not target_id:
+        raise HTTPException(status_code=400, detail="story_id is required")
+
+    res = await db.execute(select(User).where(User.id == current_user.id))
+    user = res.scalar_one_or_none() or current_user
+
+    storis = list(user.storis or [])
+    updated = [s for s in storis if isinstance(s, dict) and s.get("id") != target_id]
+    user.storis = updated
     await db.commit()
-    return {"ok": True, "message": "Story deleted"}
+    return {"ok": True, "message": "Story deleted", "storis": updated}
+

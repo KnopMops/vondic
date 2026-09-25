@@ -34,6 +34,8 @@ async def get_me(
 
 
 @users_router.put("/me")
+@users_router.put("")
+@users_router.put("/")
 async def update_me(
     payload: Dict[str, Any],
     current_user: User = Depends(get_current_user),
@@ -292,3 +294,94 @@ async def gift_premium(
 
     await db.commit()
     return {"ok": True, "recipient": recipient.to_dict()}
+
+
+@users_router.delete("")
+@users_router.delete("/")
+@users_router.delete("/delete")
+async def delete_account(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    from app.services.user_service import UserService
+    UserService.delete_user_account(current_user.id)
+    return {"message": "Account deleted successfully"}
+
+
+@users_router.post("/block")
+@users_router.post("/block-user")
+async def block_user(
+    payload: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    target_id = payload.get("user_id") or payload.get("blocked_id") or payload.get("target_id")
+    if not target_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
+    from app.services.user_service import UserService
+    block, err = UserService.block_user_by_user(current_user.id, str(target_id))
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+    return {"ok": True, "message": "User blocked"}
+
+
+@users_router.post("/unblock")
+@users_router.post("/unblock-user")
+async def unblock_user(
+    payload: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    target_id = payload.get("user_id") or payload.get("blocked_id") or payload.get("target_id")
+    if not target_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
+    from app.services.user_service import UserService
+    success, err = UserService.unblock_user_by_user(current_user.id, str(target_id))
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+    return {"ok": True, "message": "User unblocked"}
+
+
+@users_router.post("/pinned-chats")
+async def update_pinned_chats(
+    payload: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    chats = payload.get("pinned_chats") or payload.get("chats") or []
+    current_user.pinned_chats = chats
+    await db.commit()
+    return {"ok": True, "pinned_chats": current_user.pinned_chats}
+
+
+@users_router.post("/admin/generate-reset-link")
+async def generate_reset_link(
+    payload: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    role = (getattr(current_user, "role", "") or "").lower()
+    if role not in ("admin",):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    user_id = payload.get("user_id")
+    email = payload.get("email")
+    if not user_id and not email:
+        raise HTTPException(status_code=400, detail="user_id or email is required")
+
+    stmt = select(User)
+    if user_id:
+        stmt = stmt.where(User.id == str(user_id))
+    else:
+        stmt = stmt.where(User.email == str(email))
+    res = await db.execute(stmt)
+    target = res.scalar_one_or_none()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    from app.services.email_service import EmailService
+    token = EmailService.generate_password_reset_token(target.email)
+    from app.core.config import settings
+    frontend_url = settings.FRONTEND_URL or "https://vondic.ru"
+    reset_link = f"{frontend_url}/reset-verify?token={token}"
+    return {"ok": True, "reset_link": reset_link, "token": token}
+

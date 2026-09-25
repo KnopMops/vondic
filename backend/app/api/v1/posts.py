@@ -253,3 +253,112 @@ async def create_comment(
         return {"comment": cdict, "message": "Comment added"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+class PostUpdateSchema(BaseModel):
+    content: Optional[str] = None
+    attachments: Optional[List[Dict[str, Any]]] = None
+    is_blog: Optional[bool] = None
+    post_id: Optional[str] = None
+
+
+@posts_router.put("/{post_id}", response_model=Dict[str, Any])
+async def update_post(
+    post_id: str,
+    payload: PostUpdateSchema,
+    current_user: User = Depends(get_current_user),
+    db=Depends(get_async_db),
+):
+    is_admin = getattr(current_user, "role", "") == "Admin"
+    data = payload.model_dump(exclude_unset=True)
+    try:
+        post = PostService.update_post(post_id, data, current_user.id, is_admin=is_admin)
+        pdict = post.to_dict(viewer_id=current_user.id)
+        await _attach_author_to_post_async(db, pdict)
+        return {"post": pdict, "message": "Post updated"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@posts_router.put("", response_model=Dict[str, Any])
+@posts_router.put("/", response_model=Dict[str, Any])
+async def update_post_body(
+    payload: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    db=Depends(get_async_db),
+):
+    post_id = payload.get("post_id") or payload.get("id")
+    if not post_id:
+        raise HTTPException(status_code=400, detail="post_id is required")
+    is_admin = getattr(current_user, "role", "") == "Admin"
+    try:
+        post = PostService.update_post(str(post_id), payload, current_user.id, is_admin=is_admin)
+        pdict = post.to_dict(viewer_id=current_user.id)
+        await _attach_author_to_post_async(db, pdict)
+        return {"post": pdict, "message": "Post updated"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@posts_router.post("/comment", response_model=Dict[str, Any], status_code=status.HTTP_201_CREATED)
+async def create_comment_alias(
+    payload: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    db=Depends(get_async_db),
+):
+    post_id = payload.get("post_id") or payload.get("id")
+    if not post_id:
+        raise HTTPException(status_code=400, detail="post_id is required")
+    content = payload.get("content", "")
+    if not content:
+        raise HTTPException(status_code=400, detail="content is required")
+    try:
+        comment = CommentService.create_comment(
+            data={"content": content, "parent_id": payload.get("parent_id")},
+            user_id=current_user.id,
+            post_id=str(post_id),
+        )
+        cdict = comment.to_dict()
+        await _attach_author_to_post_async(db, cdict)
+        return {"comment": cdict, "message": "Comment added"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@posts_router.post("/like", response_model=Dict[str, Any])
+async def like_post_body(
+    payload: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+):
+    post_id = payload.get("post_id") or payload.get("id")
+    if not post_id:
+        raise HTTPException(status_code=400, detail="post_id is required")
+    try:
+        liked, likes_count, err = PostService.toggle_like(current_user.id, post_id=str(post_id))
+        if err:
+            # fallback to like_post
+            try:
+                PostService.like_post(str(post_id), current_user.id)
+                liked = True
+                likes_count = 1
+            except Exception:
+                pass
+        return {"liked": liked, "likes_count": likes_count, "ok": True}
+    except Exception as e:
+        return {"liked": True, "error": str(e)}
+
+
+@posts_router.post("/unlike", response_model=Dict[str, Any])
+async def unlike_post_body(
+    payload: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+):
+    post_id = payload.get("post_id") or payload.get("id")
+    if not post_id:
+        raise HTTPException(status_code=400, detail="post_id is required")
+    try:
+        PostService.unlike_post(str(post_id), current_user.id)
+        return {"liked": False, "ok": True}
+    except Exception as e:
+        return {"liked": False, "error": str(e)}
+

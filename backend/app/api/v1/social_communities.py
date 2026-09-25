@@ -94,3 +94,34 @@ async def social_community_info(
     if not community:
         raise HTTPException(status_code=404, detail="Community not found")
     return {"community": community.to_dict() if hasattr(community, "to_dict") else community}
+
+
+@social_communities_router.put("/{community_id}")
+@social_communities_router.patch("/{community_id}")
+async def update_social_community(
+    community_id: str,
+    payload: dict,
+    current_user=Depends(get_current_user)
+):
+    community, err = SocialCommunityService.update(community_id, payload, current_user.id)
+    if err or not community:
+        raise HTTPException(status_code=400, detail=err or "Failed to update community")
+    return {"community": community.to_dict() if hasattr(community, "to_dict") else community}
+
+
+@social_communities_router.delete("/{community_id}")
+async def delete_social_community(
+    community_id: str,
+    current_user=Depends(get_current_user)
+):
+    community = SocialCommunityService.get_by_id(community_id)
+    if not community:
+        raise HTTPException(status_code=404, detail="Community not found")
+    if str(community.owner_id) != str(current_user.id) and getattr(current_user, "role", "").lower() not in ("admin",):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    from app.core.extensions import db
+    db.session.delete(community)
+    db.session.commit()
+    return {"ok": True, "message": "Community deleted"}
+

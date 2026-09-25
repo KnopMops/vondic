@@ -49,21 +49,36 @@ async def list_user_files(
     }
 
 
-@files_router.delete("")
-@files_router.delete("/")
-async def delete_user_file(
-    payload: FileDeleteSchema,
+@files_router.post("/list")
+async def list_user_files_post(
+    payload: Optional[Dict[str, Any]] = None,
     current_user=Depends(get_current_user),
     db=Depends(get_async_db)
 ):
-    if not payload.file_id and not payload.url:
+    page = int((payload or {}).get("page", 1) or 1)
+    per_page = int((payload or {}).get("per_page", 20) or 20)
+    return await list_user_files(page=page, per_page=per_page, current_user=current_user, db=db)
+
+
+@files_router.delete("")
+@files_router.delete("/")
+@files_router.delete("/delete")
+@files_router.post("/delete")
+async def delete_user_file(
+    payload: Optional[FileDeleteSchema] = None,
+    current_user=Depends(get_current_user),
+    db=Depends(get_async_db)
+):
+    fid = (payload.file_id if payload else None)
+    furl = (payload.url if payload else None)
+    if not fid and not furl:
         raise HTTPException(status_code=400, detail="file_id or url is required")
 
     stmt = select(UserFile).where(UserFile.user_id == current_user.id)
-    if payload.file_id:
-        stmt = stmt.where(UserFile.id == payload.file_id)
+    if fid:
+        stmt = stmt.where(UserFile.id == fid)
     else:
-        stmt = stmt.where(UserFile.url == payload.url)
+        stmt = stmt.where(UserFile.url == furl)
 
     res = await db.execute(stmt)
     user_file = res.scalar_one_or_none()
@@ -73,3 +88,13 @@ async def delete_user_file(
     await db.delete(user_file)
     await db.commit()
     return {"message": "File record deleted"}
+
+
+@files_router.delete("/{file_id}")
+async def delete_user_file_by_id(
+    file_id: str,
+    current_user=Depends(get_current_user),
+    db=Depends(get_async_db)
+):
+    return await delete_user_file(FileDeleteSchema(file_id=file_id), current_user=current_user, db=db)
+

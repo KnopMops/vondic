@@ -115,3 +115,40 @@ async def get_group_messages(
 
     messages = MessageService.get_group_messages(gid, current_user.id, limit=limit)
     return {"messages": [m.to_dict() if hasattr(m, "to_dict") else m for m in messages]}
+
+
+@groups_router.get("/{group_id}/participants")
+async def get_group_participants(
+    group_id: str,
+    current_user=Depends(get_current_user)
+):
+    group = GroupService.get_group_by_id(group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    participants = getattr(group, "participants", []) or []
+    return {
+        "participants": [
+            p.to_dict() if hasattr(p, "to_dict") else {"id": getattr(p, "id", None), "username": getattr(p, "username", None)}
+            for p in participants
+        ]
+    }
+
+
+@groups_router.post("/{group_id}/participants")
+async def add_group_participant(
+    group_id: str,
+    payload: Dict[str, Any],
+    current_user=Depends(get_current_user)
+):
+    target_user_id = payload.get("user_id")
+    target_username = payload.get("username")
+    group, err = GroupService.add_participant(
+        group_id,
+        target_user_id=target_user_id,
+        requester_id=current_user.id,
+        target_username=target_username,
+    )
+    if err or not group:
+        raise HTTPException(status_code=400, detail=err or "Failed to add participant")
+    return {"ok": True, "message": "Participant added", "group": group.to_dict() if hasattr(group, "to_dict") else group}
+

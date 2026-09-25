@@ -181,14 +181,18 @@ async def reset_password_route(
 
 
 @auth_router.get("/verify-email/{token}")
+@auth_router.get("/verify-email")
 async def verify_email(
-    token: str,
+    token: Optional[str] = None,
     db: AsyncSession = Depends(get_async_session),
 ):
+    if not token:
+        raise HTTPException(status_code=400, detail="Token is required")
     success, message = await AuthService.verify_email_async(token, db=db)
     if not success:
         raise HTTPException(status_code=400, detail=message)
     return {"message": message}
+
 
 
 @auth_router.post("/verify-password")
@@ -510,3 +514,105 @@ async def yandex_unlink(
     current_user.yandex_token = None
     await db.commit()
     return {"ok": True}
+
+
+@auth_router.post("/logout")
+async def logout(
+    payload: Optional[Dict[str, Any]] = None,
+    current_user: Optional[User] = Depends(get_optional_current_user),
+    request: Request = None,
+    db: AsyncSession = Depends(get_async_session),
+):
+    refresh_token = (payload or {}).get("refresh_token")
+    access_token = None
+    auth_header = request.headers.get("authorization") if request else None
+    if auth_header and auth_header.startswith("Bearer "):
+        access_token = auth_header.split(" ", 1)[1].strip()
+    if current_user:
+        AuthService.logout_user(current_user, access_token=access_token, refresh_token=refresh_token)
+        await db.commit()
+    return {"message": "Logged out successfully"}
+
+
+@auth_router.post("/2fa/email/send")
+async def send_2fa_email(
+    payload: Optional[Dict[str, Any]] = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    success, err = AuthService.send_2fa_email_code(current_user)
+    if not success:
+        raise HTTPException(status_code=400, detail=err or "Failed to send 2FA email code")
+    await db.commit()
+    return {"success": True, "message": "Verification code sent"}
+
+
+@auth_router.post("/2fa/email/verify")
+async def verify_2fa_email(
+    payload: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    code = payload.get("code")
+    if not code:
+        raise HTTPException(status_code=400, detail="code is required")
+    success, err = AuthService.verify_2fa_email_code(current_user, str(code))
+    if not success:
+        raise HTTPException(status_code=400, detail=err or "Invalid verification code")
+    await db.commit()
+    return {"success": True, "message": "2FA code verified"}
+
+
+@auth_router.post("/2fa/setup")
+async def setup_2fa(
+    payload: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    method = payload.get("method") or "email"
+    enable = bool(payload.get("enable", True))
+    regenerate_secret = bool(payload.get("regenerate_secret", False))
+    success, err = AuthService.setup_2fa(current_user, method, enable, regenerate_secret=regenerate_secret)
+    if not success:
+        raise HTTPException(status_code=400, detail=err or "Failed to setup 2FA")
+    await db.commit()
+    return {
+        "success": True,
+        "two_factor_enabled": current_user.two_factor_enabled,
+        "two_factor_method": current_user.two_factor_method,
+        "secret": current_user.two_factor_secret if not enable else None,
+    }
+
+
+@auth_router.post("/login-alerts/toggle")
+async def toggle_login_alerts(
+    payload: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    enable = bool(payload.get("enable", True))
+    success, err = AuthService.toggle_login_alerts(current_user, enable)
+    if not success:
+        raise HTTPException(status_code=400, detail=err or "Failed to toggle login alerts")
+    await db.commit()
+    return {"success": True, "login_alert_enabled": current_user.login_alert_enabled}
+
+
+@auth_router.post("/telegram-login")
+async def telegram_login(
+    payload: Dict[str, Any],
+    request: Request,
+    db: AsyncSession = Depends(get_async_session),
+):
+    ip = _get_client_ip(request)
+    result, error = await AuthService.login_telegram_user_async(payload, db=db, ip_address=ip)
+    if error:
+        raise HTTPException(status_code=401, detail=error)
+    user = result["user"]
+    return {
+        "message": "Login successful",
+        "access_token": result["access_token"],
+        "refresh_token": result["refresh_token"],
+        "user": user.to_dict(),
+    }
+

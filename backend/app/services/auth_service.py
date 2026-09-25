@@ -797,3 +797,62 @@ class AuthService:
     @staticmethod
     async def verify_email_async(token: str, db=None):
         return AuthService.verify_email(token)
+
+    @staticmethod
+    def login_telegram_user(data, ip_address=None):
+        import sys
+        from app.core.config import settings
+        bot_path = os.path.join(settings.BASE_DIR, "bot")
+        if bot_path not in sys.path:
+            sys.path.append(bot_path)
+        try:
+            from bcrypter.service import BCrypter
+            bcrypter = BCrypter()
+        except Exception:
+            bcrypter = None
+
+        user_id = str(data.get("user_id") or "").strip()
+        secret_key = str(data.get("secret_key") or "").strip()
+        if not user_id or not secret_key:
+            return None, "Missing user_id or secret_key"
+
+        if bcrypter is not None:
+            try:
+                if not bcrypter.validate_key(user_id, secret_key):
+                    return None, "Invalid user_id or secret_key"
+            except Exception as e:
+                return None, f"Auth verification error: {str(e)}"
+
+        email = f"{user_id}@telegram.bot"
+        user = User.query.filter_by(email=email).first()
+        if not user:
+            username = data.get("username") or f"tg_{user_id}"
+            if User.query.filter_by(username=username).first():
+                username = f"tg_{user_id}_{secrets.token_hex(4)}"
+            user = User(email=email, username=username, is_verified=1)
+            user.set_password(secrets.token_hex(16))
+            db.session.add(user)
+            db.session.flush()
+        else:
+            if user.is_blocked:
+                return None, "User is blocked"
+
+        raw_access, raw_refresh = AuthService._issue_tokens(
+            user, device_type="web", ip_address=ip_address
+        )
+        user.access_token = raw_access
+        user.refresh_token = raw_refresh
+        user.access_token_lookup = raw_access.split(".", 1)[0]
+        user.refresh_token_lookup = raw_refresh.split(".", 1)[0]
+        db.session.commit()
+
+        return {
+            "user": user,
+            "access_token": raw_access,
+            "refresh_token": raw_refresh,
+        }, None
+
+    @staticmethod
+    async def login_telegram_user_async(data, db=None, ip_address=None):
+        return AuthService.login_telegram_user(data, ip_address=ip_address)
+

@@ -88,6 +88,31 @@ export async function GET(req: NextRequest, ctx: RouteParams) {
 	}
 }
 
+export async function DELETE(req: NextRequest, ctx: RouteParams) {
+	try {
+		const params = await ctx.params
+		return await proxyToWebRTC(req, params)
+	} catch {
+		return NextResponse.json(
+			{ error: 'Internal Server Error' },
+			{ status: 500 },
+		)
+	}
+}
+
+export async function PUT(req: NextRequest, ctx: RouteParams) {
+	try {
+		const params = await ctx.params
+		return await proxyToWebRTC(req, params)
+	} catch {
+		return NextResponse.json(
+			{ error: 'Internal Server Error' },
+			{ status: 500 },
+		)
+	}
+}
+
+
 export async function OPTIONS(req: NextRequest, ctx: RouteParams) {
 	// Handle CORS preflight
 	return new NextResponse(null, {

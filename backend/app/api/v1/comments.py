@@ -56,3 +56,55 @@ async def delete_comment_admin(
 
     CommentService.delete_comment_by_admin(payload.comment_id, admin_user.id, payload.reason)
     return {"message": "Комментарий успешно удалён админом"}
+
+
+@comments_router.delete("/{comment_id}", response_model=dict)
+async def delete_comment_by_path(
+    comment_id: str,
+    current_user=Depends(get_current_user)
+):
+    try:
+        CommentService.delete_comment_by_user(comment_id, current_user.id)
+        return {"success": True, "message": "Комментарий успешно удалён"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@comments_router.post("/like", response_model=dict)
+@comments_router.post("/{comment_id}/like", response_model=dict)
+async def like_comment(
+    comment_id: Optional[str] = None,
+    payload: Optional[dict] = None,
+    current_user=Depends(get_current_user)
+):
+    cid = comment_id or (payload.get("comment_id") if payload else None) or (payload.get("id") if payload else None)
+    if not cid:
+        raise HTTPException(status_code=400, detail="comment_id is required")
+    try:
+        comment = CommentService.like_comment(str(cid), current_user.id)
+        return {"success": True, "likes": getattr(comment, "likes", 1)}
+    except Exception as e:
+        # If already liked or error, return success if duplicate
+        if "Уже лайкнуто" in str(e):
+            return {"success": True, "already_liked": True}
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@comments_router.post("/unlike", response_model=dict)
+@comments_router.post("/{comment_id}/unlike", response_model=dict)
+async def unlike_comment(
+    comment_id: Optional[str] = None,
+    payload: Optional[dict] = None,
+    current_user=Depends(get_current_user)
+):
+    cid = comment_id or (payload.get("comment_id") if payload else None) or (payload.get("id") if payload else None)
+    if not cid:
+        raise HTTPException(status_code=400, detail="comment_id is required")
+    try:
+        comment = CommentService.unlike_comment(str(cid), current_user.id)
+        return {"success": True, "likes": getattr(comment, "likes", 0)}
+    except Exception as e:
+        if "Не лайкнуто" in str(e):
+            return {"success": True, "already_unliked": True}
+        raise HTTPException(status_code=400, detail=str(e))
+

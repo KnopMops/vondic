@@ -25,3 +25,16 @@ async def generate_account_api_key(current_user=Depends(get_current_user)):
     if error or not api_key:
         raise HTTPException(status_code=400, detail=error or "Failed to generate API key")
     return {"api_key": api_key}
+
+
+@public_account_router.post("/developer/toggle")
+async def toggle_developer_mode_public(
+    payload: dict,
+    current_user=Depends(get_current_user)
+):
+    enable = bool(payload.get("enable", False))
+    current_user.is_developer = 1 if enable else 0
+    from app.core.extensions import db
+    db.session.commit()
+    return {"ok": True, "is_developer": bool(current_user.is_developer)}
+
