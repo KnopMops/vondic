@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +18,7 @@ from app.models.user import User
 from app.models.user_session import UserSession
 from app.schemas.user_schema import UserLoginSchema, UserRegisterSchema
 from app.services.auth_service import AuthService
+from app.services.passkey_service import PasskeyService
 from app.services.user_service import UserService
 
 auth_router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
@@ -615,4 +616,107 @@ async def telegram_login(
         "refresh_token": result["refresh_token"],
         "user": user.to_dict(),
     }
+
+
+# ==========================================
+# PASSKEY & WEBAUTHN ENDPOINTS
+# ==========================================
+
+@auth_router.post("/passkey/register-options")
+async def passkey_register_options(
+    payload: Dict[str, Any] = Body(default={}),
+):
+    email = payload.get("email")
+    username = payload.get("username")
+    options = PasskeyService.generate_register_options(email=email, username=username)
+    return options
+
+
+@auth_router.post("/passkey/register-verify")
+async def passkey_register_verify(payload: Dict[str, Any]):
+    credential = payload.get("credential") or payload
+    password = payload.get("password")
+    device_name = payload.get("device_name")
+    result, err = PasskeyService.verify_register(credential, password=password, device_name=device_name)
+    if err or not result:
+        raise HTTPException(status_code=400, detail=err or "Ошибка регистрации Passkey")
+    user = result["user"]
+    return {
+        "message": "Passkey registered successfully",
+        "access_token": result["access_token"],
+        "refresh_token": result["refresh_token"],
+        "user": user.to_dict(),
+    }
+
+
+@auth_router.post("/passkey/login-options")
+async def passkey_login_options():
+    options = PasskeyService.generate_login_options()
+    return options
+
+
+@auth_router.post("/passkey/login-verify")
+async def passkey_login_verify(payload: Dict[str, Any]):
+    credential = payload.get("credential") or payload
+    result, err = PasskeyService.verify_login(credential)
+    if err or not result:
+        raise HTTPException(status_code=401, detail=err or "Неверный Passkey")
+    user = result["user"]
+    return {
+        "message": "Passkey login successful",
+        "access_token": result["access_token"],
+        "refresh_token": result["refresh_token"],
+        "user": user.to_dict(),
+    }
+
+
+@auth_router.post("/passkey/migrate/create")
+async def passkey_migrate_create(current_user: User = Depends(get_current_user)):
+    data = PasskeyService.create_migration_session(current_user)
+    return data
+
+
+@auth_router.get("/passkey/migrate/info")
+async def passkey_migrate_info(token: str = Query(...)):
+    info, err = PasskeyService.get_migration_info(token)
+    if err or not info:
+        raise HTTPException(status_code=400, detail=err or "Неверный или просроченный токен миграции")
+    return info
+
+
+@auth_router.post("/passkey/migrate/complete")
+async def passkey_migrate_complete(payload: Dict[str, Any]):
+    token = payload.get("token") or payload.get("migration_token")
+    credential = payload.get("credential") or payload
+    device_name = payload.get("device_name")
+    result, err = PasskeyService.complete_migration(token, credential, device_name=device_name)
+    if err or not result:
+        raise HTTPException(status_code=400, detail=err or "Не удалось завершить миграцию Passkey")
+    user = result["user"]
+    return {
+        "message": "Migration completed successfully",
+        "access_token": result["access_token"],
+        "refresh_token": result["refresh_token"],
+        "user": user.to_dict(),
+    }
+
+
+@auth_router.get("/passkey/migrate/status")
+async def passkey_migrate_status(token: str = Query(...)):
+    status = PasskeyService.get_migration_status(token)
+    return status
+
+
+@auth_router.get("/passkey/list")
+async def passkey_list(current_user: User = Depends(get_current_user)):
+    return {"passkeys": PasskeyService.list_user_passkeys(current_user.id)}
+
+
+@auth_router.delete("/passkey/{passkey_id}")
+async def passkey_delete(passkey_id: str, current_user: User = Depends(get_current_user)):
+    ok = PasskeyService.delete_user_passkey(current_user.id, passkey_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Passkey не найден")
+    return {"ok": True}
+
 

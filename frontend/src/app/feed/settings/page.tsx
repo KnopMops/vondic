@@ -13,7 +13,10 @@ import { AnimatePresence, motion } from 'framer-motion'
 import Link from 'next/link'
 import { FiBell, FiCode, FiLock, FiMail, FiMonitor, FiMessageCircle, FiMusic, FiPhoneCall, FiSettings, FiShield, FiVolume2, FiX } from 'react-icons/fi'
 import { HiOutlineColorSwatch } from 'react-icons/hi'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
+import QRCode from 'qrcode'
+import { LuKey, LuQrCode, LuCheck, LuLoader, LuX } from 'react-icons/lu'
+import { registerWithPasskey, createPasskeyMigration, checkPasskeyMigrationStatus, isPasskeySupported } from '@/lib/passkey'
 import { COLOR_SCHEMES, saveColorScheme, initColorScheme, type ColorSchemeId } from '@/lib/theme/colorSchemes'
 import { getEncProxyUrl, setEncProxyUrl as saveEncProxyUrl, isEncProxyEnabled, getEncProxyClient, type EncProxyStatus } from '@/lib/encproxy'
 
@@ -146,6 +149,103 @@ export default function SettingsPage() {
 			loadSessions()
 		}
 	}, [user?.id])
+
+	// Passkey и миграция
+	const [passkeysList, setPasskeysList] = useState<any[]>([])
+	const [passkeyAdding, setPasskeyAdding] = useState(false)
+	const [isMigrationModalOpen, setIsMigrationModalOpen] = useState(false)
+	const [migrationQrUrl, setMigrationQrUrl] = useState('')
+	const [migrationStatus, setMigrationStatus] = useState<'pending' | 'completed' | 'expired'>('pending')
+	const migrationPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+	const loadPasskeys = async () => {
+		try {
+			const res = await fetch('/api/auth/passkey/list')
+			const data = await res.json()
+			if (data?.passkeys) {
+				setPasskeysList(data.passkeys)
+			}
+		} catch {}
+	}
+
+	useEffect(() => {
+		if (user) {
+			loadPasskeys()
+		}
+	}, [user?.id])
+
+	const handleAddPasskey = async () => {
+		if (!user) return
+		setPasskeyAdding(true)
+		try {
+			if (!isPasskeySupported()) {
+				throw new Error('Ваш браузер или устройство не поддерживает Passkey')
+			}
+			await registerWithPasskey({
+				email: user.email,
+				username: user.username,
+			})
+			showToast('Passkey успешно добавлен на это устройство', 'success')
+			loadPasskeys()
+		} catch (err: any) {
+			showToast(err.message || 'Ошибка создания Passkey', 'error')
+		} finally {
+			setPasskeyAdding(false)
+		}
+	}
+
+	const handleDeletePasskey = async (id: string) => {
+		if (!confirm('Удалить этот Passkey?')) return
+		try {
+			const res = await fetch(`/api/auth/passkey/${id}`, { method: 'DELETE' })
+			if (res.ok) {
+				showToast('Passkey удален', 'success')
+				loadPasskeys()
+			}
+		} catch {
+			showToast('Ошибка удаления Passkey', 'error')
+		}
+	}
+
+	const handleOpenMigrationModal = async () => {
+		setIsMigrationModalOpen(true)
+		setMigrationQrUrl('')
+		setMigrationStatus('pending')
+		if (migrationPollRef.current) clearInterval(migrationPollRef.current)
+
+		try {
+			const data = await createPasskeyMigration()
+			const dataUrl = await QRCode.toDataURL(data.migrate_url, {
+				width: 256,
+				margin: 2,
+				color: { dark: '#ffffff', light: '#00000000' },
+			})
+			setMigrationQrUrl(dataUrl)
+
+			migrationPollRef.current = setInterval(async () => {
+				try {
+					const st = await checkPasskeyMigrationStatus(data.migration_token)
+					if (st === 'completed') {
+						setMigrationStatus('completed')
+						showToast('Passkey успешно перенесён на телефон!', 'success')
+						loadPasskeys()
+						if (migrationPollRef.current) clearInterval(migrationPollRef.current)
+					} else if (st === 'expired') {
+						setMigrationStatus('expired')
+						if (migrationPollRef.current) clearInterval(migrationPollRef.current)
+					}
+				} catch {}
+			}, 2000)
+		} catch (err: any) {
+			showToast(err.message || 'Ошибка генерации миграции', 'error')
+		}
+	}
+
+	useEffect(() => {
+		return () => {
+			if (migrationPollRef.current) clearInterval(migrationPollRef.current)
+		}
+	}, [])
 
 	const applyTheme = (nextTheme: 'system' | 'dark' | 'light') => {
 		const root = document.documentElement
@@ -1490,6 +1590,91 @@ export default function SettingsPage() {
 							)}
 						</motion.div>
 						)}
+
+						{/* Passkey и миграция */}
+						<motion.div
+							initial={{ opacity: 0, y: 20 }}
+							animate={{ opacity: 1, y: 0 }}
+							transition={{ duration: 0.4 }}
+							className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
+						>
+							<motion.div
+								initial={{ opacity: 0 }}
+								animate={{ opacity: 1 }}
+								transition={{ duration: 0.8 }}
+								className='absolute -top-20 -right-16 w-52 h-52 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 rounded-full blur-3xl'
+							/>
+							<div className='flex flex-wrap items-center justify-between gap-4 mb-4'>
+								<div className='flex items-center gap-3'>
+									<div className='flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500/10 border border-cyan-500/20'>
+										<LuKey className='w-5 h-5 text-cyan-400' />
+									</div>
+									<div>
+										<h2 className='text-xl font-semibold'>Passkey (Вход без пароля)</h2>
+										<p className='text-xs text-gray-400'>
+											Биометрия (Touch ID / Face ID / Windows Hello)
+										</p>
+									</div>
+								</div>
+								<div className='flex items-center gap-2'>
+									<button
+										onClick={handleOpenMigrationModal}
+										className='flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/40 px-3.5 py-2 text-xs font-medium text-cyan-200 hover:from-cyan-500/30 hover:to-blue-500/30 transition-all shadow-sm'
+									>
+										<LuQrCode className='w-4 h-4 text-cyan-400' />
+										Миграция passkey
+									</button>
+									<button
+										onClick={handleAddPasskey}
+										disabled={passkeyAdding}
+										className='rounded-xl bg-white/10 border border-white/20 px-3.5 py-2 text-xs font-medium text-white hover:bg-white/20 transition disabled:opacity-50'
+									>
+										{passkeyAdding ? 'Добавление...' : '+ Добавить Passkey'}
+									</button>
+								</div>
+							</div>
+
+							<p className='text-sm text-gray-400 mb-4'>
+								Используйте Passkey для мгновенного и защищенного входа без пароля с помощью биометрии вашего устройства.
+							</p>
+
+							{/* Список passkeys */}
+							<div className='space-y-2.5'>
+								{passkeysList.length === 0 ? (
+									<div className='rounded-xl border border-white/5 bg-black/20 p-4 text-center text-xs text-gray-400'>
+										У вас пока нет зарегистрированных Passkey на этом аккаунте.
+									</div>
+								) : (
+									passkeysList.map(pk => (
+										<div
+											key={pk.id}
+											className='flex items-center justify-between rounded-xl border border-white/10 bg-black/30 px-4 py-3'
+										>
+											<div className='flex items-center gap-3'>
+												<div className='flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-500/10 text-cyan-300'>
+													<LuKey className='w-4 h-4' />
+												</div>
+												<div>
+													<p className='text-sm font-medium text-white'>
+														{pk.device_name || 'Устройство с Passkey'}
+													</p>
+													<p className='text-[11px] text-gray-400'>
+														Создан: {formatDateTime(pk.created_at)}
+														{pk.last_used_at && ` · Использован: ${formatDateTime(pk.last_used_at)}`}
+													</p>
+												</div>
+											</div>
+											<button
+												onClick={() => handleDeletePasskey(pk.id)}
+												className='rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 text-xs text-rose-300 hover:bg-rose-500/20 transition'
+											>
+												Удалить
+											</button>
+										</div>
+									))
+								)}
+							</div>
+						</motion.div>
 					</>
 				)}
 
@@ -2020,6 +2205,90 @@ export default function SettingsPage() {
 											</button>
 										</div>
 										<DeveloperSettings enabled={developerEnabled} />
+									</motion.div>
+								</motion.div>
+							)}
+						</AnimatePresence>
+
+						{/* Passkey Migration QR Modal */}
+						<AnimatePresence>
+							{isMigrationModalOpen && (
+								<motion.div
+									initial={{ opacity: 0 }}
+									animate={{ opacity: 1 }}
+									exit={{ opacity: 0 }}
+									className='fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4'
+									onClick={() => setIsMigrationModalOpen(false)}
+								>
+									<motion.div
+										initial={{ scale: 0.92, opacity: 0 }}
+										animate={{ scale: 1, opacity: 1 }}
+										exit={{ scale: 0.92, opacity: 0 }}
+										onClick={e => e.stopPropagation()}
+										className='relative w-full max-w-md rounded-3xl bg-[#14151a] border border-white/10 p-7 shadow-2xl overflow-hidden text-center'
+									>
+										<button
+											onClick={() => setIsMigrationModalOpen(false)}
+											className='absolute top-5 right-5 text-gray-400 hover:text-white transition'
+										>
+											<LuX className='w-5 h-5' />
+										</button>
+
+										<div className='mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 text-cyan-400 shadow-lg shadow-cyan-500/10'>
+											<LuQrCode className='h-7 w-7' />
+										</div>
+
+										<h3 className='text-xl font-bold text-white mb-2'>
+											Миграция Passkey
+										</h3>
+										<p className='text-xs text-gray-300 mb-6 leading-relaxed'>
+											Отсканируйте этот QR-код камерой вашего телефона для мгновенного входа и привязки Passkey к новому устройству.
+										</p>
+
+										<div className='mx-auto mb-5 flex h-64 w-64 items-center justify-center rounded-2xl bg-white p-3 shadow-inner'>
+											{migrationQrUrl ? (
+												<img
+													src={migrationQrUrl}
+													alt='Migration QR Code'
+													className='h-full w-full object-contain'
+												/>
+											) : (
+												<div className='flex flex-col items-center gap-2 text-gray-700'>
+													<LuLoader className='w-8 h-8 animate-spin text-cyan-600' />
+													<span className='text-xs'>Генерация QR-кода...</span>
+												</div>
+											)}
+										</div>
+
+										{migrationStatus === 'pending' && (
+											<div className='flex items-center justify-center gap-2 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-xl py-2 px-3'>
+												<LuLoader className='w-4 h-4 animate-spin' />
+												<span>Ожидание сканирования на телефоне...</span>
+											</div>
+										)}
+
+										{migrationStatus === 'completed' && (
+											<div className='flex items-center justify-center gap-2 text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-xl py-2 px-3'>
+												<LuCheck className='w-4 h-4 text-emerald-400' />
+												<span>Passkey успешно сохранён на телефоне и выполнен вход!</span>
+											</div>
+										)}
+
+										{migrationStatus === 'expired' && (
+											<div className='flex flex-col items-center gap-2 text-xs text-rose-300 bg-rose-500/10 border border-rose-500/20 rounded-xl py-2.5 px-3'>
+												<span>Срок действия QR-кода истёк (5 минут).</span>
+												<button
+													onClick={handleOpenMigrationModal}
+													className='text-xs font-semibold underline text-white hover:text-cyan-300'
+												>
+													Создать новый QR-код
+												</button>
+											</div>
+										)}
+
+										<p className='text-[11px] text-gray-500 mt-5'>
+											QR-код одноразовый и действует 5 минут. При сканировании телефон предложит подтвердить биометрию.
+										</p>
 									</motion.div>
 								</motion.div>
 							)}

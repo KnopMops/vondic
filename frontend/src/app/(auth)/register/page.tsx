@@ -7,6 +7,8 @@ import { useAuth } from '@/lib/AuthContext'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import { LuKey } from 'react-icons/lu'
+import { registerWithPasskey } from '@/lib/passkey'
 
 export default function RegisterPage() {
 	const [email, setEmail] = useState('')
@@ -68,6 +70,31 @@ export default function RegisterPage() {
 		} catch {
 			setCaptchaKey(k => k + 1)
 			setCaptchaToken('')
+		}
+	}
+
+	const [passkeyLoading, setPasskeyLoading] = useState(false)
+	const [passkeyError, setPasskeyError] = useState<string | null>(null)
+
+	const handlePasskeyRegister = async () => {
+		setPasskeyError(null)
+		if (!email.trim() || !username.trim()) {
+			setPasskeyError('Сначала укажите email и имя пользователя')
+			return
+		}
+		if (emailOk === false) return
+		setPasskeyLoading(true)
+		try {
+			await registerWithPasskey({
+				email: email.trim().toLowerCase(),
+				username: username.trim(),
+				password: password.trim() || undefined,
+			})
+			window.location.assign('/feed')
+		} catch (err: any) {
+			setPasskeyError(err.message || 'Ошибка регистрации с помощью Passkey')
+		} finally {
+			setPasskeyLoading(false)
 		}
 	}
 
@@ -151,7 +178,7 @@ export default function RegisterPage() {
 					</div>
 					<SmartCaptcha key={`register-${captchaKey}`} onTokenChange={setCaptchaToken} />
 
-					<div>
+					<div className='space-y-3'>
 						<button
 							type='submit'
 							disabled={
@@ -163,6 +190,28 @@ export default function RegisterPage() {
 						>
 							{isLoading ? 'Создание...' : 'Зарегистрироваться'}
 						</button>
+
+						<div className='relative flex items-center justify-center my-2'>
+							<div className='absolute inset-0 flex items-center'>
+								<div className='w-full border-t border-white/10'></div>
+							</div>
+							<span className='relative bg-black/60 px-3 text-xs text-gray-500 uppercase tracking-wider rounded'>
+								или
+							</span>
+						</div>
+
+						<button
+							type='button'
+							onClick={handlePasskeyRegister}
+							disabled={passkeyLoading || emailOk === false}
+							className='group relative flex w-full items-center justify-center gap-2.5 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-4 py-3 text-sm font-semibold text-indigo-300 hover:bg-indigo-500/20 hover:border-indigo-500/50 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/10'
+						>
+							<LuKey className='h-4 w-4 text-indigo-400' />
+							{passkeyLoading ? 'Создание Passkey...' : 'Зарегистрировать с помощью Passkey'}
+						</button>
+						{passkeyError && (
+							<p className='text-center text-xs text-red-400 mt-1'>{passkeyError}</p>
+						)}
 					</div>
 					<p className='mt-3 text-center text-xs text-gray-500'>
 						Регистрируясь, вы соглашаетесь с{' '}

@@ -18,6 +18,7 @@ from .post_report import PostReport
 from .post import Post
 from .playlist import Playlist
 from .playlist_borrow import PlaylistBorrow
+from .passkey import Passkey
 from .social_community import SocialCommunity
 from .subscription import Subscription
 from .support_chat_message import SupportChatMessage
@@ -51,6 +52,7 @@ __all__ = [
     "Post",
     "Playlist",
     "PlaylistBorrow",
+    "Passkey",
     "Subscription",
     "SupportChatMessage",
     "User",

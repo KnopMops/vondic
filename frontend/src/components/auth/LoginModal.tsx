@@ -8,8 +8,9 @@ import { setUser } from '@/lib/features/authSlice'
 import { useAppDispatch } from '@/lib/hooks'
 import Link from 'next/link'
 import { useState } from 'react'
-import { LuX as X } from 'react-icons/lu'
+import { LuX as X, LuKey } from 'react-icons/lu'
 import { SiYandexcloud as Yandex } from 'react-icons/si'
+import { loginWithPasskey } from '@/lib/passkey'
 
 interface LoginModalProps {
 	isOpen: boolean
@@ -46,6 +47,25 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 			}
 		} catch (err: any) {
 			setLoginError(err.message || 'Ошибка отправки кода')
+		}
+	}
+
+	const [passkeyLoading, setPasskeyLoading] = useState(false)
+
+	const handlePasskeyLogin = async () => {
+		setLoginError(null)
+		setPasskeyLoading(true)
+		try {
+			const data = await loginWithPasskey()
+			if (data?.user) {
+				dispatch(setUser(data.user))
+				onClose()
+				window.location.assign('/feed')
+			}
+		} catch (err: any) {
+			setLoginError(err.message || 'Ошибка входа по Passkey')
+		} finally {
+			setPasskeyLoading(false)
 		}
 	}
 
@@ -272,6 +292,16 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 						>
 							Яндекс
 							<Yandex className='h-5 w-5 text-[#FC3F1D]' />
+						</button>
+
+						<button
+							type='button'
+							onClick={handlePasskeyLogin}
+							disabled={passkeyLoading}
+							className='group relative flex w-full items-center justify-center gap-3 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-4 py-3.5 text-sm font-semibold text-indigo-300 hover:bg-indigo-500/20 hover:border-indigo-500/50 transition-all active:scale-[0.98] disabled:opacity-50'
+						>
+							<LuKey className='h-5 w-5 text-indigo-400' />
+							{passkeyLoading ? 'Вход по Passkey...' : 'Войти с помощью Passkey'}
 						</button>
 						<p className='text-center text-xs text-gray-500'>
 							Входя через соцсети, вы соглашаетесь с{' '}

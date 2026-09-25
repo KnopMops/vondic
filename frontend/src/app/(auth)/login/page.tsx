@@ -21,7 +21,8 @@ import { useAppDispatch } from '@/lib/hooks'
 import EmailInput from '@/components/ui/EmailInput'
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
-import { LuEye, LuEyeOff } from 'react-icons/lu'
+import { LuEye, LuEyeOff, LuKey } from 'react-icons/lu'
+import { loginWithPasskey, isPasskeySupported } from '@/lib/passkey'
 
 export default function LoginPage() {
 	const [email, setEmail] = useState('')
@@ -117,6 +118,28 @@ export default function LoginPage() {
 			}
 		} finally {
 			setSwitchingAccountId(null)
+		}
+	}
+
+	const [passkeyLoading, setPasskeyLoading] = useState(false)
+
+	const handlePasskeyLogin = async () => {
+		setLoginError(null)
+		setPasskeyLoading(true)
+		try {
+			const data = await loginWithPasskey()
+			if (data?.user) {
+				dispatch(setUser(data.user))
+				if (typeof window !== 'undefined' && (window.parent !== window || isModal)) {
+					notifyParentAuthSuccess()
+					return
+				}
+				window.location.assign(postLoginRedirect || '/feed')
+			}
+		} catch (err: any) {
+			setLoginError(err.message || 'Ошибка входа по Passkey')
+		} finally {
+			setPasskeyLoading(false)
 		}
 	}
 
@@ -512,6 +535,16 @@ export default function LoginPage() {
 								className='group relative flex w-full justify-center rounded-full border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-400 hover:bg-red-500/20 transition-all'
 							>
 								Войти через Яндекс
+							</button>
+
+							<button
+								type='button'
+								onClick={handlePasskeyLogin}
+								disabled={passkeyLoading}
+								className='group relative flex w-full items-center justify-center gap-2.5 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-4 py-3 text-sm font-semibold text-indigo-300 hover:bg-indigo-500/20 hover:border-indigo-500/50 transition-all active:scale-[0.98] disabled:opacity-50'
+							>
+								<LuKey className='h-4 w-4 text-indigo-400' />
+								{passkeyLoading ? 'Вход по Passkey...' : 'Войти с помощью Passkey'}
 							</button>
 							<p className='text-center text-xs text-gray-500'>
 								Входя через соцсети, вы соглашаетесь с{' '}
