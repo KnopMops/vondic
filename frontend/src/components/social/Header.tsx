@@ -348,7 +348,7 @@ export default function Header({ email, onLogout }: Props) {
 														}
 													}}
 												>
-													<div className='w-8 h-8 rounded-full overflow-hidden bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm shrink-0'>
+													<div className='w-8 h-8 rounded-full overflow-hidden bg-[#21262d] border border-[#30363d] flex items-center justify-center text-[#e6edf3] font-bold text-sm shrink-0'>
 														{account.avatar_url ? (
 															<img
 																src={account.avatar_url}
@@ -462,7 +462,7 @@ export default function Header({ email, onLogout }: Props) {
 					) : (
 						<Link
 							href={`/login${pathname ? `?returnTo=${encodeURIComponent(pathname)}` : ''}`}
-							className='flex items-center gap-2 px-4 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-sm font-semibold shadow-md shadow-indigo-500/20 transition-all transform hover:scale-[1.02] active:scale-[0.98]'
+							className='flex items-center gap-2 px-4 py-1.5 rounded-xl bg-[#0077FF] hover:bg-[#0066dd] text-white text-sm font-medium shadow-md shadow-[#0077FF]/20 transition-all transform hover:scale-[1.02] active:scale-[0.98]'
 						>
 							Войти
 						</Link>
@@ -643,7 +643,7 @@ export default function Header({ email, onLogout }: Props) {
 							<Link
 								href={`/login${pathname ? `?returnTo=${encodeURIComponent(pathname)}` : ''}`}
 								onClick={() => setIsMobileMenuOpen(false)}
-								className='mt-3 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-3 text-sm font-semibold text-white shadow-lg transition-all'
+								className='mt-3 flex items-center justify-center gap-2 rounded-xl bg-[#0077FF] hover:bg-[#0066dd] px-4 py-3 text-sm font-semibold text-white shadow-md shadow-[#0077FF]/25 transition-all'
 							>
 								Войти
 							</Link>

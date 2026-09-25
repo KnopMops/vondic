@@ -2,11 +2,34 @@ import { saveAccount } from '@/lib/savedAccounts'
 
 export function isPasskeySupported(): boolean {
 	if (typeof window === 'undefined') return false
+	const isLocal =
+		window.location.hostname === 'localhost' ||
+		window.location.hostname === '127.0.0.1'
+	const isSecure = window.isSecureContext || isLocal
 	return (
+		isSecure &&
 		!!window.PublicKeyCredential &&
 		typeof navigator.credentials?.create === 'function' &&
 		typeof navigator.credentials?.get === 'function'
 	)
+}
+
+function getValidRpConfig(serverRp?: { name?: string; id?: string }): { name: string; id?: string } {
+	const currentHostname = typeof window !== 'undefined' ? window.location.hostname : ''
+	const isLocal = currentHostname === 'localhost' || currentHostname === '127.0.0.1'
+	const name = serverRp?.name || 'Vondic'
+
+	if (isLocal) {
+		return { name, id: 'localhost' }
+	}
+	if (!currentHostname) {
+		return { name }
+	}
+	const targetId = serverRp?.id || currentHostname
+	if (currentHostname === targetId || currentHostname.endsWith('.' + targetId)) {
+		return { name, id: targetId }
+	}
+	return { name, id: currentHostname }
 }
 
 export function bufferToBase64Url(buffer: ArrayBuffer): string {
@@ -76,8 +99,10 @@ export async function registerWithPasskey(params: RegisterPasskeyParams) {
 	}
 
 	// 2. Преобразуем challenge и user.id в Buffer
+	const rp = getValidRpConfig(options.rp)
 	const publicKey: PublicKeyCredentialCreationOptions = {
 		...options,
+		rp,
 		challenge: base64UrlToBuffer(options.challenge),
 		user: {
 			...options.user,
@@ -86,9 +111,28 @@ export async function registerWithPasskey(params: RegisterPasskeyParams) {
 	}
 
 	// 3. Вызов биометрии / создания ключа на устройстве
-	const credential = (await navigator.credentials.create({
-		publicKey,
-	})) as PublicKeyCredential
+	let credential: PublicKeyCredential | null = null
+	try {
+		credential = (await navigator.credentials.create({
+			publicKey,
+		})) as PublicKeyCredential
+	} catch (err: any) {
+		if (err.name === 'NotAllowedError') {
+			throw new Error('Создание Passkey отменено на устройстве')
+		}
+		if (err.name === 'SecurityError') {
+			try {
+				const fallbackKey = { ...publicKey, rp: { name: rp.name } }
+				credential = (await navigator.credentials.create({
+					publicKey: fallbackKey,
+				})) as PublicKeyCredential
+			} catch {
+				throw new Error(err.message || 'Ошибка безопасности при создании Passkey')
+			}
+		} else {
+			throw new Error(err.message || 'Ошибка создания Passkey')
+		}
+	}
 
 	if (!credential) {
 		throw new Error('Создание Passkey отменено')
@@ -160,15 +204,37 @@ export async function loginWithPasskey() {
 	}
 
 	// 2. Преобразуем challenge
+	const rp = getValidRpConfig(options.rp ? options.rp : { id: options.rpId })
 	const publicKey: PublicKeyCredentialRequestOptions = {
 		...options,
 		challenge: base64UrlToBuffer(options.challenge),
+		rpId: rp.id,
 	}
 
 	// 3. Вызов биометрии / FaceID / TouchID / Windows Hello
-	const assertion = (await navigator.credentials.get({
-		publicKey,
-	})) as PublicKeyCredential
+	let assertion: PublicKeyCredential | null = null
+	try {
+		assertion = (await navigator.credentials.get({
+			publicKey,
+		})) as PublicKeyCredential
+	} catch (err: any) {
+		if (err.name === 'NotAllowedError') {
+			throw new Error('Вход по Passkey отменен')
+		}
+		if (err.name === 'SecurityError') {
+			try {
+				const fallbackKey = { ...publicKey }
+				delete fallbackKey.rpId
+				assertion = (await navigator.credentials.get({
+					publicKey: fallbackKey,
+				})) as PublicKeyCredential
+			} catch {
+				throw new Error(err.message || 'Ошибка входа по Passkey')
+			}
+		} else {
+			throw new Error(err.message || 'Ошибка входа по Passkey')
+		}
+	}
 
 	if (!assertion) {
 		throw new Error('Вход по Passkey отменен')
@@ -268,8 +334,10 @@ export async function completePasskeyMigration(migrationToken: string) {
 	}
 
 	const options = info.options
+	const rp = getValidRpConfig(options.rp)
 	const publicKey: PublicKeyCredentialCreationOptions = {
 		...options,
+		rp,
 		challenge: base64UrlToBuffer(options.challenge),
 		user: {
 			...options.user,
@@ -278,9 +346,28 @@ export async function completePasskeyMigration(migrationToken: string) {
 	}
 
 	// 2. Создание Passkey на телефоне с биометрией
-	const credential = (await navigator.credentials.create({
-		publicKey,
-	})) as PublicKeyCredential
+	let credential: PublicKeyCredential | null = null
+	try {
+		credential = (await navigator.credentials.create({
+			publicKey,
+		})) as PublicKeyCredential
+	} catch (err: any) {
+		if (err.name === 'NotAllowedError') {
+			throw new Error('Создание Passkey отменено на устройстве')
+		}
+		if (err.name === 'SecurityError') {
+			try {
+				const fallbackKey = { ...publicKey, rp: { name: rp.name } }
+				credential = (await navigator.credentials.create({
+					publicKey: fallbackKey,
+				})) as PublicKeyCredential
+			} catch {
+				throw new Error(err.message || 'Ошибка безопасности биометрии')
+			}
+		} else {
+			throw new Error(err.message || 'Ошибка биометрии на телефоне')
+		}
+	}
 
 	if (!credential) {
 		throw new Error('Создание Passkey на устройстве отменено')

@@ -19,7 +19,7 @@ async function proxyPasskey(req: NextRequest, params: { path?: string[] }) {
 			'User-Agent': req.headers.get('user-agent') || '',
 			'X-Forwarded-For': req.headers.get('x-forwarded-for') || '',
 			'X-Real-IP': req.headers.get('x-real-ip') || '',
-			'X-Forwarded-Host': req.headers.get('x-forwarded-host') || req.headers.get('host') || '',
+			'X-Forwarded-Host': req.headers.get('x-forwarded-host') || req.headers.get('host') || url.host || '',
 			'X-Forwarded-Proto': req.headers.get('x-forwarded-proto') || url.protocol.replace(':', ''),
 			'Origin': req.headers.get('origin') || url.origin,
 		}

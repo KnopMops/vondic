@@ -62,7 +62,7 @@ export default function SettingsPage() {
 	const [fontFamily, setFontFamily] = useState<string>(
 		"var(--font-geist-sans), system-ui, -apple-system, 'Segoe UI', Roboto, Arial, 'Noto Sans', 'Liberation Sans', sans-serif",
 	)
-	const [colorSchemeId, setColorSchemeId] = useState<ColorSchemeId>('purple')
+	const [colorSchemeId, setColorSchemeId] = useState<ColorSchemeId>('vondic')
 	const [chatThemeId, setChatThemeId] = useState<string>('default')
 	const [messageThemeId, setMessageThemeId] = useState<string>('default')
 	const [chatBackgroundImage, setChatBackgroundImage] = useState<string>('')
@@ -179,19 +179,24 @@ export default function SettingsPage() {
 	}, [user?.id])
 
 	const handleAddPasskey = async () => {
-		if (!user) return
+		if (!user) {
+			showToast('Для добавления Passkey необходимо войти в аккаунт', 'error')
+			return
+		}
 		setPasskeyAdding(true)
 		try {
 			if (!isPasskeySupported()) {
-				throw new Error('Ваш браузер или устройство не поддерживает Passkey')
+				throw new Error('Ваш браузер или текущее подключение не поддерживает Passkey (требуется HTTPS или localhost)')
 			}
+			showToast('Подтвердите создание Passkey на вашем устройстве...', 'info')
 			await registerWithPasskey({
 				email: user.email,
 				username: user.username,
 			})
 			showToast('Passkey успешно добавлен на это устройство', 'success')
-			loadPasskeys()
+			await loadPasskeys()
 		} catch (err: any) {
+			console.error('handleAddPasskey error:', err)
 			showToast(err.message || 'Ошибка создания Passkey', 'error')
 		} finally {
 			setPasskeyAdding(false)
@@ -227,7 +232,7 @@ export default function SettingsPage() {
 			const dataUrl = await QRCode.toDataURL(data.migrate_url, {
 				width: 256,
 				margin: 2,
-				color: { dark: '#ffffff', light: '#00000000' },
+				color: { dark: '#000000', light: '#ffffff' },
 			})
 			setMigrationQrUrl(dataUrl)
 
@@ -829,19 +834,16 @@ export default function SettingsPage() {
 					initial={{ opacity: 0, y: 20 }}
 					animate={{ opacity: 1, y: 0 }}
 					transition={{ duration: 0.4 }}
-					className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
+					className='relative rounded-2xl bg-[#161b22] border border-[#30363d] p-6 overflow-hidden'
 				>
-					<motion.div
-						initial={{ opacity: 0 }}
-						animate={{ opacity: 1 }}
-						transition={{ duration: 0.8 }}
-						className='absolute -top-24 -right-24 w-64 h-64 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 rounded-full blur-3xl'
+					<div
+						className='pointer-events-none absolute -top-24 -right-24 w-64 h-64 bg-gradient-to-br from-[#0077FF]/10 to-blue-600/10 rounded-full blur-3xl'
 					/>
-					<h1 className='text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400'>
+					<h1 className='text-2xl sm:text-3xl font-bold text-[#e6edf3]'>
 						Настройки
 					</h1>
-					<p className='text-sm text-gray-400 mt-2'>
-						Управляйте настройками вашего аккаунта.
+					<p className='text-sm text-[#8b949e] mt-1.5'>
+						Управляйте параметрами аккаунта, безопасностью и внешним видом Вондик.
 					</p>
 				</motion.div>
 
@@ -849,48 +851,52 @@ export default function SettingsPage() {
 					initial={{ opacity: 0, y: 20 }}
 					animate={{ opacity: 1, y: 0 }}
 					transition={{ duration: 0.4 }}
-					className='relative rounded-2xl bg-white/5 border border-white/10 p-2 overflow-hidden'
+					className='relative rounded-2xl bg-[#161b22] border border-[#30363d] p-1.5 overflow-hidden'
 				>
 					<div className='flex gap-1'>
 						<button
+							type='button'
 							onClick={() => setActiveTab('system')}
-							className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+							className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all cursor-pointer ${
 								activeTab === 'system'
-									? 'bg-indigo-500/20 text-white'
-									: 'text-gray-400 hover:text-white hover:bg-white/5'
+									? 'bg-[#0077FF] text-white shadow-sm font-semibold'
+									: 'text-[#8b949e] hover:text-white hover:bg-white/5'
 							}`}
 						>
 							<FiSettings className='w-4 h-4' />
 							Системные
 						</button>
 						<button
+							type='button'
 							onClick={() => setActiveTab('mail')}
-							className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+							className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all cursor-pointer ${
 								activeTab === 'mail'
-									? 'bg-indigo-500/20 text-white'
-									: 'text-gray-400 hover:text-white hover:bg-white/5'
+									? 'bg-[#0077FF] text-white shadow-sm font-semibold'
+									: 'text-[#8b949e] hover:text-white hover:bg-white/5'
 							}`}
 						>
 							<FiMail className='w-4 h-4' />
 							Почта
 						</button>
 						<button
+							type='button'
 							onClick={() => setActiveTab('interface')}
-							className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+							className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all cursor-pointer ${
 								activeTab === 'interface'
-									? 'bg-indigo-500/20 text-white'
-									: 'text-gray-400 hover:text-white hover:bg-white/5'
+									? 'bg-[#0077FF] text-white shadow-sm font-semibold'
+									: 'text-[#8b949e] hover:text-white hover:bg-white/5'
 							}`}
 						>
 							<FiMonitor className='w-4 h-4' />
 							Интерфейс
 						</button>
 						<button
+							type='button'
 							onClick={() => setActiveTab('sounds')}
-							className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+							className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all cursor-pointer ${
 								activeTab === 'sounds'
-									? 'bg-indigo-500/20 text-white'
-									: 'text-gray-400 hover:text-white hover:bg-white/5'
+									? 'bg-[#0077FF] text-white shadow-sm font-semibold'
+									: 'text-[#8b949e] hover:text-white hover:bg-white/5'
 							}`}
 						>
 							<FiMusic className='w-4 h-4' />
@@ -905,7 +911,7 @@ export default function SettingsPage() {
 							initial={{ opacity: 0, y: 20 }}
 							animate={{ opacity: 1, y: 0 }}
 							transition={{ duration: 0.4 }}
-							className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
+							className='relative rounded-2xl bg-[#161b22] border border-[#30363d] p-6 overflow-hidden'
 						>
 							<motion.div
 								initial={{ rotate: 0 }}
@@ -950,12 +956,12 @@ export default function SettingsPage() {
 											</button>
 											<button
 												onClick={() => setIsOauthModalOpen(true)}
-												className='rounded-lg bg-indigo-500/20 border border-indigo-500/30 px-4 py-2 text-sm text-indigo-300 hover:bg-indigo-500/30 transition'
+												className='rounded-lg bg-[#0077FF]/15 border border-[#0077FF]/30 px-4 py-2 text-sm text-[#0077FF] hover:bg-indigo-500/30 transition'
 											>
 												OAuth приложения
 											</button>
 										</div>
-										<div className='rounded-lg border border-white/10 bg-black/30 p-3 text-sm text-gray-300 break-all font-mono'>
+										<div className='rounded-lg border border-[#30363d] bg-[#0e1117] p-3 text-sm text-gray-300 break-all font-mono'>
 											{apiKey || 'Ключ появится здесь после генерации'}
 										</div>
 									</div>
@@ -967,7 +973,7 @@ export default function SettingsPage() {
 							initial={{ opacity: 0, y: 20 }}
 							animate={{ opacity: 1, y: 0 }}
 							transition={{ duration: 0.4 }}
-							className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
+							className='relative rounded-2xl bg-[#161b22] border border-[#30363d] p-6 overflow-hidden'
 						>
 							<motion.div
 								initial={{ opacity: 0.3 }}
@@ -1017,7 +1023,7 @@ export default function SettingsPage() {
 											value={encProxyUrl}
 											onChange={e => setEncProxyUrlState(e.target.value)}
 											placeholder='wss://encproxy.example.com'
-											className='flex-1 rounded-lg border border-white/10 bg-black/30 p-2 text-sm text-white placeholder:text-gray-500 font-mono'
+											className='flex-1 rounded-lg border border-[#30363d] bg-[#0e1117] p-2 text-sm text-white placeholder:text-gray-500 font-mono'
 										/>
 										<button
 											onClick={connectEncProxy}
@@ -1048,7 +1054,7 @@ export default function SettingsPage() {
 							initial={{ opacity: 0, y: 20 }}
 							animate={{ opacity: 1, y: 0 }}
 							transition={{ duration: 0.4 }}
-							className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
+							className='relative rounded-2xl bg-[#161b22] border border-[#30363d] p-6 overflow-hidden'
 						>
 							<motion.div
 								initial={{ opacity: 0.3 }}
@@ -1057,7 +1063,7 @@ export default function SettingsPage() {
 								className='absolute -bottom-24 -left-24 w-64 h-64 bg-gradient-to-tr from-emerald-500/10 to-teal-500/10 rounded-full blur-3xl'
 							/>
 							<div className='flex items-center gap-3 mb-4'>
-								<FiShield className='w-5 h-5 text-indigo-400' />
+								<FiShield className='w-5 h-5 text-[#0077FF]' />
 								<h2 className='text-xl font-semibold'>Безопасность</h2>
 							</div>
 							<div className='space-y-4'>
@@ -1081,7 +1087,7 @@ export default function SettingsPage() {
 									</button>
 								</div>
 										{twoFAEnabled && (
-											<div className='mt-2 rounded-xl border border-white/10 bg-white/5 p-4'>
+											<div className='mt-2 rounded-xl border border-[#30363d] bg-[#0e1117] p-4'>
 												{isYandexAccount && (
 													<p className='text-xs text-red-400 mb-2'>
 														для yandex аккаунта это не недоступно
@@ -1093,13 +1099,13 @@ export default function SettingsPage() {
 														<div className='flex gap-2'>
 															<button
 																onClick={() => selectMethod('email')}
-																className={`rounded-lg px-3 py-2 text-sm border ${twoFAMethod === 'email' ? 'border-indigo-500 bg-indigo-500/20 text-white' : 'border-white/10 bg-white/5 text-gray-300'}`}
+																className={`rounded-lg px-3 py-2 text-sm border ${twoFAMethod === 'email' ? 'border-[#0077FF] bg-[#0077FF]/15 text-white' : 'border-white/10 bg-white/5 text-gray-300'}`}
 															>
 																Код на почту
 															</button>
 															<button
 																onClick={() => selectMethod('totp')}
-																className={`rounded-lg px-3 py-2 text-sm border ${twoFAMethod === 'totp' ? 'border-indigo-500 bg-indigo-500/20 text-white' : 'border-white/10 bg-white/5 text-gray-300'}`}
+																className={`rounded-lg px-3 py-2 text-sm border ${twoFAMethod === 'totp' ? 'border-[#0077FF] bg-[#0077FF]/15 text-white' : 'border-white/10 bg-white/5 text-gray-300'}`}
 															>
 																Секретный ключ
 															</button>
@@ -1109,9 +1115,9 @@ export default function SettingsPage() {
 														<p className='text-sm text-white'>
 															Оповещение о входе
 														</p>
-														<div className='flex items-center justify-between rounded-lg border border-white/10 bg-black/30 p-3'>
+														<div className='flex items-center justify-between rounded-lg border border-[#30363d] bg-[#0e1117] p-3'>
 															<div className='flex items-center gap-2'>
-																<FiMail className='w-4 h-4 text-indigo-300' />
+																<FiMail className='w-4 h-4 text-[#0077FF]' />
 																<span className='text-sm text-gray-300'>
 																	Отправлять письмо при входе
 																</span>
@@ -1129,11 +1135,11 @@ export default function SettingsPage() {
 												</div>
 												{twoFAMethod === 'totp' && (
 													<div className='mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3'>
-														<div className='rounded-lg border border-white/10 bg-black/30 h-32 flex items-center justify-center text-gray-500 text-sm'>
+														<div className='rounded-lg border border-[#30363d] bg-[#0e1117] h-32 flex items-center justify-center text-gray-500 text-sm'>
 															QR-код
 														</div>
 														<div className='space-y-2'>
-															<div className='rounded-lg border border-white/10 bg-black/30 p-3 text-sm text-gray-300'>
+															<div className='rounded-lg border border-[#30363d] bg-[#0e1117] p-3 text-sm text-gray-300'>
 																{secretKey
 																	? `Секрет: ${secretKey}`
 																	: 'Секрет не сгенерирован'}
@@ -1162,7 +1168,7 @@ export default function SettingsPage() {
 																value={emailCode}
 																onChange={e => setEmailCode(e.target.value)}
 																placeholder='Введите код'
-																className='w-full rounded-lg border border-white/10 bg-black/30 p-2 text-sm text-white placeholder:text-gray-500'
+																className='w-full rounded-lg border border-[#30363d] bg-[#0e1117] p-2 text-sm text-white placeholder:text-gray-500'
 															/>
 															<button
 																onClick={verifyEmailCode}
@@ -1175,7 +1181,7 @@ export default function SettingsPage() {
 												)}
 											</div>
 										)}
-										<div className='mt-4 rounded-xl border border-white/10 bg-black/30 p-4'>
+										<div className='mt-4 rounded-xl border border-[#30363d] bg-[#0e1117] p-4'>
 											<div className='flex items-center justify-between mb-3'>
 												<div>
 													<p className='text-sm font-medium text-white'>
@@ -1217,7 +1223,7 @@ export default function SettingsPage() {
 																	animate={{ opacity: 1, y: 0 }}
 																	exit={{ opacity: 0, y: -10 }}
 																	transition={{ duration: 0.2 }}
-																	className='flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-black/40 p-3'
+																	className='flex items-start justify-between gap-3 rounded-lg border border-[#30363d] bg-[#0e1117] p-3'
 																>
 																	<div className='space-y-2'>
 																		<div className='flex flex-wrap items-center gap-2'>
@@ -1225,7 +1231,7 @@ export default function SettingsPage() {
 																				{getSessionLabel(session)}
 																			</p>
 																			{browserLabel ? (
-																				<span className='rounded-full bg-indigo-500/20 px-2 py-0.5 text-[11px] text-indigo-200'>
+																				<span className='rounded-full bg-[#0077FF]/15 px-2 py-0.5 text-[11px] text-[#0077FF]'>
 																					{browserLabel}
 																				</span>
 																			) : null}
@@ -1285,7 +1291,7 @@ export default function SettingsPage() {
 								initial={{ opacity: 0, y: 20 }}
 								animate={{ opacity: 1, y: 0 }}
 								transition={{ duration: 0.4 }}
-								className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
+								className='relative rounded-2xl bg-[#161b22] border border-[#30363d] p-6 overflow-hidden'
 							>
 								<motion.div
 									initial={{ opacity: 0 }}
@@ -1324,7 +1330,7 @@ export default function SettingsPage() {
 												</button>
 												<button
 													onClick={() => setChangePasswordOpen(false)}
-													className='rounded-lg bg-white/5 border border-white/10 px-4 py-2 text-sm text-gray-300 hover:bg-white/10 transition'
+													className='rounded-lg bg-[#0e1117] border border-[#30363d] px-4 py-2 text-sm text-gray-300 hover:bg-white/10 transition'
 												>
 													Отмена
 												</button>
@@ -1338,7 +1344,7 @@ export default function SettingsPage() {
 									initial={{ opacity: 0, y: 20 }}
 									animate={{ opacity: 1, y: 0 }}
 									transition={{ duration: 0.4 }}
-									className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
+									className='relative rounded-2xl bg-[#161b22] border border-[#30363d] p-6 overflow-hidden'
 								>
 									<motion.div
 										initial={{ opacity: 0 }}
@@ -1396,7 +1402,7 @@ export default function SettingsPage() {
 							initial={{ opacity: 0, y: 20 }}
 							animate={{ opacity: 1, y: 0 }}
 							transition={{ duration: 0.4 }}
-							className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
+							className='relative rounded-2xl bg-[#161b22] border border-[#30363d] p-6 overflow-hidden'
 						>
 							<div className='flex items-center justify-between mb-4'>
 								<div className='flex items-center gap-3'>
@@ -1439,7 +1445,7 @@ export default function SettingsPage() {
 															updateStorageRule(i, 'value', [])
 														}
 													}}
-													className='rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-gray-200'
+													className='rounded-lg border border-[#30363d] bg-[#0e1117] px-2 py-1.5 text-xs text-gray-200'
 												>
 													<option value='size'>📦 Размер файла</option>
 													<option value='extension'>📄 Расширение</option>
@@ -1451,7 +1457,7 @@ export default function SettingsPage() {
 														<select
 															value={rule.operator}
 															onChange={e => updateStorageRule(i, 'operator', e.target.value)}
-															className='rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-gray-200'
+															className='rounded-lg border border-[#30363d] bg-[#0e1117] px-2 py-1.5 text-xs text-gray-200'
 														>
 															<option value='gt'>больше</option>
 															<option value='gte'>больше или равно</option>
@@ -1461,7 +1467,7 @@ export default function SettingsPage() {
 														<select
 															value={typeof rule.value === 'number' ? rule.value : 1048576}
 															onChange={e => updateStorageRule(i, 'value', parseInt(e.target.value))}
-															className='rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-gray-200'
+															className='rounded-lg border border-[#30363d] bg-[#0e1117] px-2 py-1.5 text-xs text-gray-200'
 														>
 															<option value={1024}>1 КБ</option>
 															<option value={10240}>10 КБ</option>
@@ -1483,7 +1489,7 @@ export default function SettingsPage() {
 														<select
 															value={rule.operator}
 															onChange={e => updateStorageRule(i, 'operator', e.target.value)}
-															className='rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-gray-200'
+															className='rounded-lg border border-[#30363d] bg-[#0e1117] px-2 py-1.5 text-xs text-gray-200'
 														>
 															<option value='in'>входит в</option>
 															<option value='not_in'>не входит в</option>
@@ -1491,7 +1497,7 @@ export default function SettingsPage() {
 														<select
 															value={typeof rule.value === 'string' ? rule.value : 'image'}
 															onChange={e => updateStorageRule(i, 'value', e.target.value)}
-															className='rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-gray-200'
+															className='rounded-lg border border-[#30363d] bg-[#0e1117] px-2 py-1.5 text-xs text-gray-200'
 														>
 															<option value='image'>🖼 Картинки (jpg, png, gif, webp, svg)</option>
 															<option value='video'>🎬 Видео (mp4, mov, webm, mkv, avi)</option>
@@ -1507,7 +1513,7 @@ export default function SettingsPage() {
 														<select
 															value={rule.operator}
 															onChange={e => updateStorageRule(i, 'operator', e.target.value)}
-															className='rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-gray-200'
+															className='rounded-lg border border-[#30363d] bg-[#0e1117] px-2 py-1.5 text-xs text-gray-200'
 														>
 															<option value='in'>в списке</option>
 															<option value='not_in'>не в списке</option>
@@ -1545,7 +1551,7 @@ export default function SettingsPage() {
 												<select
 													value={rule.target}
 													onChange={e => updateStorageRule(i, 'target', e.target.value as 's3' | 'yandex_disk')}
-													className='rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-gray-200'
+													className='rounded-lg border border-[#30363d] bg-[#0e1117] px-2 py-1.5 text-xs text-gray-200'
 												>
 													<option value='s3'>☁️ S3 Vondic</option>
 													<option value='yandex_disk'>💾 Яндекс Диск</option>
@@ -1566,7 +1572,7 @@ export default function SettingsPage() {
 										<button
 											onClick={addStorageRule}
 											type='button'
-											className='rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 text-xs text-gray-300 hover:bg-white/10 transition'
+											className='rounded-lg bg-[#0e1117] border border-[#30363d] px-3 py-1.5 text-xs text-gray-300 hover:bg-white/10 transition'
 										>
 											+ Добавить правило
 										</button>
@@ -1576,7 +1582,7 @@ export default function SettingsPage() {
 											<select
 												value={storageRules.default_target}
 												onChange={e => setStorageRules(prev => ({ ...prev, default_target: e.target.value as 's3' | 'yandex_disk' }))}
-												className='rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-gray-200'
+												className='rounded-lg border border-[#30363d] bg-[#0e1117] px-2 py-1.5 text-xs text-gray-200'
 											>
 												<option value='s3'>☁️ S3 Vondic</option>
 												<option value='yandex_disk'>💾 Яндекс Диск</option>
@@ -1605,77 +1611,78 @@ export default function SettingsPage() {
 							initial={{ opacity: 0, y: 20 }}
 							animate={{ opacity: 1, y: 0 }}
 							transition={{ duration: 0.4 }}
-							className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
+							className='relative rounded-2xl bg-[#161b22] border border-[#30363d] p-6 overflow-hidden'
 						>
-							<motion.div
-								initial={{ opacity: 0 }}
-								animate={{ opacity: 1 }}
-								transition={{ duration: 0.8 }}
-								className='absolute -top-20 -right-16 w-52 h-52 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 rounded-full blur-3xl'
+							<div
+								className='pointer-events-none absolute -top-20 -right-16 w-52 h-52 bg-gradient-to-br from-[#0077FF]/10 to-blue-500/10 rounded-full blur-3xl'
 							/>
-							<div className='flex flex-wrap items-center justify-between gap-4 mb-4'>
+							<div className='relative z-10 flex flex-wrap items-center justify-between gap-4 mb-4'>
 								<div className='flex items-center gap-3'>
-									<div className='flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500/10 border border-cyan-500/20'>
-										<LuKey className='w-5 h-5 text-cyan-400' />
+									<div className='flex h-10 w-10 items-center justify-center rounded-xl bg-[#0077FF]/10 border border-[#0077FF]/20 text-[#0077FF]'>
+										<LuKey className='w-5 h-5' />
 									</div>
 									<div>
-										<h2 className='text-xl font-semibold'>Passkey (Вход без пароля)</h2>
-										<p className='text-xs text-gray-400'>
+										<h2 className='text-lg sm:text-xl font-semibold text-[#e6edf3]'>Passkey (Вход без пароля)</h2>
+										<p className='text-xs text-[#8b949e]'>
 											Биометрия (Touch ID / Face ID / Windows Hello)
 										</p>
 									</div>
 								</div>
-								<div className='flex items-center gap-2'>
+								<div className='flex items-center gap-2 relative z-20'>
 									<button
+										type='button'
 										onClick={handleOpenMigrationModal}
-										className='flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/40 px-3.5 py-2 text-xs font-medium text-cyan-200 hover:from-cyan-500/30 hover:to-blue-500/30 transition-all shadow-sm'
+										className='flex items-center gap-2 rounded-xl bg-[#21262d] border border-[#30363d] px-3.5 py-2 text-xs font-medium text-[#e6edf3] hover:bg-[#30363d] transition-all cursor-pointer shadow-sm'
 									>
-										<LuQrCode className='w-4 h-4 text-cyan-400' />
+										<LuQrCode className='w-4 h-4 text-[#0077FF]' />
 										Миграция passkey
 									</button>
 									<button
+										type='button'
 										onClick={handleAddPasskey}
 										disabled={passkeyAdding}
-										className='rounded-xl bg-white/10 border border-white/20 px-3.5 py-2 text-xs font-medium text-white hover:bg-white/20 transition disabled:opacity-50'
+										className='flex items-center gap-1.5 rounded-xl bg-[#0077FF] hover:bg-[#0066dd] text-white px-4 py-2 text-xs font-semibold transition disabled:opacity-50 cursor-pointer shadow-md shadow-[#0077FF]/25'
 									>
+										{passkeyAdding && <LuLoader className='w-3.5 h-3.5 animate-spin' />}
 										{passkeyAdding ? 'Добавление...' : '+ Добавить Passkey'}
 									</button>
 								</div>
 							</div>
 
-							<p className='text-sm text-gray-400 mb-4'>
+							<p className='relative z-10 text-sm text-[#8b949e] mb-4 leading-relaxed'>
 								Используйте Passkey для мгновенного и защищенного входа без пароля с помощью биометрии вашего устройства.
 							</p>
 
 							{/* Список passkeys */}
-							<div className='space-y-2.5'>
+							<div className='relative z-10 space-y-2.5'>
 								{passkeysList.length === 0 ? (
-									<div className='rounded-xl border border-white/5 bg-black/20 p-4 text-center text-xs text-gray-400'>
+									<div className='rounded-xl border border-[#30363d] bg-[#0e1117] p-4 text-center text-xs text-[#8b949e]'>
 										У вас пока нет зарегистрированных Passkey на этом аккаунте.
 									</div>
 								) : (
 									passkeysList.map(pk => (
 										<div
 											key={pk.id}
-											className='flex items-center justify-between rounded-xl border border-white/10 bg-black/30 px-4 py-3'
+											className='flex items-center justify-between rounded-xl border border-[#30363d] bg-[#0e1117] px-4 py-3'
 										>
 											<div className='flex items-center gap-3'>
-												<div className='flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-500/10 text-cyan-300'>
+												<div className='flex h-8 w-8 items-center justify-center rounded-lg bg-[#0077FF]/10 text-[#0077FF]'>
 													<LuKey className='w-4 h-4' />
 												</div>
 												<div>
 													<p className='text-sm font-medium text-white'>
 														{pk.device_name || 'Устройство с Passkey'}
 													</p>
-													<p className='text-[11px] text-gray-400'>
+													<p className='text-[11px] text-[#8b949e]'>
 														Создан: {formatDateTime(pk.created_at)}
 														{pk.last_used_at && ` · Использован: ${formatDateTime(pk.last_used_at)}`}
 													</p>
 												</div>
 											</div>
 											<button
+												type='button'
 												onClick={() => handleDeletePasskey(pk.id)}
-												className='rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 text-xs text-rose-300 hover:bg-rose-500/20 transition'
+												className='rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 text-xs text-rose-300 hover:bg-rose-500/20 transition cursor-pointer'
 											>
 												Удалить
 											</button>
@@ -1692,24 +1699,24 @@ export default function SettingsPage() {
 								initial={{ opacity: 0, y: 20 }}
 								animate={{ opacity: 1, y: 0 }}
 								transition={{ duration: 0.4 }}
-								className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
+								className='relative rounded-2xl bg-[#161b22] border border-[#30363d] p-6 overflow-hidden'
 							>
 								<motion.div
 									initial={{ opacity: 0 }}
 									animate={{ opacity: 1 }}
 									transition={{ duration: 0.8 }}
-									className='absolute -top-20 -right-16 w-52 h-52 bg-gradient-to-br from-indigo-500/10 to-blue-500/10 rounded-full blur-3xl'
+									className='absolute -top-20 -right-16 w-52 h-52 bg-gradient-to-br from-[#0077FF]/10 to-blue-500/10 rounded-full blur-3xl'
 								/>
 								<div className='flex items-center gap-3 mb-4'>
-									<FiMail className='w-5 h-5 text-indigo-400' />
+									<FiMail className='w-5 h-5 text-[#0077FF]' />
 									<h2 className='text-xl font-semibold'>Mail API</h2>
 								</div>
 								{user?.premium ? (
 									<MailApiSettings />
 								) : (
 									<div className='text-center py-8'>
-										<div className='mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-500/10 border border-indigo-500/20'>
-											<FiMail className='h-7 w-7 text-indigo-400' />
+										<div className='mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#0077FF]/10 border border-[#0077FF]/20'>
+											<FiMail className='h-7 w-7 text-[#0077FF]' />
 										</div>
 										<h2 className='text-lg font-semibold mb-2'>
 											Mail API доступно только с Вондик Premium
@@ -1719,7 +1726,7 @@ export default function SettingsPage() {
 										</p>
 										<Link
 											href='/shop'
-											className='inline-block rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 px-5 py-2 text-sm font-medium shadow-lg shadow-indigo-900/30 hover:from-indigo-500 hover:to-purple-500 transition-all'
+											className='inline-block rounded-lg bg-[#0077FF] hover:bg-[#0066dd] text-white px-5 py-2 text-sm font-medium transition-all shadow-md shadow-[#0077FF]/25'
 										>
 											Оформить Premium
 										</Link>
@@ -1734,7 +1741,7 @@ export default function SettingsPage() {
 									initial={{ opacity: 0, y: 20 }}
 									animate={{ opacity: 1, y: 0 }}
 									transition={{ duration: 0.4 }}
-									className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
+									className='relative rounded-2xl bg-[#161b22] border border-[#30363d] p-6 overflow-hidden'
 								>
 									<motion.div
 										initial={{ opacity: 0.3 }}
@@ -1749,19 +1756,19 @@ export default function SettingsPage() {
 									<div className='grid grid-cols-3 gap-2'>
 										<button
 											onClick={() => setTheme('system')}
-											className={`rounded-lg px-4 py-2 text-sm border ${theme === 'system' ? 'border-indigo-500 bg-indigo-500/20 text-white' : 'border-white/10 bg-white/5 text-gray-300'}`}
+											className={`rounded-lg px-4 py-2 text-sm border ${theme === 'system' ? 'border-[#0077FF] bg-[#0077FF]/15 text-white' : 'border-white/10 bg-white/5 text-gray-300'}`}
 										>
 											Системная тема
 										</button>
 										<button
 											onClick={() => setTheme('dark')}
-											className={`rounded-lg px-4 py-2 text-sm border ${theme === 'dark' ? 'border-indigo-500 bg-indigo-500/20 text-white' : 'border-white/10 bg-white/5 text-gray-300'}`}
+											className={`rounded-lg px-4 py-2 text-sm border ${theme === 'dark' ? 'border-[#0077FF] bg-[#0077FF]/15 text-white' : 'border-white/10 bg-white/5 text-gray-300'}`}
 										>
 											Тёмная
 										</button>
 										<button
 											onClick={() => setTheme('light')}
-											className={`rounded-lg px-4 py-2 text-sm border ${theme === 'light' ? 'border-indigo-500 bg-indigo-500/20 text-white' : 'border-white/10 bg-white/5 text-gray-300'}`}
+											className={`rounded-lg px-4 py-2 text-sm border ${theme === 'light' ? 'border-[#0077FF] bg-[#0077FF]/15 text-white' : 'border-white/10 bg-white/5 text-gray-300'}`}
 										>
 											Светлая
 										</button>
@@ -1772,16 +1779,16 @@ export default function SettingsPage() {
 									initial={{ opacity: 0, y: 20 }}
 									animate={{ opacity: 1, y: 0 }}
 									transition={{ duration: 0.4 }}
-									className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
+									className='relative rounded-2xl bg-[#161b22] border border-[#30363d] p-6 overflow-hidden'
 								>
 									<motion.div
 										initial={{ opacity: 0.25 }}
 										animate={{ opacity: [0.25, 0.5, 0.25] }}
 										transition={{ duration: 7, repeat: Infinity }}
-										className='absolute -top-24 -right-24 w-64 h-64 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 rounded-full blur-3xl'
+										className='absolute -top-24 -right-24 w-64 h-64 bg-gradient-to-br from-[#0077FF]/10 to-blue-500/10 rounded-full blur-3xl'
 									/>
 									<div className='flex items-center gap-3 mb-4'>
-										<HiOutlineColorSwatch className='w-5 h-5 text-indigo-300' />
+										<HiOutlineColorSwatch className='w-5 h-5 text-[#0077FF]' />
 										<h2 className='text-xl font-semibold'>Цветовая схема</h2>
 									</div>
 
@@ -1811,7 +1818,7 @@ export default function SettingsPage() {
 									initial={{ opacity: 0, y: 20 }}
 									animate={{ opacity: 1, y: 0 }}
 									transition={{ duration: 0.4 }}
-									className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
+									className='relative rounded-2xl bg-[#161b22] border border-[#30363d] p-6 overflow-hidden'
 								>
 									<motion.div
 										initial={{ opacity: 0.25 }}
@@ -1836,7 +1843,7 @@ export default function SettingsPage() {
 													localStorage.removeItem('chat_background_image')
 													setChatBackgroundImage('')
 												}}
-												className='w-full rounded-lg border border-white/10 bg-black/30 p-2 text-sm text-white'
+												className='w-full rounded-lg border border-[#30363d] bg-[#0e1117] p-2 text-sm text-white'
 											>
 												{CHAT_THEMES.map(t => (
 													<option key={t.id} value={t.id}>
@@ -1854,7 +1861,7 @@ export default function SettingsPage() {
 													setMessageThemeId(id)
 													localStorage.setItem('message_theme', id)
 												}}
-												className='w-full rounded-lg border border-white/10 bg-black/30 p-2 text-sm text-white'
+												className='w-full rounded-lg border border-[#30363d] bg-[#0e1117] p-2 text-sm text-white'
 											>
 												{CHAT_THEMES.map(t => (
 													<option key={t.id} value={t.id}>
@@ -1873,7 +1880,7 @@ export default function SettingsPage() {
 													value={chatBackgroundImage}
 													onChange={e => setChatBackgroundImage(e.target.value)}
 													placeholder='URL или data:image/...'
-													className='w-full rounded-lg border border-white/10 bg-black/30 p-2 text-sm text-white placeholder:text-gray-500'
+													className='w-full rounded-lg border border-[#30363d] bg-[#0e1117] p-2 text-sm text-white placeholder:text-gray-500'
 												/>
 												<button
 													onClick={() => {
@@ -1950,7 +1957,7 @@ export default function SettingsPage() {
 													className='w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-cyan-400'
 												/>
 											</div>
-											<div className='flex items-center justify-between rounded-xl border border-white/10 bg-black/20 p-4'>
+											<div className='flex items-center justify-between rounded-xl border border-[#30363d] bg-[#0e1117] p-4'>
 												<div>
 													<p className='text-sm font-medium text-white'>Сетка</p>
 													<p className='text-xs text-gray-400'>Лёгкий узор поверх фона</p>
@@ -1972,7 +1979,7 @@ export default function SettingsPage() {
 									initial={{ opacity: 0, y: 20 }}
 									animate={{ opacity: 1, y: 0 }}
 									transition={{ duration: 0.4 }}
-									className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
+									className='relative rounded-2xl bg-[#161b22] border border-[#30363d] p-6 overflow-hidden'
 								>
 									<div className='flex items-center gap-3 mb-4'>
 										<FiMonitor className='w-5 h-5 text-emerald-300' />
@@ -2010,7 +2017,7 @@ export default function SettingsPage() {
 											Mono
 										</button>
 									</div>
-									<div className='mt-3 rounded-xl border border-white/10 bg-black/20 p-4'>
+									<div className='mt-3 rounded-xl border border-[#30363d] bg-[#0e1117] p-4'>
 										<p className='text-xs text-gray-400 mb-2'>Текущее значение</p>
 										<p className='text-xs text-gray-200 break-words'>{fontFamily}</p>
 									</div>
@@ -2020,17 +2027,17 @@ export default function SettingsPage() {
 									initial={{ opacity: 0, y: 20 }}
 									animate={{ opacity: 1, y: 0 }}
 									transition={{ duration: 0.4 }}
-									className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
+									className='relative rounded-2xl bg-[#161b22] border border-[#30363d] p-6 overflow-hidden'
 								>
 									<div className='flex items-center gap-3 mb-4'>
-										<FiMonitor className='w-5 h-5 text-indigo-400' />
+										<FiMonitor className='w-5 h-5 text-[#0077FF]' />
 										<h2 className='text-xl font-semibold'>Масштабирование</h2>
 									</div>
 									<div className='space-y-6'>
 										<div>
 											<div className='flex items-center justify-between mb-2'>
 												<p className='text-sm text-white'>Размер шрифта</p>
-												<span className='text-xs text-indigo-400 font-medium'>
+												<span className='text-xs text-[#0077FF] font-medium'>
 													{fontSize}px
 												</span>
 											</div>
@@ -2050,7 +2057,7 @@ export default function SettingsPage() {
 										<div>
 											<div className='flex items-center justify-between mb-2'>
 												<p className='text-sm text-white'>Закругление углов</p>
-												<span className='text-xs text-indigo-400 font-medium'>
+												<span className='text-xs text-[#0077FF] font-medium'>
 													{borderRadius}px
 												</span>
 											</div>
@@ -2081,7 +2088,7 @@ export default function SettingsPage() {
 									initial={{ opacity: 0, y: 20 }}
 									animate={{ opacity: 1, y: 0 }}
 									transition={{ duration: 0.4 }}
-									className='relative rounded-2xl bg-white/5 border border-white/10 p-6 overflow-hidden'
+									className='relative rounded-2xl bg-[#161b22] border border-[#30363d] p-6 overflow-hidden'
 								>
 									<motion.div
 										initial={{ rotate: 0 }}
@@ -2234,23 +2241,24 @@ export default function SettingsPage() {
 										animate={{ scale: 1, opacity: 1 }}
 										exit={{ scale: 0.92, opacity: 0 }}
 										onClick={e => e.stopPropagation()}
-										className='relative w-full max-w-md rounded-3xl bg-[#14151a] border border-white/10 p-7 shadow-2xl overflow-hidden text-center'
+										className='relative w-full max-w-md rounded-3xl bg-[#161b22] border border-[#30363d] p-7 shadow-2xl overflow-hidden text-center'
 									>
 										<button
+											type='button'
 											onClick={() => setIsMigrationModalOpen(false)}
-											className='absolute top-5 right-5 text-gray-400 hover:text-white transition'
+											className='absolute top-5 right-5 text-gray-400 hover:text-white transition cursor-pointer'
 										>
 											<LuX className='w-5 h-5' />
 										</button>
 
-										<div className='mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 text-cyan-400 shadow-lg shadow-cyan-500/10'>
+										<div className='mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#0077FF]/10 border border-[#0077FF]/25 text-[#0077FF] shadow-lg shadow-[#0077FF]/10'>
 											<LuQrCode className='h-7 w-7' />
 										</div>
 
 										<h3 className='text-xl font-bold text-white mb-2'>
 											Миграция Passkey
 										</h3>
-										<p className='text-xs text-gray-300 mb-6 leading-relaxed'>
+										<p className='text-xs text-[#8b949e] mb-6 leading-relaxed'>
 											Отсканируйте этот QR-код камерой вашего телефона для мгновенного входа и привязки Passkey к новому устройству.
 										</p>
 
@@ -2263,7 +2271,7 @@ export default function SettingsPage() {
 												/>
 											) : (
 												<div className='flex flex-col items-center gap-2 text-gray-700'>
-													<LuLoader className='w-8 h-8 animate-spin text-cyan-600' />
+													<LuLoader className='w-8 h-8 animate-spin text-[#0077FF]' />
 													<span className='text-xs'>Генерация QR-кода...</span>
 												</div>
 											)}
@@ -2287,15 +2295,16 @@ export default function SettingsPage() {
 											<div className='flex flex-col items-center gap-2 text-xs text-rose-300 bg-rose-500/10 border border-rose-500/20 rounded-xl py-2.5 px-3'>
 												<span>Срок действия QR-кода истёк (5 минут).</span>
 												<button
+													type='button'
 													onClick={handleOpenMigrationModal}
-													className='text-xs font-semibold underline text-white hover:text-cyan-300'
+													className='text-xs font-semibold underline text-white hover:text-[#0077FF] cursor-pointer'
 												>
 													Создать новый QR-код
 												</button>
 											</div>
 										)}
 
-										<p className='text-[11px] text-gray-500 mt-5'>
+										<p className='text-[11px] text-[#8b949e] mt-5'>
 											QR-код одноразовый и действует 5 минут. При сканировании телефон предложит подтвердить биометрию.
 										</p>
 									</motion.div>

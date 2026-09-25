@@ -71,8 +71,9 @@ export default function SupportWidget() {
 	return (
 		<>
 			<button
+				type='button'
 				onClick={() => setIsOpen(true)}
-				className='fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:scale-105 transition-all duration-200'
+				className='fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#0077FF] hover:bg-[#0066dd] text-white shadow-lg shadow-[#0077FF]/30 hover:shadow-[#0077FF]/50 hover:scale-105 transition-all duration-200 cursor-pointer'
 				aria-label='Техническая поддержка'
 			>
 				<LifeBuoy className='h-6 w-6' />
@@ -80,21 +81,22 @@ export default function SupportWidget() {
 
 			{isOpen && (
 				<div
-					className='fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4'
+					className='fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-0 sm:p-4'
 					onClick={() => setIsOpen(false)}
 				>
 					<div
-						className='w-full sm:max-w-lg max-h-[85vh] overflow-y-auto bg-gray-950 sm:rounded-2xl rounded-t-2xl border border-white/10 shadow-2xl'
+						className='w-full sm:max-w-lg max-h-[85vh] overflow-y-auto bg-[#161b22] sm:rounded-2xl rounded-t-2xl border border-[#30363d] shadow-2xl'
 						onClick={e => e.stopPropagation()}
 					>
-						<div className='flex items-center justify-between p-4 border-b border-white/10'>
+						<div className='flex items-center justify-between p-4 border-b border-[#30363d]'>
 							<div className='flex items-center gap-2'>
-								<LifeBuoy className='h-5 w-5 text-indigo-400' />
+								<LifeBuoy className='h-5 w-5 text-[#0077FF]' />
 								<h2 className='text-lg font-semibold text-white'>Техническая поддержка</h2>
 							</div>
 							<button
+								type='button'
 								onClick={() => setIsOpen(false)}
-								className='p-1 rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors'
+								className='p-1 rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer'
 							>
 								<X className='h-5 w-5' />
 							</button>
@@ -102,16 +104,17 @@ export default function SupportWidget() {
 
 						<div className='p-4 space-y-4'>
 							<div>
-								<h3 className='text-sm font-medium text-gray-300 mb-2'>Частые вопросы</h3>
+								<h3 className='text-sm font-medium text-[#8b949e] mb-2'>Частые вопросы</h3>
 								<div className='space-y-2'>
 									{SUPPORT_QUESTIONS.map(q => (
 										<button
 											key={q}
+											type='button'
 											onClick={() => setQuestion(q === question ? '' : q)}
-											className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+											className={`w-full text-left px-3 py-2.5 rounded-xl text-sm transition-all cursor-pointer ${
 												question === q
-													? 'bg-indigo-600/20 text-indigo-300 ring-1 ring-indigo-500/30'
-													: 'bg-white/5 text-gray-300 hover:bg-white/10'
+													? 'bg-[#0077FF]/15 text-white ring-1 ring-[#0077FF]/40 border border-[#0077FF]/30 font-medium'
+													: 'bg-[#0e1117] text-[#8b949e] border border-[#30363d] hover:bg-white/5 hover:text-white'
 											}`}
 										>
 											{q}
@@ -122,7 +125,7 @@ export default function SupportWidget() {
 
 							{question === 'Другое' && (
 								<div>
-									<label className='text-sm font-medium text-gray-300 mb-2 block'>
+									<label className='text-sm font-medium text-[#8b949e] mb-2 block'>
 										Опишите вашу проблему
 									</label>
 									<textarea
@@ -130,15 +133,16 @@ export default function SupportWidget() {
 										onChange={e => setCustomQuestion(e.target.value)}
 										placeholder='Опишите вашу проблему подробно...'
 										rows={4}
-										className='w-full rounded-xl bg-white/5 border border-white/10 px-4 py-3 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 resize-none'
+										className='w-full rounded-xl bg-[#0e1117] border border-[#30363d] px-4 py-3 text-sm text-[#e6edf3] placeholder-[#8b949e]/60 focus:outline-none focus:ring-2 focus:ring-[#0077FF]/50 focus:border-[#0077FF] resize-none'
 									/>
 								</div>
 							)}
 
 							<button
+								type='button'
 								onClick={handleSubmit}
 								disabled={loading || (!question && !customQuestion.trim()) || (question === 'Другое' && !customQuestion.trim())}
-								className='w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
+								className='w-full rounded-xl bg-[#0077FF] px-4 py-3 text-sm font-medium text-white hover:bg-[#0066dd] disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-md shadow-[#0077FF]/25 cursor-pointer'
 							>
 								{loading ? 'Отправка...' : 'Отправить'}
 							</button>

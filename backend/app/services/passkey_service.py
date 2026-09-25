@@ -37,15 +37,15 @@ class PasskeyService:
         if not clean_host:
             return os.environ.get("WEBAUTHN_RP_ID", "vondic.ru")
 
-        # Для localhost или локальной разработки
-        if clean_host in ("localhost", "127.0.0.1") or clean_host.endswith(".localhost"):
+        # Для localhost, локальной разработки или внутренних docker-сетей
+        if clean_host in ("localhost", "127.0.0.1", "0.0.0.0", "backend", "api", "nginx") or clean_host.endswith(".localhost"):
             return "localhost"
 
-        # Если это IPv4 адрес
+        # Если это IPv4/IPv6 адрес (по спецификации WebAuthn RP ID не может быть IP-адресом)
         import ipaddress
         try:
             ipaddress.ip_address(clean_host)
-            return clean_host
+            return "localhost"
         except ValueError:
             pass
 

@@ -105,8 +105,8 @@ export default function Sidebar() {
 											i.href === '/feed/communities' ||
 											i.href === '/feed/settings')))
 						const activeClass = isActive
-								? 'bg-[rgb(var(--app-accent-rgb)/0.2)] text-white border-[rgb(var(--app-accent-rgb)/0.3)] shadow-[0_0_12px_rgb(var(--app-accent-rgb)/0.15)]'
-								: 'border-transparent text-gray-400 hover:bg-white/5 hover:text-white'
+								? 'bg-[#0077FF]/15 text-white border-[#0077FF]/40 shadow-[0_0_15px_rgba(0,119,255,0.18)] font-medium'
+								: 'border-transparent text-[#8b949e] hover:bg-white/5 hover:text-white'
 							const content = (
 								<>
 									<span className='text-xl drop-shadow-lg'>
@@ -150,11 +150,11 @@ export default function Sidebar() {
 					</nav>
 
 					{isExpanded && communities.length > 0 && (
-						<div className='mt-2 w-full border-t border-white/10 pt-3'>
-							<p className='mb-2 px-2 text-[10px] font-semibold uppercase tracking-wide text-gray-500'>
+						<div className='mt-2 w-full border-t border-[#30363d] pt-3'>
+							<p className='mb-2 px-2 text-[10px] font-semibold uppercase tracking-wide text-[#8b949e]'>
 								Мои сообщества
 							</p>
-							<div className='flex max-h-40 flex-col gap-1 overflow-y-auto'>
+							<div className='flex max-h-40 flex-col gap-1 overflow-y-auto custom-scrollbar'>
 								{communities.slice(0, 8).map(c => {
 									const href = `/feed/communities/${c.id}`
 									const active =
@@ -163,8 +163,8 @@ export default function Sidebar() {
 										<Link
 											key={c.id}
 											href={href}
-											className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-gray-300 hover:bg-white/10 hover:text-white ${
-												active ? 'bg-white/15 text-white' : ''
+											className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-[#8b949e] hover:bg-white/10 hover:text-white ${
+												active ? 'bg-[#0077FF]/15 text-white border border-[#0077FF]/30' : ''
 											}`}
 											title={c.name}
 										>
@@ -175,7 +175,7 @@ export default function Sidebar() {
 													className='h-7 w-7 shrink-0 rounded-full object-cover'
 												/>
 											) : (
-												<div className='flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-900/60 text-xs font-bold text-indigo-200'>
+												<div className='flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#21262d] border border-[#30363d] text-xs font-bold text-[#e6edf3]'>
 													{c.name.charAt(0).toUpperCase()}
 												</div>
 											)}
@@ -195,16 +195,16 @@ export default function Sidebar() {
 								onClick={() => setIsMemoryModalOpen(true)}
 								className='w-full'
 							>
-								<div className='rounded-xl bg-white/5 border border-white/10 p-3 hover:bg-white/10 transition-colors cursor-pointer'>
+								<div className='rounded-xl bg-[#0e1117] border border-[#30363d] p-3 hover:border-[#0077FF]/40 transition-colors cursor-pointer'>
 									<div className='flex justify-between text-[10px] mb-1.5'>
-										<span className='text-gray-400'>Память</span>
+										<span className='text-[#8b949e]'>Память</span>
 										<span className='text-white font-mono'>
 											{formatBytes(user.disk_usage || 0)}
 										</span>
 									</div>
-									<div className='h-1.5 bg-gray-700/50 rounded-full overflow-hidden mb-1.5'>
+									<div className='h-1.5 bg-[#21262d] rounded-full overflow-hidden mb-1.5'>
 										<div
-											className='h-full bg-gradient-to-r from-indigo-500 to-purple-500'
+											className='h-full bg-[#0077FF] rounded-full'
 											style={{
 												width: `${Math.min(
 													((user.disk_usage || 0) /
@@ -216,7 +216,7 @@ export default function Sidebar() {
 											}}
 										/>
 									</div>
-									<p className='text-[10px] text-gray-500 leading-tight'>
+									<p className='text-[10px] text-[#8b949e] leading-tight'>
 										Лимит {formatBytes(user.disk_limit || 512 * 1024 * 1024)}
 									</p>
 								</div>

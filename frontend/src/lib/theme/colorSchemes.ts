@@ -46,7 +46,13 @@ export const applyColorScheme = (id: ColorSchemeId | string) => {
 }
 export const initColorScheme = () => {
 	const saved = localStorage.getItem(COLOR_SCHEME_STORAGE_KEY) as ColorSchemeId | null
-	const id = COLOR_SCHEMES.some(s => s.id === saved) ? saved! : DEFAULT_COLOR_SCHEME
+	let id: ColorSchemeId = DEFAULT_COLOR_SCHEME
+	if (saved && saved !== 'purple' && COLOR_SCHEMES.some(s => s.id === saved)) {
+		id = saved
+	} else if (saved === 'purple') {
+		localStorage.setItem(COLOR_SCHEME_STORAGE_KEY, 'vondic')
+		id = 'vondic'
+	}
 	applyColorScheme(id)
 	return id
 }
