@@ -18,7 +18,9 @@ export default function QRLoginPage() {
 	const router = useRouter()
 	const [qrToken, setQrToken] = useState<string | null>(null)
 	const [qrDataUrl, setQrDataUrl] = useState<string>('')
-	const [status, setStatus] = useState<'loading' | 'pending' | 'confirmed' | 'expired' | 'error'>('loading')
+	const [status, setStatus] = useState<
+		'loading' | 'pending' | 'confirmed' | 'expired' | 'error'
+	>('loading')
 	const [error, setError] = useState('')
 	const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -58,7 +60,9 @@ export default function QRLoginPage() {
 		if (status !== 'pending' || !qrToken) return
 		pollRef.current = setInterval(async () => {
 			try {
-				const res = await fetch(`/api/auth/qr/status?qr_token=${encodeURIComponent(qrToken)}`)
+				const res = await fetch(
+					`/api/auth/qr/status?qr_token=${encodeURIComponent(qrToken)}`,
+				)
 				const data = await res.json()
 				if (data.status === 'confirmed') {
 					setStatus('confirmed')
@@ -91,29 +95,35 @@ export default function QRLoginPage() {
 	}, [status, qrToken, router])
 
 	return (
-		<div className='min-h-screen bg-black text-white flex items-center justify-center px-4'>
-			<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
-				<div className='absolute -top-[30%] -left-[15%] w-[60%] h-[60%] rounded-full bg-indigo-600/15 blur-[150px]' />
-				<div className='absolute top-[30%] -right-[10%] w-[50%] h-[50%] rounded-full bg-purple-600/15 blur-[150px]' />
-			</div>
-
-			<div className='relative z-10 w-full max-w-sm'>
+		<div className='min-h-screen bg-[#0e1117] text-[#e6edf3] selection:bg-[#0077FF] selection:text-white flex items-center justify-center p-4 relative'>
+			<div className='relative z-10 w-full max-w-[420px] space-y-4'>
 				<Link
 					href='/login'
-					className='inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors mb-8'
+					className='inline-flex items-center gap-2 text-xs font-medium text-[#8b949e] hover:text-white transition-colors'
 				>
 					<ArrowLeft className='w-4 h-4' />
 					Назад к входу
 				</Link>
 
-				<div className='rounded-2xl bg-gray-900/50 border border-white/[0.06] p-8 text-center'>
-					<h1 className='text-xl font-bold mb-2'>Войти по QR-коду</h1>
-					<p className='text-sm text-gray-400 mb-8'>
-						Откройте Вондик на телефоне и отсканируйте код
-					</p>
+				<div className='rounded-2xl bg-[#161b22] border border-[#30363d] p-7 shadow-xl text-center space-y-5'>
+					<div className='flex flex-col items-center justify-center gap-2.5'>
+						<div className='relative flex items-center justify-center w-14 h-14 rounded-2xl bg-[#0d1117] border border-[#30363d] shadow-lg shadow-black/40 overflow-hidden p-1.5'>
+							<img
+								src='/logo.png'
+								alt='Вондик'
+								className='w-full h-full object-contain drop-shadow'
+							/>
+						</div>
+						<h1 className='text-2xl font-bold text-white tracking-tight mt-1'>
+							Войти по QR-коду
+						</h1>
+						<p className='text-xs text-[#8b949e]'>
+							Отсканируйте код через приложение Вондик на телефоне
+						</p>
+					</div>
 
-					<div className='flex justify-center mb-6'>
-						<div className='w-56 h-56 rounded-2xl bg-white/5 border border-white/[0.06] flex items-center justify-center overflow-hidden'>
+					<div className='flex justify-center'>
+						<div className='w-56 h-56 rounded-2xl bg-[#0d1117] border border-[#30363d] flex items-center justify-center overflow-hidden p-3'>
 							<AnimatePresence mode='wait'>
 								{status === 'loading' && (
 									<motion.div
@@ -122,7 +132,7 @@ export default function QRLoginPage() {
 										animate={{ opacity: 1 }}
 										exit={{ opacity: 0 }}
 									>
-										<Loader2 className='w-8 h-8 text-gray-500 animate-spin' />
+										<Loader2 className='w-8 h-8 text-[#8b949e] animate-spin' />
 									</motion.div>
 								)}
 								{status === 'pending' && qrDataUrl && (
@@ -130,7 +140,7 @@ export default function QRLoginPage() {
 										key='qr'
 										src={qrDataUrl}
 										alt='QR Code'
-										className='w-48 h-48'
+										className='w-48 h-48 rounded-lg'
 										initial={{ opacity: 0, scale: 0.9 }}
 										animate={{ opacity: 1, scale: 1 }}
 										exit={{ opacity: 0 }}
@@ -143,10 +153,12 @@ export default function QRLoginPage() {
 										animate={{ opacity: 1, scale: 1 }}
 										className='flex flex-col items-center gap-2'
 									>
-										<div className='w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center'>
-											<Check className='w-8 h-8 text-emerald-400' />
+										<div className='w-14 h-14 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400'>
+											<Check className='w-7 h-7' />
 										</div>
-										<span className='text-sm text-emerald-400 font-medium'>Вход выполнен</span>
+										<span className='text-sm text-emerald-400 font-medium'>
+											Вход выполнен
+										</span>
 									</motion.div>
 								)}
 								{(status === 'expired' || status === 'error') && (
@@ -156,10 +168,10 @@ export default function QRLoginPage() {
 										animate={{ opacity: 1 }}
 										className='flex flex-col items-center gap-2'
 									>
-										<div className='w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center'>
-											<X className='w-8 h-8 text-red-400' />
+										<div className='w-14 h-14 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400'>
+											<X className='w-7 h-7' />
 										</div>
-										<span className='text-sm text-red-400'>
+										<span className='text-xs text-red-400 font-medium'>
 											{error || 'QR код истёк'}
 										</span>
 									</motion.div>
@@ -171,15 +183,15 @@ export default function QRLoginPage() {
 					{(status === 'expired' || status === 'error') && (
 						<button
 							onClick={generateQR}
-							className='inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.06] text-sm text-gray-300 hover:text-white transition-all'
+							className='inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#21262d] hover:bg-[#30363d] border border-[#30363d] text-xs font-semibold text-white transition-all'
 						>
-							<Refresh className='w-4 h-4' />
-							Обновить QR
+							<Refresh className='w-3.5 h-3.5' />
+							Обновить QR-код
 						</button>
 					)}
 
 					{status === 'pending' && (
-						<p className='text-xs text-gray-500 mt-4'>
+						<p className='text-xs text-[#8b949e]'>
 							Ожидание сканирования...
 						</p>
 					)}

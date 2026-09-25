@@ -29,32 +29,35 @@ export default function DesktopDownloadPage() {
 	const d = settings.desktop
 
 	return (
-		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white overflow-x-hidden'>
+		<div className='min-h-screen bg-[#0e1117] text-[#e6edf3] selection:bg-[#0077FF] selection:text-white overflow-x-hidden font-sans relative'>
 			<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
-				<div className='absolute -top-[30%] -left-[15%] w-[60%] h-[60%] rounded-full bg-indigo-600/15 blur-[150px]' />
-				<div className='absolute top-[30%] -right-[10%] w-[50%] h-[50%] rounded-full bg-purple-600/15 blur-[150px]' />
+				<div className='absolute -top-32 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-[#0077FF]/10 blur-[140px] rounded-full' />
 			</div>
 
-			<nav className='relative z-10 mx-auto max-w-3xl px-6 py-5 flex items-center justify-between'>
-				<Link href='/' className='flex items-center gap-2.5'>
-					<Logo />
-					<span className='text-lg font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent'>
-						Вондик
-					</span>
-				</Link>
-				<div className='flex items-center gap-3'>
-					<Link
-						href='/login'
-						className='px-4 py-2 text-sm font-medium text-gray-300 hover:text-white rounded-full border border-white/10 hover:border-white/20 hover:bg-white/5 transition-all'
-					>
-						Войти
+			<nav className='relative z-20 border-b border-[#30363d] bg-[#161b22]/80 backdrop-blur-md sticky top-0'>
+				<div className='max-w-6xl mx-auto px-6 py-4 flex items-center justify-between'>
+					<Link href='/' className='flex items-center gap-3 group'>
+						<div className='w-10 h-10 rounded-xl bg-[#0d1117] border border-[#30363d] p-1 flex items-center justify-center shadow-sm group-hover:border-[#0077FF] transition-colors'>
+							<BrandLogo size={32} />
+						</div>
+						<span className='text-lg font-bold text-white tracking-tight'>
+							Вондик
+						</span>
 					</Link>
-					<Link
-						href='/register'
-						className='px-4 py-2 text-sm font-medium text-white rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 shadow-lg shadow-indigo-500/25 transition-all'
-					>
-						Регистрация
-					</Link>
+					<div className='flex items-center gap-3'>
+						<Link
+							href='/login'
+							className='px-3.5 py-1.5 text-xs font-medium text-white rounded-lg border border-[#30363d] bg-[#21262d] hover:bg-[#30363d] hover:border-[#8b949e]/40 transition-colors'
+						>
+							Войти
+						</Link>
+						<Link
+							href='/register'
+							className='px-3.5 py-1.5 text-xs font-medium text-white rounded-lg bg-[#0077FF] hover:bg-[#0066dd] shadow-sm transition-colors'
+						>
+							Регистрация
+						</Link>
+					</div>
 				</div>
 			</nav>
 
@@ -67,15 +70,15 @@ export default function DesktopDownloadPage() {
 					Назад к загрузкам
 				</Link>
 
-				<div className='mt-10 rounded-3xl bg-gray-900/50 border border-white/[0.06] p-8 md:p-10 relative overflow-hidden'>
-					<div className='absolute inset-0 bg-gradient-to-br from-indigo-500/[0.04] to-transparent' />
+				<div className='mt-10 rounded-2xl bg-[#161b22] border border-[#30363d] p-8 md:p-10 relative overflow-hidden shadow-xl'>
+					<div className='absolute inset-0 bg-gradient-to-br from-[#0077FF]/[0.04] to-transparent pointer-events-none' />
 
 					<div className='relative'>
 						<div className='flex flex-wrap items-start justify-between gap-4'>
-							<div className='w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-600/20 to-indigo-800/20 border border-indigo-500/20 flex items-center justify-center'>
-								<Monitor className='h-7 w-7 text-indigo-400' />
+							<div className='w-14 h-14 rounded-2xl bg-[#0077FF]/15 border border-[#0077FF]/30 flex items-center justify-center'>
+								<Monitor className='h-7 w-7 text-[#58a6ff]' />
 							</div>
-							<span className='inline-flex items-center rounded-full border border-indigo-500/30 bg-indigo-500/10 px-3 py-1 text-sm font-medium text-indigo-300'>
+							<span className='inline-flex items-center rounded-full border border-[#0077FF]/30 bg-[#0077FF]/10 px-3 py-1 text-xs font-semibold text-[#58a6ff]'>
 								v{d.version}
 							</span>
 						</div>

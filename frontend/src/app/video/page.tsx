@@ -347,17 +347,15 @@ export default function VideoPage() {
 	}
 
 	return (
-		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white overflow-x-hidden relative'>
+		<div className='min-h-screen bg-[#0e1117] text-[#e6edf3] selection:bg-[#0077FF] selection:text-white overflow-x-hidden relative font-sans'>
 			<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
-				<div className='absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-indigo-900/20 blur-[120px]' />
-				<div className='absolute top-[40%] -right-[10%] w-[40%] h-[60%] rounded-full bg-purple-900/20 blur-[120px]' />
-				<div className='absolute bottom-[10%] left-[20%] w-[30%] h-[30%] rounded-full bg-emerald-900/10 blur-[100px]' />
+				<div className='absolute -top-32 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-[#0077FF]/10 blur-[140px] rounded-full' />
 			</div>
 			<div className='relative z-20'>
 				<Header email={user?.email || ''} onLogout={logout} />
 			</div>
 			<div className='relative z-10 mx-auto flex max-w-7xl pt-6'>
-				<aside className='hidden md:flex sticky top-20 h-[calc(100vh-10rem)] w-56 flex-col gap-1 rounded-xl border border-gray-800/50 bg-gray-900/40 backdrop-blur-md px-2 py-3 ml-4'>
+				<aside className='hidden md:flex sticky top-20 h-[calc(100vh-10rem)] w-56 flex-col gap-1 rounded-2xl border border-[#30363d] bg-[#161b22] px-2 py-3 ml-4 shadow-sm'>
 					<Link
 						href='/video'
 						className='group flex items-center rounded-xl px-3 py-2 bg-white/10 justify-between'

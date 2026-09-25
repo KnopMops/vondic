@@ -3013,36 +3013,36 @@ client.delete_comment("comment123")`}
 	}
 
 	return (
-		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white overflow-x-hidden'>
-			
+		<div className='min-h-screen bg-[#0e1117] text-[#e6edf3] selection:bg-[#0077FF] selection:text-white overflow-x-hidden font-sans'>
 			<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
-				<div className='absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-indigo-900/20 blur-[120px]' />
-				<div className='absolute top-[40%] -right-[10%] w-[40%] h-[60%] rounded-full bg-purple-900/20 blur-[120px]' />
-				<div className='absolute bottom-[10%] left-[20%] w-[30%] h-[30%] rounded-full bg-emerald-900/10 blur-[100px]' />
+				<div className='absolute -top-32 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-[#0077FF]/10 blur-[140px] rounded-full' />
 			</div>
 
-			<div className='relative z-10 min-h-screen py-8'>
-				<div className='max-w-6xl mx-auto px-4'>
-					<header className='mb-8 text-center'>
-						<h1 className='text-4xl font-bold text-white mb-2'>
-							Документация API Вондик
+			<div className='relative z-10 min-h-screen py-10'>
+				<div className='max-w-6xl mx-auto px-4 sm:px-6 space-y-6'>
+					<header className='text-center space-y-2'>
+						<div className='inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#161b22] border border-[#30363d] text-[#8b949e] text-xs font-medium'>
+							<span className='w-2 h-2 rounded-full bg-emerald-500 animate-pulse' />
+							Документация разработчика Вондик
+						</div>
+						<h1 className='text-3xl sm:text-4xl font-extrabold text-white tracking-tight'>
+							API платформы Вондик
 						</h1>
-						<p className='text-lg text-gray-300'>
-							Создавайте приложения, которые интегрируются с нашей социальной
-							сетью
+						<p className='text-sm text-[#8b949e] max-w-xl mx-auto'>
+							Создавайте ботов, интеграции и клиентские сервисы на базе экосистемы Вондик
 						</p>
 					</header>
 
-					<div className='bg-white/5 backdrop-blur-sm rounded-xl shadow-lg overflow-hidden border border-white/10'>
-						<div className='border-b border-white/10'>
-							<nav className='flex overflow-x-auto'>
+					<div className='bg-[#161b22] rounded-2xl shadow-xl overflow-hidden border border-[#30363d]'>
+						<div className='border-b border-[#30363d] bg-[#0d1117]'>
+							<nav className='flex overflow-x-auto custom-scrollbar'>
 								{tabs.map(tab => (
 									<button
 										key={tab.id}
-										className={`px-6 py-4 font-medium text-sm whitespace-nowrap ${
+										className={`px-5 py-3.5 font-medium text-xs sm:text-sm whitespace-nowrap transition-colors ${
 											activeTab === tab.id
-												? 'text-indigo-400 border-b-2 border-indigo-400'
-												: 'text-gray-400 hover:text-gray-200'
+												? 'text-[#58a6ff] border-b-2 border-[#0077FF] bg-[#161b22] font-semibold'
+												: 'text-[#8b949e] hover:text-white'
 										}`}
 										onClick={() => setActiveTab(tab.id)}
 									>
@@ -3052,16 +3052,12 @@ client.delete_comment("comment123")`}
 							</nav>
 						</div>
 
-						<div className='p-6'>{renderContent()}</div>
+						<div className='p-6 sm:p-8'>{renderContent()}</div>
 					</div>
 
-					<footer className='mt-12 text-center text-gray-500 text-sm'>
+					<footer className='mt-12 text-center text-[#8b949e] text-xs'>
 						<p>
-							© {new Date().getFullYear()} Социальная сеть Вондик. Все права
-							защищены.
-						</p>
-						<p className='mt-2'>
-							По вопросам поддержки обращайтесь в нашу команду разработчиков.
+							© {new Date().getFullYear()} Платформа Вондик. Все права защищены.
 						</p>
 					</footer>
 				</div>

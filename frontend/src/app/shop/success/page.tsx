@@ -6,7 +6,7 @@ import { fetchUser } from '@/lib/features/authSlice'
 import { useAppDispatch } from '@/lib/hooks'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import { FiCheckCircle as CheckCircle } from 'react-icons/fi'
+import { LuCircleCheck as CheckCircle } from 'react-icons/lu'
 
 export default function ShopSuccessPage() {
 	const { user } = useAuth()
@@ -48,11 +48,9 @@ export default function ShopSuccessPage() {
 	}, [dispatch])
 
 	return (
-		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white overflow-x-hidden relative'>
+		<div className='min-h-screen bg-[#0e1117] text-[#e6edf3] selection:bg-[#0077FF] selection:text-white overflow-x-hidden relative font-sans'>
 			<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
-				<div className='absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-emerald-900/20 blur-[120px]' />
-				<div className='absolute top-[40%] -right-[10%] w-[40%] h-[60%] rounded-full bg-indigo-900/20 blur-[120px]' />
-				<div className='absolute bottom-[10%] left-[20%] w-[30%] h-[30%] rounded-full bg-purple-900/10 blur-[100px]' />
+				<div className='absolute -top-32 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-[#0077FF]/10 blur-[140px] rounded-full' />
 			</div>
 
 			<div className='relative z-20'>
@@ -63,47 +61,52 @@ export default function ShopSuccessPage() {
 				<Sidebar />
 				<main className='flex-1 p-4 sm:p-6 lg:p-8'>
 					<div className='mx-auto max-w-3xl'>
-						<div className='rounded-2xl border border-gray-200 bg-white/90 p-8 shadow-sm dark:border-gray-700 dark:bg-gray-800/90'>
+						<div className='rounded-2xl border border-[#30363d] bg-[#161b22] p-8 shadow-xl'>
 							<div className='flex items-start gap-4'>
-								<CheckCircle className='h-8 w-8 text-emerald-600 dark:text-emerald-400' />
-								<div>
-									<h1 className='text-2xl font-bold text-gray-900 dark:text-white'>
+								<div className='w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0'>
+									<CheckCircle className='h-6 w-6' />
+								</div>
+								<div className='space-y-1.5'>
+									<h1 className='text-2xl font-bold text-white tracking-tight'>
 										Оплата прошла успешно
 									</h1>
-									<p className='mt-2 text-gray-600 dark:text-gray-300'>
-										Спасибо за покупку. Рубли зачислятся
-										автоматически после подтверждения оплаты.
+									<p className='text-sm text-[#8b949e] leading-relaxed'>
+										Спасибо за покупку в Вондик. Баланс зачисляется
+										автоматически после завершения сессии оплаты.
 									</p>
 									{confirming && (
-										<p className='mt-2 text-sm text-indigo-600 dark:text-indigo-400'>
+										<p className='text-xs text-[#58a6ff]'>
 											Подтверждаем оплату…
 										</p>
 									)}
 									{error && (
-										<p className='mt-2 text-sm text-red-600 dark:text-red-400'>
+										<p className='text-xs text-red-400'>
 											{error}
 										</p>
 									)}
 								</div>
 							</div>
 
-							<div className='mt-6 flex gap-3'>
+							<div className='mt-6 flex flex-wrap gap-3'>
 								<Link
 									href='/shop'
-									className='rounded-xl bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700'
+									className='rounded-xl bg-[#0077FF] hover:bg-[#0066dd] px-5 py-2.5 text-xs font-semibold text-white transition-colors shadow-sm'
 								>
 									Вернуться в магазин
 								</Link>
 								<Link
 									href='/feed'
-									className='rounded-xl border border-gray-300 px-4 py-2 text-gray-900 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700'
+									className='rounded-xl border border-[#30363d] bg-[#21262d] hover:bg-[#30363d] px-5 py-2.5 text-xs font-semibold text-white transition-colors'
 								>
 									Перейти в ленту
 								</Link>
 							</div>
 
-							<div className='mt-4 text-sm text-gray-500 dark:text-gray-400'>
-								Ваш текущий баланс: {(user?.balance ?? 0) + ((user as any)?.bonus_balance ?? 0)} ₽
+							<div className='mt-6 pt-4 border-t border-[#30363d] text-xs text-[#8b949e]'>
+								Ваш текущий баланс:{' '}
+								<span className='text-white font-semibold'>
+									{(user?.balance ?? 0) + ((user as any)?.bonus_balance ?? 0)} ₽
+								</span>
 							</div>
 						</div>
 					</div>

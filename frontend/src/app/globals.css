@@ -32,66 +32,84 @@
 /* App theme variables (customizable via Settings) */
 :root {
 	/* legacy tokens used by Tailwind @theme */
-	--background: #ffffff;
-	--foreground: #171717;
+	--background: #0e1117;
+	--foreground: #e6edf3;
 
 	/* layout tokens */
 	--app-radius: 12px;
 	--app-font-family: var(--font-geist-sans), system-ui, -apple-system,
 		'Segoe UI', Roboto, Arial, 'Noto Sans', 'Liberation Sans', sans-serif;
 
-	/* palette tokens — Vondic dark theme (Telegram-infused) */
-	--app-bg: #0e1621;
-	--app-fg: #f5f5f5;
-	--app-surface: #17212b;
-	--app-border: rgba(255, 255, 255, 0.08);
-	--app-muted: #7f91a4;
-	--app-accent: #2481cc; /* Telegram blue */
-	--app-accent-2: #0088cc; /* Telegram bright blue */
+	/* palette tokens — Vondic dark theme (Obsidian Auth Design) */
+	--app-bg: #0e1117;
+	--app-fg: #e6edf3;
+	--app-surface: #161b22;
+	--app-border: #30363d;
+	--app-muted: #8b949e;
+	--app-accent: #0077FF;
+	--app-accent-2: #0066dd;
 
 	/* rgb triplets for alpha mixing */
-	--app-bg-rgb: 14 22 33;
-	--app-fg-rgb: 245 245 245;
-	--app-surface-rgb: 23 33 43;
-	--app-accent-rgb: 36 129 204;
+	--app-bg-rgb: 14 17 23;
+	--app-fg-rgb: 230 237 243;
+	--app-surface-rgb: 22 27 34;
+	--app-accent-rgb: 0 119 255;
 
 	/* messenger */
-	--chat-bubble-own: #2b5278;
-	--chat-bubble-other: #182533;
-	--chat-bubble-border: rgba(255, 255, 255, 0.06);
-	--chat-composer-bg: #17212b;
+	--chat-bubble-own: #0077FF;
+	--chat-bubble-other: #21262d;
+	--chat-bubble-border: #30363d;
+	--chat-composer-bg: #161b22;
 }
 
 :root {
-	--app-glass-bg: rgb(var(--app-surface-rgb) / 0.75);
-	--app-glass-border: rgba(255, 255, 255, 0.08);
+	--app-glass-bg: #161b22;
+	--app-glass-border: #30363d;
 	--app-glass-blur: 16px;
-	--app-glow: rgb(var(--app-accent-rgb) / 0.15);
+	--app-glow: rgba(0, 119, 255, 0.15);
 }
-::selection { background: rgb(var(--app-accent-rgb) / 0.35); color: var(--app-fg); }
-:root[data-color-scheme='telegram'] { --app-accent:#2481cc; --app-accent-2:#0088cc; --app-accent-rgb:36 129 204; --app-bg:#0e1621; --app-surface:#17212b; --app-bg-rgb:14 22 33; --app-surface-rgb:23 33 43; }
+::selection { background: #0077FF; color: #ffffff; }
+:root[data-color-scheme='vondic'],
+:root:not([data-color-scheme]) {
+	--app-accent: #0077FF;
+	--app-accent-2: #0066dd;
+	--app-accent-rgb: 0 119 255;
+	--app-bg: #0e1117;
+	--app-surface: #161b22;
+	--app-bg-rgb: 14 17 23;
+	--app-surface-rgb: 22 27 34;
+	--app-border: #30363d;
+	--app-muted: #8b949e;
+}
 :root[data-color-scheme='purple'] { --app-accent:#8b5cf6; --app-accent-2:#a78bfa; --app-accent-rgb:139 92 246; --app-bg:#0f0e1b; --app-surface:#151326; --app-bg-rgb:15 14 27; --app-surface-rgb:21 19 38; }
 :root[data-color-scheme='blue']    { --app-accent:#3b82f6; --app-accent-2:#60a5fa; --app-accent-rgb:59 130 246; --app-bg:#0a0f1a; --app-surface:#111827; --app-bg-rgb:10 15 26; --app-surface-rgb:17 24 39; }
 :root[data-color-scheme='dark-blue']{ --app-accent:#2563eb; --app-accent-2:#3b82f6; --app-accent-rgb:37 99 235; --app-bg:#050a14; --app-surface:#0c1526; --app-bg-rgb:5 10 20; --app-surface-rgb:12 21 38; }
 :root[data-color-scheme='red']     { --app-accent:#ef4444; --app-accent-2:#f87171; --app-accent-rgb:239 68 68; --app-bg:#140a0c; --app-surface:#1f1114; --app-bg-rgb:20 10 12; --app-surface-rgb:31 17 20; }
 
+.feed-bg-glow {
+	position: fixed;
+	inset: 0;
+	pointer-events: none;
+	z-index: 0;
+	background: radial-gradient(circle at 50% -20%, rgba(0, 119, 255, 0.08), transparent 70%),
+	            radial-gradient(circle at 100% 40%, rgba(139, 92, 246, 0.05), transparent 60%);
+}
+
 .glass-panel {
-	background: var(--app-glass-bg);
-	border: 1px solid var(--app-glass-border);
-	backdrop-filter: blur(var(--app-glass-blur));
-	-webkit-backdrop-filter: blur(var(--app-glass-blur));
-	border-radius: 1.25rem;
-	box-shadow: 0 4px 32px rgb(0 0 0 / 0.2);
+	background: #161b22;
+	border: 1px solid #30363d;
+	border-radius: 1rem;
+	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
 }
 .glass-sidebar {
-	background-color: var(--app-surface) !important;
-	border-right: 1px solid var(--app-glass-border);
+	background-color: #161b22 !important;
+	border-right: 1px solid #30363d !important;
 	box-shadow: 4px 0 32px rgba(0, 0, 0, 0.6);
 	z-index: 9999 !important;
 }
 .glass-header {
-	background: rgb(var(--app-bg-rgb) / 0.85);
-	border-bottom: 1px solid var(--app-glass-border);
+	background: rgba(14, 17, 23, 0.88) !important;
+	border-bottom: 1px solid #30363d !important;
 	backdrop-filter: blur(20px);
 }
 .btn-accent { background: var(--app-accent); color:#fff; border-radius:.75rem; font-weight:600; }

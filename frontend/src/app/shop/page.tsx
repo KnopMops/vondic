@@ -528,11 +528,9 @@ export default function ShopPage() {
 	}
 
 	return (
-		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white overflow-x-hidden relative'>
+		<div className='min-h-screen bg-[#0e1117] text-[#e6edf3] selection:bg-[#0077FF] selection:text-white overflow-x-hidden relative font-sans'>
 			<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
-				<div className='absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-indigo-900/20 blur-[120px]' />
-				<div className='absolute top-[40%] -right-[10%] w-[40%] h-[60%] rounded-full bg-purple-900/20 blur-[120px]' />
-				<div className='absolute bottom-[10%] left-[20%] w-[30%] h-[30%] rounded-full bg-emerald-900/10 blur-[100px]' />
+				<div className='absolute -top-32 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-[#0077FF]/10 blur-[140px] rounded-full' />
 			</div>
 
 			<div className='relative z-20'>
@@ -542,15 +540,17 @@ export default function ShopPage() {
 			<div className='relative z-10 mx-auto flex max-w-7xl pt-20'>
 				<Sidebar />
 				<main className='flex-1 p-4 sm:p-6 lg:p-8'>
-					<div className='mx-auto max-w-5xl'>
-						<h1 className='text-2xl font-bold text-white'>Магазин</h1>
-						<p className='mt-1 text-gray-400'>
-							Поддержите проект и получите расширенные возможности
-						</p>
-						<div className='mt-4 rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm'>
+					<div className='mx-auto max-w-5xl space-y-4'>
+						<div>
+							<h1 className='text-2xl font-bold text-white tracking-tight'>Магазин</h1>
+							<p className='mt-1 text-xs text-[#8b949e]'>
+								Поддержите проект и получите расширенные возможности Вондик
+							</p>
+						</div>
+						<div className='rounded-2xl border border-[#30363d] bg-[#161b22] p-4 shadow-sm'>
 							<div className='flex items-center gap-3 text-white'>
-								<div className='h-10 w-10 rounded-xl bg-indigo-500/20 flex items-center justify-center'>
-									<Coins className='h-5 w-5 text-indigo-300' />
+								<div className='h-10 w-10 rounded-xl bg-[#0077FF]/15 border border-[#0077FF]/30 flex items-center justify-center text-[#58a6ff]'>
+									<Coins className='h-5 w-5' />
 								</div>
 								<div className='flex-1'>
 									<div className='text-sm text-gray-400'>Ваш баланс</div>

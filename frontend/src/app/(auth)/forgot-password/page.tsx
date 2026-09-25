@@ -44,17 +44,21 @@ export default function ForgotPasswordPage() {
 				transition={{ duration: 0.35, ease: 'easeOut' }}
 				className='w-full max-w-[420px] space-y-6 rounded-2xl bg-[#161b22] border border-[#30363d] p-7 shadow-xl relative z-10 text-center'
 			>
-				<div className='flex flex-col items-center justify-center gap-2'>
-					<div className='flex items-center justify-center w-11 h-11 rounded-xl bg-[#0077FF] shadow-sm'>
-						<span className='text-xl font-bold text-white tracking-wide'>V</span>
+				<div className='flex flex-col items-center justify-center gap-2.5'>
+					<div className='relative flex items-center justify-center w-14 h-14 rounded-2xl bg-[#0d1117] border border-[#30363d] shadow-lg shadow-black/40 overflow-hidden p-1.5 group'>
+						<img
+							src='/logo.png'
+							alt='Вондик'
+							className='w-full h-full object-contain drop-shadow transition-transform duration-300 group-hover:scale-105'
+						/>
 					</div>
-					<h1 className='text-xl font-bold text-white tracking-tight mt-1'>
-						{status === 'success' ? 'Готово!' : 'Сброс пароля'}
+					<h1 className='text-2xl font-bold text-white tracking-tight mt-1'>
+						{status === 'success' ? 'Готово!' : 'Сброс пароля Вондик'}
 					</h1>
 					<p className='text-xs text-[#8b949e] text-center'>
 						{status === 'success'
 							? 'Проверьте входящие сообщения'
-							: 'Введите email, указанный при регистрации'}
+							: 'Введите email, указанный при регистрации аккаунта Вондик'}
 					</p>
 				</div>
 

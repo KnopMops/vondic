@@ -1,10 +1,14 @@
-export type ColorSchemeId = 'purple' | 'blue' | 'dark-blue' | 'red'
+export type ColorSchemeId = 'vondic' | 'purple' | 'blue' | 'dark-blue' | 'red'
 export type AppPalette = {
 	bg: string; fg: string; surface: string; border: string
 	muted: string; accent: string; accent2: string
 }
 export const COLOR_SCHEME_STORAGE_KEY = 'app_color_scheme'
 export const COLOR_SCHEMES = [
+	{ id: 'vondic' as const, name: 'Вондик (Obsidian)', palette: {
+		bg: '#0e1117', fg: '#e6edf3', surface: '#161b22',
+		border: '#30363d', muted: '#8b949e',
+		accent: '#0077FF', accent2: '#0066dd' }},
 	{ id: 'purple' as const, name: 'Фиолетовая', palette: {
 		bg: '#0f0e1b', fg: '#f3f2f8', surface: '#151326',
 		border: 'rgba(139,92,246,0.14)', muted: '#8b89a8',
@@ -22,7 +26,7 @@ export const COLOR_SCHEMES = [
 		border: 'rgba(239,68,68,0.14)', muted: '#a89094',
 		accent: '#ef4444', accent2: '#f87171' }},
 ]
-export const DEFAULT_COLOR_SCHEME: ColorSchemeId = 'purple'
+export const DEFAULT_COLOR_SCHEME: ColorSchemeId = 'vondic'
 const hexToRgb = (hex: string) => {
 	const r = hex.replace('#','')
 	return `${parseInt(r.slice(0,2),16)} ${parseInt(r.slice(2,4),16)} ${parseInt(r.slice(4,6),16)}`

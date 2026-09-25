@@ -3,7 +3,7 @@
 import AppLoader from '@/components/ui/AppLoader'
 import FeedPageShell from '@/components/social/FeedPageShell'
 import { useAuth } from '@/lib/AuthContext'
-import { LuLoader as Loader2 } from 'react-icons/lu'
+import { LuLoader as Loader2, LuLifeBuoy as LifeBuoy, LuCircleHelp as HelpCircle } from 'react-icons/lu'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
@@ -45,69 +45,75 @@ export default function SupportPage() {
 	return (
 		<FeedPageShell email={user.email} onLogout={() => router.push('/')}>
 			<div className='mx-auto max-w-2xl space-y-6'>
-				<div className='rounded-2xl border border-gray-800 bg-black/40 backdrop-blur-sm p-6'>
-					<div className='flex items-center gap-2 mb-6'>
-						<span className='text-lg font-semibold text-white'>
-							Тех. поддержка
-						</span>
-						<span className='text-xs text-gray-400'>
-							Справка и обращения
-						</span>
+				<div className='rounded-2xl border border-[#30363d] bg-[#161b22] p-6 shadow-sm'>
+					<div className='flex items-center gap-3 mb-6'>
+						<div className='w-10 h-10 rounded-xl bg-[#0077FF]/15 border border-[#0077FF]/30 flex items-center justify-center text-[#58a6ff]'>
+							<LifeBuoy className='w-5 h-5' />
+						</div>
+						<div>
+							<h1 className='text-lg font-bold text-white tracking-tight'>
+								Техническая поддержка Вондик
+							</h1>
+							<p className='text-xs text-[#8b949e]'>
+								Справочные материалы и прямая связь с операторами платформы
+							</p>
+						</div>
 					</div>
 
-					<div className='space-y-6'>
-						<div className='bg-gray-950/60 border border-gray-800 rounded-xl p-4'>
-							<div className='text-sm font-medium text-gray-200 mb-3'>
+					<div className='space-y-5'>
+						<div className='bg-[#0d1117] border border-[#30363d] rounded-xl p-4'>
+							<div className='text-xs font-semibold text-white uppercase tracking-wider mb-3 flex items-center gap-1.5'>
+								<HelpCircle className='w-4 h-4 text-[#58a6ff]' />
 								Частые вопросы
 							</div>
-							<div className='space-y-3 text-sm text-gray-300'>
+							<div className='space-y-3 text-xs text-[#e6edf3]'>
 								<div>
-									<div className='font-semibold'>Как войти через Yandex?</div>
-									<div className='text-gray-400'>
+									<div className='font-semibold text-white'>Как войти через Yandex?</div>
+									<div className='text-[#8b949e] mt-0.5'>
 										На странице входа нажмите «Войти через Yandex» и
-										подтвердите вход.
+										подтвердите авторизацию.
 									</div>
 								</div>
 								<div>
-									<div className='font-semibold'>
-										Почему меня просят ввести код при входе?
+									<div className='font-semibold text-white'>
+										Зачем нужен двухфакторный код при входе?
 									</div>
-									<div className='text-gray-400'>
-										Это двухфакторная защита (2FA).
-									</div>
-								</div>
-								<div>
-									<div className='font-semibold'>
-										Письмо с кодом не приходит — что делать?
-									</div>
-									<div className='text-gray-400'>
-										Проверьте «Спам» и «Промоакции».
+									<div className='text-[#8b949e] mt-0.5'>
+										Это защита аккаунта (2FA) для подтверждения владельца.
 									</div>
 								</div>
 								<div>
-									<div className='font-semibold'>
-										Как восстановить аккаунт?
+									<div className='font-semibold text-white'>
+										Письмо со ссылкой сброса не приходит — что делать?
 									</div>
-									<div className='text-gray-400'>
-										Используйте команду /recover-account или нажмите «Забыли пароль?» на странице входа.
+									<div className='text-[#8b949e] mt-0.5'>
+										Проверьте папку «Спам» и «Рассылки».
+									</div>
+								</div>
+								<div>
+									<div className='font-semibold text-white'>
+										Как восстановить доступ к аккаунту?
+									</div>
+									<div className='text-[#8b949e] mt-0.5'>
+										Нажмите «Забыли пароль?» на странице входа или обратитесь в поддержку.
 									</div>
 								</div>
 							</div>
 						</div>
 
-						<div className='bg-gray-950/60 border border-gray-800 rounded-xl p-4'>
-							<div className='text-sm font-medium text-gray-200 mb-3'>
-								Создать заявку
+						<div className='bg-[#0d1117] border border-[#30363d] rounded-xl p-4'>
+							<div className='text-sm font-semibold text-white mb-1'>
+								Создать обращение
 							</div>
-							<div className='text-xs text-gray-400 mb-3'>
-								Опишите вашу проблему. После создания заявки вы будете перенаправлены в мессенджер для общения с оператором.
+							<div className='text-xs text-[#8b949e] mb-3'>
+								Опишите ваш вопрос или проблему. После отправки диалог откроется в мессенджере с оператором.
 							</div>
 							<textarea
 								value={ticketText}
 								onChange={e => setTicketText(e.target.value)}
 								placeholder='Опишите вашу проблему...'
 								rows={4}
-								className='w-full bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-600 resize-none'
+								className='w-full bg-[#161b22] border border-[#30363d] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-[#8b949e]/60 focus:border-[#0077FF] focus:ring-1 focus:ring-[#0077FF] outline-none transition-colors resize-none'
 							/>
 							{error && (
 								<div className='text-red-400 text-xs mt-2'>{error}</div>
@@ -116,7 +122,7 @@ export default function SupportPage() {
 								<button
 									onClick={handleSubmitTicket}
 									disabled={isSubmitting || !ticketText.trim()}
-									className='px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium flex items-center gap-2'
+									className='px-4 py-2 rounded-lg bg-[#0077FF] hover:bg-[#0066dd] disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold flex items-center gap-2 shadow-sm transition-colors'
 								>
 									{isSubmitting ? (
 										<Loader2 className='w-4 h-4 animate-spin' />

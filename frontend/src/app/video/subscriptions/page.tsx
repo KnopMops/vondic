@@ -41,11 +41,9 @@ export default function SubscriptionsPage() {
 	}, [user?.id])
 
 	return (
-		<div className='min-h-screen bg-black text-white selection:bg-indigo-500 selection:text-white overflow-x-hidden relative'>
+		<div className='min-h-screen bg-[#0e1117] text-[#e6edf3] selection:bg-[#0077FF] selection:text-white overflow-x-hidden relative font-sans'>
 			<div className='fixed inset-0 z-0 overflow-hidden pointer-events-none'>
-				<div className='absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-indigo-900/20 blur-[120px]' />
-				<div className='absolute top-[40%] -right-[10%] w-[40%] h-[60%] rounded-full bg-purple-900/20 blur-[120px]' />
-				<div className='absolute bottom-[10%] left-[20%] w-[30%] h-[30%] rounded-full bg-emerald-900/10 blur-[100px]' />
+				<div className='absolute -top-32 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-[#0077FF]/10 blur-[140px] rounded-full' />
 			</div>
 			<div className='relative z-20'>
 				<Header email={user?.email || ''} onLogout={logout} />
@@ -55,9 +53,9 @@ export default function SubscriptionsPage() {
 					<div className='mb-4'>
 						<Link
 							href='/video'
-							className='inline-flex items-center rounded-full border border-gray-800/60 bg-gray-900/40 px-3 py-1.5 text-xs text-gray-200 hover:bg-white/10'
+							className='inline-flex items-center rounded-xl border border-[#30363d] bg-[#161b22] px-3.5 py-1.5 text-xs text-[#e6edf3] hover:bg-[#21262d] transition-colors'
 						>
-							Подписки
+							← Назад к видео
 						</Link>
 					</div>
 					{isLoading && (
