@@ -157,7 +157,7 @@ async def push_bot_update(bot_id: str, payload: dict):
     return {"ok": True, "outbox": outbox, "items": outbox}
 
 
-def _extract_user_id(payload: dict = None, request: Optional[Request] = None) -> str:
+def _extract_user_id(payload: Optional[dict] = None, request: Optional[Request] = None) -> str:
     if payload:
         user_id = str(payload.get("user_id") or payload.get("from_user_id") or "")
         if user_id and user_id != "unknown":
@@ -477,9 +477,7 @@ async def get_file(bot_id: str, file_id: str = Query(...)):
     return {"ok": True, "file_id": file_id, "file_path": f"files/{file_id}"}
 
 
-@public_bots_router.get("/{bot_id}/permissions")
-@public_bots_router.get("/{bot_id}/permissions/{user_id}")
-async def get_bot_user_permissions(bot_id: str, user_id: Optional[str] = None, request: Optional[Request] = None):
+async def _resolve_and_get_bot_permissions(bot_id: str, request: Request, user_id: Optional[str] = None):
     """Check if user has granted permissions to this bot. Returns bot's required scopes + granted scopes."""
     bot_id = _resolve_bot_id(bot_id)
     if not user_id:
@@ -535,6 +533,16 @@ async def get_bot_user_permissions(bot_id: str, user_id: Optional[str] = None, r
         "granted_scopes": [],
         "scope_descriptions": {s: BOT_SCOPES.get(s, s) for s in required},
     }
+
+
+@public_bots_router.get("/{bot_id}/permissions")
+async def get_bot_permissions_current(bot_id: str, request: Request, user_id: Optional[str] = None):
+    return await _resolve_and_get_bot_permissions(bot_id=bot_id, request=request, user_id=user_id)
+
+
+@public_bots_router.get("/{bot_id}/permissions/{user_id}")
+async def get_bot_user_permissions(bot_id: str, user_id: str, request: Request):
+    return await _resolve_and_get_bot_permissions(bot_id=bot_id, request=request, user_id=user_id)
 
 
 @public_bots_router.post("/{bot_id}/permissions/grant")

@@ -5,6 +5,7 @@ from app.api.public.v1.bots import (
     get_bot_outbox,
     handle_bot_callback,
     answer_bot_callback_query,
+    get_bot_permissions_current,
     get_bot_user_permissions,
     grant_bot_permissions,
 )
@@ -217,8 +218,12 @@ async def answer_callback_alias(bot_id: str, payload: dict):
 
 
 @bots_router.get("/{bot_id}/permissions")
+async def get_permissions_alias_current(bot_id: str, request: Request, user_id: Optional[str] = None):
+    return await get_bot_permissions_current(bot_id, request, user_id)
+
+
 @bots_router.get("/{bot_id}/permissions/{user_id}")
-async def get_permissions_alias(bot_id: str, user_id: Optional[str] = None, request: Optional[Request] = None):
+async def get_permissions_alias(bot_id: str, user_id: str, request: Request):
     return await get_bot_user_permissions(bot_id, user_id, request)
 
 
