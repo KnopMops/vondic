@@ -33,7 +33,7 @@ export const ScreenShareViewer: React.FC<ScreenShareViewerProps> = ({
 		(remoteScreenShare?.isSharing && remoteScreenShare.socketId
 			? remoteStreams.get(remoteScreenShare.socketId) || null
 			: null) ||
-		Array.from(remoteStreams.values()).find(s => s.getVideoTracks().length > 0) ||
+		Array.from(remoteStreams.values()).find((s: MediaStream) => s.getVideoTracks().length > 0) ||
 		null
 
 	const isFullscreenSupported =
@@ -57,13 +57,13 @@ export const ScreenShareViewer: React.FC<ScreenShareViewerProps> = ({
 			const attemptPlay = () => {
 				if (el) {
 					el.play().catch(err => {
-						console.error('Failed to play screen share:', err)
-						setHasError(true)
+						console.warn('Screen share auto-play deferred:', err)
 					})
 				}
 			}
 
 			liveVideoTracks.forEach(track => {
+				track.enabled = true
 				track.addEventListener('unmute', attemptPlay)
 			})
 
@@ -93,7 +93,7 @@ export const ScreenShareViewer: React.FC<ScreenShareViewerProps> = ({
 				}
 			}
 		}
-	}, [streamToPlay])
+	}, [streamToPlay, remoteStreams, isScreenSharing])
 
 	useEffect(() => {
 		const handleFullscreenChange = () => {
@@ -126,7 +126,8 @@ export const ScreenShareViewer: React.FC<ScreenShareViewerProps> = ({
 		onClose()
 	}
 
-	if (!screenStream && !isScreenSharing) {
+	const hasActiveStream = !!streamToPlay || !!screenStream || isScreenSharing
+	if (!hasActiveStream) {
 		return null
 	}
 

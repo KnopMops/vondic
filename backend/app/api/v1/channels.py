@@ -74,6 +74,14 @@ async def join_channel_by_code(
 ):
     try:
         channel, err = ChannelService.join_channel(payload.invite_code, current_user.id)
+        if err == "pending_approval":
+            ch_dict = channel.to_dict() if hasattr(channel, "to_dict") else channel
+            return {
+                "channel": ch_dict,
+                "status": "pending_approval",
+                "message": "Заявка на вступление отправлена",
+                "is_pending_approval": True,
+            }
         if err or not channel:
             raise HTTPException(status_code=400, detail=err or "Failed to join channel")
         return channel.to_dict() if hasattr(channel, "to_dict") else channel

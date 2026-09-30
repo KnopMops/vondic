@@ -78,14 +78,15 @@ class PasskeyService:
         user_name = user.email if user else (email or "user@vondic.ru")
         display_name = user.username if user else (username or "Пользователь")
 
-        # Сохраняем challenge в кэш на 5 минут
+        # Сохраняем challenge в кэш на 10 минут
         cache_key = f"passkey_reg_challenge:{challenge_b64}"
         cache_data = {
             "user_id": user.id if user else None,
             "email": email.strip().lower() if email else (user.email if user else None),
             "username": username.strip() if username else (user.username if user else None),
         }
-        cache.set(cache_key, cache_data, timeout=300)
+        cache.set(cache_key, cache_data, timeout=600)
+        cache.set(f"passkey_reg_challenge:{challenge_b64.rstrip('=')}", cache_data, timeout=600)
 
         rp_id = PasskeyService.get_rp_id(host)
 
@@ -148,7 +149,16 @@ class PasskeyService:
             if not saved_ctx:
                 saved_ctx = cache.get(f"passkey_reg_challenge:{challenge}")
             if not saved_ctx:
-                return None, "Срок действия сессии регистрации истёк. Попробуйте снова."
+                # Если пользователь уже авторизован (например, в настройках профиля привязывает Passkey),
+                # используем его контекст, исключая ложную ошибку устаревания сессии при смене воркеров
+                if current_user:
+                    saved_ctx = {
+                        "user_id": current_user.id,
+                        "email": current_user.email,
+                        "username": current_user.username,
+                    }
+                else:
+                    return None, "Срок действия сессии регистрации истёк. Попробуйте снова."
             cache.delete(f"passkey_reg_challenge:{norm_challenge}")
             cache.delete(f"passkey_reg_challenge:{challenge}")
 

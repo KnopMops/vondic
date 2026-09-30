@@ -1444,6 +1444,9 @@ export class WebRTCService {
 					type: answer.type,
 				},
 			})
+			this.syncRemoteStreamTracks(socketId)
+			setTimeout(() => this.syncRemoteStreamTracks(socketId), 250)
+			setTimeout(() => this.syncRemoteStreamTracks(socketId), 600)
 		} catch (e: any) {
 			if (e.message?.includes('wrong state') || e.message?.includes('stable')) {
 				console.log(`Ignoring renegotiation offer race condition for ${socketId}`)
@@ -1625,6 +1628,8 @@ export class WebRTCService {
 				await pc.setRemoteDescription(new RTCSessionDescription(this.optimizeSessionDescription(data.answer)))
 				console.log('[WebRTC] Remote description set from answer')
 				this.processBufferedCandidates(data.sender_socket_id)
+				this.syncRemoteStreamTracks(data.sender_socket_id)
+				setTimeout(() => this.syncRemoteStreamTracks(data.sender_socket_id), 250)
 		
 				try {
 					const dirs =
@@ -1741,34 +1746,35 @@ export class WebRTCService {
 	/**
 	 * Synchronize remote stream tracks with the current receivers for a given peer connection
 	 */
-	private syncRemoteStreamTracks(targetSocketId: string) {
+	public syncRemoteStreamTracks(targetSocketId: string) {
 		const pc = this.peerConnections.get(targetSocketId);
 		if (!pc) return;
 
-		let stream = this.remoteStreams.get(targetSocketId);
-		const existingTracks = stream ? stream.getTracks().filter(t => t.readyState === 'live') : [];
-
 		try {
 			const receivers = pc.getReceivers() || [];
-			let hasNewTracks = false;
-			const currentTracks = [...existingTracks];
+			const liveReceiverTracks: MediaStreamTrack[] = [];
 
-			// Add any new tracks from receivers
 			receivers.forEach(receiver => {
-				if (receiver.track && receiver.track.readyState === 'live') {
-					const trackExists = currentTracks.some(t =>
-						t.id === receiver.track.id && t.kind === receiver.track.kind
-					);
-					if (!trackExists) {
-						console.log(`[WebRTC] Adding ${receiver.track.kind} track from receiver to remote stream for ${targetSocketId}`);
-						currentTracks.push(receiver.track);
-						hasNewTracks = true;
-					}
+				const track = receiver.track;
+				if (track && track.readyState === 'live') {
+					try {
+						track.enabled = true;
+					} catch {}
+
+					liveReceiverTracks.push(track);
+
+					// Hook unmute to instantly update stream when frames start arriving (e.g. screen share re-enabled)
+					const onTrackUnmuted = () => {
+						console.log(`[WebRTC] Receiver ${track.kind} track unmuted for ${targetSocketId}`);
+						this.syncRemoteStreamTracks(targetSocketId);
+					};
+					track.removeEventListener('unmute', onTrackUnmuted);
+					track.addEventListener('unmute', onTrackUnmuted, { once: true });
 				}
 			});
 
-			if (hasNewTracks || !stream) {
-				const freshStream = new MediaStream(currentTracks);
+			if (liveReceiverTracks.length > 0) {
+				const freshStream = new MediaStream(liveReceiverTracks);
 				this.remoteStreams.set(targetSocketId, freshStream);
 				if (this.onRemoteStream) {
 					this.onRemoteStream(targetSocketId, freshStream);

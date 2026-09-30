@@ -5,6 +5,8 @@ from app.api.public.v1.bots import (
     get_bot_outbox,
     handle_bot_callback,
     answer_bot_callback_query,
+    get_bot_user_permissions,
+    grant_bot_permissions,
 )
 from app.api.v1.bot_games import bot_games_router
 import logging
@@ -216,8 +218,13 @@ async def answer_callback_alias(bot_id: str, payload: dict):
 
 @bots_router.get("/{bot_id}/permissions")
 @bots_router.get("/{bot_id}/permissions/{user_id}")
-async def get_permissions_alias(bot_id: str, user_id: Optional[str] = None):
-    return {"granted": True, "scopes": ["basic", "user_info", "send_messages"]}
+async def get_permissions_alias(bot_id: str, user_id: Optional[str] = None, request: Optional[Request] = None):
+    return await get_bot_user_permissions(bot_id, user_id, request)
+
+
+@bots_router.post("/{bot_id}/permissions/grant")
+async def grant_permissions_alias(bot_id: str, payload: dict, request: Request):
+    return await grant_bot_permissions(bot_id, payload, request)
 
 
 @bots_router.get("/{bot_id}/outbox")

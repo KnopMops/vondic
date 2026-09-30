@@ -159,6 +159,8 @@ export async function registerWithPasskey(params: RegisterPasskeyParams) {
 			credential: credentialPayload,
 			password: params.password,
 			device_name: params.deviceName || 'Устройство (Passkey)',
+			email: params.email,
+			username: params.username,
 		}),
 	})
 

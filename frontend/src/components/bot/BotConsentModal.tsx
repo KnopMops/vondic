@@ -39,15 +39,27 @@ export default function BotConsentModal({
 	const handleGrant = async () => {
 		setLoading(true)
 		try {
-			const token = localStorage.getItem('access_token')
+			const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
+			const userData =
+				typeof window !== 'undefined'
+					? localStorage.getItem('user') || localStorage.getItem('user_data')
+					: null
+			let user: { id?: string } | null = null
+			try {
+				user = userData ? JSON.parse(userData) : null
+			} catch {}
+
 			await fetch(`/api/v1/bots/${botId}/permissions/grant`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
 					...(token ? { Authorization: `Bearer ${token}` } : {}),
 				},
-				body: JSON.stringify({ scopes: scopes.join(',') }),
+				body: JSON.stringify({ scopes, user_id: user?.id }),
 			})
+			if (typeof window !== 'undefined') {
+				localStorage.setItem('bot_consent_' + botId, 'true')
+			}
 			onGranted()
 		} catch {
 			onDenied()

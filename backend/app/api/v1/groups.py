@@ -47,6 +47,14 @@ async def join_group(
     current_user=Depends(get_current_user)
 ):
     group, error = GroupService.join_group(payload.invite_code, current_user.id)
+    if error == "pending_approval":
+        g_dict = group.to_dict() if hasattr(group, "to_dict") else group
+        return {
+            "group": g_dict,
+            "status": "pending_approval",
+            "message": "Заявка на вступление отправлена",
+            "is_pending_approval": True,
+        }
     if error or not group:
         raise HTTPException(status_code=400, detail=error or "Failed to join group")
     return {"group": group.to_dict() if hasattr(group, "to_dict") else group}

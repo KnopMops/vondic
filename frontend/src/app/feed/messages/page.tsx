@@ -1180,7 +1180,6 @@ export default function MessengerPage() {
 
 	useEffect(() => {
 		if (!selectedFriend || selectedFriend.is_bot !== true) return
-		if (selectedFriend.id === botUser.id) return
 		if (!user?.id) return
 		let active = true
 		let pollTimeout: number | null = null
@@ -1652,13 +1651,20 @@ export default function MessengerPage() {
 		if (!selectedFriend || selectedFriend.is_bot !== true || !user?.id) return
 		if (selectedFriend.id === botUser.id) return
 		if (consentChecked[selectedFriend.id]) return
+		if (
+			typeof window !== 'undefined' &&
+			localStorage.getItem('bot_consent_' + selectedFriend.id) === 'true'
+		) {
+			setConsentChecked(prev => ({ ...prev, [selectedFriend.id!]: true }))
+			return
+		}
 
 		const checkConsent = async () => {
 			try {
 				const token = localStorage.getItem('access_token')
 				const res = await fetch(
 					`/api/v1/bots/${selectedFriend.id}/permissions`,
-					{ headers: { Authorization: `Bearer ${token}` } },
+					{ headers: token ? { Authorization: `Bearer ${token}` } : {} },
 				)
 				if (res.ok) {
 					const data = await res.json()
@@ -1671,6 +1677,10 @@ export default function MessengerPage() {
 							avatar_url: selectedFriend.avatar_url || undefined,
 						})
 						setShowConsent(true)
+					} else {
+						if (typeof window !== 'undefined') {
+							localStorage.setItem('bot_consent_' + selectedFriend.id, 'true')
+						}
 					}
 				}
 			} catch {}
@@ -9718,6 +9728,12 @@ export default function MessengerPage() {
 				botAvatar={consentBot.avatar_url}
 				scopes={consentScopes}
 				onGranted={() => {
+					if (typeof window !== 'undefined' && consentBot?.id) {
+						localStorage.setItem('bot_consent_' + consentBot.id, 'true')
+					}
+					if (consentBot?.id) {
+						setConsentChecked(prev => ({ ...prev, [consentBot.id]: true }))
+					}
 					setShowConsent(false)
 					setConsentBot(null)
 					setInput('/start')

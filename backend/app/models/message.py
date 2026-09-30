@@ -84,6 +84,11 @@ class Message(Base):
             "read_by": self.read_by or [],
             "reply_to_id": self.reply_to_id,
             "forwarded_from_id": self.forwarded_from_id,
+            "reply_markup": (
+                self.attachments.get("reply_markup") if isinstance(self.attachments, dict) and "reply_markup" in self.attachments
+                else next((a.get("reply_markup") for a in self.attachments if isinstance(a, dict) and "reply_markup" in a), None) if isinstance(self.attachments, list)
+                else None
+            ),
             "is_deleted": getattr(
                     self,
                     'is_deleted',

@@ -6,7 +6,7 @@ import time
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from pydantic import BaseModel
 
 from app.services.bot_service import BotService
@@ -157,31 +157,110 @@ async def push_bot_update(bot_id: str, payload: dict):
     return {"ok": True, "outbox": outbox, "items": outbox}
 
 
-def _extract_user_id(payload: dict) -> str:
-    user_id = str(payload.get("user_id") or payload.get("from_user_id") or "")
-    if user_id:
-        return user_id
-    token = payload.get("access_token")
-    if token:
-        try:
-            from app.core.security import decode_access_token
-            data = decode_access_token(token)
-            if data and data.get("sub"):
-                return str(data["sub"])
-        except Exception:
-            pass
+def _extract_user_id(payload: dict = None, request: Optional[Request] = None) -> str:
+    if payload:
+        user_id = str(payload.get("user_id") or payload.get("from_user_id") or "")
+        if user_id and user_id != "unknown":
+            return user_id
+        token = payload.get("access_token")
+        if token:
+            try:
+                from app.core.security import decode_access_token
+                data = decode_access_token(token)
+                if data and data.get("sub"):
+                    return str(data["sub"])
+            except Exception:
+                pass
+    if request:
+        auth = request.headers.get("authorization") or ""
+        if auth.startswith("Bearer "):
+            token = auth[7:].strip()
+            try:
+                from app.core.security import decode_access_token
+                data = decode_access_token(token)
+                if data and data.get("sub"):
+                    return str(data["sub"])
+            except Exception:
+                pass
     return "unknown"
 
 
 @public_bots_router.post("/{bot_id}/callback")
 @public_bots_router.post("/{bot_id}/callback_query")
 @public_bots_router.post("/{bot_id}/callback-query")
-async def handle_bot_callback(bot_id: str, payload: dict):
+async def handle_bot_callback(bot_id: str, payload: dict, request: Request):
     bot_id = _resolve_bot_id(bot_id)
-    user_id = _extract_user_id(payload)
+    user_id = _extract_user_id(payload, request)
     cb_data = payload.get("data") or payload.get("callback_data") or ""
     msg_id = str(payload.get("message_id") or "1")
     cb_id = f"cb_{int(time.time() * 1000)}"
+
+    # Immediately process join request actions if present
+    if cb_data.startswith("join_approve:"):
+        req_id = cb_data.split(":", 1)[1].strip()
+        try:
+            from app.models.join_request import JoinRequest
+            from app.core.extensions import db as sync_db
+            req = JoinRequest.query.get(req_id)
+            if req:
+                req.status = "approved"
+                from app.models.user import User
+                u = User.query.get(req.user_id)
+                target_name = "Чат"
+                if req.target_type == "group":
+                    from app.models.group import Group
+                    g = Group.query.get(req.target_id)
+                    if g:
+                        target_name = g.name
+                        if u and u not in g.participants:
+                            g.participants.append(u)
+                elif req.target_type == "channel":
+                    from app.models.channel import Channel
+                    ch = Channel.query.get(req.target_id)
+                    if ch:
+                        target_name = ch.name
+                        if u and u not in ch.participants:
+                            ch.participants.append(u)
+                elif req.target_type == "community":
+                    from app.models.community import Community
+                    c = Community.query.get(req.target_id)
+                    if c:
+                        target_name = c.name
+                        if u and u not in c.members:
+                            c.members.append(u)
+                sync_db.session.commit()
+                from app.api.v1.join_requests import push_join_request_decision_message
+                push_join_request_decision_message(req, target_name)
+                logger.info("join_request approved via bot callback: req_id=%s user_id=%s target=%s", req_id, req.user_id, target_name)
+        except Exception as e:
+            logger.warning("Error in callback join_approve: %s", e)
+    elif cb_data.startswith("join_decline:"):
+        req_id = cb_data.split(":", 1)[1].strip()
+        try:
+            from app.models.join_request import JoinRequest
+            from app.core.extensions import db as sync_db
+            req = JoinRequest.query.get(req_id)
+            if req:
+                req.status = "declined"
+                target_name = "Чат"
+                if req.target_type == "group":
+                    from app.models.group import Group
+                    g = Group.query.get(req.target_id)
+                    if g: target_name = g.name
+                elif req.target_type == "channel":
+                    from app.models.channel import Channel
+                    ch = Channel.query.get(req.target_id)
+                    if ch: target_name = ch.name
+                elif req.target_type == "community":
+                    from app.models.community import Community
+                    c = Community.query.get(req.target_id)
+                    if c: target_name = c.name
+                sync_db.session.commit()
+                from app.api.v1.join_requests import push_join_request_decision_message
+                push_join_request_decision_message(req, target_name)
+                logger.info("join_request declined via bot callback: req_id=%s", req_id)
+        except Exception as e:
+            logger.warning("Error in callback join_decline: %s", e)
 
     raw_update = {
         "update_id": int(time.time() * 1000),
@@ -381,11 +460,6 @@ async def send_bot_message(
     return {"ok": True, "result": item}
 
 
-@public_bots_router.post("/{bot_id}/permissions/grant")
-async def grant_bot_permissions(bot_id: str, payload: dict):
-    return {"ok": True, "granted": True, "scopes": payload.get("scopes", "basic")}
-
-
 @public_bots_router.post("/{bot_id}/token")
 async def generate_bot_token_public(bot_id: str):
     return {"ok": True, "token": f"bot_token_{bot_id}"}
@@ -403,27 +477,57 @@ async def get_file(bot_id: str, file_id: str = Query(...)):
     return {"ok": True, "file_id": file_id, "file_path": f"files/{file_id}"}
 
 
+@public_bots_router.get("/{bot_id}/permissions")
 @public_bots_router.get("/{bot_id}/permissions/{user_id}")
-async def get_bot_user_permissions(bot_id: str, user_id: str):
+async def get_bot_user_permissions(bot_id: str, user_id: Optional[str] = None, request: Optional[Request] = None):
     """Check if user has granted permissions to this bot. Returns bot's required scopes + granted scopes."""
     bot_id = _resolve_bot_id(bot_id)
+    if not user_id:
+        user_id = _extract_user_id({}, request)
+    if not user_id or user_id == "unknown":
+        return {
+            "granted": False,
+            "required_scopes": ["basic_profile", "send_messages"],
+            "granted_scopes": [],
+            "scope_descriptions": {},
+        }
+
     from app.models.bot import Bot, BOT_SCOPES
 
     bot = Bot.query.get(bot_id)
-    required = bot.get_scopes() if bot else ["username", "send_messages"]
+    required = bot.get_scopes() if bot else ["basic_profile", "send_messages"]
 
     # Check Redis for granted consent
     consent_key = f"bot:consent:{bot_id}:{user_id}"
     r = _get_redis()
     granted_raw = r.get(consent_key)
     if granted_raw:
-        granted_scopes = _json.loads(granted_raw)
-        return {
-            "granted": True,
-            "required_scopes": required,
-            "granted_scopes": granted_scopes,
-            "scope_descriptions": {s: BOT_SCOPES.get(s, s) for s in required},
-        }
+        try:
+            granted_scopes = _json.loads(granted_raw)
+            return {
+                "granted": True,
+                "required_scopes": required,
+                "granted_scopes": granted_scopes,
+                "scope_descriptions": {s: BOT_SCOPES.get(s, s) for s in required},
+            }
+        except Exception:
+            pass
+
+    # Check database via BotPermissionService
+    from app.services.bot_permission_service import BotPermissionService
+    try:
+        db_scopes = BotPermissionService.get_user_scopes(bot_id, user_id)
+        if db_scopes:
+            granted_scopes = [s.strip() for s in db_scopes.split(",") if s.strip()]
+            r.set(consent_key, _json.dumps(granted_scopes), ex=86400 * 365)
+            return {
+                "granted": True,
+                "required_scopes": required,
+                "granted_scopes": granted_scopes,
+                "scope_descriptions": {s: BOT_SCOPES.get(s, s) for s in required},
+            }
+    except Exception as e:
+        logger.warning("Error checking BotPermissionService.get_user_scopes: %s", e)
 
     return {
         "granted": False,
@@ -434,20 +538,37 @@ async def get_bot_user_permissions(bot_id: str, user_id: str):
 
 
 @public_bots_router.post("/{bot_id}/permissions/grant")
-async def grant_bot_permissions(bot_id: str, payload: dict):
-    """User grants consent to a bot. Stores in Redis."""
+async def grant_bot_permissions(bot_id: str, payload: dict, request: Request):
+    """User grants consent to a bot. Stores in PostgreSQL DB and Redis."""
     bot_id = _resolve_bot_id(bot_id)
     user_id = str(payload.get("user_id") or "")
-    scopes = payload.get("scopes") or []
-
     if not user_id:
+        user_id = _extract_user_id(payload, request)
+
+    if not user_id or user_id == "unknown":
         raise HTTPException(status_code=400, detail="user_id required")
 
+    scopes = payload.get("scopes") or ["basic_profile", "send_messages"]
+    if isinstance(scopes, str):
+        scopes_list = [s.strip() for s in scopes.split(",") if s.strip()]
+        scopes_str = scopes
+    else:
+        scopes_list = list(scopes)
+        scopes_str = ",".join(scopes_list)
+
+    # Persist in DB
+    from app.services.bot_permission_service import BotPermissionService
+    try:
+        BotPermissionService.grant_scopes(bot_id, user_id, scopes_str)
+    except Exception as e:
+        logger.warning("Error in BotPermissionService.grant_scopes: %s", e)
+
+    # Cache in Redis
     consent_key = f"bot:consent:{bot_id}:{user_id}"
     r = _get_redis()
-    r.set(consent_key, _json.dumps(scopes), ex=86400 * 365)  # 1 year
+    r.set(consent_key, _json.dumps(scopes_list), ex=86400 * 365)  # 1 year
 
-    return {"ok": True, "granted": True, "scopes": scopes}
+    return {"ok": True, "granted": True, "scopes": scopes_list}
 
 
 @public_bots_router.post("/{bot_id}/permissions/revoke")

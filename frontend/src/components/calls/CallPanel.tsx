@@ -222,9 +222,22 @@ export const CallPanel: React.FC<CallPanelProps> = ({ onClose }) => {
 		remoteScreenShares.forEach((stream, socketId) => {
 			const videoEl = remoteScreenVideoRefs.current.get(socketId)
 			if (videoEl) {
-				if (videoEl.srcObject !== stream) {
-					videoEl.srcObject = stream
+				const liveTracks = stream.getVideoTracks().filter(t => t.readyState === 'live')
+				if (liveTracks.length > 0) {
+					if (videoEl.srcObject !== stream) {
+						videoEl.srcObject = stream
+					}
+					liveTracks.forEach(t => {
+						t.enabled = true
+						const onUnmute = () => {
+							videoEl.play().catch(() => {})
+						}
+						t.removeEventListener('unmute', onUnmute)
+						t.addEventListener('unmute', onUnmute, { once: true })
+					})
 					videoEl.play().catch(() => {})
+				} else if (videoEl.srcObject) {
+					videoEl.srcObject = null
 				}
 			}
 		})
@@ -651,6 +664,10 @@ export const CallPanel: React.FC<CallPanelProps> = ({ onClose }) => {
 											ref={el => {
 												if (el) {
 													remoteScreenVideoRefs.current.set(socketId, el)
+													if (el.srcObject !== stream) {
+														el.srcObject = stream
+														el.play().catch(() => {})
+													}
 												} else {
 													remoteScreenVideoRefs.current.delete(socketId)
 												}

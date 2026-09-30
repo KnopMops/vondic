@@ -55,6 +55,24 @@ def push_join_request_bot_message(req_id: str, owner_id: str, target_name: str, 
         }
         _q_push(f"bot:outbox:{BOT_ID}:{owner_id}", item)
 
+        from app.models.user import User
+        from app.core.extensions import db as sync_db
+        bot_user = User.query.get(BOT_ID)
+        if not bot_user:
+            bot_user = User(
+                id=BOT_ID,
+                username="Вондик BOT",
+                email="botik@вондик.local",
+                role="Bot",
+                is_bot=True,
+                is_verified=1,
+                status="online",
+                avatar_url="/static/botik.png",
+            )
+            bot_user.set_password("botik_secret_pass_123")
+            sync_db.session.add(bot_user)
+            sync_db.session.commit()
+
         try:
             import os
             import json
@@ -64,7 +82,11 @@ def push_join_request_bot_message(req_id: str, owner_id: str, target_name: str, 
             from app.services.message_service import MessageService
 
             msg_obj, _ = MessageService.create_message(
-                {"content": text, "type": "text"},
+                {
+                    "content": text,
+                    "type": "text",
+                    "attachments": [{"type": "reply_markup", "reply_markup": reply_markup}],
+                },
                 user_id=BOT_ID,
                 target_id=str(owner_id),
             )
@@ -235,6 +257,8 @@ async def approve_join_request(
             if u and u not in c.members:
                 c.members.append(u)
 
+    from app.core.extensions import db as sync_db
+    sync_db.session.commit()
     await db.commit()
     push_join_request_decision_message(req, target_name)
     return {"message": "Заявка одобрена, пользователь добавлен", "request": req.to_dict()}
@@ -269,6 +293,8 @@ async def decline_join_request(
         if c:
             target_name = c.name
 
+    from app.core.extensions import db as sync_db
+    sync_db.session.commit()
     await db.commit()
     push_join_request_decision_message(req, target_name)
     return {"message": "Заявка отклонена", "request": req.to_dict()}

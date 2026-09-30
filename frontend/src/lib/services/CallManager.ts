@@ -958,7 +958,8 @@ export class CallManager {
 					});
 				}
 
-				// Get the current remote stream for this participant
+				// Sync remote stream tracks for this participant
+				this.webRTCService.syncRemoteStreamTracks(from_socket_id);
 				const currentStream = this.webRTCService.getRemoteStream(from_socket_id);
 				if (currentStream) {
 					if (this.onRemoteStream) {
