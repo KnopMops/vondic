@@ -366,12 +366,16 @@ export default function SettingsPage() {
 
 	useEffect(() => {
 		const saved = getEncProxyUrl()
-		if (saved) setEncProxyUrlState(saved)
+		if (saved) {
+			setEncProxyUrlState(saved)
+		} else {
+			setEncProxyUrlState('http://127.0.0.1:8888')
+		}
 		const client = getEncProxyClient()
-		setEncProxyConnected(client.isConnected)
+		setEncProxyConnected(client.isConnected || !!saved)
 		const unsub = client.on('statusChange', (s) => {
 			setEncProxyStatusState(s)
-			setEncProxyConnected(s === 'connected')
+			setEncProxyConnected(s === 'connected' || !!getEncProxyUrl())
 		})
 		return unsub
 	}, [])
@@ -380,33 +384,28 @@ export default function SettingsPage() {
 		const current = getEncProxyUrl()
 		if (current) {
 			saveEncProxyUrl(null)
-			setEncProxyUrlState('')
 			setEncProxyConnected(false)
 			const client = getEncProxyClient()
 			client.disconnect()
-			showToast('EncProxy отключён', 'success')
+			showToast('EncProxy отключён', 'info')
 		} else {
-			const url = encProxyUrl.trim()
-			if (!url) {
-				showToast('Введите URL EncProxy сервера', 'error')
-				return
-			}
+			const url = (encProxyUrl.trim() || 'http://127.0.0.1:8888')
+			setEncProxyUrlState(url)
 			saveEncProxyUrl(url)
-			showToast('EncProxy подключён', 'success')
+			setEncProxyConnected(true)
+			showToast('EncProxy подключён: ' + url, 'success')
 		}
 	}
 
 	const connectEncProxy = () => {
-		const url = encProxyUrl.trim()
-		if (!url) {
-			showToast('Введите URL EncProxy сервера', 'error')
-			return
-		}
+		const url = (encProxyUrl.trim() || 'http://127.0.0.1:8888')
+		setEncProxyUrlState(url)
 		saveEncProxyUrl(url)
+		setEncProxyConnected(true)
 		const client = getEncProxyClient()
 		const token = localStorage.getItem('access_token') || ''
 		client.connect({ serverUrl: url, accessToken: token, userId: String(user?.id || '') })
-		showToast('Подключение к EncProxy...', 'success')
+		showToast('Настройки EncProxy сохранены: ' + url, 'success')
 	}
 
 	const toggleTwoFA = async () => {
@@ -1046,74 +1045,106 @@ export default function SettingsPage() {
 								initial={{ opacity: 0.3 }}
 								animate={{ opacity: [0.3, 0.6, 0.3] }}
 								transition={{ duration: 5, repeat: Infinity }}
-								className='absolute -bottom-24 -left-24 w-64 h-64 bg-gradient-to-tr from-violet-500/10 to-purple-500/10 rounded-full blur-3xl'
+								className='absolute pointer-events-none -bottom-24 -left-24 w-64 h-64 bg-gradient-to-tr from-violet-500/10 to-purple-500/10 rounded-full blur-3xl'
 							/>
-							<div className='flex items-center gap-3 mb-4'>
-								<FiLock className='w-5 h-5 text-violet-400' />
-								<h2 className='text-xl font-semibold'>EncProxy</h2>
-								{encProxyConnected && (
-									<span className='rounded-full bg-emerald-500/20 px-2 py-0.5 text-[11px] text-emerald-300 border border-emerald-500/30'>
-										Использует EncProxy
-									</span>
-								)}
-							</div>
-							<p className='text-xs text-gray-400 mb-4'>
-								Сервер шифрования для end-to-end зашифрованных сообщений. Ключи хранятся только на ваших устройствах.
-							</p>
-							<div className='space-y-3'>
-								<div className='flex items-center justify-between'>
-									<div>
-										<p className='text-sm font-medium text-white'>
-											EncProxy
-										</p>
-										<p className='text-xs text-gray-400'>
-											{encProxyConnected
-												? 'Подключён к серверу шифрования'
-												: getEncProxyUrl()
-													? 'URL сохранён (отключён)'
-													: 'Не настроен'}
-										</p>
-									</div>
-									<button
-										onClick={toggleEncProxy}
-										className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${encProxyConnected ? 'bg-emerald-500/60' : getEncProxyUrl() ? 'bg-violet-500/40' : 'bg-white/10'}`}
-									>
-										<span
-											className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${encProxyConnected ? 'translate-x-6' : getEncProxyUrl() ? 'translate-x-6' : 'translate-x-1'}`}
-										/>
-									</button>
+							<div className='relative z-10'>
+								<div className='flex items-center gap-3 mb-4'>
+									<FiLock className='w-5 h-5 text-violet-400' />
+									<h2 className='text-xl font-semibold'>EncProxy</h2>
+									{encProxyConnected && (
+										<span className='rounded-full bg-emerald-500/20 px-2 py-0.5 text-[11px] text-emerald-300 border border-emerald-500/30'>
+											Использует EncProxy
+										</span>
+									)}
 								</div>
-								<div className='space-y-2'>
-									<p className='text-sm text-white'>EncProxy URL</p>
-									<div className='flex gap-2'>
-										<input
-											value={encProxyUrl}
-											onChange={e => setEncProxyUrlState(e.target.value)}
-											placeholder='wss://encproxy.example.com'
-											className='flex-1 rounded-lg border border-[#30363d] bg-[#0e1117] p-2 text-sm text-white placeholder:text-gray-500 font-mono'
-										/>
+								<p className='text-xs text-gray-400 mb-4'>
+									Сервер шифрования для end-to-end зашифрованных сообщений. Ключи хранятся только на ваших устройствах.
+								</p>
+								<div className='space-y-3'>
+									<div className='flex items-center justify-between'>
+										<div>
+											<p className='text-sm font-medium text-white'>
+												EncProxy
+											</p>
+											<p className='text-xs text-gray-400'>
+												{encProxyConnected
+													? 'Подключён к серверу шифрования'
+													: getEncProxyUrl()
+														? 'URL сохранён (отключён)'
+														: 'Не настроен'}
+											</p>
+										</div>
 										<button
-											onClick={connectEncProxy}
-											disabled={!encProxyUrl.trim()}
-											className='rounded-lg bg-violet-500/20 border border-violet-500/30 px-4 py-2 text-sm text-violet-300 hover:bg-violet-500/30 transition disabled:opacity-40'
+											type='button'
+											onClick={toggleEncProxy}
+											className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors cursor-pointer ${encProxyConnected || !!getEncProxyUrl() ? 'bg-emerald-500/60' : 'bg-white/10'}`}
 										>
-											Подключить
+											<span
+												className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${encProxyConnected || !!getEncProxyUrl() ? 'translate-x-6' : 'translate-x-1'}`}
+											/>
 										</button>
 									</div>
-								</div>
-								{encProxyConnected && (
-									<div className='rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3'>
-										<div className='flex items-center gap-2'>
-											<div className='w-2 h-2 rounded-full bg-emerald-400 animate-pulse' />
-											<span className='text-sm text-emerald-300'>
-												Использует EncProxy
-											</span>
+									<div className='space-y-2'>
+										<p className='text-sm text-white'>EncProxy URL</p>
+										<div className='flex gap-2'>
+											<input
+												type='text'
+												value={encProxyUrl}
+												onChange={e => setEncProxyUrlState(e.target.value)}
+												placeholder='http://127.0.0.1:8888'
+												className='flex-1 rounded-lg border border-[#30363d] bg-[#0e1117] p-2 text-sm text-white placeholder:text-gray-500 font-mono focus:border-[#58a6ff] focus:outline-none'
+											/>
+											<button
+												type='button'
+												onClick={connectEncProxy}
+												disabled={!encProxyUrl.trim()}
+												className='rounded-lg bg-violet-500/20 border border-violet-500/30 px-4 py-2 text-sm text-violet-300 hover:bg-violet-500/30 transition disabled:opacity-40 cursor-pointer'
+											>
+												Сохранить
+											</button>
 										</div>
-										<p className='text-xs text-gray-400 mt-1'>
-											Сообщения шифруются на клиенте и передаются через EncProxy
-										</p>
+										<div className='flex items-center gap-2 pt-1'>
+											<button
+												type='button'
+												onClick={() => {
+													setEncProxyUrlState('http://127.0.0.1:8888')
+													saveEncProxyUrl('http://127.0.0.1:8888')
+													setEncProxyConnected(true)
+													showToast('Установлен адрес локального EncProxy', 'success')
+												}}
+												className='text-[11px] text-[#58a6ff] hover:underline cursor-pointer'
+											>
+												Использовать локальный (127.0.0.1:8888)
+											</button>
+											<span className='text-gray-600'>•</span>
+											<button
+												type='button'
+												onClick={() => {
+													setEncProxyUrlState('')
+													saveEncProxyUrl(null)
+													setEncProxyConnected(false)
+													showToast('Сброшено', 'info')
+												}}
+												className='text-[11px] text-gray-400 hover:text-gray-200 cursor-pointer'
+											>
+												Сбросить
+											</button>
+										</div>
 									</div>
-								)}
+									{encProxyConnected && (
+										<div className='rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3'>
+											<div className='flex items-center gap-2'>
+												<div className='w-2 h-2 rounded-full bg-emerald-400 animate-pulse' />
+												<span className='text-sm text-emerald-300'>
+													Использует EncProxy ({encProxyUrl || 'http://127.0.0.1:8888'})
+												</span>
+											</div>
+											<p className='text-xs text-gray-400 mt-1'>
+												Сообщения шифруются на клиенте и передаются через EncProxy
+											</p>
+										</div>
+									)}
+								</div>
 							</div>
 						</motion.div>
 
