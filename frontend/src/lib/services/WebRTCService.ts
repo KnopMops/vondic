@@ -45,7 +45,7 @@ export class WebRTCService {
 	private audioProcessor: AudioProcessor | null = null
 	private adaptiveBitrateManagers: Map<string, AdaptiveBitrateManager> = new Map()
 	private audioQualityPreset: AudioBitratePreset = 'boost1'
-	private isKrispActive: boolean = true
+	private isKrispActive: boolean = false
 	private latestNetworkStats: NetworkQualityStats | null = null
 	private videoStream: MediaStream | null = null
 	private screenStream: MediaStream | null = null
@@ -167,14 +167,18 @@ export class WebRTCService {
 				}
 			}
 
-			// Discord-like intelligent Krisp noise suppression and spectral gating
-			try {
-				if (!this.audioProcessor) {
-					this.audioProcessor = new AudioProcessor({ krispEnabled: this.isKrispActive })
+			// Optional Krisp noise suppression if actively requested
+			if (this.isKrispActive) {
+				try {
+					if (!this.audioProcessor) {
+						this.audioProcessor = new AudioProcessor({ krispEnabled: this.isKrispActive })
+					}
+					this.localStream = await this.audioProcessor.initialize(rawStream)
+				} catch (procErr) {
+					console.warn('[WebRTC] AudioProcessor failed, using raw stream:', procErr)
+					this.localStream = rawStream
 				}
-				this.localStream = await this.audioProcessor.initialize(rawStream)
-			} catch (procErr) {
-				console.warn('[WebRTC] AudioProcessor failed, using raw stream:', procErr)
+			} else {
 				this.localStream = rawStream
 			}
 

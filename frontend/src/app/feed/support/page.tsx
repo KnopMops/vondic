@@ -30,7 +30,7 @@ export default function SupportPage() {
 				body: JSON.stringify({ message: text, new_chat: true }),
 			})
 			const data = await res.json()
-			if (res.ok && data?.ok && data?.escalation_id) {
+			if (res.ok && data?.escalation_id) {
 				router.push(`/feed/messages?support_id=${data.escalation_id}`)
 			} else {
 				setError(data?.error || 'Не удалось создать заявку')

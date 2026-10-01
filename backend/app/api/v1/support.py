@@ -73,9 +73,19 @@ async def ask_support(
         created_at=datetime.utcnow(),
     )
     db.add(escalation)
+    await db.flush()
+
+    msg = SupportChatMessage(
+        escalation_id=escalation.id,
+        sender="user",
+        content=question,
+        created_at=datetime.utcnow(),
+    )
+    db.add(msg)
     await db.commit()
 
     return {
+        "ok": True,
         "answer": "Ваше обращение зарегистрировано. Оператор ответит вам в ближайшее время.",
         "escalation_created": True,
         "escalation_id": escalation.id,

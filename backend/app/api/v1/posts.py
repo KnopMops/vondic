@@ -86,6 +86,7 @@ async def get_posts(
         page, per_page, viewer_id=viewer_id, community_id=cid
     )
     dicts = [p.to_dict(viewer_id=viewer_id) for p in items]
+    PostService.attach_like_flags(dicts, viewer_id)
     await _attach_authors_to_posts_async(db, dicts)
     return {
         "posts": dicts,
@@ -147,6 +148,7 @@ async def get_feed(
         )
 
     dicts = [p.to_dict(viewer_id=user_id) for p in items]
+    PostService.attach_like_flags(dicts, user_id)
     await _attach_authors_to_posts_async(db, dicts)
     return {
         "posts": dicts,
@@ -171,6 +173,7 @@ async def get_post(
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
     pdict = post.to_dict(viewer_id=viewer_id)
+    PostService.attach_like_flags([pdict], viewer_id)
     await _attach_author_to_post_async(db, pdict)
     return {"post": pdict}
 
@@ -226,6 +229,14 @@ async def get_comments(
         post_id, page=page, per_page=per_page, viewer_id=viewer_id
     )
     dicts = [c.to_dict() for c in items]
+    if viewer_id and dicts:
+        from app.models.like import Like
+        c_ids = [c["id"] for c in dicts if c.get("id")]
+        if c_ids:
+            liked_rows = Like.query.filter(Like.user_id == str(viewer_id), Like.comment_id.in_(c_ids)).with_entities(Like.comment_id).all()
+            liked_ids = {row[0] for row in liked_rows}
+            for c in dicts:
+                c["is_liked"] = c.get("id") in liked_ids
     await _attach_authors_to_posts_async(db, dicts)
     return {
         "comments": dicts,

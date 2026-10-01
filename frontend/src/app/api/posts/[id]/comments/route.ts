@@ -25,39 +25,55 @@ export async function GET(
 		})
 
 		if (res.ok) {
-			const comments = await res.json()
+			const data = await res.json()
+			const commentsList = Array.isArray(data)
+				? data
+				: Array.isArray(data?.comments)
+					? data.comments
+					: []
 
-			// Fetch users to map author info
-			const usersResponse = await fetch(`${BACKEND_URL}/api/v1/users/`, {
-				method: 'GET',
-				headers, // Use the same headers with token if available
-			})
-
+			// Fetch users to map author info if needed
+			const needsAuthors = commentsList.some((c: any) => !c.author_name && (c.user_id || c.posted_by))
 			let usersMap: Record<string, any> = {}
-			if (usersResponse.ok) {
-				const users = await usersResponse.json()
-				if (Array.isArray(users)) {
-					users.forEach((u: any) => {
-						usersMap[u.id] = u
+			if (needsAuthors) {
+				try {
+					const usersResponse = await fetch(`${BACKEND_URL}/api/v1/users/`, {
+						method: 'GET',
+						headers,
 					})
-				}
+					if (usersResponse.ok) {
+						const users = await usersResponse.json()
+						if (Array.isArray(users)) {
+							users.forEach((u: any) => {
+								usersMap[u.id] = u
+							})
+						}
+					}
+				} catch {}
 			}
 
 			// Merge data
-			const enrichedComments = Array.isArray(comments)
-				? comments.map((comment: any) => {
-						const userId =
-							comment.user_id || comment.posted_by || comment.author_id
-						const author = usersMap[userId]
-						return {
-							...comment,
-							user_id: userId,
-							author_name: author?.username || `User ${userId || '?'}`,
-							author_avatar: author?.avatar_url || null,
-							author_premium: !!author?.premium,
-						}
-					})
-				: []
+			const enrichedComments = commentsList.map((comment: any) => {
+				const userId =
+					comment.user_id || comment.posted_by || comment.author_id
+				const author = usersMap[userId]
+				return {
+					...comment,
+					user_id: userId,
+					author_name:
+						comment.author_name ||
+						author?.username ||
+						`User ${userId || '?'}`,
+					author_avatar:
+						comment.author_avatar ||
+						author?.avatar_url ||
+						null,
+					author_premium:
+						Boolean(comment.author_premium || author?.premium),
+					is_liked: Boolean(comment.is_liked),
+					likes: typeof comment.likes === 'number' ? comment.likes : 0,
+				}
+			})
 
 			return NextResponse.json(enrichedComments)
 		} else {

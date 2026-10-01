@@ -30,9 +30,14 @@ class VideoCommentSchema(BaseModel):
     content: str
 
 
-async def _serialize_video_async(db, video: Video) -> dict:
+async def _serialize_video_async(db, video: Video, viewer_id: Optional[str] = None) -> dict:
     res = await db.execute(select(User).where(User.id == video.author_id))
     author = res.scalar_one_or_none()
+    is_liked = False
+    if viewer_id:
+        from app.models.video_like import VideoLike
+        vl_res = await db.execute(select(VideoLike).where(VideoLike.video_id == video.id, VideoLike.user_id == str(viewer_id)))
+        is_liked = vl_res.scalar_one_or_none() is not None
     return {
         "id": video.id,
         "author_id": video.author_id,
@@ -44,6 +49,8 @@ async def _serialize_video_async(db, video: Video) -> dict:
         "created_at": video.created_at.isoformat() if video.created_at else None,
         "views": int(video.views or 0),
         "likes": int(video.likes or 0),
+        "is_liked": is_liked,
+        "liked": is_liked,
         "is_deleted": bool(video.is_deleted),
         "tags": video.tags,
         "author_name": getattr(author, "username", None),
@@ -57,8 +64,10 @@ async def _serialize_video_async(db, video: Video) -> dict:
 async def list_videos(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
+    current_user: Optional[User] = Depends(get_optional_current_user),
     db=Depends(get_async_db)
 ):
+    viewer_id = current_user.id if current_user else None
     offset = (page - 1) * per_page
     res = await db.execute(
         select(Video)
@@ -68,7 +77,7 @@ async def list_videos(
         .limit(per_page)
     )
     videos = res.scalars().all()
-    serialized = [await _serialize_video_async(db, v) for v in videos]
+    serialized = [await _serialize_video_async(db, v, viewer_id=viewer_id) for v in videos]
     return {"videos": serialized, "page": page, "per_page": per_page}
 
 
@@ -98,6 +107,7 @@ async def create_video(
 @videos_router.get("/{video_id}")
 async def get_video(
     video_id: str,
+    current_user: Optional[User] = Depends(get_optional_current_user),
     db=Depends(get_async_db)
 ):
     res = await db.execute(select(Video).where(Video.id == video_id, Video.is_deleted == False))
@@ -107,7 +117,8 @@ async def get_video(
 
     video.views = (video.views or 0) + 1
     await db.commit()
-    return {"video": await _serialize_video_async(db, video)}
+    viewer_id = current_user.id if current_user else None
+    return {"video": await _serialize_video_async(db, video, viewer_id=viewer_id)}
 
 
 @videos_router.post("/{video_id}/like")

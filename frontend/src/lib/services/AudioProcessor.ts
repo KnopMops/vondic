@@ -102,10 +102,10 @@ export function optimizeOpusSdp(
 	if (!sdp) return sdp
 
 	const targetBitrate = options.bitrate || AUDIO_BITRATE_PRESETS.boost1.bitrate
-	const stereo = options.stereo !== undefined ? options.stereo : true
+	const stereo = options.stereo !== undefined ? options.stereo : false
 	const useFec = options.useFec !== undefined ? options.useFec : true
-	const useDtx = options.useDtx !== undefined ? options.useDtx : true
-	const minPtime = options.minPtime || 10
+	const useDtx = options.useDtx !== undefined ? options.useDtx : false
+	const minPtime = options.minPtime || 20
 
 	const lines = sdp.split(/\r\n|\n/)
 	let opusPayloadType: string | null = null
@@ -503,8 +503,10 @@ export class AudioProcessor {
 		if (!this.speechDetectorNode || !this.audioContext) return
 
 		const dataArray = new Uint8Array(this.speechDetectorNode.frequencyBinCount)
-		const NOISE_THRESHOLD = 18 // Порог фонового шума
-		const SPEECH_THRESHOLD = 32 // Порог уверенной речи
+		const SPEECH_THRESHOLD = 26 // Порог уверенной речи
+		const NOISE_THRESHOLD = 14 // Порог фона
+		let lastSpeechTime = 0
+		const HANGOVER_TIME_SEC = 0.4 // 400мс удержание предотвращает обрезание окончаний слов
 
 		const loop = () => {
 			if (!this.isProcessing || !this.speechDetectorNode || !this.gateGainNode || !this.audioContext) {
@@ -514,7 +516,6 @@ export class AudioProcessor {
 			if (this.options.krispEnabled) {
 				this.speechDetectorNode.getByteFrequencyData(dataArray)
 
-				// Анализируем энергию преимущественно в голосовом диапазоне (bins 5 - 40 ~ 300Hz - 3500Hz)
 				let voiceSum = 0
 				const startBin = 5
 				const endBin = Math.min(dataArray.length, 45)
@@ -526,13 +527,13 @@ export class AudioProcessor {
 
 				const now = this.audioContext.currentTime
 				if (avgEnergy > SPEECH_THRESHOLD) {
-					// Обнаружен голос: мгновенное открытие (1.5 мс) без съедания первой буквы
+					lastSpeechTime = now
 					this.gateGainNode.gain.cancelScheduledValues(now)
-					this.gateGainNode.gain.setTargetAtTime(1.0, now, 0.002)
-				} else if (avgEnergy < NOISE_THRESHOLD) {
-					// Тишина / шум: плавный спуск до уровня -50dB (коэффициент 0.015)
+					this.gateGainNode.gain.setTargetAtTime(1.0, now, 0.01)
+				} else if (now - lastSpeechTime > HANGOVER_TIME_SEC && avgEnergy < NOISE_THRESHOLD) {
+					// Мягкое фоновое подавление без клиппинга и шипения
 					this.gateGainNode.gain.cancelScheduledValues(now)
-					this.gateGainNode.gain.setTargetAtTime(0.015, now, 0.12)
+					this.gateGainNode.gain.setTargetAtTime(0.45, now, 0.18)
 				}
 			}
 
@@ -648,7 +649,7 @@ export function getDiscordLikeAudioConstraints(options: {
 	stereo?: boolean
 	krisp?: boolean
 } = {}): MediaTrackConstraints {
-	const isStereo = options.stereo ?? true
+	const isStereo = options.stereo ?? false
 
 	return {
 		echoCancellation: true,
@@ -662,10 +663,8 @@ export function getDiscordLikeAudioConstraints(options: {
 				echoCancellation: true,
 				noiseSuppression: true,
 				autoGainControl: true,
-				sampleRate: 48000,
 			},
 			{
-				// Дополнительные флаги WebRTC движка Chromium
 				googEchoCancellation: true,
 				googAutoGainControl: true,
 				googNoiseSuppression: true,
