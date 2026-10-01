@@ -58,6 +58,7 @@ run.py
 
 *.crt
 *.key
+encproxy/keys/
 
 mail/.env
 mail/data/

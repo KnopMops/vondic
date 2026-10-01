@@ -117,7 +117,11 @@ import {
 	LuLifeBuoy as LifeBuoyIcon,
 	LuStar as StarIcon,
 	LuSparkles as SparklesIcon,
+	LuBell as BellIcon,
+	LuBellOff as BellOffIcon,
 } from 'react-icons/lu'
+import ImageEditorModal from '@/components/chat/ImageEditorModal'
+import WebAppModal from '@/components/chat/WebAppModal'
 import { DataStorageSettingsModal } from '@/components/settings/DataStorageSettingsModal'
 import ChannelSettingsModal from './ChannelSettingsModal'
 import ChatDateSeparator from './ChatDateSeparator'
@@ -1317,60 +1321,8 @@ export default function MessengerPage() {
 		'all' | 'files' | 'photos' | 'links'
 	>('all')
 
-	const [isAiCorrecting, setIsAiCorrecting] = useState(false)
-	const [isAiPremiumModalOpen, setIsAiPremiumModalOpen] = useState(false)
-
-	const handleAiAutoCorrectText = async () => {
-		if (!user) {
-			showToast('Нужна авторизация', 'error')
-			return
-		}
-		if (!user.premium) {
-			showToast('ИИ-автоисправление доступно только с подпиской Premium', 'info')
-			setIsAiPremiumModalOpen(true)
-			return
-		}
-		const trimmedInput = input.trim()
-		if (!trimmedInput) {
-			showToast('Введите текст для ИИ-автоисправления', 'info')
-			return
-		}
-		setIsAiCorrecting(true)
-		try {
-			const token = user.access_token || localStorage.getItem('token') || ''
-			const res = await fetch('/api/v1/ai/autocorrect', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${token}`,
-				},
-				body: JSON.stringify({ text: trimmedInput }),
-			})
-			const data = await res.json()
-			if (!res.ok) {
-				if (res.status === 403) {
-					showToast(data.detail || 'ИИ-функции доступны только для Premium', 'info')
-					setIsAiPremiumModalOpen(true)
-				} else {
-					const errorMsg =
-						typeof data.detail === 'string'
-							? data.detail
-							: data.error || data.message || 'Ошибка исправления текста'
-					throw new Error(errorMsg)
-				}
-				return
-			}
-			if (data.corrected) {
-				setInput(data.corrected)
-				showToast('Текст исправлен с помощью ИИ! ✨', 'success')
-			}
-		} catch (e: any) {
-			console.error('AI AutoCorrect Error:', e)
-			showToast(e.message || 'Не удалось исправить текст', 'error')
-		} finally {
-			setIsAiCorrecting(false)
-		}
-	}
+	const [isSilentMode, setIsSilentMode] = useState(false)
+	const [editingImageIndex, setEditingImageIndex] = useState<number | null>(null)
 
 	const getReactionsForMessage = (id: string) => {
 		const counts = reactionCounts[id] || {}
@@ -4632,6 +4584,9 @@ export default function MessengerPage() {
 						}
 						attachments = list
 					}
+				}
+				if (isSilentMode) {
+					attachments = (attachments || []).concat([{ type: 'flag', is_silent: true }])
 				}
 				if (replyToMessage) {
 					pendingReplyRef.current = {
@@ -8437,7 +8392,18 @@ export default function MessengerPage() {
 																	className='relative flex flex-col items-center justify-between w-20 h-20 shrink-0 rounded-xl overflow-hidden border border-[#30363d] bg-[#0e1117] p-1 group'
 																>
 																	{isImg && previewUrl ? (
-																		<img src={previewUrl} alt={f.name} className='w-full h-full object-cover rounded-lg' />
+																		<>
+																			<img src={previewUrl} alt={f.name} className='w-full h-full object-cover rounded-lg' />
+																			<button
+																				onClick={() => setEditingImageIndex(idx)}
+																				disabled={isBlockedChat || isBlockedUserChat || !canWriteToSelectedChannel}
+																				className='absolute bottom-1 left-1 px-1 py-0.5 rounded bg-black/75 hover:bg-indigo-600 text-white text-[9px] flex items-center justify-center opacity-90 group-hover:opacity-100 transition shadow'
+																				type='button'
+																				title='Редактировать изображение'
+																			>
+																				✏️
+																			</button>
+																		</>
 																	) : (
 																		<div className='flex-1 flex flex-col items-center justify-center text-[#8b949e] p-1 text-center'>
 																			<Paperclip className='w-5 h-5 mb-0.5 text-[#0077FF]' />
@@ -8645,28 +8611,23 @@ export default function MessengerPage() {
 
 											<button
 												type='button'
-												onClick={handleAiAutoCorrectText}
-												disabled={isBlockedChat || !canWriteToSelectedChannel || isAiCorrecting}
+												onClick={() => setIsSilentMode(prev => !prev)}
+												disabled={isBlockedChat || !canWriteToSelectedChannel}
 												className={`w-9 h-9 rounded-xl transition-all flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed shrink-0 relative group ${
-													isAiCorrecting
-														? 'animate-pulse text-amber-300 bg-amber-500/20 ring-1 ring-amber-400/50'
-														: user?.premium
-															? 'text-amber-400 hover:text-amber-300 hover:bg-amber-500/20'
-															: 'text-[#8b949e] hover:text-amber-400 hover:bg-[#21262d]'
+													isSilentMode
+														? 'text-amber-300 bg-amber-500/20 ring-1 ring-amber-400/50'
+														: 'text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#21262d]'
 												}`}
 												title={
-													user?.premium
-														? 'ИИ-автоисправление текста (GLM Premium)'
-														: 'ИИ-автоисправление текста (Требуется Premium)'
+													isSilentMode
+														? 'Отправка без звука (включено)'
+														: 'Отправить без звука'
 												}
 											>
-												{isAiCorrecting ? (
-													<div className='w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin' />
+												{isSilentMode ? (
+													<BellOffIcon className='w-5 h-5 text-amber-400' />
 												) : (
-													<div className='relative flex items-center justify-center'>
-														<StarIcon className={`w-5 h-5 ${user?.premium ? 'fill-amber-400/30 text-amber-400' : 'text-amber-400/80'}`} />
-														<SparklesIcon className='w-2.5 h-2.5 text-violet-400 absolute -top-1 -right-1 animate-bounce' />
-													</div>
+													<BellIcon className='w-5 h-5' />
 												)}
 											</button>
 
@@ -9544,43 +9505,26 @@ export default function MessengerPage() {
 				</div>
 			)}
 
-			{activeWebModal && (() => {
-				let hostname = ''
-				try { hostname = new URL(activeWebModal.url).hostname } catch {}
-				const isSecure = activeWebModal.url.startsWith('https://') && !!hostname && !/^\d+\.\d+\.\d+\.\d+$/.test(hostname)
-				if (!isSecure) {
-					return (
-						<div className='fixed inset-0 z-[100002] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4' onClick={() => setActiveWebModal(null)}>
-							<div className='w-full max-w-sm rounded-2xl border border-rose-500/30 bg-gray-950 p-6 text-center' onClick={e => e.stopPropagation()}>
-								<div className='text-4xl mb-3'>⚠️</div>
-								<h3 className='text-lg font-bold text-white mb-2'>Небезопасная ссылка</h3>
-								<p className='text-sm text-gray-400 mb-4'>Ссылка должна использовать HTTPS и содержать домен (не IP-адрес).</p>
-								<button onClick={() => setActiveWebModal(null)} className='px-4 py-2 rounded-lg bg-white/10 text-white text-sm hover:bg-white/20'>Закрыть</button>
-							</div>
-						</div>
-					)
-				}
-				return (
-					<div className='fixed inset-0 z-[100002] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4' onClick={() => setActiveWebModal(null)}>
-						<div className='w-full max-w-3xl rounded-2xl border border-white/10 bg-gradient-to-br from-[#0b1220] to-[#1a1035] shadow-2xl overflow-hidden flex flex-col' style={{ height: '85vh' }} onClick={e => e.stopPropagation()}>
-							<div className='flex items-center justify-between px-5 py-3 border-b border-white/10'>
-								<div className='flex items-center gap-3 min-w-0'>
-									<h2 className='text-lg font-semibold text-white truncate'>{activeWebModal.title || hostname}</h2>
-									<span className='shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30'>Внешний сайт</span>
-								</div>
-								<button type='button' onClick={() => setActiveWebModal(null)} className='p-2 rounded-full text-gray-400 hover:text-white hover:bg-white/10'>✕</button>
-							</div>
-							<div className='px-5 py-2 bg-amber-500/5 border-b border-amber-500/20 flex items-center gap-2'>
-								<span className='text-amber-400 text-sm'>⚠️</span>
-								<p className='text-xs text-amber-200/80'>Этот сайт не принадлежит инфраструктуре Вондик. Будьте осторожны с вводом личных данных.</p>
-							</div>
-							<div className='flex-1 relative'>
-								<iframe title={activeWebModal.title || hostname} src={activeWebModal.url} className='absolute inset-0 w-full h-full border-0 bg-white' sandbox='allow-scripts allow-same-origin allow-forms allow-popups' />
-							</div>
-						</div>
-					</div>
-				)
-			})()}
+			{activeWebModal && (
+				<WebAppModal
+					isOpen={!!activeWebModal}
+					onClose={() => setActiveWebModal(null)}
+					url={activeWebModal.url}
+					title={activeWebModal.title}
+					user={user}
+				/>
+			)}
+
+			<ImageEditorModal
+				isOpen={editingImageIndex !== null}
+				file={editingImageIndex !== null && files[editingImageIndex] ? files[editingImageIndex] : null}
+				onClose={() => setEditingImageIndex(null)}
+				onSave={editedFile => {
+					if (editingImageIndex !== null) {
+						setFiles(prev => prev.map((f, i) => (i === editingImageIndex ? editedFile : f)))
+					}
+				}}
+			/>
 
 			<ScheduleMessageModal
 				isOpen={isScheduleModalOpen}
@@ -9747,10 +9691,6 @@ export default function MessengerPage() {
 				}}
 			/>
 		)}
-		<PremiumModal
-			isOpen={isAiPremiumModalOpen}
-			onClose={() => setIsAiPremiumModalOpen(false)}
-		/>
 		<DataStorageSettingsModal
 			isOpen={isDataStorageOpen}
 			onClose={() => setIsDataStorageOpen(false)}

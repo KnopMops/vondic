@@ -653,6 +653,73 @@ export default function SettingsPage() {
 		}
 	}
 
+	const terminateOtherSessions = async () => {
+		setSessionsLoading(true)
+		try {
+			const res = await fetch('/api/auth/sessions', {
+				method: 'POST',
+			})
+			const data = await res.json()
+			if (!res.ok) throw new Error(data.error || 'Не удалось завершить другие сессии')
+			showToast('Все другие сеансы завершены', 'success')
+			await loadSessions()
+		} catch (e: any) {
+			showToast(e.message || 'Ошибка завершения сеансов', 'error')
+		} finally {
+			setSessionsLoading(false)
+		}
+	}
+
+	const [privacySettings, setPrivacySettings] = useState({
+		who_can_see_last_seen: 'everybody',
+		who_can_call: 'everybody',
+		who_can_forward: 'everybody',
+	})
+
+	const loadPrivacy = async () => {
+		try {
+			const token = localStorage.getItem('token') || ''
+			const res = await fetch('/api/v1/auth/privacy', {
+				headers: { Authorization: `Bearer ${token}` }
+			})
+			if (res.ok) {
+				const data = await res.json()
+				setPrivacySettings({
+					who_can_see_last_seen: data.who_can_see_last_seen || 'everybody',
+					who_can_call: data.who_can_call || 'everybody',
+					who_can_forward: data.who_can_forward || 'everybody',
+				})
+			}
+		} catch {}
+	}
+
+	const updatePrivacy = async (key: string, value: string) => {
+		const updated = { ...privacySettings, [key]: value }
+		setPrivacySettings(updated)
+		try {
+			const token = localStorage.getItem('token') || ''
+			const res = await fetch('/api/v1/auth/privacy', {
+				method: 'PUT',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`
+				},
+				body: JSON.stringify({ [key]: value }),
+			})
+			if (res.ok) {
+				showToast('Настройки приватности обновлены', 'success')
+			}
+		} catch {
+			showToast('Не удалось обновить настройки', 'error')
+		}
+	}
+
+	useEffect(() => {
+		if (user?.id) {
+			loadPrivacy()
+		}
+	}, [user?.id])
+
 	const handleChangePassword = async () => {
 		setChangePasswordLoading(true)
 		try {
@@ -1191,13 +1258,22 @@ export default function SettingsPage() {
 														Устройства, где выполнен вход
 													</p>
 												</div>
-												<button
-													onClick={loadSessions}
-													disabled={sessionsLoading}
-													className='rounded-lg border border-white/10 bg-white/5 px-3 py-1 text-xs text-gray-300 hover:bg-white/10 transition disabled:opacity-60'
-												>
-													{sessionsLoading ? 'Обновление...' : 'Обновить'}
-												</button>
+												<div className='flex items-center gap-2'>
+													<button
+														onClick={terminateOtherSessions}
+														disabled={sessionsLoading || sessions.length <= 1}
+														className='rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-1 text-xs text-rose-300 hover:bg-rose-500/20 transition disabled:opacity-40'
+													>
+														Завершить другие сеансы
+													</button>
+													<button
+														onClick={loadSessions}
+														disabled={sessionsLoading}
+														className='rounded-lg border border-white/10 bg-white/5 px-3 py-1 text-xs text-gray-300 hover:bg-white/10 transition disabled:opacity-60'
+													>
+														{sessionsLoading ? 'Обновление...' : 'Обновить'}
+													</button>
+												</div>
 											</div>
 											{sessionsLoading ? (
 												<div className='text-sm text-gray-400'>Загрузка...</div>
@@ -1283,6 +1359,83 @@ export default function SettingsPage() {
 													</AnimatePresence>
 												</div>
 											)}
+										</div>
+
+										{/* Privacy Settings Card */}
+										<div className='mt-4 rounded-xl border border-[#30363d] bg-[#0e1117] p-4 space-y-4'>
+											<div>
+												<p className='text-sm font-medium text-white'>
+													Конфиденциальность
+												</p>
+												<p className='text-xs text-gray-400'>
+													Кто может видеть ваш статус и взаимодействовать с вами
+												</p>
+											</div>
+
+											<div className='space-y-3 pt-1'>
+												{/* Last seen */}
+												<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-lg border border-[#30363d] bg-[#161b22]'>
+													<div>
+														<p className='text-xs font-semibold text-white'>
+															Время последнего захода и статус онлайн
+														</p>
+														<p className='text-[11px] text-gray-400'>
+															Кто видит, когда вы были в сети
+														</p>
+													</div>
+													<select
+														value={privacySettings.who_can_see_last_seen}
+														onChange={e => updatePrivacy('who_can_see_last_seen', e.target.value)}
+														className='rounded-lg border border-white/10 bg-[#0e1117] px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#0077FF]'
+													>
+														<option value='everybody'>Все</option>
+														<option value='friends'>Мои контакты</option>
+														<option value='nobody'>Никто</option>
+													</select>
+												</div>
+
+												{/* Calls */}
+												<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-lg border border-[#30363d] bg-[#161b22]'>
+													<div>
+														<p className='text-xs font-semibold text-white'>
+															Кто может мне звонить
+														</p>
+														<p className='text-[11px] text-gray-400'>
+															Входящие голосовые и видеозвонки
+														</p>
+													</div>
+													<select
+														value={privacySettings.who_can_call}
+														onChange={e => updatePrivacy('who_can_call', e.target.value)}
+														className='rounded-lg border border-white/10 bg-[#0e1117] px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#0077FF]'
+													>
+														<option value='everybody'>Все</option>
+														<option value='friends'>Мои контакты</option>
+														<option value='nobody'>Никто</option>
+													</select>
+												</div>
+
+												{/* Forwarding */}
+												<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-lg border border-[#30363d] bg-[#161b22]'>
+													<div>
+														<p className='text-xs font-semibold text-white'>
+															Пересылка сообщений
+														</p>
+														<p className='text-[11px] text-gray-400'>
+															Ссылка на ваш профиль при пересылке сообщений
+														</p>
+													</div>
+													<select
+														value={privacySettings.who_can_forward}
+														onChange={e => updatePrivacy('who_can_forward', e.target.value)}
+														className='rounded-lg border border-white/10 bg-[#0e1117] px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#0077FF]'
+													>
+														<option value='everybody'>Все (с ссылкой)</option>
+														<option value='friends'>Только контакты</option>
+														<option value='nobody'>Анонимно (без ссылки)</option>
+													</select>
+												</div>
+											</div>
 										</div>
 									</div>
 								</motion.div>

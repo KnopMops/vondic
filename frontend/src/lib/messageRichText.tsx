@@ -13,9 +13,30 @@ const ENTITY_RE = new RegExp(
 		'(@[a-zA-Z0-9_]{3,32})',
 		'(#[\\w\\u0400-\\u04FF]+)',
 		'(\\/feed\\/(?:messages\\/join(?:\\/(?:channel|group))?\\/[^\\s<]+|communities\\/join\\/[^\\s<]+))',
+		'(\\b[0-5]?[0-9]:[0-5][0-9]\\b)',
 	].join('|'),
 	'gi',
 )
+
+export function SpoilerSpan({ children }: { children: React.ReactNode }) {
+	const [revealed, setRevealed] = React.useState(false)
+	return (
+		<span
+			onClick={(e) => {
+				e.stopPropagation()
+				setRevealed(prev => !prev)
+			}}
+			title={revealed ? 'Скрыть спойлер' : 'Нажмите, чтобы показать спойлер'}
+			className={`inline-block cursor-pointer rounded px-1 transition-all duration-200 select-none ${
+				revealed
+					? 'bg-white/10 filter-none text-inherit'
+					: 'bg-white/20 text-transparent filter blur-[4px] hover:blur-[2px]'
+			}`}
+		>
+			{children}
+		</span>
+	)
+}
 
 export function richLinkClass(isOwn?: boolean, isInvite?: boolean): string {
 	if (isInvite) {
@@ -98,6 +119,27 @@ function renderEntity(
 			</span>
 		)
 	}
+	if (/^[0-5]?[0-9]:[0-5][0-9]$/.test(entity)) {
+		return (
+			<button
+				type='button'
+				key={key}
+				onClick={(e) => {
+					e.stopPropagation()
+					if (typeof window !== 'undefined') {
+						window.dispatchEvent(
+							new CustomEvent('vondic-seek-media', { detail: { timeStr: entity } }),
+						)
+					}
+				}}
+				className='inline-flex items-center gap-1 rounded px-1.5 py-0.5 bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500/40 hover:text-white transition-colors font-mono text-xs cursor-pointer align-baseline select-none'
+				title={`Перемотать на ${entity}`}
+			>
+				<span>▶</span>
+				<span>{entity}</span>
+			</button>
+		)
+	}
 	return entity
 }
 
@@ -122,29 +164,41 @@ export function renderRichInline(
 			return
 		}
 
-		let lastIndex = 0
-		const re = new RegExp(ENTITY_RE.source, 'gi')
-		let match: RegExpExecArray | null
-		while ((match = re.exec(part)) !== null) {
-			const token = match[0]
-			const idx = match.index
-			if (idx > lastIndex) {
+		const spoilerParts = part.split('||')
+		spoilerParts.forEach((spBlock, spIndex) => {
+			if (spIndex % 2 === 1) {
 				nodes.push(
-					<span key={`${keyPrefix}-t-${codeIndex}-${lastIndex}`}>
-						{part.slice(lastIndex, idx)}
+					<SpoilerSpan key={`${keyPrefix}-spoiler-${codeIndex}-${spIndex}`}>
+						{spBlock}
+					</SpoilerSpan>,
+				)
+				return
+			}
+
+			let lastIndex = 0
+			const re = new RegExp(ENTITY_RE.source, 'gi')
+			let match: RegExpExecArray | null
+			while ((match = re.exec(spBlock)) !== null) {
+				const token = match[0]
+				const idx = match.index
+				if (idx > lastIndex) {
+					nodes.push(
+						<span key={`${keyPrefix}-t-${codeIndex}-${spIndex}-${lastIndex}`}>
+							{spBlock.slice(lastIndex, idx)}
+						</span>,
+					)
+				}
+				nodes.push(renderEntity(token, `${keyPrefix}-e-${codeIndex}-${spIndex}-${idx}`, isOwn))
+				lastIndex = idx + token.length
+			}
+			if (lastIndex < spBlock.length) {
+				nodes.push(
+					<span key={`${keyPrefix}-tail-${codeIndex}-${spIndex}`}>
+						{spBlock.slice(lastIndex)}
 					</span>,
 				)
 			}
-			nodes.push(renderEntity(token, `${keyPrefix}-e-${codeIndex}-${idx}`, isOwn))
-			lastIndex = idx + token.length
-		}
-		if (lastIndex < part.length) {
-			nodes.push(
-				<span key={`${keyPrefix}-tail-${codeIndex}`}>
-					{part.slice(lastIndex)}
-				</span>,
-			)
-		}
+		})
 	})
 
 	return nodes

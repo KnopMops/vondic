@@ -28,6 +28,41 @@ class MessageSendSchema(BaseModel):
     content: str
     type: Optional[str] = "text"
     attachments: Optional[List[Dict[str, Any]]] = None
+    reply_to_id: Optional[str] = None
+    is_silent: Optional[bool] = False
+    disappear_after: Optional[int] = None
+
+
+@messages_router.post("/{message_id}/pin")
+async def pin_message(
+    message_id: str,
+    current_user=Depends(get_current_user),
+    db=Depends(get_async_db)
+):
+    res = await db.execute(select(Message).where(Message.id == message_id))
+    message = res.scalar_one_or_none()
+    if not message:
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    message.pinned_by = current_user.id
+    await db.commit()
+    return {"success": True, "message": message.to_dict(), "is_pinned": True}
+
+
+@messages_router.delete("/{message_id}/pin")
+async def unpin_message(
+    message_id: str,
+    current_user=Depends(get_current_user),
+    db=Depends(get_async_db)
+):
+    res = await db.execute(select(Message).where(Message.id == message_id))
+    message = res.scalar_one_or_none()
+    if not message:
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    message.pinned_by = None
+    await db.commit()
+    return {"success": True, "message": message.to_dict(), "is_pinned": False}
 
 
 @messages_router.post("/{message_id}/reaction")
@@ -130,7 +165,10 @@ async def send_message(
         group_id=payload.group_id,
         content=payload.content,
         msg_type=payload.type or "text",
-        attachments=payload.attachments
+        attachments=payload.attachments,
+        reply_to_id=payload.reply_to_id,
+        is_silent=bool(payload.is_silent),
+        disappear_after=payload.disappear_after
     )
     if err or not msg:
         raise HTTPException(status_code=400, detail=err or "Failed to send message")

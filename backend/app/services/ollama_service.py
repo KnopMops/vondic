@@ -125,17 +125,8 @@ class OllamaService:
             is_dm=True,
             content=None,
             sender_id=None):
-        logger.info(
-            "ai_start message_id=%s is_dm=%s sender_id=%s",
-            message_id,
-            is_dm,
-            sender_id,
-        )
-        thread = threading.Thread(
-            target=OllamaService._generate_reply,
-            args=(message_id, is_dm, content, sender_id),
-        )
-        thread.start()
+        # AI assistant features decommissioned
+        return
 
     @staticmethod
     def _generate_reply(message_id, is_dm=True, content=None, sender_id=None):

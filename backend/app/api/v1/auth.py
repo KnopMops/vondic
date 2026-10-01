@@ -356,6 +356,102 @@ async def delete_device_session(
     return {"ok": True}
 
 
+@auth_router.post("/device-sessions/terminate-others")
+async def terminate_other_sessions(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    res = await db.execute(
+        select(UserSession)
+        .where(UserSession.user_id == current_user.id)
+        .order_by(UserSession.last_active.desc())
+    )
+    sessions = res.scalars().all()
+    # Keep the most recently active session (current user's active session)
+    terminated_count = 0
+    if len(sessions) > 1:
+        for s in sessions[1:]:
+            if s.device_type != "mobile":
+                await db.delete(s)
+                terminated_count += 1
+        await db.commit()
+    return {"ok": True, "terminated": terminated_count}
+
+
+class PrivacySettingsUpdateSchema(BaseModel):
+    who_can_see_last_seen: Optional[str] = None
+    who_can_call: Optional[str] = None
+    who_can_forward: Optional[str] = None
+    show_email: Optional[bool] = None
+
+
+@auth_router.get("/privacy")
+async def get_privacy_settings(
+    current_user: User = Depends(get_current_user)
+):
+    settings_dict = current_user.privacy_settings or {}
+    return {
+        "who_can_see_last_seen": settings_dict.get("who_can_see_last_seen", "everybody"),
+        "who_can_call": settings_dict.get("who_can_call", "everybody"),
+        "who_can_forward": settings_dict.get("who_can_forward", "everybody"),
+        "show_email": settings_dict.get("show_email", False),
+    }
+
+
+@auth_router.put("/privacy")
+async def update_privacy_settings(
+    payload: PrivacySettingsUpdateSchema,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    current = dict(current_user.privacy_settings or {})
+    for k, v in payload.dict(exclude_unset=True).items():
+        if v is not None:
+            current[k] = v
+    current_user.privacy_settings = current
+    await db.commit()
+    return {"ok": True, "privacy_settings": current_user.privacy_settings}
+
+
+class ZkVaultSchema(BaseModel):
+    salt: str
+    wrapped_secret: str
+
+
+@auth_router.get("/zk-vault")
+async def get_zk_vault(
+    current_user: User = Depends(get_current_user)
+):
+    return {
+        "enabled": bool(current_user.e2e_wrapped_device_secret),
+        "salt": current_user.e2e_backup_salt,
+        "wrapped_secret": current_user.e2e_wrapped_device_secret,
+    }
+
+
+@auth_router.post("/zk-vault")
+async def save_zk_vault(
+    payload: ZkVaultSchema,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    current_user.e2e_backup_salt = payload.salt
+    current_user.e2e_wrapped_device_secret = payload.wrapped_secret
+    await db.commit()
+    return {"ok": True}
+
+
+@auth_router.delete("/zk-vault")
+async def reset_zk_vault(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    current_user.e2e_backup_salt = None
+    current_user.e2e_wrapped_device_secret = None
+    await db.commit()
+    return {"ok": True}
+
+
 @auth_router.post("/qr/generate")
 async def qr_generate():
     qr_token = secrets.token_urlsafe(32)

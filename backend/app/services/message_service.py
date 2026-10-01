@@ -1,5 +1,5 @@
 import html
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.core.extensions import cache, db
 from app.models.group import Group
@@ -93,6 +93,17 @@ class MessageService:
         else:
             content = MessageService._sanitize_text(content)
 
+        reply_to_id = data.get("reply_to_id")
+        disappear_after = data.get("disappear_after")
+        disappear_at = None
+        if disappear_after and isinstance(disappear_after, (int, float)) and disappear_after > 0:
+            disappear_at = datetime.utcnow() + timedelta(seconds=int(disappear_after))
+
+        if data.get("is_silent"):
+            if attachments is None:
+                attachments = []
+            attachments.append({"type": "flag", "is_silent": True})
+
         if group_id:
             group = Group.query.get(group_id)
             if not group:
@@ -108,6 +119,9 @@ class MessageService:
                 type=msg_type,
                 sender_id=user_id,
                 group_id=group_id,
+                reply_to_id=reply_to_id,
+                disappear_after=disappear_after,
+                disappear_at=disappear_at,
                 is_deleted=False
             )
         elif target_id:
@@ -126,7 +140,9 @@ class MessageService:
                 type=msg_type,
                 sender_id=user_id,
                 target_id=target_id,
-                reply_to_id=data.get("reply_to_id"),
+                reply_to_id=reply_to_id,
+                disappear_after=disappear_after,
+                disappear_at=disappear_at,
             )
         else:
             return None, "Either group_id or target_id is required"
@@ -141,24 +157,7 @@ class MessageService:
                     cache.delete_memoized(MessageService.get_recent_contacts, target_id)
             except Exception:
                 pass
-
-            from app.services.ollama_service import AI_USERNAME, OllamaService
-
-            if group_id:
-                ai_participant = next(
-                    (p for p in group.participants if p.username == AI_USERNAME), None)
-                if ai_participant and str(new_message.sender_id) != str(
-                    ai_participant.id
-                ):
-                    OllamaService.process_message_async(
-                        new_message.id, is_dm=False)
-
-            elif target_id:
-                ai_user = OllamaService.get_ai_user()
-                if str(target_id) == str(ai_user.id):
-                    OllamaService.process_message_async(
-                        new_message.id, is_dm=True)
-
+            if target_id:
                 try:
                     target_user = User.query.get(target_id)
                     if target_user and (getattr(target_user, "is_bot", False) or str(target_id) == "7e140ffc-5549-418a-8bad-525c02193812"):
@@ -201,6 +200,31 @@ class MessageService:
         except Exception as e:
             db.session.rollback()
             return None, str(e)
+
+    @staticmethod
+    def send_message(
+        sender_id,
+        content,
+        target_user_id=None,
+        channel_id=None,
+        group_id=None,
+        msg_type="text",
+        attachments=None,
+        reply_to_id=None,
+        is_silent=False,
+        disappear_after=None
+    ):
+        data = {
+            "content": content,
+            "type": msg_type,
+            "attachments": attachments or [],
+            "reply_to_id": reply_to_id,
+            "is_silent": is_silent,
+            "disappear_after": disappear_after,
+        }
+        if channel_id:
+            return MessageService.create_channel_message(data, sender_id, channel_id)
+        return MessageService.create_message(data, sender_id, group_id=group_id, target_id=target_user_id)
 
     @staticmethod
     def get_direct_messages(
