@@ -12,16 +12,26 @@ export function storePostLoginRedirect(path: string): void {
 export function consumePostLoginRedirect(fallback = '/feed'): string {
 	if (typeof window === 'undefined') return fallback
 
+	const sanitize = (url: string | null | undefined): string | null => {
+		if (!url || typeof url !== 'string') return null
+		const trimmed = url.trim()
+		if (!trimmed.startsWith('/') || trimmed.includes('[object') || trimmed.includes('%5Bobject')) {
+			return null
+		}
+		return trimmed
+	}
+
 	const params = new URLSearchParams(window.location.search)
-	const fromQuery =
+	const fromQuery = sanitize(
 		params.get('returnTo') || params.get('redirect') || params.get('from')
-	if (fromQuery && fromQuery.startsWith('/')) {
+	)
+	if (fromQuery) {
 		sessionStorage.removeItem(STORAGE_KEY)
 		return fromQuery
 	}
 
-	const stored = sessionStorage.getItem(STORAGE_KEY)
-	if (stored?.startsWith('/')) {
+	const stored = sanitize(sessionStorage.getItem(STORAGE_KEY))
+	if (stored) {
 		sessionStorage.removeItem(STORAGE_KEY)
 		return stored
 	}

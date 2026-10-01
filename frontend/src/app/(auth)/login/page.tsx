@@ -127,14 +127,18 @@ export default function LoginPage() {
 		setLoginError(null)
 		setPasskeyLoading(true)
 		try {
-			const data = await loginWithPasskey()
+			const data = await loginWithPasskey(email?.trim() || undefined)
 			if (data?.user) {
 				dispatch(setUser(data.user))
 				if (typeof window !== 'undefined' && (window.parent !== window || isModal)) {
 					notifyParentAuthSuccess()
 					return
 				}
-				window.location.assign(postLoginRedirect || '/feed')
+				let targetUrl = postLoginRedirect || '/feed'
+				if (!targetUrl || typeof targetUrl !== 'string' || targetUrl.includes('[object') || targetUrl.includes('%5Bobject')) {
+					targetUrl = '/feed'
+				}
+				window.location.assign(targetUrl)
 			}
 		} catch (err: any) {
 			setLoginError(err.message || 'Ошибка входа по Passkey')

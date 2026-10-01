@@ -15,19 +15,15 @@ export async function GET(
         token = authHeader.slice(7).trim()
       }
     }
-    if (!token) {
-      return NextResponse.json({ error: 'access_token is missing' }, { status: 401 })
-    }
-
     const chatId = request.nextUrl.searchParams.get('chat_id') || ''
     const backendUrl = getBackendUrl()
+    const headers: Record<string, string> = {}
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
     const response = await fetch(
       `${backendUrl}/api/v1/bots/${bot_id}/outbox?chat_id=${encodeURIComponent(chatId)}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
+      { headers }
     )
 
     const text = await response.text()

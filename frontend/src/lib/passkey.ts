@@ -188,7 +188,7 @@ export async function registerWithPasskey(params: RegisterPasskeyParams) {
 	return data
 }
 
-export async function loginWithPasskey() {
+export async function loginWithPasskey(email?: string) {
 	if (!isPasskeySupported()) {
 		throw new Error('Ваш браузер или устройство не поддерживает Passkey (WebAuthn)')
 	}
@@ -198,6 +198,7 @@ export async function loginWithPasskey() {
 		method: 'POST',
 		credentials: 'include',
 		headers: getAuthHeaders(),
+		body: email ? JSON.stringify({ email }) : undefined,
 	})
 
 	const options = await optRes.json()
@@ -205,12 +206,20 @@ export async function loginWithPasskey() {
 		throw new Error(options.error || 'Не удалось получить опции входа Passkey')
 	}
 
-	// 2. Преобразуем challenge
+	// 2. Преобразуем challenge и allowCredentials
 	const rp = getValidRpConfig(options.rp ? options.rp : { id: options.rpId })
+	const allowCredentials = Array.isArray(options.allowCredentials)
+		? options.allowCredentials.map((c: any) => ({
+				...c,
+				id: typeof c.id === 'string' ? base64UrlToBuffer(c.id) : c.id,
+		  }))
+		: undefined
+
 	const publicKey: PublicKeyCredentialRequestOptions = {
 		...options,
 		challenge: base64UrlToBuffer(options.challenge),
 		rpId: rp.id,
+		...(allowCredentials ? { allowCredentials } : {}),
 	}
 
 	// 3. Вызов биометрии / FaceID / TouchID / Windows Hello

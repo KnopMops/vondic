@@ -106,7 +106,8 @@ class PasskeyService:
                 {"alg": -257, "type": "public-key"}, # RS256
             ],
             "authenticatorSelection": {
-                "residentKey": "preferred",
+                "residentKey": "required",
+                "requireResidentKey": True,
                 "userVerification": "preferred",
             },
             "timeout": 60000,
@@ -238,22 +239,39 @@ class PasskeyService:
     # ==========================================
 
     @staticmethod
-    def generate_login_options(host: Optional[str] = None) -> Dict[str, Any]:
+    def generate_login_options(host: Optional[str] = None, email: Optional[str] = None) -> Dict[str, Any]:
         """Генерирует challenge для входа через Passkey."""
         challenge_bytes = secrets.token_bytes(32)
         challenge_b64 = PasskeyService._b64url_encode(challenge_bytes)
 
         cache_key = f"passkey_login_challenge:{challenge_b64}"
         cache.set(cache_key, True, timeout=300)
+        cache.set(f"passkey_login_challenge:{challenge_b64.rstrip('=')}", True, timeout=300)
 
         rp_id = PasskeyService.get_rp_id(host)
 
-        return {
+        opts: Dict[str, Any] = {
             "challenge": challenge_b64,
             "rpId": rp_id,
             "timeout": 60000,
             "userVerification": "preferred",
         }
+
+        if email and email.strip():
+            user = User.query.filter(db.func.lower(User.email) == email.strip().lower()).first()
+            if user:
+                passkeys = Passkey.query.filter_by(user_id=user.id).all()
+                if passkeys:
+                    opts["allowCredentials"] = [
+                        {
+                            "type": "public-key",
+                            "id": pk.credential_id,
+                            "transports": pk.transports or ["internal", "hybrid"],
+                        }
+                        for pk in passkeys
+                    ]
+
+        return opts
 
     @staticmethod
     def verify_login(
@@ -290,8 +308,9 @@ class PasskeyService:
             cache.delete(f"passkey_login_challenge:{norm_challenge}")
             cache.delete(f"passkey_login_challenge:{challenge}")
 
-            # Находим Passkey в базе данных
-            passkey = Passkey.query.filter_by(credential_id=cred_id).first()
+            # Находим Passkey в базе данных с проверкой различных вариантов padding
+            cand_ids = [cred_id, cred_id.rstrip("="), cred_id + "=", cred_id + "=="]
+            passkey = Passkey.query.filter(Passkey.credential_id.in_(cand_ids)).first()
             if not passkey:
                 return None, "Passkey не зарегистрирован в системе"
 

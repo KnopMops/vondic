@@ -864,7 +864,7 @@ export default function SettingsPage() {
 							}`}
 						>
 							<FiSettings className='w-4 h-4' />
-							Системные
+							Основные
 						</button>
 						<button
 							type='button'
@@ -1691,6 +1691,47 @@ export default function SettingsPage() {
 								)}
 							</div>
 						</motion.div>
+
+						<motion.div
+							initial={{ opacity: 0, y: 20 }}
+							animate={{ opacity: 1, y: 0 }}
+							transition={{ duration: 0.4 }}
+							className='relative rounded-2xl bg-white/5 border border-rose-500/20 p-6 overflow-hidden'
+						>
+							<motion.div
+								initial={{ opacity: 0.3 }}
+								animate={{ opacity: [0.3, 0.6, 0.3] }}
+								transition={{ duration: 6, repeat: Infinity }}
+								className='absolute -bottom-24 -left-24 w-64 h-64 bg-gradient-to-tr from-rose-500/10 to-red-500/10 rounded-full blur-3xl'
+							/>
+							<div className='flex items-center gap-3 mb-4'>
+								<FiShield className='w-5 h-5 text-rose-400' />
+								<h2 className='text-xl font-semibold'>Удаление аккаунта</h2>
+							</div>
+							<div className='space-y-4'>
+								<p className='text-sm text-rose-200'>
+									Аккаунт и связанные данные будут удалены без возможности
+									восстановления.
+								</p>
+								<div className='space-y-2'>
+									<input
+										value={deleteConfirmText}
+										onChange={e => setDeleteConfirmText(e.target.value)}
+										placeholder='Введите УДАЛИТЬ'
+										className='w-full rounded-lg border border-rose-500/30 bg-black/40 p-2 text-sm text-white placeholder:text-rose-300/60'
+									/>
+									<button
+										onClick={handleDeleteAccount}
+										disabled={deleteLoading}
+										className='w-full rounded-lg bg-rose-600/80 border border-rose-400/60 px-4 py-2 text-sm text-white hover:bg-rose-600 disabled:opacity-60'
+									>
+										{deleteLoading ? 'Удаление...' : 'Удалить аккаунт'}
+									</button>
+								</div>
+							</div>
+						</motion.div>
+
+						<BrowserPermissions />
 					</>
 				)}
 
@@ -2311,47 +2352,6 @@ export default function SettingsPage() {
 								</motion.div>
 							)}
 						</AnimatePresence>
-
-						<motion.div
-							initial={{ opacity: 0, y: 20 }}
-							animate={{ opacity: 1, y: 0 }}
-							transition={{ duration: 0.4 }}
-							className='relative rounded-2xl bg-white/5 border border-rose-500/20 p-6 overflow-hidden'
-						>
-							<motion.div
-								initial={{ opacity: 0.3 }}
-								animate={{ opacity: [0.3, 0.6, 0.3] }}
-								transition={{ duration: 6, repeat: Infinity }}
-								className='absolute -bottom-24 -left-24 w-64 h-64 bg-gradient-to-tr from-rose-500/10 to-red-500/10 rounded-full blur-3xl'
-							/>
-							<div className='flex items-center gap-3 mb-4'>
-								<FiShield className='w-5 h-5 text-rose-400' />
-								<h2 className='text-xl font-semibold'>Удаление аккаунта</h2>
-							</div>
-							<div className='space-y-4'>
-								<p className='text-sm text-rose-200'>
-									Аккаунт и связанные данные будут удалены без возможности
-									восстановления.
-								</p>
-								<div className='space-y-2'>
-									<input
-										value={deleteConfirmText}
-										onChange={e => setDeleteConfirmText(e.target.value)}
-										placeholder='Введите УДАЛИТЬ'
-										className='w-full rounded-lg border border-rose-500/30 bg-black/40 p-2 text-sm text-white placeholder:text-rose-300/60'
-									/>
-									<button
-										onClick={handleDeleteAccount}
-										disabled={deleteLoading}
-										className='w-full rounded-lg bg-rose-600/80 border border-rose-400/60 px-4 py-2 text-sm text-white hover:bg-rose-600 disabled:opacity-60'
-									>
-										{deleteLoading ? 'Удаление...' : 'Удалить аккаунт'}
-									</button>
-								</div>
-							</div>
-						</motion.div>
-
-						<BrowserPermissions />
 			</div>
 		</FeedPageShell>
 	)

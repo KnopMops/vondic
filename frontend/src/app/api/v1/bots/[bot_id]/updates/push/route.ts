@@ -19,18 +19,19 @@ export async function POST(
     if (!token && body?.access_token) {
       token = body.access_token
     }
-    if (!token) {
-      return NextResponse.json({ error: 'access_token is missing' }, { status: 401 })
+    const backendUrl = getBackendUrl()
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    }
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
     }
 
-    const backendUrl = getBackendUrl()
+    const payload = token ? { ...body, access_token: token } : body
     const response = await fetch(`${backendUrl}/api/v1/bots/${bot_id}/updates/push`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ ...body, access_token: token }),
+      headers,
+      body: JSON.stringify(payload),
     })
 
     const text = await response.text()

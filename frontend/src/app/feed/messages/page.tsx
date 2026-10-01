@@ -2687,7 +2687,7 @@ export default function MessengerPage() {
 				!selectedChannel.owner_id ||
 				!user?.id ||
 				String(selectedChannel.owner_id) === String(user.id)
-	const accessToken = (user as any)?.access_token as string | undefined
+	const accessToken = ((user as any)?.access_token || (typeof window !== 'undefined' ? (localStorage.getItem('access_token') || undefined) : undefined)) as string | undefined
 	const [secretChatEnabled, setSecretChatEnabled] = useState(false)
 	const [isEncProxyActive, setIsEncProxyActive] = useState(false)
 
@@ -4263,92 +4263,95 @@ export default function MessengerPage() {
 				return next
 			})
 		}
-			if (!accessToken || !user?.id) {
-				setBotMessages(prev => [
-					...prev,
-					buildBotReply('Нужна авторизация для отправки боту.'),
-				])
-				setInput('')
-				setReplyToMessage(null)
-				return
-			}
-			if (!targetBotId) {
-				setBotMessages(prev => [
-					...prev,
-					buildBotReply('Не удалось определить чат бота.'),
-				])
-				setInput('')
-				setReplyToMessage(null)
-				return
-			}
-			try {
-				const requestBody = JSON.stringify({
-					wait_for_reply: 5,
-					message: {
-						text,
-						from_user: {
-							id: user.id,
-							username: user.username,
-							avatar_url: user.avatar_url,
-						},
-						chat: {
-							id: user.id,
-							type: 'private',
-							title: user.username,
-						},
+		const effectiveUser = user || (typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('user') || 'null') : null)
+		if (!effectiveUser?.id) {
+			setBotMessages(prev => [
+				...prev,
+				buildBotReply('Нужна авторизация для отправки боту.'),
+			])
+			setInput('')
+			setReplyToMessage(null)
+			return
+		}
+		if (!targetBotId) {
+			setBotMessages(prev => [
+				...prev,
+				buildBotReply('Не удалось определить чат бота.'),
+			])
+			setInput('')
+			setReplyToMessage(null)
+			return
+		}
+		try {
+			const requestBody = JSON.stringify({
+				wait_for_reply: 5,
+				message: {
+					text,
+					from_user: {
+						id: effectiveUser.id,
+						username: effectiveUser.username,
+						avatar_url: effectiveUser.avatar_url,
 					},
-				})
-				let res: Response | null = null
-				let lastError: unknown = null
-				for (let attempt = 0; attempt < 2; attempt++) {
-					try {
-						res = await fetch(
-							`/api/v1/bots/${targetBotId}/updates/push`,
-							{
-								method: 'POST',
-								headers: {
-									'Content-Type': 'application/json',
-									Authorization: `Bearer ${accessToken}`,
-								},
-								body: requestBody,
-							},
-						)
-						break
-					} catch (error) {
-						lastError = error
-						if (attempt === 0) {
-							await new Promise(resolve => setTimeout(resolve, 600))
-						}
-					}
-				}
-				if (!res) {
-					throw lastError ?? new Error('Failed to push bot update')
-				}
-				const textResponse = await res.text()
-				let data: any = {}
+					chat: {
+						id: effectiveUser.id,
+						type: 'private',
+						title: effectiveUser.username,
+					},
+				},
+			})
+			let res: Response | null = null
+			let lastError: unknown = null
+			for (let attempt = 0; attempt < 2; attempt++) {
 				try {
-					data = textResponse ? JSON.parse(textResponse) : {}
-				} catch {
-					data = {}
-				}
-				if (!res.ok) {
-					setBotMessages(prev => [
-						...prev,
-						buildBotReply('Не удалось отправить сообщение боту.'),
-					])
-				} else if (Array.isArray(data?.outbox) && data.outbox.length > 0) {
-					appendBotOutboxItems(targetBotId, data.outbox)
-				}
-			} catch (error) {
-				try {
-					const outboxRes = await fetch(
-						`/api/v1/bots/${targetBotId}/outbox?chat_id=${user.id}`,
+					res = await fetch(
+						`/api/v1/bots/${targetBotId}/updates/push`,
 						{
+							method: 'POST',
+							credentials: 'include',
 							headers: {
-								Authorization: `Bearer ${accessToken}`,
+								'Content-Type': 'application/json',
+								...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
 							},
+							body: requestBody,
 						},
 					)
+					break
+				} catch (error) {
+					lastError = error
+					if (attempt === 0) {
+						await new Promise(resolve => setTimeout(resolve, 600))
+					}
+				}
+			}
+			if (!res) {
+				throw lastError ?? new Error('Failed to push bot update')
+			}
+			const textResponse = await res.text()
+			let data: any = {}
+			try {
+				data = textResponse ? JSON.parse(textResponse) : {}
+			} catch {
+				data = {}
+			}
+			if (!res.ok) {
+				setBotMessages(prev => [
+					...prev,
+					buildBotReply('Не удалось отправить сообщение боту.'),
+				])
+			} else if (Array.isArray(data?.outbox) && data.outbox.length > 0) {
+				appendBotOutboxItems(targetBotId, data.outbox)
+			}
+		} catch (error) {
+			try {
+				const outboxRes = await fetch(
+					`/api/v1/bots/${targetBotId}/outbox?chat_id=${effectiveUser.id}`,
+					{
+						credentials: 'include',
+						headers: {
+							...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+						},
+					},
+				)
 					if (outboxRes.ok) {
 						const outboxData: any = await outboxRes.json().catch(() => ({}))
 						const items = Array.isArray(outboxData?.items) ? outboxData.items : []

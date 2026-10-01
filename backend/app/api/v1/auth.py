@@ -677,7 +677,13 @@ async def passkey_register_verify(
 @auth_router.post("/passkey/login-options")
 async def passkey_login_options(request: Request):
     host = _get_request_host(request)
-    options = PasskeyService.generate_login_options(host=host)
+    body: Dict[str, Any] = {}
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    email = body.get("email") if isinstance(body, dict) else None
+    options = PasskeyService.generate_login_options(host=host, email=email)
     return options
 
 

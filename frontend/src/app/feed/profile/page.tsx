@@ -12,7 +12,13 @@ export default function ProfilePage() {
 	useEffect(() => {
 		if (!isLoading) {
 			if (user) {
-				router.replace(`/feed/profile/${user.id}`)
+				const rawId = (user as any)?.id || (user as any)?._id || (user as any)?.user_id
+				const idStr = typeof rawId === 'string' || typeof rawId === 'number' ? String(rawId).trim() : ''
+				if (idStr && !idStr.includes('[object')) {
+					router.replace(`/feed/profile/${encodeURIComponent(idStr)}`)
+				} else {
+					router.replace('/feed')
+				}
 			} else {
 				router.push('/login')
 			}
