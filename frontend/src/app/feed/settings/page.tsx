@@ -1110,11 +1110,24 @@ export default function SettingsPage() {
 													setEncProxyUrlState('http://127.0.0.1:8888')
 													saveEncProxyUrl('http://127.0.0.1:8888')
 													setEncProxyConnected(true)
-													showToast('Установлен адрес локального EncProxy', 'success')
+													showToast('Установлен адрес локального EncProxy (8888)', 'success')
 												}}
 												className='text-[11px] text-[#58a6ff] hover:underline cursor-pointer'
 											>
-												Использовать локальный (127.0.0.1:8888)
+												Proxy (:8888)
+											</button>
+											<span className='text-gray-600'>•</span>
+											<button
+												type='button'
+												onClick={() => {
+													setEncProxyUrlState('http://127.0.0.1:5100')
+													saveEncProxyUrl('http://127.0.0.1:5100')
+													setEncProxyConnected(true)
+													showToast('Установлен адрес EncProxy Relay (5100)', 'success')
+												}}
+												className='text-[11px] text-[#58a6ff] hover:underline cursor-pointer'
+											>
+												Relay (:5100)
 											</button>
 											<span className='text-gray-600'>•</span>
 											<button

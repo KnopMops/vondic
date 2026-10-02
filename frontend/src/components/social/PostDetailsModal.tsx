@@ -4,8 +4,10 @@ import { useAppSelector } from '@/lib/hooks'
 import { Attachment } from '@/lib/types'
 import { formatMskDateTime, getAttachmentUrl } from '@/lib/utils'
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
+import VideoPlayer from './VideoPlayer'
+import AudioPlayer from './AudioPlayer'
 import { LuHeart as Heart, LuMessageCircle as MessageCircle, LuX as X } from 'react-icons/lu'
 
 type PostData = {
@@ -79,7 +81,7 @@ export default function PostDetailsModal(props: Props) {
 
 	const isImageAttachment = (a: Attachment) => {
 		const ext = (a.ext || '').toLowerCase()
-		return (
+		if (
 			ext === 'png' ||
 			ext === 'jpg' ||
 			ext === 'jpeg' ||
@@ -87,8 +89,46 @@ export default function PostDetailsModal(props: Props) {
 			ext === 'webp' ||
 			ext === 'bmp' ||
 			ext === 'svg'
-		)
+		) return true
+		const url = (a.url || '').toLowerCase()
+		return url.endsWith('.jpg') || url.endsWith('.jpeg') || url.endsWith('.png') || url.endsWith('.gif') || url.endsWith('.webp') || url.endsWith('.svg') || url.endsWith('.bmp')
 	}
+
+	const isVideoAttachment = (a: Attachment) => {
+		const ext = (a.ext || '').toLowerCase()
+		if (ext === 'mp4' || ext === 'mov' || ext === 'webm' || ext === 'ogg') return true
+		const url = (a.url || '').toLowerCase()
+		return url.endsWith('.mp4') || url.endsWith('.mov') || url.endsWith('.webm') || url.endsWith('.ogg')
+	}
+
+	const isAudioAttachment = (a: Attachment) => {
+		const ext = (a.ext || '').toLowerCase()
+		if (ext === 'mp3' || ext === 'wav' || ext === 'm4a' || ext === 'aac' || ext === 'flac' || ext === 'oga') return true
+		const url = (a.url || '').toLowerCase()
+		return url.endsWith('.mp3') || url.endsWith('.wav') || url.endsWith('.m4a') || url.endsWith('.aac') || url.endsWith('.flac') || url.endsWith('.oga')
+	}
+
+	const normalizedAttachments = useMemo(() => {
+		const atts = post?.attachments
+		if (!atts) return []
+		let list: any[] = []
+		if (Array.isArray(atts)) {
+			list = atts
+		} else if (typeof atts === 'string') {
+			try {
+				const parsed = JSON.parse(atts)
+				if (Array.isArray(parsed)) list = parsed
+			} catch {}
+		}
+		return list.map((a: any) => {
+			if (typeof a === 'string') {
+				const name = a.split('/').pop() || 'file'
+				const ext = name.includes('.') ? name.split('.').pop()!.toLowerCase() : ''
+				return { url: a, name, ext }
+			}
+			return a
+		}).filter((a: any) => a && a.url)
+	}, [post?.attachments])
 
 	return createPortal(
 		<div className='fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4'>
@@ -164,11 +204,11 @@ export default function PostDetailsModal(props: Props) {
 								</div>
 							)}
 
-							{post.attachments && post.attachments.length > 0 && (
+							{normalizedAttachments && normalizedAttachments.length > 0 && (
 								<div className='mt-4 grid grid-cols-1 gap-2'>
-									{post.attachments
+									{normalizedAttachments
 										.filter(
-											a => a && a.url && (!post.image || a.url !== post.image),
+											a => (!post.image || a.url !== post.image),
 										)
 										.map(a =>
 											isImageAttachment(a) ? (
@@ -178,6 +218,10 @@ export default function PostDetailsModal(props: Props) {
 													alt={a.name}
 													className='w-full rounded-lg object-cover max-h-[500px]'
 												/>
+											) : isVideoAttachment(a) ? (
+												<VideoPlayer key={a.url} src={getAttachmentUrl(a.url)} />
+											) : isAudioAttachment(a) ? (
+												<AudioPlayer key={a.url} src={a.url} />
 											) : (
 												<a
 													key={a.url}

@@ -2681,81 +2681,8 @@ export default function MessengerPage() {
 		return unsub
 	}, [user?.id, accessToken])
 
-	const peerUsesEncProxy = useMemo(() => {
-		if (!selectedFriend) return false
-		if ((selectedFriend as any).uses_encproxy || (selectedFriend as any).is_encproxy) return true
-		return messages.some(
-			(m) =>
-				m.sender_id === selectedFriend.id &&
-				(m.content?.startsWith('encproxy:') ||
-					(m as any).is_encproxy ||
-					(m as any).extra?.encproxy),
-		)
-	}, [selectedFriend, messages])
-
-	const [approvedEncProxyPeers, setApprovedEncProxyPeers] = useState<
-		Record<string, boolean>
-	>(() => {
-		if (typeof window === 'undefined') return {}
-		try {
-			const raw = localStorage.getItem('vondic_approved_encproxy_peers')
-			return raw ? JSON.parse(raw) : {}
-		} catch {
-			return {}
-		}
-	})
-
-	const handleApproveEncProxyPeer = async () => {
-		if (!selectedFriend || !user) return
-		try {
-			let pubKeyBase64 = ''
-			if (typeof crypto !== 'undefined' && crypto.subtle) {
-				const pair = await crypto.subtle.generateKey(
-					{ name: 'ECDH', namedCurve: 'P-256' },
-					true,
-					['deriveBits'],
-				)
-				const rawPub = await crypto.subtle.exportKey('raw', pair.publicKey)
-				pubKeyBase64 = btoa(String.fromCharCode(...new Uint8Array(rawPub)))
-			}
-
-			const keyId = [user.id, selectedFriend.id].sort().join(':')
-			const updated = { ...approvedEncProxyPeers, [selectedFriend.id]: true }
-			setApprovedEncProxyPeers(updated)
-			try {
-				localStorage.setItem('vondic_approved_encproxy_peers', JSON.stringify(updated))
-			} catch {}
-
-			if (socket && socket.connected) {
-				socket.emit('encproxy_key_exchange', {
-					target_user_id: selectedFriend.id,
-					public_key: pubKeyBase64,
-					key_id: keyId,
-					type: 'offer',
-					from_user_id: user.id,
-					from_username: user.username,
-				})
-			}
-
-			if (pubKeyBase64) {
-				sendChatMessage(
-					`encproxy:handshake:approve:${pubKeyBase64}`,
-					'text',
-				)
-			}
-
-			showToast(
-				`Переписка с @${selectedFriend.username} одобрена! Сквозное шифрование активно.`,
-				'success',
-			)
-		} catch (e) {
-			console.error('Failed to approve EncProxy peer:', e)
-			showToast('Не удалось одобрить шифрование', 'error')
-		}
-	}
-
-
 	useEffect(() => {
+
 		if (!selectedFriend?.id || isAiChat || isBotChat || !accessToken) {
 			setSecretChatEnabled(false)
 			return
@@ -2852,6 +2779,80 @@ export default function MessengerPage() {
 	const messages = isBotChat ? botMessages : chatMessages
 	const isChatLoading = isBotChat ? false : isLoading
 	const isChatTyping = isBotChat ? false : isTyping
+
+	const peerUsesEncProxy = useMemo(() => {
+		if (!selectedFriend) return false
+		if ((selectedFriend as any).uses_encproxy || (selectedFriend as any).is_encproxy) return true
+		return messages.some(
+			(m) =>
+				m.sender_id === selectedFriend.id &&
+				(m.content?.startsWith('encproxy:') ||
+					(m as any).is_encproxy ||
+					(m as any).extra?.encproxy),
+		)
+	}, [selectedFriend, messages])
+
+	const [approvedEncProxyPeers, setApprovedEncProxyPeers] = useState<
+		Record<string, boolean>
+	>(() => {
+		if (typeof window === 'undefined') return {}
+		try {
+			const raw = localStorage.getItem('vondic_approved_encproxy_peers')
+			return raw ? JSON.parse(raw) : {}
+		} catch {
+			return {}
+		}
+	})
+
+	const handleApproveEncProxyPeer = async () => {
+		if (!selectedFriend || !user) return
+		try {
+			let pubKeyBase64 = ''
+			if (typeof crypto !== 'undefined' && crypto.subtle) {
+				const pair = await crypto.subtle.generateKey(
+					{ name: 'ECDH', namedCurve: 'P-256' },
+					true,
+					['deriveBits'],
+				)
+				const rawPub = await crypto.subtle.exportKey('raw', pair.publicKey)
+				pubKeyBase64 = btoa(String.fromCharCode(...new Uint8Array(rawPub)))
+			}
+
+			const keyId = [user.id, selectedFriend.id].sort().join(':')
+			const updated = { ...approvedEncProxyPeers, [selectedFriend.id]: true }
+			setApprovedEncProxyPeers(updated)
+			try {
+				localStorage.setItem('vondic_approved_encproxy_peers', JSON.stringify(updated))
+			} catch {}
+
+			if (socket && socket.connected) {
+				socket.emit('encproxy_key_exchange', {
+					target_user_id: selectedFriend.id,
+					public_key: pubKeyBase64,
+					key_id: keyId,
+					type: 'offer',
+					from_user_id: user.id,
+					from_username: user.username,
+				})
+			}
+
+			if (pubKeyBase64) {
+				sendChatMessage(
+					`encproxy:handshake:approve:${pubKeyBase64}`,
+					'text',
+				)
+			}
+
+			showToast(
+				`Переписка с @${selectedFriend.username} одобрена! Сквозное шифрование активно.`,
+				'success',
+			)
+		} catch (e) {
+			console.error('Failed to approve EncProxy peer:', e)
+			showToast('Не удалось одобрить шифрование', 'error')
+		}
+	}
+
 
 	const mentionUsers = useMemo(() => {
 		if (selectedGroup) {

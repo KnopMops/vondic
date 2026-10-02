@@ -75,7 +75,9 @@ class PostService:
             query = query.filter(
                 Post.social_community_id == social_community_id
             )
-        elif filter_mode == "subscriptions" and user_id:
+        elif filter_mode == "subscriptions":
+            if not user_id:
+                return _paginate_query(Post.query.filter(Post.id.is_(None)), page=page, per_page=per_page)
             subscriptions = Subscription.query.filter_by(
                 subscriber_id=user_id
             ).all()

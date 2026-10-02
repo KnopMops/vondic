@@ -65,7 +65,10 @@ export function usePosts({
 			if (filter && filter !== 'all') {
 				params.set('filter', filter)
 			}
-			const res = await fetch(`/api/posts?${params.toString()}`)
+			const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
+			const headers: HeadersInit = {}
+			if (token) headers['Authorization'] = `Bearer ${token}`
+			const res = await fetch(`/api/posts?${params.toString()}`, { headers })
 			if (!res.ok) throw new Error('Failed to fetch posts')
 			return res.json() as Promise<PostsResponse>
 		},
@@ -158,9 +161,12 @@ export function usePosts({
 			attachments?: Attachment[]
 			is_blog?: boolean
 		}) => {
+			const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
+			const headers: HeadersInit = { 'Content-Type': 'application/json' }
+			if (token) headers['Authorization'] = `Bearer ${token}`
 			const res = await fetch('/api/posts', {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
+				headers,
 				body: JSON.stringify({
 					title: 'New Post',
 					content: text,

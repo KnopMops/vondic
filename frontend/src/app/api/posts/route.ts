@@ -59,22 +59,24 @@ export async function GET(req: NextRequest) {
 			.map((p: { posted_by: string }) => p.posted_by)
 
 		if (missingAuthorIds.length > 0 && accessToken) {
-			const usersResponse = await fetch(`${BACKEND_URL}/api/v1/users/`, {
-				method: 'GET',
-				headers: withVondicProxyHeaders({
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${accessToken}`,
-				}),
-				next: { revalidate: 60 },
-			}).catch(() => null)
-			if (usersResponse && usersResponse.ok) {
-				const users = await usersResponse.json().catch(() => [])
-				if (Array.isArray(users)) {
-					users.forEach((u: { id: string }) => {
-						usersMap[u.id] = u
-					})
-				}
-			}
+			const uniqueMissing = Array.from(new Set(missingAuthorIds)).slice(0, 5)
+			await Promise.allSettled(
+				uniqueMissing.map(async (uid) => {
+					try {
+						const res = await fetch(`${BACKEND_URL}/api/v1/users/${uid}`, {
+							headers: withVondicProxyHeaders({
+								'Content-Type': 'application/json',
+								Authorization: `Bearer ${accessToken}`,
+							}),
+							next: { revalidate: 300 },
+						})
+						if (res.ok) {
+							const u = await res.json()
+							if (u && u.id) usersMap[u.id] = u
+						}
+					} catch {}
+				})
+			)
 		}
 
 

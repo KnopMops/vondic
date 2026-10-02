@@ -18,7 +18,7 @@ export default function Composer({ onCreate, mode = 'feed' }: Props) {
 	const { user } = useAppSelector(state => state.auth)
 
 	
-	const isBlogPost = user?.role === 'Admin' && (text.trim().startsWith('# ') || text.trim().startsWith('#'))
+	const isBlogPost = (mode === 'blog') || (user?.role === 'Admin' && (text.trim().startsWith('# ') || text.trim().startsWith('#')))
 
 	const fileToDataUrl = (file: File) =>
 		new Promise<string>((resolve, reject) => {
@@ -41,9 +41,12 @@ export default function Composer({ onCreate, mode = 'feed' }: Props) {
 			await new Promise(resolve => setTimeout(resolve, delayMs))
 		}
 		const dataUrl = await fileToDataUrl(file)
+		const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
+		const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+		if (token) headers['Authorization'] = `Bearer ${token}`
 		const res = await fetch('/api/upload/file', {
 			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
+			headers,
 			body: JSON.stringify({
 				file: dataUrl,
 				filename: file.name,

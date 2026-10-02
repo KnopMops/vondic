@@ -134,8 +134,8 @@ export class EncProxyClient {
 		})
 
 		socket.on('connect_error', (err: Error) => {
-			console.error('[EncProxy] Connection error:', err.message)
-			this.setStatus('error')
+			console.warn('[EncProxy] Local daemon not reachable at', config.serverUrl, `(${err.message})`)
+			this.setStatus('disconnected')
 			this.listeners.error?.(err.message)
 		})
 

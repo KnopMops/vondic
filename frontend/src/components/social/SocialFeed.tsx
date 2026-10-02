@@ -20,9 +20,10 @@ type FilterMode = 'all' | 'subscriptions' | 'blog'
 
 export default function SocialFeed({ email, onLogout, mode = 'feed' }: Props) {
 	const { user } = useAppSelector(state => state.auth)
-	const [filter, setFilter] = useState<FilterMode>(mode === 'blog' ? 'blog' : 'all')
+	const isBlogMode = mode === 'blog'
+	const [filter, setFilter] = useState<FilterMode>('all')
 	
-	const kind = filter === 'blog' ? 'blog' : 'feed'
+	const kind = isBlogMode ? 'blog' : (filter === 'blog' ? 'blog' : 'feed')
 	const {
 		posts,
 		isLoading: loading,
@@ -35,7 +36,7 @@ export default function SocialFeed({ email, onLogout, mode = 'feed' }: Props) {
 	} = usePosts({ perPage: 5, kind, filter })
 
 	const addPost = (text: string, attachments?: Attachment[], isBlog?: boolean) => {
-		createPost({ text, attachments, is_blog: isBlog || mode === 'blog' || filter === 'blog' })
+		createPost({ text, attachments, is_blog: isBlog || isBlogMode || filter === 'blog' })
 	}
 
 
@@ -56,7 +57,7 @@ export default function SocialFeed({ email, onLogout, mode = 'feed' }: Props) {
 		<FeedPageShell email={email} onLogout={onLogout}>
 			<div className='mx-auto max-w-2xl space-y-6'>
 				<StoriesBar />
-				<Composer onCreate={addPost} />
+				<Composer onCreate={addPost} mode={mode} />
 
 				
 				<div className='glass-panel p-2 flex gap-2'>
@@ -68,7 +69,7 @@ export default function SocialFeed({ email, onLogout, mode = 'feed' }: Props) {
 								: 'text-[var(--app-muted)] hover:bg-white/5'
 						}`}
 					>
-						Все
+						{isBlogMode ? 'Все записи блога' : 'Все'}
 					</button>
 					<button
 						onClick={() => setFilter('subscriptions')}
@@ -80,16 +81,18 @@ export default function SocialFeed({ email, onLogout, mode = 'feed' }: Props) {
 					>
 						Подписки
 					</button>
-					<button
-						onClick={() => setFilter('blog')}
-						className={`flex-1 rounded-xl px-4 py-2 text-sm font-medium transition-all ${
-							filter === 'blog'
-								? 'btn-accent shadow-lg'
-								: 'text-[var(--app-muted)] hover:bg-white/5'
-						}`}
-					>
-						БЛОГ ✍️
-					</button>
+					{!isBlogMode && (
+						<button
+							onClick={() => setFilter('blog')}
+							className={`flex-1 rounded-xl px-4 py-2 text-sm font-medium transition-all ${
+								filter === 'blog'
+									? 'btn-accent shadow-lg'
+									: 'text-[var(--app-muted)] hover:bg-white/5'
+							}`}
+						>
+							БЛОГ ✍️
+						</button>
+					)}
 				</div>
 
 				{loading && (
