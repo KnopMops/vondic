@@ -108,6 +108,15 @@ class MessageService:
                 attachments = []
             attachments.append({"type": "flag", "is_silent": True})
 
+        if data.get("is_encproxy") or (isinstance(data.get("extra"), dict) and data.get("extra", {}).get("encproxy")):
+            if attachments is None:
+                attachments = []
+            attachments.append({
+                "type": "encproxy",
+                "is_encproxy": True,
+                "extra": data.get("extra") or {"encproxy": True},
+            })
+
         if group_id:
             group = Group.query.get(group_id)
             if not group:
@@ -216,7 +225,9 @@ class MessageService:
         attachments=None,
         reply_to_id=None,
         is_silent=False,
-        disappear_after=None
+        disappear_after=None,
+        is_encproxy=False,
+        extra=None
     ):
         data = {
             "content": content,
@@ -225,6 +236,8 @@ class MessageService:
             "reply_to_id": reply_to_id,
             "is_silent": is_silent,
             "disappear_after": disappear_after,
+            "is_encproxy": is_encproxy,
+            "extra": extra,
         }
         if channel_id:
             return MessageService.create_channel_message(data, sender_id, channel_id)

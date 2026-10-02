@@ -93,4 +93,9 @@ class Message(Base):
                     self,
                     'is_deleted',
                     False),
+            "is_encproxy": (
+                any(isinstance(a, dict) and (a.get("type") == "encproxy" or a.get("is_encproxy")) for a in (self.attachments or []))
+                if isinstance(self.attachments, list) else False
+            ) or (isinstance(self.attachments, dict) and self.attachments.get("is_encproxy", False)),
+            "extra": next((a.get("extra") for a in (self.attachments or []) if isinstance(a, dict) and a.get("type") == "encproxy"), None) if isinstance(self.attachments, list) else None,
         }

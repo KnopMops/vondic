@@ -70,19 +70,25 @@ export class EncProxyClient {
 	}
 
 	async connect(config: EncProxyConfig) {
-		if (this.socket?.connected && this.config?.serverUrl === config.serverUrl) {
+		let serverUrl = config.serverUrl
+		if (serverUrl.includes(':8888')) {
+			serverUrl = serverUrl.replace(':8888', ':5100')
+		}
+		const normalizedConfig = { ...config, serverUrl }
+
+		if (this.socket?.connected && this.config?.serverUrl === normalizedConfig.serverUrl) {
 			return
 		}
 		this.disconnect()
-		this.config = config
-		this._userId = config.userId
+		this.config = normalizedConfig
+		this._userId = normalizedConfig.userId
 		this.setStatus('connecting')
 
-		const socket = io(config.serverUrl, {
-			transports: ['websocket', 'polling'],
-			auth: { access_token: config.accessToken },
+		const socket = io(serverUrl, {
+			transports: ['polling', 'websocket'],
+			auth: { access_token: normalizedConfig.accessToken },
 			reconnection: false,
-			timeout: 10000,
+			timeout: 7000,
 		})
 
 		this.socket = socket
@@ -90,7 +96,7 @@ export class EncProxyClient {
 		socket.on('connect', () => {
 			this.reconnectAttempt = 0
 			this.setStatus('authenticating')
-			socket.emit('encproxy_auth', { access_token: config.accessToken })
+			socket.emit('encproxy_auth', { access_token: normalizedConfig.accessToken })
 		})
 
 		socket.on('encproxy_auth_ok', (data: { user_id: string; socket_id: string }) => {
@@ -234,6 +240,10 @@ export class EncProxyClient {
 
 	private scheduleReconnect() {
 		if (!this.config) return
+		if (this.reconnectAttempt >= 3) {
+			this.setStatus('disconnected')
+			return
+		}
 		const delay = RECONNECT_DELAYS[
 			Math.min(this.reconnectAttempt, RECONNECT_DELAYS.length - 1)
 		]

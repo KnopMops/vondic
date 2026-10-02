@@ -35,10 +35,20 @@ export function getEncProxyUrl(): string | null {
 	return localStorage.getItem(STORAGE_KEY)
 }
 
+export function getEncProxyRelayUrl(): string | null {
+	const raw = getEncProxyUrl()
+	if (!raw) return null
+	// Port 8888 is the HTTP interceptor proxy; port 5100 is the Socket.IO relay
+	if (raw.includes(':8888')) {
+		return raw.replace(':8888', ':5100')
+	}
+	return raw
+}
+
 export function setEncProxyUrl(url: string | null) {
 	if (typeof window === 'undefined') return
-	if (url) {
-		localStorage.setItem(STORAGE_KEY, url)
+	if (url && url.trim()) {
+		localStorage.setItem(STORAGE_KEY, url.trim())
 	} else {
 		localStorage.removeItem(STORAGE_KEY)
 	}
@@ -47,3 +57,4 @@ export function setEncProxyUrl(url: string | null) {
 export function isEncProxyEnabled(): boolean {
 	return !!getEncProxyUrl()
 }
+

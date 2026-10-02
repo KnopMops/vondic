@@ -369,7 +369,7 @@ export default function SettingsPage() {
 		if (saved) {
 			setEncProxyUrlState(saved)
 		} else {
-			setEncProxyUrlState('http://127.0.0.1:8888')
+			setEncProxyUrlState('http://127.0.0.1:5100')
 		}
 		const client = getEncProxyClient()
 		setEncProxyConnected(client.isConnected || !!saved)
@@ -380,31 +380,69 @@ export default function SettingsPage() {
 		return unsub
 	}, [])
 
-	const toggleEncProxy = () => {
+	const toggleEncProxy = async () => {
 		const current = getEncProxyUrl()
+		const client = getEncProxyClient()
 		if (current) {
 			saveEncProxyUrl(null)
 			setEncProxyConnected(false)
-			const client = getEncProxyClient()
 			client.disconnect()
+			try {
+				await fetch('/api/users/update', {
+					method: 'PUT',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						privacy_settings: {
+							...(user?.privacy_settings || {}),
+							uses_encproxy: false,
+						},
+					}),
+				})
+			} catch {}
 			showToast('EncProxy отключён', 'info')
 		} else {
-			const url = (encProxyUrl.trim() || 'http://127.0.0.1:8888')
+			const url = (encProxyUrl.trim() || 'http://127.0.0.1:5100')
 			setEncProxyUrlState(url)
 			saveEncProxyUrl(url)
+			const token = localStorage.getItem('access_token') || ''
+			client.connect({ serverUrl: url, accessToken: token, userId: String(user?.id || '') })
 			setEncProxyConnected(true)
+			try {
+				await fetch('/api/users/update', {
+					method: 'PUT',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						privacy_settings: {
+							...(user?.privacy_settings || {}),
+							uses_encproxy: true,
+						},
+					}),
+				})
+			} catch {}
 			showToast('EncProxy подключён: ' + url, 'success')
 		}
 	}
 
-	const connectEncProxy = () => {
-		const url = (encProxyUrl.trim() || 'http://127.0.0.1:8888')
+	const connectEncProxy = async () => {
+		const url = (encProxyUrl.trim() || 'http://127.0.0.1:5100')
 		setEncProxyUrlState(url)
 		saveEncProxyUrl(url)
 		setEncProxyConnected(true)
 		const client = getEncProxyClient()
 		const token = localStorage.getItem('access_token') || ''
 		client.connect({ serverUrl: url, accessToken: token, userId: String(user?.id || '') })
+		try {
+			await fetch('/api/users/update', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					privacy_settings: {
+						...(user?.privacy_settings || {}),
+						uses_encproxy: true,
+					},
+				}),
+			})
+		} catch {}
 		showToast('Настройки EncProxy сохранены: ' + url, 'success')
 	}
 
@@ -1091,7 +1129,7 @@ export default function SettingsPage() {
 												type='text'
 												value={encProxyUrl}
 												onChange={e => setEncProxyUrlState(e.target.value)}
-												placeholder='http://127.0.0.1:8888'
+												placeholder='http://127.0.0.1:5100'
 												className='flex-1 rounded-lg border border-[#30363d] bg-[#0e1117] p-2 text-sm text-white placeholder:text-gray-500 font-mono focus:border-[#58a6ff] focus:outline-none'
 											/>
 											<button
@@ -1107,19 +1145,6 @@ export default function SettingsPage() {
 											<button
 												type='button'
 												onClick={() => {
-													setEncProxyUrlState('http://127.0.0.1:8888')
-													saveEncProxyUrl('http://127.0.0.1:8888')
-													setEncProxyConnected(true)
-													showToast('Установлен адрес локального EncProxy (8888)', 'success')
-												}}
-												className='text-[11px] text-[#58a6ff] hover:underline cursor-pointer'
-											>
-												Proxy (:8888)
-											</button>
-											<span className='text-gray-600'>•</span>
-											<button
-												type='button'
-												onClick={() => {
 													setEncProxyUrlState('http://127.0.0.1:5100')
 													saveEncProxyUrl('http://127.0.0.1:5100')
 													setEncProxyConnected(true)
@@ -1128,6 +1153,19 @@ export default function SettingsPage() {
 												className='text-[11px] text-[#58a6ff] hover:underline cursor-pointer'
 											>
 												Relay (:5100)
+											</button>
+											<span className='text-gray-600'>•</span>
+											<button
+												type='button'
+												onClick={() => {
+													setEncProxyUrlState('http://127.0.0.1:8888')
+													saveEncProxyUrl('http://127.0.0.1:8888')
+													setEncProxyConnected(true)
+													showToast('Установлен адрес HTTP EncProxy (8888)', 'info')
+												}}
+												className='text-[11px] text-[#58a6ff] hover:underline cursor-pointer'
+											>
+												Proxy (:8888)
 											</button>
 											<span className='text-gray-600'>•</span>
 											<button

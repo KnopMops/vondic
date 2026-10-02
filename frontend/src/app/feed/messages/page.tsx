@@ -37,7 +37,7 @@ import {
 	resetE2eRestoreCache,
 	restoreKeyFromServer,
 } from '@/lib/e2eKeySync'
-import { getEncProxyClient, isEncProxyEnabled, getEncProxyUrl } from '@/lib/encproxy'
+import { getEncProxyClient, isEncProxyEnabled, getEncProxyUrl, getEncProxyRelayUrl } from '@/lib/encproxy'
 import { useChannels } from '@/lib/hooks/useChannels'
 import { decryptDmPreviewText, tryDecryptE2EPreviewWithKeyIds, useChat } from '@/lib/hooks/useChat'
 import { useCommunities } from '@/lib/hooks/useCommunities'
@@ -2665,12 +2665,12 @@ export default function MessengerPage() {
 	}, [botMessages, isBotChat])
 
 	useEffect(() => {
-		setIsEncProxyActive(isEncProxyEnabled())
 		const client = getEncProxyClient()
+		setIsEncProxyActive(client.isConnected)
 		const unsub = client.on('statusChange', (s) => {
 			setIsEncProxyActive(s === 'connected')
 		})
-		const encProxyUrl = getEncProxyUrl()
+		const encProxyUrl = getEncProxyRelayUrl()
 		if (encProxyUrl && user?.id && accessToken) {
 			client.connect({
 				serverUrl: encProxyUrl,
@@ -2780,17 +2780,75 @@ export default function MessengerPage() {
 	const isChatLoading = isBotChat ? false : isLoading
 	const isChatTyping = isBotChat ? false : isTyping
 
+	const [activeEncProxyPeerIds, setActiveEncProxyPeerIds] = useState<
+		Record<string, boolean>
+	>({})
+
+	useEffect(() => {
+		if (!socket) return
+
+		const handlePeerStatus = (data: any) => {
+			if (data?.user_id) {
+				setActiveEncProxyPeerIds(prev => ({
+					...prev,
+					[data.user_id]: !!data.is_encproxy,
+				}))
+			}
+		}
+
+		const handleKeyExchange = (data: any) => {
+			if (data?.from_user_id) {
+				setActiveEncProxyPeerIds(prev => ({
+					...prev,
+					[data.from_user_id]: true,
+				}))
+			}
+		}
+
+		socket.on('encproxy_peer_status', handlePeerStatus)
+		socket.on('encproxy_key_exchange', handleKeyExchange)
+
+		return () => {
+			socket.off('encproxy_peer_status', handlePeerStatus)
+			socket.off('encproxy_key_exchange', handleKeyExchange)
+		}
+	}, [socket])
+
+	useEffect(() => {
+		if (!socket || !selectedFriend || !user) return
+		const userUsesProxy = !!(
+			(user as any).uses_encproxy ||
+			(user?.privacy_settings as any)?.uses_encproxy ||
+			isEncProxyEnabled()
+		)
+		if (userUsesProxy) {
+			socket.emit('encproxy_status_signal', {
+				target_user_id: selectedFriend.id,
+				is_active: true,
+				status: 'active',
+			})
+		}
+	}, [socket, selectedFriend?.id, user])
+
 	const peerUsesEncProxy = useMemo(() => {
 		if (!selectedFriend) return false
-		if ((selectedFriend as any).uses_encproxy || (selectedFriend as any).is_encproxy) return true
+		if (
+			(selectedFriend as any).uses_encproxy ||
+			(selectedFriend as any).is_encproxy ||
+			(selectedFriend.privacy_settings as any)?.uses_encproxy ||
+			activeEncProxyPeerIds[selectedFriend.id]
+		) {
+			return true
+		}
 		return messages.some(
 			(m) =>
 				m.sender_id === selectedFriend.id &&
 				(m.content?.startsWith('encproxy:') ||
-					(m as any).is_encproxy ||
-					(m as any).extra?.encproxy),
+					m.is_encproxy ||
+					(m as any).extra?.encproxy ||
+					(m as any).attachments?.some?.((a: any) => a?.type === 'encproxy' || a?.is_encproxy)),
 		)
-	}, [selectedFriend, messages])
+	}, [selectedFriend, messages, activeEncProxyPeerIds])
 
 	const [approvedEncProxyPeers, setApprovedEncProxyPeers] = useState<
 		Record<string, boolean>
@@ -7414,6 +7472,33 @@ export default function MessengerPage() {
 												</button>
 											)}
 
+											{selectedFriend && !isAiChat && !isBotChat && (
+												<button
+													onClick={() => {
+														if (!approvedEncProxyPeers[selectedFriend.id]) {
+															handleApproveEncProxyPeer()
+														} else {
+															showToast(`EncProxy сквозное шифрование с @${selectedFriend.username} активно`, 'info')
+														}
+													}}
+													className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all ${
+														approvedEncProxyPeers[selectedFriend.id]
+															? 'text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30'
+															: peerUsesEncProxy
+															? 'text-violet-400 bg-violet-500/20 hover:bg-violet-500/30 border border-violet-500/40 animate-pulse'
+															: 'text-[#8b949e] hover:text-[#e6edf3] hover:bg-[#21262d] border border-transparent'
+													}`}
+													title={
+														approvedEncProxyPeers[selectedFriend.id]
+															? `EncProxy защита с @${selectedFriend.username} активна`
+															: peerUsesEncProxy
+															? `Одобрить стороннее шифрование EncProxy с @${selectedFriend.username}`
+															: `Стороннее шифрование EncProxy`
+													}
+												>
+													<span className='text-sm'>🛡️</span>
+												</button>
+											)}
 										</div>
 									</>
 								)}
@@ -8072,7 +8157,6 @@ export default function MessengerPage() {
 							>
 								{selectedFriend &&
 									peerUsesEncProxy &&
-									!isEncProxyActive &&
 									!approvedEncProxyPeers[selectedFriend.id] && (
 										<div className='mb-4 mx-1 p-3.5 rounded-2xl bg-gradient-to-r from-violet-950/70 via-purple-950/50 to-neutral-900/80 border border-violet-500/40 backdrop-blur-md shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-white animate-fadeIn'>
 											<div className='flex items-center gap-3'>
@@ -8091,7 +8175,7 @@ export default function MessengerPage() {
 											</div>
 											<button
 												onClick={handleApproveEncProxyPeer}
-												className='px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 active:scale-95 text-white font-medium text-xs shadow-lg shadow-violet-600/30 transition-all shrink-0 flex items-center justify-center gap-1.5'
+												className='px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 active:scale-95 text-white font-medium text-xs shadow-lg shadow-violet-600/30 transition-all shrink-0 flex items-center justify-center gap-1.5 cursor-pointer'
 											>
 												Одобрить переписку с @{selectedFriend.username}
 											</button>
@@ -8100,7 +8184,6 @@ export default function MessengerPage() {
 
 								{selectedFriend &&
 									peerUsesEncProxy &&
-									!isEncProxyActive &&
 									approvedEncProxyPeers[selectedFriend.id] && (
 										<div className='mb-3 mx-1 px-3 py-1.5 rounded-xl bg-violet-950/30 border border-violet-500/20 flex items-center justify-between text-xs text-violet-300/90'>
 											<span className='flex items-center gap-1.5'>

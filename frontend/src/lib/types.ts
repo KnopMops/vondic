@@ -146,4 +146,6 @@ export interface Message {
 	}
 	disappear_after?: number | null
 	disappear_at?: string | null
+	is_encproxy?: boolean
+	extra?: any
 }

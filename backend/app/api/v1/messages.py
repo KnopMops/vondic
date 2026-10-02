@@ -31,6 +31,8 @@ class MessageSendSchema(BaseModel):
     reply_to_id: Optional[str] = None
     is_silent: Optional[bool] = False
     disappear_after: Optional[int] = None
+    is_encproxy: Optional[bool] = False
+    extra: Optional[Dict[str, Any]] = None
 
 
 @messages_router.post("/{message_id}/pin")
@@ -168,7 +170,9 @@ async def send_message(
         attachments=payload.attachments,
         reply_to_id=payload.reply_to_id,
         is_silent=bool(payload.is_silent),
-        disappear_after=payload.disappear_after
+        disappear_after=payload.disappear_after,
+        is_encproxy=bool(payload.is_encproxy),
+        extra=payload.extra
     )
     if err or not msg:
         raise HTTPException(status_code=400, detail=err or "Failed to send message")

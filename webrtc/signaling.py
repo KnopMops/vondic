@@ -251,8 +251,9 @@ class SignalingService:
         self.io.on("post_delete", self.on_post_delete)
         self.io.on("video_create", self.on_video_create)
         self.io.on("video_update", self.on_video_update)
-        self.io.on("video_delete", self.on_video_delete)
         self.io.on("e2e_key_exchange", self.on_e2e_key_exchange)
+        self.io.on("encproxy_status_signal", self.on_encproxy_status_signal)
+        self.io.on("encproxy_key_exchange", self.on_encproxy_key_exchange)
         self.io.on("typing", self.on_typing)
         self.io.on("stop_typing", self.on_stop_typing)
         self.io.on("message_read", self.on_message_read)
@@ -656,6 +657,32 @@ class SignalingService:
             },
             room=target_user_id,
         )
+
+    async def on_encproxy_status_signal(self, sid, payload):
+        target_user_id = str(payload.get("target_user_id")) if payload.get("target_user_id") else None
+        sender_id, _ = await self._get_sender(sid)
+        if target_user_id and sender_id:
+            await self.io.emit(
+                "encproxy_peer_status",
+                {
+                    "user_id": sender_id,
+                    "uses_encproxy": bool(payload.get("uses_encproxy", True)),
+                },
+                room=target_user_id,
+            )
+
+    async def on_encproxy_key_exchange(self, sid, payload):
+        target_user_id = str(payload.get("target_user_id")) if payload.get("target_user_id") else None
+        sender_id, sender = await self._get_sender(sid)
+        if target_user_id and sender_id:
+            out = dict(payload)
+            out["from_user_id"] = sender_id
+            out["from_username"] = getattr(sender, "username", "") if sender else ""
+            await self.io.emit(
+                "encproxy_key_exchange",
+                out,
+                room=target_user_id,
+            )
 
     async def on_call_answer(self, sid, payload):
         caller_socket_id = payload.get("caller_socket_id") or payload.get("target_socket_id")
@@ -1105,6 +1132,19 @@ class SignalingService:
         msg_type = payload.get("type", "text")
         forwarded_from = payload.get("forwarded_from")
         disappear_after = payload.get("disappear_after")
+        is_encproxy = bool(payload.get("is_encproxy") or (isinstance(payload.get("extra"), dict) and payload.get("extra", {}).get("encproxy")))
+        extra = payload.get("extra")
+
+        if is_encproxy or extra:
+            if attachments is None:
+                attachments = []
+            elif not isinstance(attachments, list):
+                attachments = [attachments]
+            attachments.append({
+                "type": "encproxy",
+                "is_encproxy": True,
+                "extra": extra or {"encproxy": True},
+            })
 
         if (
             attachments is not None
@@ -1269,6 +1309,8 @@ class SignalingService:
                 "type": msg_type,
                 "timestamp": timestamp,
                 "is_read": 0,
+                "is_encproxy": is_encproxy,
+                "extra": extra,
             }
 
             if forwarded_from:

@@ -1,9 +1,11 @@
 import logging
+import os
 from typing import Any, Dict, Optional
 from fastapi import FastAPI, HTTPException, Request, status, Depends
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -265,4 +267,9 @@ app.include_router(ai_router)
 app.include_router(corporate_router)
 app.include_router(call_routing_router)
 app.include_router(bot_games_router)
+
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+if os.path.exists(static_dir):
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
 

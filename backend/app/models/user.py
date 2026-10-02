@@ -161,6 +161,7 @@ class User(Base):
             "yandex_id": self.yandex_id,
             "yandex_disk_connected": bool(self.yandex_token),
             "privacy_settings": self.privacy_settings or {"show_email": False},
+            "uses_encproxy": bool((self.privacy_settings or {}).get("uses_encproxy", False)),
             "last_seen": (
                 f"{self.last_seen.isoformat()}Z"
                 if self.last_seen and self.last_seen.tzinfo is None

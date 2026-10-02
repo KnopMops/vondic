@@ -985,6 +985,8 @@ export const useChat = (
 										reply_to: msg.reply_to,
 										type: msg.type || 'text',
 										attachments: msg.is_deleted ? undefined : msg.attachments,
+										is_encproxy: !!msg.is_encproxy,
+										extra: msg.extra,
 									}))
 								: []
 							const decryptedHistory = history.map(msg => decryptMessageRef.current(msg))
@@ -1053,6 +1055,8 @@ export const useChat = (
 								pinned_by: msg.pinned_by,
 								attachments: msg.is_deleted ? undefined : msg.attachments,
 								forwarded_from: msg.forwarded_from || undefined,
+								is_encproxy: !!msg.is_encproxy,
+								extra: msg.extra,
 							}))
 						: []
 					hydrateKeysRef.current()
@@ -1241,6 +1245,8 @@ export const useChat = (
 								: Array.isArray(msg.attachments)
 									? msg.attachments
 									: undefined,
+							is_encproxy: !!msg.is_encproxy,
+							extra: msg.extra,
 						}))
 					: []
 				hydrateKeysFromLocalStorage()
@@ -1354,6 +1360,8 @@ export const useChat = (
 					type: data.type || 'text',
 					pinned_by: data.pinned_by,
 					attachments: data.attachments,
+					is_encproxy: !!data.is_encproxy,
+					extra: data.extra,
 				}
 				const decrypted = decryptMessage(newMessage)
 				setMessages(prevMessages => [...prevMessages, decrypted as Message])
@@ -1381,6 +1389,8 @@ export const useChat = (
 					type: msg.type || 'text',
 					pinned_by: msg.pinned_by,
 					attachments: msg.attachments,
+					is_encproxy: !!msg.is_encproxy,
+					extra: msg.extra,
 				}
 				const decrypted = decryptMessage(newMessage)
 				setMessages(prevMessages => [...prevMessages, decrypted as Message])
@@ -1402,6 +1412,8 @@ export const useChat = (
 					reply_to: msg.reply_to,
 					type: msg.type || 'text',
 					attachments: msg.attachments,
+					is_encproxy: !!msg.is_encproxy,
+					extra: msg.extra,
 				}
 				const decrypted = decryptMessage(newMessage)
 				setMessages(prevMessages => [...prevMessages, decrypted as Message])
@@ -1432,6 +1444,8 @@ export const useChat = (
 					reply_to: msg.reply_to,
 					type: msg.type || 'text',
 					attachments: msg.attachments,
+					is_encproxy: !!msg.is_encproxy,
+					extra: msg.extra,
 				}
 				const decrypted = decryptMessage(newMessage)
 				setMessages(prevMessages => [...prevMessages, decrypted as Message])
