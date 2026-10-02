@@ -24,6 +24,8 @@ class PostCreateSchema(BaseModel):
     content: str
     attachments: Optional[List[Dict[str, Any]]] = None
     community_id: Optional[str] = None
+    is_blog: Optional[bool] = False
+
 
 
 class CommentCreateSchema(BaseModel):
@@ -77,13 +79,32 @@ async def get_posts(
     per_page: int = Query(20, ge=1, le=100),
     community_id: Optional[str] = None,
     social_community_id: Optional[str] = None,
+    user_id: Optional[str] = None,
+    kind: Optional[str] = None,
+    filter: Optional[str] = None,
+    filter_mode: Optional[str] = None,
+    is_blog: Optional[bool] = None,
     current_user: Optional[User] = Depends(get_optional_current_user),
     db=Depends(get_async_db)
 ):
     viewer_id = current_user.id if current_user else None
     cid = social_community_id or community_id
+
+    # Determine blog mode
+    actual_is_blog = is_blog if is_blog is not None else (kind == "blog" or filter == "blog")
+    actual_filter_mode = filter or filter_mode
+    target_user_id = user_id
+    if actual_filter_mode == "subscriptions":
+        target_user_id = viewer_id
+
     items, total, current_page, pages = PostService.get_posts_paginated(
-        page, per_page, viewer_id=viewer_id, community_id=cid
+        page=page,
+        per_page=per_page,
+        user_id=target_user_id,
+        is_blog=actual_is_blog,
+        filter_mode=actual_filter_mode,
+        social_community_id=cid,
+        viewer_id=viewer_id,
     )
     dicts = [p.to_dict(viewer_id=viewer_id) for p in items]
     PostService.attach_like_flags(dicts, viewer_id)
@@ -110,6 +131,7 @@ async def create_post(
             title=payload.title,
             attachments=payload.attachments,
             community_id=payload.community_id,
+            is_blog=bool(payload.is_blog),
         )
         if isinstance(res, tuple):
             post, err = res
@@ -121,6 +143,7 @@ async def create_post(
     if err or not post:
         raise HTTPException(status_code=400, detail=err or "Failed to create post")
     pdict = post.to_dict(viewer_id=current_user.id)
+
     await _attach_author_to_post_async(db, pdict)
     return {"post": pdict, "message": "Post created"}
 

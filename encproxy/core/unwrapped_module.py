@@ -56,6 +56,20 @@ class UnwrappedModule:
         self.add_target_peer(user_id=user_id, dh_public_key=dh_public_key)
         self.pending_approvals = [p for p in self.pending_approvals if p.get("user_id") != user_id]
 
+    def auto_approve_peer(self, user_id: str, username: str = "", dh_public_key: Optional[str] = None):
+        """Automatically add peer to targets with intercepted key and activate encryption."""
+        uid = str(user_id).strip()
+        uname = str(username).strip() or uid
+        self.add_target_peer(user_id=uid, username=uname, dh_public_key=dh_public_key)
+        self.pending_approvals = [p for p in self.pending_approvals if p.get("user_id") != uid]
+        logger.info(f"[EncProxy] Auto-paired peer {uname} ({uid}) with intercepted key!")
+        for listener in self.approval_listeners:
+            try:
+                listener({"user_id": uid, "username": uname, "status": "active", "dh_public_key": dh_public_key})
+            except Exception:
+                pass
+
+
     def register_pending_request(self, user_id: str, username: str, dh_public_key: str):
         req = {
             "user_id": user_id,

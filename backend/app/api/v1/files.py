@@ -42,11 +42,24 @@ async def list_user_files(
     files = res.scalars().all()
 
     return {
-        "files": [{"id": f.id, "filename": f.filename, "url": f.url, "size": f.size, "mime_type": f.mime_type, "storage_type": f.storage_type} for f in files],
+        "files": [
+            {
+                "id": f.id,
+                "name": getattr(f, "name", None) or getattr(f, "filename", "file"),
+                "filename": getattr(f, "name", None) or getattr(f, "filename", "file"),
+                "url": f.url,
+                "size": f.size or 0,
+                "mime_type": getattr(f, "mime_type", None) or "application/octet-stream",
+                "storage_type": getattr(f, "storage_type", "s3"),
+                "created_at": f.created_at.isoformat() if getattr(f, "created_at", None) else None,
+            }
+            for f in files
+        ],
         "total": total,
         "page": page,
         "pages": math.ceil(total / per_page) if per_page else 1,
     }
+
 
 
 @files_router.post("/list")

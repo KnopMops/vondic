@@ -218,17 +218,31 @@ class BotGameService:
     @staticmethod
     async def get_asset_bytes(game: BotGame, rel_path: str) -> bytes | None:
         """Download a game asset. Works for both local and S3 storage."""
+        clean_path = (rel_path or "").split("?")[0].split("#")[0].lstrip("/")
+        if not clean_path:
+            clean_path = (game.entry_path or "index.html").lstrip("/")
+
         base_str = game.storage_dir or ""
         if base_str.startswith(f"{_GAMES_S3_PREFIX}/"):
             # S3 storage
             from app.services.s3_service import download_file_from_s3
-            key = f"{base_str}/{rel_path}"
-            return await download_file_from_s3(key)
+            key = f"{base_str}/{clean_path}"
+            data = await download_file_from_s3(key)
+            if data is None and game.entry_path and "/" in game.entry_path:
+                entry_dir = game.entry_path.rsplit("/", 1)[0]
+                nested_key = f"{base_str}/{entry_dir}/{clean_path}"
+                data = await download_file_from_s3(nested_key)
+            return data
+
         # Fallback: local storage
-        local = BotGameService.resolve_asset_path(game, rel_path)
+        local = BotGameService.resolve_asset_path(game, clean_path)
+        if not local and game.entry_path and "/" in game.entry_path:
+            entry_dir = game.entry_path.rsplit("/", 1)[0]
+            local = BotGameService.resolve_asset_path(game, f"{entry_dir}/{clean_path}")
         if local:
             return local.read_bytes()
         return None
+
 
     @staticmethod
     def make_download_zip(game: BotGame) -> Path | None:

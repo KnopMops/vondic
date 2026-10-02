@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 import { audioManager } from '@/lib/services/musicPlayer'
+import { getAttachmentUrl } from '@/lib/utils'
+
 
 export interface Track {
   id: string
@@ -152,8 +154,10 @@ export const useMusicPlayerStore = create<MusicPlayerState>((set, get) => ({
     const newQueue = queue || state.queue
     const position = newQueue.findIndex(t => t.id === track.id)
     const audio = getAudio()
-    audio.src = track.url
+    const resolvedUrl = getAttachmentUrl(track.url) || track.url
+    audio.src = resolvedUrl
     audio.play().catch(() => {})
+
     return {
       currentTrack: track,
       isPlaying: true,

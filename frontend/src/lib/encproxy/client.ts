@@ -162,7 +162,7 @@ export class EncProxyClient {
 		encryptedContent: string,
 		encryptedAttachments?: string,
 		messageType?: string,
-		extra?: unknown,
+		extra?: Record<string, unknown>,
 	) {
 		if (!this.socket?.connected) return false
 		this.emit('encproxy_send', {
@@ -171,8 +171,9 @@ export class EncProxyClient {
 			encrypted_attachments: encryptedAttachments || '',
 			message_type: messageType || 'text',
 			timestamp: Date.now(),
-			...extra,
+			...(extra || {}),
 		})
+
 		return true
 	}
 

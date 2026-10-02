@@ -67,7 +67,11 @@ class MessageService:
             return None
         if not isinstance(value, str):
             value = str(value)
-        return html.escape(value.strip(), quote=False)
+        val = value.strip()
+        if val.startswith("encproxy:") or val.startswith("e2e:"):
+            return val
+        return html.escape(val, quote=False)
+
 
     @staticmethod
     def _decrypt_content(value: str | None) -> str | None:
@@ -465,6 +469,9 @@ class MessageService:
                     preview = "📎 Файл"
                 elif raw_content.startswith("e2e:"):
                     preview = "🔐 Зашифрованное сообщение"
+                elif raw_content.startswith("encproxy:"):
+                    preview = "🛡️ Зашифровано EncProxy"
+
                 else:
                     decrypted = MessageService._decrypt_content(
                         raw_content) or ""

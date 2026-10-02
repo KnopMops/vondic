@@ -2681,6 +2681,80 @@ export default function MessengerPage() {
 		return unsub
 	}, [user?.id, accessToken])
 
+	const peerUsesEncProxy = useMemo(() => {
+		if (!selectedFriend) return false
+		if ((selectedFriend as any).uses_encproxy || (selectedFriend as any).is_encproxy) return true
+		return messages.some(
+			(m) =>
+				m.sender_id === selectedFriend.id &&
+				(m.content?.startsWith('encproxy:') ||
+					(m as any).is_encproxy ||
+					(m as any).extra?.encproxy),
+		)
+	}, [selectedFriend, messages])
+
+	const [approvedEncProxyPeers, setApprovedEncProxyPeers] = useState<
+		Record<string, boolean>
+	>(() => {
+		if (typeof window === 'undefined') return {}
+		try {
+			const raw = localStorage.getItem('vondic_approved_encproxy_peers')
+			return raw ? JSON.parse(raw) : {}
+		} catch {
+			return {}
+		}
+	})
+
+	const handleApproveEncProxyPeer = async () => {
+		if (!selectedFriend || !user) return
+		try {
+			let pubKeyBase64 = ''
+			if (typeof crypto !== 'undefined' && crypto.subtle) {
+				const pair = await crypto.subtle.generateKey(
+					{ name: 'ECDH', namedCurve: 'P-256' },
+					true,
+					['deriveBits'],
+				)
+				const rawPub = await crypto.subtle.exportKey('raw', pair.publicKey)
+				pubKeyBase64 = btoa(String.fromCharCode(...new Uint8Array(rawPub)))
+			}
+
+			const keyId = [user.id, selectedFriend.id].sort().join(':')
+			const updated = { ...approvedEncProxyPeers, [selectedFriend.id]: true }
+			setApprovedEncProxyPeers(updated)
+			try {
+				localStorage.setItem('vondic_approved_encproxy_peers', JSON.stringify(updated))
+			} catch {}
+
+			if (socket && socket.connected) {
+				socket.emit('encproxy_key_exchange', {
+					target_user_id: selectedFriend.id,
+					public_key: pubKeyBase64,
+					key_id: keyId,
+					type: 'offer',
+					from_user_id: user.id,
+					from_username: user.username,
+				})
+			}
+
+			if (pubKeyBase64) {
+				sendChatMessage(
+					`encproxy:handshake:approve:${pubKeyBase64}`,
+					'text',
+				)
+			}
+
+			showToast(
+				`Переписка с @${selectedFriend.username} одобрена! Сквозное шифрование активно.`,
+				'success',
+			)
+		} catch (e) {
+			console.error('Failed to approve EncProxy peer:', e)
+			showToast('Не удалось одобрить шифрование', 'error')
+		}
+	}
+
+
 	useEffect(() => {
 		if (!selectedFriend?.id || isAiChat || isBotChat || !accessToken) {
 			setSecretChatEnabled(false)
@@ -7090,14 +7164,16 @@ export default function MessengerPage() {
 																	🔐
 																</span>
 															)}
-															{isEncProxyActive && (
+															{(isEncProxyActive || peerUsesEncProxy) && (
 																<span
-																	className='text-[10px] px-1.5 py-0.5 rounded-md bg-violet-500/15 text-violet-400 font-medium border border-violet-500/30'
-																	title='Использует EncProxy'
+																	className='text-[10px] px-1.5 py-0.5 rounded-md bg-violet-500/15 text-violet-400 font-medium border border-violet-500/30 flex items-center gap-1'
+																	title={isEncProxyActive ? 'Использует EncProxy' : 'Собеседник использует стороннее шифрование EncProxy'}
 																>
-																	EncProxy
+																	<span>🛡️</span>
+																	<span>EncProxy</span>
 																</span>
 															)}
+
 															{selectedFriend.premium && (
 																<span className='text-amber-400 text-xs'>★</span>
 															)}
@@ -7993,7 +8069,49 @@ export default function MessengerPage() {
 								onScroll={handleScroll}
 								className='flex-1 overflow-y-auto px-4 md:px-6 py-4 custom-scrollbar scroll-smooth'
 							>
+								{selectedFriend &&
+									peerUsesEncProxy &&
+									!isEncProxyActive &&
+									!approvedEncProxyPeers[selectedFriend.id] && (
+										<div className='mb-4 mx-1 p-3.5 rounded-2xl bg-gradient-to-r from-violet-950/70 via-purple-950/50 to-neutral-900/80 border border-violet-500/40 backdrop-blur-md shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-white animate-fadeIn'>
+											<div className='flex items-center gap-3'>
+												<div className='w-10 h-10 rounded-xl bg-violet-600/20 border border-violet-500/30 flex items-center justify-center text-violet-400 shrink-0 text-xl'>
+													🛡️
+												</div>
+												<div>
+													<div className='text-sm font-semibold text-white flex items-center gap-2'>
+														<span>Данный пользователь использует стороннее шифрование</span>
+														<span className='text-[10px] px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-300 font-mono'>EncProxy</span>
+													</div>
+													<div className='text-xs text-violet-300/80 mt-0.5'>
+														Одобрите переписку для автоматического обмена ключами и активации сквозной защиты
+													</div>
+												</div>
+											</div>
+											<button
+												onClick={handleApproveEncProxyPeer}
+												className='px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 active:scale-95 text-white font-medium text-xs shadow-lg shadow-violet-600/30 transition-all shrink-0 flex items-center justify-center gap-1.5'
+											>
+												Одобрить переписку с @{selectedFriend.username}
+											</button>
+										</div>
+									)}
+
+								{selectedFriend &&
+									peerUsesEncProxy &&
+									!isEncProxyActive &&
+									approvedEncProxyPeers[selectedFriend.id] && (
+										<div className='mb-3 mx-1 px-3 py-1.5 rounded-xl bg-violet-950/30 border border-violet-500/20 flex items-center justify-between text-xs text-violet-300/90'>
+											<span className='flex items-center gap-1.5'>
+												<span>🛡️</span>
+												<span>Стороннее шифрование (EncProxy) с @{selectedFriend.username} одобрено и активно</span>
+											</span>
+											<span className='text-[10px] text-emerald-400 font-medium'>Защищено</span>
+										</div>
+									)}
+
 								{isChatLoading && messages.length > 0 && !isChatSearchOpen && (
+
 									<div className='flex justify-center py-4'>
 										<div
 											className={`w-6 h-6 border-2 border-t-transparent rounded-full animate-spin ${currentBackground.borderColor.replace(

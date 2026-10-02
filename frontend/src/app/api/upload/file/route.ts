@@ -21,42 +21,62 @@ export async function POST(req: NextRequest) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 		}
 
-		const body = await req.json().catch((e) => {
-			console.error('[Upload] Failed to parse JSON body:', e)
-			return {}
-		})
-		const file = body?.file
-		const filename = body?.filename
-
-		console.log('[Upload] Received file upload request:', {
-			hasFile: !!file,
-			filename,
-			fileLength: file?.length,
-			tokenLength: token.length,
-		})
-
-		if (!file || !filename) {
-			console.error('[Upload] Missing file or filename in request body')
-			return NextResponse.json(
-				{ error: 'Missing file or filename' },
-				{ status: 400 },
-			)
-		}
-
+		const contentType = req.headers.get('content-type') || ''
 		const backendUrl = getBackendUrl()
-		console.log('[Upload] Using backend URL:', backendUrl)
 
-		const response = await fetch(`${backendUrl}/api/v1/upload/file`, {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify({
-				access_token: token,
-				file,
-				filename,
-			}),
-		})
+		let response: Response
+
+		if (contentType.includes('multipart/form-data')) {
+			const incomingFormData = await req.formData()
+			const fileEntry = incomingFormData.get('file')
+			if (!fileEntry) {
+				return NextResponse.json(
+					{ error: 'Missing file in multipart form data' },
+					{ status: 400 },
+				)
+			}
+
+			const backendFormData = new FormData()
+			for (const [key, value] of incomingFormData.entries()) {
+				backendFormData.append(key, value)
+			}
+
+			response = await fetch(`${backendUrl}/api/v1/upload/file`, {
+				method: 'POST',
+				headers: {
+					Authorization: `Bearer ${token}`,
+				},
+				body: backendFormData,
+			})
+		} else {
+			const body = await req.json().catch((e) => {
+				console.error('[Upload] Failed to parse JSON body:', e)
+				return {}
+			})
+			const file = body?.file
+			const filename = body?.filename
+
+			if (!file || !filename) {
+				console.error('[Upload] Missing file or filename in request body')
+				return NextResponse.json(
+					{ error: 'Missing file or filename' },
+					{ status: 400 },
+				)
+			}
+
+			response = await fetch(`${backendUrl}/api/v1/upload/file`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`,
+				},
+				body: JSON.stringify({
+					access_token: token,
+					file,
+					filename,
+				}),
+			})
+		}
 
 		if (!response.ok) {
 			const errorText = await response.text()
@@ -68,8 +88,11 @@ export async function POST(req: NextRequest) {
 		}
 
 		const data = await response.json()
-		console.log('[Upload] Upload successful:', data)
-		return NextResponse.json(data)
+		return NextResponse.json({
+			...data,
+			file_url: data.url || data.file_url,
+		})
+
 	} catch (error) {
 		console.error('[Upload] Upload file proxy error:', error)
 		return NextResponse.json(

@@ -54,20 +54,21 @@ export async function GET(req: NextRequest) {
 			: postsPayload.items || postsPayload.posts || []
 
 		let usersMap: Record<string, any> = {}
-		const needsAuthors = items.some(
-			(p: { author_name?: string; posted_by?: string }) =>
-				p.posted_by && !p.author_name,
-		)
-		if (needsAuthors && accessToken) {
+		const missingAuthorIds = items
+			.filter((p: { author_name?: string; posted_by?: string }) => p.posted_by && !p.author_name)
+			.map((p: { posted_by: string }) => p.posted_by)
+
+		if (missingAuthorIds.length > 0 && accessToken) {
 			const usersResponse = await fetch(`${BACKEND_URL}/api/v1/users/`, {
 				method: 'GET',
 				headers: withVondicProxyHeaders({
 					'Content-Type': 'application/json',
 					Authorization: `Bearer ${accessToken}`,
 				}),
-			})
-			if (usersResponse.ok) {
-				const users = await usersResponse.json()
+				next: { revalidate: 60 },
+			}).catch(() => null)
+			if (usersResponse && usersResponse.ok) {
+				const users = await usersResponse.json().catch(() => [])
 				if (Array.isArray(users)) {
 					users.forEach((u: { id: string }) => {
 						usersMap[u.id] = u
@@ -75,6 +76,7 @@ export async function GET(req: NextRequest) {
 				}
 			}
 		}
+
 
 		const enrichedPosts = Array.isArray(items)
 			? items.map((post: any) => {

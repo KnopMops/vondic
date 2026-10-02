@@ -12,8 +12,10 @@ class PeersTab(QWidget):
     def __init__(self, unwrapped_module: UnwrappedModule, parent=None):
         super().__init__(parent)
         self.unwrapped_module = unwrapped_module
+        self.unwrapped_module.approval_listeners.append(lambda _: self.load_peers_to_table())
         self.init_ui()
         self.load_peers_to_table()
+
 
     def init_ui(self):
         layout = QVBoxLayout(self)

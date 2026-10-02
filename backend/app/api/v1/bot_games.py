@@ -87,8 +87,9 @@ async def _serve_game_file(bot_id: str, game_id: str, path: str = ""):
     game = BotGameService.get_game(bot_id, game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
-    if not game.is_published:
+    if not game.is_published and game.scan_status != "approved":
         raise HTTPException(status_code=403, detail="Game not published")
+
 
     file_path = path or game.entry_path or "index.html"
     ext = os.path.splitext(file_path)[1].lower()

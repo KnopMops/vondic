@@ -3,32 +3,22 @@
 import AppLoader from '@/components/ui/AppLoader'
 import SocialFeed from '@/components/social/SocialFeed'
 import { useAuth } from '@/lib/AuthContext'
-import { setSocketId } from '@/lib/features/authSlice'
-import { useAppDispatch } from '@/lib/hooks'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
-
-function generateUUID(): string {
-	if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-		return crypto.randomUUID()
-	}
-	return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-		const r = (Math.random() * 16) | 0
-		const v = c === 'x' ? r : (r & 0x3) | 0x8
-		return v.toString(16)
-	})
-}
+import { useEffect } from 'react'
 
 export default function BlogPage() {
 	const { user, logout, isLoading: isAuthLoading, isInitialized } = useAuth()
 	const router = useRouter()
 
 	useEffect(() => {
-		if (isInitialized && !isAuthLoading) {
-			
-			router.push('/feed')
+		if (isInitialized && !isAuthLoading && !user) {
+			router.push('/')
 		}
-	}, [isInitialized, isAuthLoading, router])
+	}, [user, isAuthLoading, isInitialized, router])
 
-	return <AppLoader fullScreen size='lg' />
+	if (!isInitialized || isAuthLoading || !user) {
+		return <AppLoader fullScreen size='lg' />
+	}
+
+	return <SocialFeed email={user.email} onLogout={logout} mode='blog' />
 }

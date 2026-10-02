@@ -197,10 +197,10 @@ export function usePosts({
 			if (!res.ok) throw new Error('Failed to delete post')
 			return res.json()
 		},
-		onSuccess: () => {
+		onSuccess: (_data, variables) => {
 			queryClient.invalidateQueries({ queryKey: ['posts'] })
 			try {
-				socket?.emit('post_delete', { id })
+				socket?.emit('post_delete', { id: variables.id })
 			} catch {}
 		},
 	})
@@ -230,14 +230,15 @@ export function usePosts({
 			if (!res.ok) throw new Error('Failed to update post')
 			return res.json()
 		},
-		onSuccess: (data: any) => {
+		onSuccess: (data: any, variables) => {
 			queryClient.invalidateQueries({ queryKey: ['posts'] })
 			try {
-				const payload = { id: data?.id ?? id, ...data }
+				const payload = { id: data?.id ?? variables.id, ...data }
 				socket?.emit('post_update', payload)
 			} catch {}
 		},
 	})
+
 
 	return {
 		...query,

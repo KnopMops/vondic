@@ -18,18 +18,12 @@ export default function FeedPage() {
 		}
 	}, [user, isAuthLoading, isInitialized, router])
 
-	// socket_id задаёт только сервер signaling (SocketContext → connection_success).
-	// Старый random UUID через /set_socket_id ломал release_socket при выходе (профиль висел «в сети»).
-	const isLoading =
-		!isInitialized ||
-		isAuthLoading ||
-		!user ||
-		!isConnected ||
-		!user.socket_id
+	const isLoading = !isInitialized || isAuthLoading || !user
 
 	if (isLoading) {
 		return <AppLoader fullScreen size='lg' />
 	}
+
 
 	return <SocialFeed email={user.email} onLogout={logout} mode='feed' />
 }

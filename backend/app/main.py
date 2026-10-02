@@ -264,3 +264,5 @@ app.include_router(join_requests_router)
 app.include_router(ai_router)
 app.include_router(corporate_router)
 app.include_router(call_routing_router)
+app.include_router(bot_games_router)
+

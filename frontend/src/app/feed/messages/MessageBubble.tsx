@@ -422,13 +422,22 @@ const MessageBubble = memo(
 								: undefined
 						return { intro, invite: parsed }
 					})()
+		const isEncProxyHandshake = typeof msg.content === 'string' && (
+			msg.content.startsWith('encproxy:handshake:') ||
+			msg.content.startsWith('encproxy_handshake:')
+		)
 		const displayContent = msg.is_deleted
 			? 'Сообщение удалено'
 			: hasDisappeared
 				? 'Сообщение исчезло'
 				: typeof msg.content === 'string' && msg.content.startsWith('e2e:')
 					? '🔒 Зашифрованное сообщение'
-					: (msg.content || '').replace(/\n*\s*__STORY_REPLY__\{.*?\}__\s*/g, '').trim()
+					: isEncProxyHandshake
+						? '🛡️ Рукопожатие EncProxy (ключ согласован)'
+						: typeof msg.content === 'string' && msg.content.startsWith('encproxy:')
+							? '🛡️ Сообщение защищено сторонним шифрованием (EncProxy)'
+							: (msg.content || '').replace(/\n*\s*__STORY_REPLY__\{.*?\}__\s*/g, '').trim()
+
 		const reactionEntries = reactions ? Object.entries(reactions) : []
 		const attachments = Array.isArray(msg.attachments) ? msg.attachments : []
 		const isGroupChat = !!(msg.group_id || msg.channel_id)
@@ -1329,7 +1338,13 @@ const MessageBubble = memo(
 								: 'text-[#8b949e]'
 						}`}
 					>
+						{((msg as any).is_encproxy || (msg as any).is_encproxy_unwrapped || (typeof msg.content === 'string' && (msg.content.startsWith('encproxy:') || msg.content.startsWith('encproxy_handshake:')))) && (
+							<span className='mr-1 inline-flex items-center gap-0.5 text-[9px] px-1 py-0.2 rounded bg-violet-500/20 text-violet-300 border border-violet-500/30 font-medium' title='Защищено сторонним шифрованием EncProxy'>
+								🛡️ EncProxy
+							</span>
+						)}
 						{formatMskTime(
+
 							(msg as Message & { created_at?: string }).timestamp ||
 								(msg as Message & { created_at?: string }).created_at ||
 								'',

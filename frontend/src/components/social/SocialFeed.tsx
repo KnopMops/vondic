@@ -20,8 +20,7 @@ type FilterMode = 'all' | 'subscriptions' | 'blog'
 
 export default function SocialFeed({ email, onLogout, mode = 'feed' }: Props) {
 	const { user } = useAppSelector(state => state.auth)
-	const [filter, setFilter] = useState<FilterMode>('all')
-	
+	const [filter, setFilter] = useState<FilterMode>(mode === 'blog' ? 'blog' : 'all')
 	
 	const kind = filter === 'blog' ? 'blog' : 'feed'
 	const {
@@ -36,8 +35,9 @@ export default function SocialFeed({ email, onLogout, mode = 'feed' }: Props) {
 	} = usePosts({ perPage: 5, kind, filter })
 
 	const addPost = (text: string, attachments?: Attachment[], isBlog?: boolean) => {
-		createPost({ text, attachments, is_blog: isBlog || mode === 'blog' })
+		createPost({ text, attachments, is_blog: isBlog || mode === 'blog' || filter === 'blog' })
 	}
+
 
 	const handleDeletePost = (id: string | number, reason?: string) => {
 		if (!user) return
