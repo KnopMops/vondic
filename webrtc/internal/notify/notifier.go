@@ -20,7 +20,21 @@ type Notifier struct {
 func NewNotifier(rabbitURL string) *Notifier {
 	n := &Notifier{rabbitURL: rabbitURL}
 	n.connect()
+	go n.reconnectLoop()
 	return n
+}
+
+func (n *Notifier) reconnectLoop() {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		n.mu.Lock()
+		closed := n.conn == nil || n.conn.IsClosed() || n.ch == nil || n.ch.IsClosed()
+		n.mu.Unlock()
+		if closed {
+			n.connect()
+		}
+	}
 }
 
 func (n *Notifier) connect() {

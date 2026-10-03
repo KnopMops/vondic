@@ -27,7 +27,7 @@ func NewRepository(database *Database, cryptoSvc *crypto.CryptoService, secretKe
 	}
 }
 
-// AuthenticateToken verifies JWT or session token in DB and returns the User
+// AuthenticateToken verifies JWT, session token, user direct token, or OAuth token in DB and returns the User
 func (r *Repository) AuthenticateToken(token string) (*User, error) {
 	if token == "" {
 		return nil, errors.New("empty token")
@@ -53,26 +53,66 @@ func (r *Repository) AuthenticateToken(token string) (*User, error) {
 		}
 	}
 
-	// 2. Try looking up in user_sessions via lookup hash
+	// 2. Try looking up in user_sessions via lookup key (prefix before '.')
 	lookupKey := crypto.TokenLookupKey(token)
 	var session UserSession
 	if err := r.db.Where("access_token_lookup = ?", lookupKey).First(&session).Error; err == nil {
 		if session.ExpiresAt == nil || session.ExpiresAt.After(time.Now()) {
-			var user User
-			if err := r.db.Where("id = ?", session.UserID).First(&user).Error; err == nil {
-				return &user, nil
+			if session.AccessTokenHash != "" && strings.HasPrefix(session.AccessTokenHash, "$argon2id$") {
+				if crypto.VerifyArgon2id(token, session.AccessTokenHash) {
+					var user User
+					if err := r.db.Where("id = ?", session.UserID).First(&user).Error; err == nil {
+						return &user, nil
+					}
+				}
+			} else {
+				var user User
+				if err := r.db.Where("id = ?", session.UserID).First(&user).Error; err == nil {
+					return &user, nil
+				}
+			}
+		}
+	}
+
+	// 2b. Legacy SHA256 lookup fallback
+	legacyKey := crypto.LegacySha256LookupKey(token)
+	if legacyKey != lookupKey {
+		if err := r.db.Where("access_token_lookup = ?", legacyKey).First(&session).Error; err == nil {
+			if session.ExpiresAt == nil || session.ExpiresAt.After(time.Now()) {
+				var user User
+				if err := r.db.Where("id = ?", session.UserID).First(&user).Error; err == nil {
+					return &user, nil
+				}
 			}
 		}
 	}
 
 	// 3. Fallback: check users table directly
 	var user User
-	if err := r.db.Where("id = ? OR access_token = ? OR access_token_lookup = ?", token, token, lookupKey).First(&user).Error; err == nil {
-		return &user, nil
+	if err := r.db.Where("id = ? OR access_token = ? OR access_token_lookup = ? OR access_token_lookup = ?", token, token, lookupKey, legacyKey).First(&user).Error; err == nil {
+		if user.AccessToken != nil && strings.HasPrefix(*user.AccessToken, "$argon2id$") {
+			if crypto.VerifyArgon2id(token, *user.AccessToken) {
+				return &user, nil
+			}
+		} else {
+			return &user, nil
+		}
+	}
+
+	// 4. Fallback: check oauth_access_tokens table
+	var oauth OAuthAccessToken
+	if err := r.db.Where("token = ?", token).First(&oauth).Error; err == nil {
+		if oauth.ExpiresAt == nil || oauth.ExpiresAt.After(time.Now()) {
+			var u User
+			if err := r.db.Where("id = ?", oauth.UserID).First(&u).Error; err == nil {
+				return &u, nil
+			}
+		}
 	}
 
 	return nil, errors.New("invalid or expired token")
 }
+
 
 func (r *Repository) GetUser(userID string) (*User, error) {
 	var user User

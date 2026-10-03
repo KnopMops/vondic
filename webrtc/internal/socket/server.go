@@ -54,7 +54,11 @@ func (sm *ServerManager) setupEvents() {
 		// 1. Try authenticating from Handshake (query/auth/headers)
 		user := sm.extractUserFromHandshake(client)
 		if user != nil {
-			sm.registerUserConnection(client, user.ID, *user.Username)
+			uname := ""
+			if user.Username != nil {
+				uname = *user.Username
+			}
+			sm.registerUserConnection(client, user.ID, uname)
 		}
 
 		// 2. Inbound event: "authenticate" (used by Flutter and fallback)
@@ -249,7 +253,7 @@ func (sm *ServerManager) EmitToRoom(room, event string, payload any) bool {
 }
 
 func (sm *ServerManager) GetOnlineUsers() []string {
-	var users []string
+	users := make([]string, 0)
 	sm.userSockets.Range(func(key, value any) bool {
 		users = append(users, key.(string))
 		return true
@@ -261,7 +265,7 @@ func (sm *ServerManager) GetActiveCalls() []map[string]interface{} {
 	sm.groupCallsMutex.RLock()
 	defer sm.groupCallsMutex.RUnlock()
 
-	var result []map[string]interface{}
+	result := make([]map[string]interface{}, 0)
 	for id, call := range sm.groupCalls {
 		c := map[string]interface{}{
 			"call_id": id,
@@ -285,9 +289,9 @@ func (sm *ServerManager) GetActiveVoiceChannels() []map[string]interface{} {
 	sm.voiceChannelsMutex.RLock()
 	defer sm.voiceChannelsMutex.RUnlock()
 
-	var result []map[string]interface{}
+	result := make([]map[string]interface{}, 0)
 	for chID, participants := range sm.voiceChannelCalls {
-		var partsList []map[string]interface{}
+		partsList := make([]map[string]interface{}, 0)
 		for _, p := range participants {
 			partsList = append(partsList, p)
 		}
@@ -304,7 +308,7 @@ func (sm *ServerManager) GetVoiceChannelParticipants(channelID string) []map[str
 	sm.voiceChannelsMutex.RLock()
 	defer sm.voiceChannelsMutex.RUnlock()
 
-	var partsList []map[string]interface{}
+	partsList := make([]map[string]interface{}, 0)
 	if parts, ok := sm.voiceChannelCalls[channelID]; ok {
 		for _, p := range parts {
 			partsList = append(partsList, p)
@@ -312,6 +316,7 @@ func (sm *ServerManager) GetVoiceChannelParticipants(channelID string) []map[str
 	}
 	return partsList
 }
+
 
 func (sm *ServerManager) leaveAllVoiceChannels(sid, userID string) {
 	sm.voiceChannelsMutex.Lock()

@@ -55,3 +55,30 @@ func TestHashToken(t *testing.T) {
 		t.Fatalf("Expected SHA256 hex string (64 chars), got %d chars", len(hash1))
 	}
 }
+
+func TestTokenLookupKey(t *testing.T) {
+	token := "bf319d3bf45460e63ab7e505e632e227.bu0SLp1Ri8kPcwWp5DzywzNRVF7xtx0Ijgpw2iRvThN1qJLxinFYqQ"
+	lookup := TokenLookupKey(token)
+	if lookup != "bf319d3bf45460e63ab7e505e632e227" {
+		t.Fatalf("Expected prefix 'bf319d3bf45460e63ab7e505e632e227', got: %s", lookup)
+	}
+
+	plain := "plaintoken"
+	if TokenLookupKey(plain) != plain {
+		t.Fatalf("Expected %s, got: %s", plain, TokenLookupKey(plain))
+	}
+}
+
+func TestVerifyArgon2id(t *testing.T) {
+	password := "my_secret_token"
+	pythonHash := "$argon2id$v=19$m=65536,t=2,p=4$YX856lFaa-NZ2dfPQhptNA==$dHPUZzDoOS2vw1TaCt4IeE_mpPH8tgfa9L2HTHbkkO8="
+
+	if !VerifyArgon2id(password, pythonHash) {
+		t.Fatalf("VerifyArgon2id failed to verify Python-generated hash")
+	}
+
+	if VerifyArgon2id("wrong_token", pythonHash) {
+		t.Fatalf("VerifyArgon2id should fail on wrong password")
+	}
+}
+

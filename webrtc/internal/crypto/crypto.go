@@ -4,11 +4,15 @@ import (
 	"crypto/aes"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"strconv"
 	"strings"
+
+	"golang.org/x/crypto/argon2"
 )
 
 type CryptoService struct {
@@ -195,7 +199,24 @@ func HashToken(token string) string {
 	return hex.EncodeToString(hash[:])
 }
 
+// TokenLookupKey returns the session lookup key for a token.
+// The Python auth service generates tokens as: <32-hex-chars>.<urlsafe-secret>
+// and stores the first 32-hex segment before '.' as access_token_lookup in user_sessions.
 func TokenLookupKey(token string) string {
+	if token == "" {
+		return ""
+	}
+	if strings.Contains(token, ".") {
+		parts := strings.SplitN(token, ".", 2)
+		if len(parts[0]) > 0 {
+			return parts[0]
+		}
+	}
+	return token
+}
+
+// LegacySha256LookupKey returns the first 16 chars of SHA256 of the token for legacy sessions.
+func LegacySha256LookupKey(token string) string {
 	if token == "" {
 		return ""
 	}
@@ -206,3 +227,69 @@ func TokenLookupKey(token string) string {
 	}
 	return hexStr
 }
+
+// VerifyArgon2id verifies a password against an Argon2id hash string formatted as:
+// $argon2id$v=19$m=65536,t=2,p=4$<salt>$<expected>
+func VerifyArgon2id(password, hashStr string) bool {
+	if password == "" || hashStr == "" {
+		return false
+	}
+	if !strings.HasPrefix(hashStr, "$argon2id$") {
+		return false
+	}
+	parts := strings.Split(hashStr, "$")
+	// Expected parts: ["", "argon2id", "v=19", "m=65536,t=2,p=4", b64Salt, b64Hash]
+	if len(parts) < 6 {
+		return false
+	}
+
+	params := make(map[string]int)
+	for _, item := range strings.Split(parts[3], ",") {
+		kv := strings.Split(item, "=")
+		if len(kv) == 2 {
+			val, err := strconv.Atoi(kv[1])
+			if err == nil {
+				params[kv[0]] = val
+			}
+		}
+	}
+
+	m, okM := params["m"]
+	if !okM || m <= 0 {
+		m = 65536
+	}
+	t, okT := params["t"]
+	if !okT || t <= 0 {
+		t = 2
+	}
+	p, okP := params["p"]
+	if !okP || p <= 0 {
+		p = 4
+	}
+
+	salt, err := decodeBase64Flexible(parts[4])
+	if err != nil {
+		return false
+	}
+	expected, err := decodeBase64Flexible(parts[5])
+	if err != nil {
+		return false
+	}
+
+	derived := argon2.IDKey([]byte(password), salt, uint32(t), uint32(m), uint8(p), uint32(len(expected)))
+	return subtle.ConstantTimeCompare(derived, expected) == 1
+}
+
+func decodeBase64Flexible(s string) ([]byte, error) {
+	if data, err := base64.URLEncoding.DecodeString(s); err == nil {
+		return data, nil
+	}
+	if data, err := base64.RawURLEncoding.DecodeString(s); err == nil {
+		return data, nil
+	}
+	if data, err := base64.StdEncoding.DecodeString(s); err == nil {
+		return data, nil
+	}
+	return base64.RawStdEncoding.DecodeString(s)
+}
+

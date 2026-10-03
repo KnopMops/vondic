@@ -3175,6 +3175,7 @@ export default function MessengerPage() {
 		}
 
 		const handleOnlineUsers = (data: Array<{ user_id: string; last_seen?: string } | string>) => {
+			if (!Array.isArray(data)) return
 			const onlineIds = new Set<string>()
 			const lastSeenMap = new Map<string, string>()
 			for (const item of data) {

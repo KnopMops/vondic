@@ -125,3 +125,15 @@ type ChatClear struct {
 func (ChatClear) TableName() string {
 	return "chat_clears"
 }
+
+type OAuthAccessToken struct {
+	ID        int        `gorm:"primaryKey;column:id"`
+	UserID    string     `gorm:"column:user_id;index"`
+	Token     string     `gorm:"column:token;uniqueIndex"`
+	ExpiresAt *time.Time `gorm:"column:expires_at"`
+}
+
+func (OAuthAccessToken) TableName() string {
+	return "oauth_access_tokens"
+}
+
