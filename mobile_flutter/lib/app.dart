@@ -22,6 +22,7 @@ import 'features/home/bloc/inbox_event.dart';
 
 import 'features/auth/views/splash_screen.dart';
 import 'features/auth/views/login_screen.dart';
+import 'features/auth/views/forgot_password_modal.dart';
 import 'features/chat/views/chat_screen.dart';
 import 'features/calls/views/call_screen.dart';
 import 'features/home/views/home_shell.dart';
@@ -318,6 +319,33 @@ class _VondicAppState extends State<VondicApp> {
         debugPrint('[DeepLink] Migration token login error: $e');
         _showErrorSnackBar('Ошибка входа через QR-миграцию: $e');
       }
+    }
+
+    // 0.1 Password reset token (e.g. from email link /reset-password?token=XYZ)
+    final resetToken = (uri.path.contains('reset-password') || uri.path.contains('reset_password'))
+        ? (uri.queryParameters['token'] ?? uri.queryParameters['reset_token'])
+        : uri.queryParameters['reset_token'];
+    if (resetToken != null && resetToken.isNotEmpty) {
+      final navContext = _router.routerDelegate.navigatorKey.currentContext;
+      if (navContext != null) {
+        showModalBottomSheet(
+          context: navContext,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (ctx) => ForgotPasswordModal(
+            initialToken: resetToken,
+            onPasswordResetSuccess: (email) {
+              ScaffoldMessenger.of(navContext).showSnackBar(
+                const SnackBar(
+                  content: Text('Пароль успешно изменён! Войдите с новым паролем.'),
+                  backgroundColor: Color(0xFF2EA043),
+                ),
+              );
+            },
+          ),
+        );
+      }
+      return;
     }
 
     if (uri.scheme == 'vondic') {

@@ -377,4 +377,86 @@ class OAuthService {
       rethrow;
     }
   }
+
+  /// Request password reset email
+  Future<String> requestPasswordReset(String email) async {
+    try {
+      final response = await _apiClient.publicDio.post(
+        '${AppConfig.backendUrl}/api/v1/auth/forgot-password',
+        data: {'email': email.trim().toLowerCase()},
+      );
+
+      if (response.statusCode == 200) {
+        final data = response.data;
+        if (data is Map && data['message'] != null) {
+          final msg = data['message'].toString();
+          if (msg == 'Password reset email sent') {
+            return 'Письмо со ссылкой для сброса пароля отправлено на ваш email';
+          }
+          return msg;
+        }
+        return 'Письмо для сброса пароля отправлено';
+      }
+      throw Exception('Не удалось отправить запрос на сброс пароля');
+    } on DioException catch (e) {
+      _logger.e('[Auth] Forgot password failed: ${e.message}');
+      final detail = e.response?.data is Map
+          ? (e.response?.data['detail'] ?? e.response?.data['error'] ?? e.response?.data['message'])
+          : null;
+      if (detail != null) {
+        final str = detail.toString();
+        if (str == 'User not found') {
+          throw Exception('Пользователь с таким email не найден');
+        }
+        throw Exception(str);
+      }
+      throw Exception(e.message ?? 'Ошибка запроса сброса пароля');
+    }
+  }
+
+  /// Reset password using token received in email
+  Future<String> resetPassword({
+    required String token,
+    required String newPassword,
+  }) async {
+    try {
+      final response = await _apiClient.publicDio.post(
+        '${AppConfig.backendUrl}/api/v1/auth/reset-password',
+        data: {
+          'token': token.trim(),
+          'new_password': newPassword,
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = response.data;
+        if (data is Map && data['message'] != null) {
+          final msg = data['message'].toString();
+          if (msg == 'Password reset successfully') {
+            return 'Пароль успешно изменён! Теперь вы можете войти в аккаунт.';
+          }
+          return msg;
+        }
+        return 'Пароль успешно изменён!';
+      }
+      throw Exception('Не удалось сбросить пароль');
+    } on DioException catch (e) {
+      _logger.e('[Auth] Reset password failed: ${e.message}');
+      final detail = e.response?.data is Map
+          ? (e.response?.data['detail'] ?? e.response?.data['error'] ?? e.response?.data['message'])
+          : null;
+      if (detail != null) {
+        final str = detail.toString();
+        if (str == 'Invalid or expired token') {
+          throw Exception('Недействительный или истёкший токен сброса пароля');
+        }
+        if (str == 'User not found') {
+          throw Exception('Пользователь не найден');
+        }
+        throw Exception(str);
+      }
+      throw Exception(e.message ?? 'Ошибка сброса пароля');
+    }
+  }
 }
+

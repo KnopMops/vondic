@@ -7,6 +7,7 @@ import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
 import '../services/oauth_service.dart';
 import '../../support/views/support_init_dialog.dart';
+import 'forgot_password_modal.dart';
 
 enum AuthMode { login, register, twoFactor }
 
@@ -259,6 +260,29 @@ class _LoginScreenState extends State<LoginScreen> {
           } finally {
             if (mounted) setState(() => _isLoading = false);
           }
+        },
+      ),
+    );
+  }
+
+  void _openForgotPasswordModal({String? initialToken}) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => ForgotPasswordModal(
+        initialEmail: _emailController.text.trim(),
+        initialToken: initialToken,
+        onPasswordResetSuccess: (email) {
+          if (email.isNotEmpty) {
+            _emailController.text = email;
+          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Пароль успешно изменён! Войдите с новым паролем.'),
+              backgroundColor: Color(0xFF2EA043),
+            ),
+          );
         },
       ),
     );
@@ -594,7 +618,31 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       onSubmitted: (_) => _handleAuthSubmit(),
                     ),
-                    const SizedBox(height: 20),
+                    if (_authMode == AuthMode.login) ...[
+                      const SizedBox(height: 6),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () => _openForgotPasswordModal(),
+                          style: TextButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                            minimumSize: const Size(50, 24),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text(
+                            'Забыли пароль?',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: primaryBlue,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                    ] else ...[
+                      const SizedBox(height: 20),
+                    ],
 
                     // Submit Primary Button
                     SizedBox(
