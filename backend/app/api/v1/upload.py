@@ -176,6 +176,7 @@ async def upload_voice(
 
 
 @upload_router.post("/file", status_code=status.HTTP_201_CREATED)
+@upload_router.post("/storage/upload", status_code=status.HTTP_201_CREATED)
 async def upload_file(
     request: Request,
     file: Optional[UploadFile] = File(None),

@@ -194,11 +194,18 @@ class MessageBloc extends Bloc<MessageEvent, MessageState> {
 
       final List<ChatMessage> chatMessages = [];
       if (endpoint.isNotEmpty) {
-        final historyRes = await _apiClient.get<Map<String, dynamic>>(endpoint);
-        final rawItems = historyRes.data?['items'] as List? ?? historyRes.data?['messages'] as List? ?? [];
+        final historyRes = await _apiClient.get<dynamic>(endpoint);
+        List<dynamic> rawItems = [];
+        if (historyRes.data is List) {
+          rawItems = historyRes.data as List;
+        } else if (historyRes.data is Map) {
+          rawItems = (historyRes.data['items'] ?? historyRes.data['messages'] ?? []) as List? ?? [];
+        }
 
         for (final item in rawItems) {
-          chatMessages.add(_parseAndDecryptMessage(item));
+          if (item is Map) {
+            chatMessages.add(_parseAndDecryptMessage(item));
+          }
         }
 
         // Emit message_read for all unread incoming messages in the chat history

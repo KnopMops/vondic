@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
+import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:logger/logger.dart';
 import '../../../core/config/config.dart';
@@ -22,6 +23,22 @@ class OAuthService {
   final Logger _logger = Logger(printer: SimplePrinter(colors: true));
 
   OAuthService(this._apiClient, this._storageService);
+
+  /// Fetch current user from /auth/me with active access token
+  Future<User?> getMe() async {
+    try {
+      final response = await _apiClient.get<Map<String, dynamic>>('/auth/me');
+      final userData = response.data?['user'];
+      if (userData != null) {
+        final user = User.fromJson(userData);
+        await _storageService.writeString('user', jsonEncode(user.toJson()));
+        return user;
+      }
+    } catch (e) {
+      _logger.e('[Auth] getMe failed: $e');
+    }
+    return null;
+  }
 
   /// Login with email/username and password via Vondic backend, with optional 2FA code.
   Future<User?> loginWithEmail(
@@ -199,16 +216,17 @@ class OAuthService {
     }
   }
 
-  /// Open Yandex OAuth in system browser.
-  /// The browser will redirect back to vondic:///oauth/callback after auth.
-  Future<void> loginWithYandex() async {
+  /// Open Yandex OAuth.
+  /// Uses flutter_web_auth_2 for automatic in-app flow or falls back to system browser.
+  Future<User?> loginWithYandex() async {
     try {
       String? authUrl;
 
-      // 1. Try to get auth_url from backend
+      // 1. Try to get auth_url from backend with state=mobile_redirect:vondic://oauth/callback
       try {
         final response = await _apiClient.publicDio.get(
           '${AppConfig.backendUrl}/api/v1/auth/yandex/login',
+          queryParameters: {'state': 'mobile_redirect:vondic://oauth/callback'},
         );
         if (response.statusCode == 200 && response.data is Map) {
           authUrl = response.data['auth_url'] as String?;
@@ -218,6 +236,10 @@ class OAuthService {
         try {
           final response = await _apiClient.publicDio.post(
             '${AppConfig.backendUrl}/api/auth/yandex/login',
+            queryParameters: {
+              'state': 'mobile_redirect:vondic://oauth/callback',
+              'cid': 'mobile_redirect:vondic://oauth/callback',
+            },
           );
           if (response.statusCode == 200 && response.data is Map) {
             authUrl = response.data['auth_url'] as String?;
@@ -227,14 +249,15 @@ class OAuthService {
         }
       }
 
-      // 2. If backend did not provide auth_url, build fallback or use Vondic OAuth
+      // 2. Fallbacks
       if (authUrl == null || authUrl.isEmpty) {
         final clientId = AppConfig.yandexClientId;
         if (clientId.isNotEmpty) {
           authUrl = 'https://oauth.yandex.ru/authorize?'
               'response_type=code'
               '&client_id=$clientId'
-              '&redirect_uri=${Uri.encodeComponent('vondic:///oauth/callback')}';
+              '&redirect_uri=${Uri.encodeComponent('https://vondic.ru/api/auth/yandex/callback')}'
+              '&state=${Uri.encodeComponent('mobile_redirect:vondic://oauth/callback')}';
         } else {
           // Fallback to Vondic OAuth authorization page
           authUrl = '${AppConfig.oauthUrl}/oauth/authorize?'
@@ -254,37 +277,70 @@ class OAuthService {
 
       _logger.d('[Auth] Opening OAuth: $authUrl');
 
-      final launchUri = Uri.parse(authUrl);
-      bool launched = false;
+      // 3. Try flutter_web_auth_2 first (closes automatically upon redirect)
       try {
-        launched = await launchUrl(
-          launchUri,
-          mode: LaunchMode.externalApplication,
+        final result = await FlutterWebAuth2.authenticate(
+          url: authUrl,
+          callbackUrlScheme: 'vondic',
         );
-      } catch (e) {
-        _logger.w('[Auth] externalApplication launch failed: $e');
-      }
 
-      if (!launched) {
+        _logger.d('[Auth] FlutterWebAuth2 result: $result');
+        final resultUri = Uri.parse(result);
+        final accessToken = resultUri.queryParameters['access_token'];
+        final refreshToken = resultUri.queryParameters['refresh_token'];
+        final code = resultUri.queryParameters['code'];
+        final state = resultUri.queryParameters['state'] ?? '';
+
+        if (accessToken != null && accessToken.isNotEmpty) {
+          await _storageService.writeSecure('access_token', accessToken);
+          if (refreshToken != null && refreshToken.isNotEmpty) {
+            await _storageService.writeSecure('refresh_token', refreshToken);
+          }
+          final user = await getMe();
+          return user;
+        } else if (code != null && code.isNotEmpty) {
+          final user = await handleOAuthCallback(code, state);
+          return user;
+        }
+        return null;
+      } catch (authErr) {
+        _logger.w('[Auth] FlutterWebAuth2 failed or dismissed: $authErr');
+        final errLower = authErr.toString().toLowerCase();
+        if (errLower.contains('canceled') || errLower.contains('cancelled') || errLower.contains('user_cancelled')) {
+          // User cancelled authentication
+          return null;
+        }
+
+        // Fallback: launch external browser
+        final launchUri = Uri.parse(authUrl);
+        bool launched = false;
         try {
           launched = await launchUrl(
             launchUri,
-            mode: LaunchMode.inAppBrowserView,
+            mode: LaunchMode.externalApplication,
           );
-        } catch (e) {
-          _logger.w('[Auth] inAppBrowserView launch failed: $e');
+        } catch (_) {}
+
+        if (!launched) {
+          try {
+            launched = await launchUrl(
+              launchUri,
+              mode: LaunchMode.inAppBrowserView,
+            );
+          } catch (_) {}
         }
-      }
 
-      if (!launched) {
-        launched = await launchUrl(
-          launchUri,
-          mode: LaunchMode.platformDefault,
-        );
-      }
+        if (!launched) {
+          launched = await launchUrl(
+            launchUri,
+            mode: LaunchMode.platformDefault,
+          );
+        }
 
-      if (!launched) {
-        throw Exception('Не удалось открыть браузер для авторизации');
+        if (!launched) {
+          throw Exception('Не удалось открыть браузер для авторизации');
+        }
+        return null;
       }
     } catch (e) {
       _logger.e('[Auth] Yandex login launch failed: $e');

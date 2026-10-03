@@ -318,7 +318,7 @@ class AuthService:
             return None, str(e)
 
     @staticmethod
-    def get_yandex_auth_url(login_hint: str | None = None, force_confirm: bool = True):
+    def get_yandex_auth_url(login_hint: str | None = None, force_confirm: bool = True, state: str | None = None):
         from urllib.parse import urlencode
 
         client_id = Config.YANDEX_CLIENT_ID
@@ -335,6 +335,8 @@ class AuthService:
         hint = (login_hint or "").strip()
         if hint:
             params["login_hint"] = hint
+        if state:
+            params["state"] = state
         return f"https://oauth.yandex.ru/authorize?{urlencode(params)}", None
 
     @staticmethod

@@ -476,9 +476,10 @@ async def qr_scan(
 @auth_router.post("/yandex/login")
 async def yandex_login(
     login_hint: Optional[str] = Query(None),
+    state: Optional[str] = Query(None),
     request: Request = None,
 ):
-    url, error = AuthService.get_yandex_auth_url(login_hint=login_hint)
+    url, error = AuthService.get_yandex_auth_url(login_hint=login_hint, state=state)
     if error or not url:
         raise HTTPException(status_code=500, detail=error or "Yandex OAuth не настроен")
     return {"auth_url": url}
@@ -514,10 +515,11 @@ async def yandex_callback(
     }
 
     # Mobile deep link redirect: state contains the custom URL scheme
-    if state and state.startswith("mobile_redirect:"):
-        redirect_uri = state[len("mobile_redirect:"):]
+    if state and (state.startswith("mobile_redirect:") or state.startswith("vondic://")):
+        redirect_uri = state[len("mobile_redirect:"):] if state.startswith("mobile_redirect:") else state
         params = urlencode(tokens)
-        return RedirectResponse(url=f"{redirect_uri}?{params}", status_code=302)
+        separator = "&" if "?" in redirect_uri else "?"
+        return RedirectResponse(url=f"{redirect_uri}{separator}{params}", status_code=302)
 
     return {
         "message": "Вход через Yandex выполнен успешно",

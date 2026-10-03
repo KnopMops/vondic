@@ -45,7 +45,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final storageService = context.read<StorageService>();
 
       final uploadRes = await apiClient.post<Map<String, dynamic>>(
-        '/storage/upload',
+        '/upload/file',
         data: {
           'file': base64Data,
           'filename': filename,

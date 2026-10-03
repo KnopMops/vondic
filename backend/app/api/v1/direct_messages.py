@@ -44,6 +44,7 @@ async def update_dm_settings(
 
 
 @dm_router.get("/{target_id}")
+@dm_router.get("/{target_id}/messages")
 async def get_direct_messages(
     target_id: str,
     limit: int = Query(50, ge=1, le=100),

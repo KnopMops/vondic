@@ -135,18 +135,29 @@ class InboxBloc extends Bloc<InboxEvent, InboxState> {
     return mapped;
   }
 
+  List<dynamic> _safeExtractList(dynamic data, String primaryKey) {
+    if (data == null) return [];
+    if (data is List) return data;
+    if (data is Map) {
+      final val = data[primaryKey] ?? data['items'] ?? data['data'];
+      if (val is List) return val;
+    }
+    return [];
+  }
+
   Future<void> _onLoadInbox(InboxLoadEvent event, Emitter<InboxState> emit) async {
     emit(InboxLoadingState());
     try {
       // 1. Fetch DMs
-      final recentRes = await _apiClient.get<Map<String, dynamic>>('/dm/recent');
-      final recentItems = recentRes.data?['items'] as List? ?? [];
+      final recentRes = await _apiClient.get<dynamic>('/dm/recent');
+      final recentItems = _safeExtractList(recentRes.data, 'items');
       final List<ChatPreview> chats = [];
 
       final myUserStr = _storageService.readString('user');
       final myId = myUserStr != null ? jsonDecode(myUserStr)['id']?.toString() ?? '' : '';
 
       for (final r in recentItems) {
+        if (r is! Map) continue;
         final dmId = r['id']?.toString() ?? r['target_id']?.toString() ?? '';
         var lastMsg = r['last_message_text']?.toString() ?? '';
         final unread = r['unread_count'] as int? ?? 0;
@@ -177,37 +188,52 @@ class InboxBloc extends Bloc<InboxEvent, InboxState> {
       }
 
       // 2. Fetch Groups & Channels & Communities
-      final groupsRes = await _apiClient.post<List<dynamic>>('/groups/my', data: {});
-      final groupsItems = groupsRes.data ?? [];
-      for (final g in groupsItems) {
-        chats.add(ChatPreview(
-          id: g['id']?.toString() ?? '',
-          name: g['name']?.toString() ?? 'Группа',
-          avatarUrl: g['avatar_url']?.toString(),
-          type: 'group',
-          lastMessage: g['last_message']?.toString() ?? '',
-          unreadCount: 0,
-          timestamp: g['updated_at']?.toString() ?? '',
-        ));
+      try {
+        final groupsRes = await _apiClient.post<dynamic>('/groups/my', data: {});
+        final groupsItems = _safeExtractList(groupsRes.data, 'groups');
+        for (final g in groupsItems) {
+          if (g is! Map) continue;
+          chats.add(ChatPreview(
+            id: g['id']?.toString() ?? '',
+            name: g['name']?.toString() ?? 'Группа',
+            avatarUrl: g['avatar_url']?.toString(),
+            type: 'group',
+            lastMessage: g['last_message']?.toString() ?? '',
+            unreadCount: (g['unread_count'] as int?) ?? 0,
+            timestamp: g['updated_at']?.toString() ?? '',
+          ));
+        }
+      } catch (e) {
+        debugPrint('[InboxBloc] Failed to fetch groups: $e');
       }
 
-      final channelsRes = await _apiClient.post<List<dynamic>>('/channels/my', data: {});
-      final channelsItems = channelsRes.data ?? [];
-      for (final c in channelsItems) {
-        chats.add(ChatPreview(
-          id: c['id']?.toString() ?? '',
-          name: c['name']?.toString() ?? 'Канал',
-          avatarUrl: c['avatar_url']?.toString(),
-          type: 'channel',
-          lastMessage: c['last_message']?.toString() ?? '',
-          unreadCount: 0,
-          timestamp: c['updated_at']?.toString() ?? '',
-          communityId: c['community_id']?.toString(),
-        ));
+      try {
+        final channelsRes = await _apiClient.post<dynamic>('/channels/my', data: {});
+        final channelsItems = _safeExtractList(channelsRes.data, 'channels');
+        for (final c in channelsItems) {
+          if (c is! Map) continue;
+          chats.add(ChatPreview(
+            id: c['id']?.toString() ?? '',
+            name: c['name']?.toString() ?? 'Канал',
+            avatarUrl: c['avatar_url']?.toString(),
+            type: 'channel',
+            lastMessage: c['last_message']?.toString() ?? '',
+            unreadCount: (c['unread_count'] as int?) ?? 0,
+            timestamp: c['updated_at']?.toString() ?? '',
+            communityId: c['community_id']?.toString(),
+          ));
+        }
+      } catch (e) {
+        debugPrint('[InboxBloc] Failed to fetch channels: $e');
       }
 
-      final communitiesRes = await _apiClient.post<List<dynamic>>('/communities/my', data: {});
-      final communitiesItems = communitiesRes.data ?? [];
+      List<dynamic> communitiesItems = [];
+      try {
+        final communitiesRes = await _apiClient.post<dynamic>('/communities/my', data: {});
+        communitiesItems = _safeExtractList(communitiesRes.data, 'communities');
+      } catch (e) {
+        debugPrint('[InboxBloc] Failed to fetch communities: $e');
+      }
 
       final pinnedIds = _getPinnedChatIds();
       final sortedChats = _applyPinnedSort(chats, pinnedIds);

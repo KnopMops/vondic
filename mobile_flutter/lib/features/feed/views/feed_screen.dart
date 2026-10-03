@@ -59,7 +59,7 @@ class _FeedScreenState extends State<FeedScreen> {
       // Query the public API path for posts as it has author details enriched
       final res = await apiClient.publicDio.get<Map<String, dynamic>>('/posts?page=$page&per_page=10');
       
-      final List<dynamic> fetched = res.data?['items'] as List? ?? [];
+      final List<dynamic> fetched = (res.data?['posts'] ?? res.data?['items'] ?? (res.data is List ? res.data : [])) as List? ?? [];
       final int totalPages = res.data?['pages'] as int? ?? 1;
 
       setState(() {

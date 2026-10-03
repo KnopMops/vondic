@@ -270,6 +270,142 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
           ],
         ),
       ),
+      floatingActionButton: _currentIndex == 0
+          ? Container(
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  colors: [Color(0xFF7000FF), Color(0xFF00C2FF)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: FloatingActionButton(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                onPressed: _showNewChatMenu,
+                child: const Icon(Icons.edit, color: Colors.white),
+              ),
+            )
+          : null,
+    );
+  }
+
+  void _showNewChatMenu() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF11111A),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFF7000FF),
+                  child: Icon(Icons.person_add_alt_1_rounded, color: Colors.white, size: 20),
+                ),
+                title: const Text('Написать другу', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                subtitle: const Text('Выбрать собеседника из списка друзей', style: TextStyle(color: Colors.white38, fontSize: 12)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context.push('/friends');
+                },
+              ),
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFF00C2FF),
+                  child: Icon(Icons.group_add_rounded, color: Colors.white, size: 20),
+                ),
+                title: const Text('Создать группу', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                subtitle: const Text('Групповой чат для общения', style: TextStyle(color: Colors.white38, fontSize: 12)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showCreateGroupOrChannelDialog(isChannel: false);
+                },
+              ),
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFF00FF87),
+                  child: Icon(Icons.campaign_rounded, color: Colors.black, size: 20),
+                ),
+                title: const Text('Создать канал', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                subtitle: const Text('Публикация новостей и сообщений', style: TextStyle(color: Colors.white38, fontSize: 12)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showCreateGroupOrChannelDialog(isChannel: true);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showCreateGroupOrChannelDialog({required bool isChannel}) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: const Color(0xFF131320),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          isChannel ? 'Создать канал' : 'Создать группу',
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            hintText: isChannel ? 'Название канала' : 'Название группы',
+            hintStyle: const TextStyle(color: Colors.white38),
+            filled: true,
+            fillColor: Colors.white.withOpacity(0.05),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Отмена', style: TextStyle(color: Colors.white38)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF7000FF)),
+            onPressed: () async {
+              final name = controller.text.trim();
+              if (name.isEmpty) return;
+              Navigator.pop(dialogCtx);
+              try {
+                final apiClient = context.read<ApiClient>();
+                final endpoint = isChannel ? '/channels' : '/groups';
+                await apiClient.post(endpoint, data: {'name': name});
+                if (mounted) {
+                  context.read<InboxBloc>().add(InboxLoadEvent());
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('${isChannel ? "Канал" : "Группа"} "$name" успешно создан!'),
+                      backgroundColor: const Color(0xFF00FF87),
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Ошибка создания: $e'), backgroundColor: Colors.redAccent),
+                  );
+                }
+              }
+            },
+            child: const Text('Создать', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
     );
   }
 

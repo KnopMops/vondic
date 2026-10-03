@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/utils/storage_service.dart';
 import '../services/oauth_service.dart';

@@ -42,14 +42,26 @@ class _FriendsScreenState extends State<FriendsScreen> {
     try {
       final apiClient = context.read<ApiClient>();
       if (_activeTab == 'my') {
-        final res = await apiClient.post<List<dynamic>>('/friends/list', data: {'user_id': myId});
+        final res = await apiClient.post<dynamic>('/friends/list', data: {'user_id': myId});
+        List<dynamic> items = [];
+        if (res.data is List) {
+          items = res.data as List;
+        } else if (res.data is Map) {
+          items = (res.data['friends'] ?? res.data['items'] ?? []) as List? ?? [];
+        }
         setState(() {
-          _friends = res.data ?? [];
+          _friends = items;
         });
       } else {
-        final res = await apiClient.post<List<dynamic>>('/friends/requests', data: {'user_id': myId});
+        final res = await apiClient.post<dynamic>('/friends/requests', data: {'user_id': myId});
+        List<dynamic> items = [];
+        if (res.data is List) {
+          items = res.data as List;
+        } else if (res.data is Map) {
+          items = (res.data['requests'] ?? res.data['items'] ?? []) as List? ?? [];
+        }
         setState(() {
-          _requests = res.data ?? [];
+          _requests = items;
         });
       }
     } catch (e) {

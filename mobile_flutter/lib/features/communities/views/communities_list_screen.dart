@@ -31,9 +31,15 @@ class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
     try {
       final apiClient = context.read<ApiClient>();
       // /my is a POST endpoint on the backend
-      final res = await apiClient.post<List<dynamic>>('/social-communities/my', data: {});
+      final res = await apiClient.post<dynamic>('/social-communities/my', data: {});
+      List<dynamic> items = [];
+      if (res.data is List) {
+        items = res.data as List;
+      } else if (res.data is Map) {
+        items = (res.data['communities'] ?? res.data['items'] ?? []) as List? ?? [];
+      }
       setState(() {
-        _communities = res.data ?? [];
+        _communities = items;
         _loading = false;
       });
     } catch (e) {

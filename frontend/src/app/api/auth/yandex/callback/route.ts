@@ -42,6 +42,15 @@ export async function GET(req: NextRequest) {
 		const data = await response.json()
 
 		if (!response.ok) {
+			if (cid && (cid.startsWith('mobile_redirect:') || cid.startsWith('vondic://'))) {
+				const redirectBase = cid.startsWith('mobile_redirect:')
+					? cid.substring('mobile_redirect:'.length)
+					: cid
+				const separator = redirectBase.includes('?') ? '&' : '?'
+				const params = new URLSearchParams()
+				params.set('error', data.error || 'Yandex login failed')
+				return NextResponse.redirect(`${redirectBase}${separator}${params.toString()}`)
+			}
 			const loginUrl = new URL('/login', frontendUrl)
 			loginUrl.searchParams.set('error', data.error || 'Yandex login failed')
 			return NextResponse.redirect(loginUrl)
@@ -57,6 +66,18 @@ export async function GET(req: NextRequest) {
 			} catch (e) {
 				console.error('Failed to register desktop session', e)
 			}
+		}
+
+		// Mobile deep link redirect: redirect directly to custom URL scheme
+		if (cid && (cid.startsWith('mobile_redirect:') || cid.startsWith('vondic://'))) {
+			const redirectBase = cid.startsWith('mobile_redirect:')
+				? cid.substring('mobile_redirect:'.length)
+				: cid
+			const separator = redirectBase.includes('?') ? '&' : '?'
+			const params = new URLSearchParams()
+			if (data.access_token) params.set('access_token', data.access_token)
+			if (data.refresh_token) params.set('refresh_token', data.refresh_token)
+			return NextResponse.redirect(`${redirectBase}${separator}${params.toString()}`)
 		}
 
 		const rawRedirect = req.cookies.get(POST_LOGIN_REDIRECT_COOKIE)?.value
@@ -97,6 +118,20 @@ export async function GET(req: NextRequest) {
 		return responseWithTokens
 	} catch (error) {
 		console.error('Yandex callback proxy error:', error)
+		try {
+			const { searchParams } = new URL(req.url)
+			const cid = searchParams.get('cid') || searchParams.get('state')
+			if (cid && (cid.startsWith('mobile_redirect:') || cid.startsWith('vondic://'))) {
+				const redirectBase = cid.startsWith('mobile_redirect:')
+					? cid.substring('mobile_redirect:'.length)
+					: cid
+				const separator = redirectBase.includes('?') ? '&' : '?'
+				const params = new URLSearchParams()
+				params.set('error', 'Internal Server Error')
+				return NextResponse.redirect(`${redirectBase}${separator}${params.toString()}`)
+			}
+		} catch (_) {}
+
 		const loginUrl = new URL('/login', frontendUrl)
 		loginUrl.searchParams.set('error', 'Internal Server Error')
 		return NextResponse.redirect(loginUrl)

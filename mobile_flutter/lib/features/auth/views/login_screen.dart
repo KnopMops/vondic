@@ -218,7 +218,10 @@ class _LoginScreenState extends State<LoginScreen> {
       final storageService = context.read<StorageService>();
       final apiClient = context.read<ApiClient>();
       final authService = OAuthService(apiClient, storageService);
-      await authService.loginWithYandex();
+      final user = await authService.loginWithYandex();
+      if (user != null && mounted) {
+        context.read<AuthBloc>().add(AuthSetUserEvent(user));
+      }
     } catch (e) {
       if (mounted) {
         setState(() {

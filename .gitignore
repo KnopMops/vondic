@@ -95,8 +95,8 @@ mail_listener.py
 
 free-qwen-api/
 
-android/
-ios/
+/android/
+/ios/
 
 fcm-service-account.json
 

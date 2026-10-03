@@ -1,10 +1,11 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from app.core.deps import get_current_user
 from app.services.channel_service import ChannelService
+from app.services.message_service import MessageService
 
 channels_router = APIRouter(prefix="/api/v1/channels", tags=["Channels"])
 
@@ -193,3 +194,24 @@ async def leave_channel(channel_id: str, current_user=Depends(get_current_user))
         raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@channels_router.get("/{channel_id}/messages")
+@channels_router.post("/{channel_id}/messages")
+async def get_channel_messages(
+    channel_id: str,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=100),
+    current_user=Depends(get_current_user)
+):
+    try:
+        messages, err = MessageService.get_channel_messages(
+            channel_id, current_user.id, page=page, per_page=per_page
+        )
+        if err:
+            raise HTTPException(status_code=400, detail=err)
+        return {"messages": [m.to_dict() if hasattr(m, "to_dict") else m for m in (messages or [])]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

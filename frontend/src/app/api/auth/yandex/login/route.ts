@@ -11,12 +11,11 @@ export async function OPTIONS() {
 	return NextResponse.json({}, { headers: corsHeaders })
 }
 
-export async function POST(req: NextRequest) {
+async function handleLogin(req: NextRequest) {
 	try {
 		const { searchParams } = new URL(req.url)
-		const cid = searchParams.get('cid')
+		const cid = searchParams.get('cid') || searchParams.get('state')
 
-		
 		const backendUrl = getBackendUrl()
 
 		const loginHint =
@@ -24,6 +23,9 @@ export async function POST(req: NextRequest) {
 		const backendLoginUrl = new URL(`${backendUrl}/api/v1/auth/yandex/login`)
 		if (loginHint) {
 			backendLoginUrl.searchParams.set('login_hint', loginHint)
+		}
+		if (cid) {
+			backendLoginUrl.searchParams.set('state', cid)
 		}
 
 		const response = await fetch(backendLoginUrl.toString(), {
@@ -69,4 +71,12 @@ export async function POST(req: NextRequest) {
 			{ status: 500, headers: corsHeaders },
 		)
 	}
+}
+
+export async function GET(req: NextRequest) {
+	return handleLogin(req)
+}
+
+export async function POST(req: NextRequest) {
+	return handleLogin(req)
 }

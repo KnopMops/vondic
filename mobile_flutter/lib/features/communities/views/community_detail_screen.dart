@@ -73,7 +73,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
     final res = await apiClient.publicDio.get<Map<String, dynamic>>(
       '/posts?social_community_id=${widget.id}&per_page=30',
     );
-    _posts = res.data?['items'] as List? ?? [];
+    _posts = (res.data?['posts'] ?? res.data?['items'] ?? (res.data is List ? res.data : [])) as List? ?? [];
   }
 
   Future<void> _handleCreatePost() async {
