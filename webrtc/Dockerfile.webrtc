@@ -1,21 +1,32 @@
-FROM python:3.13-slim
+# Multi-stage Dockerfile for Vondic WebRTC & Signaling Service (Golang)
+FROM golang:1.24-alpine AS builder
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+WORKDIR /build
+
+# Copy dependency manifests
+COPY webrtc/go.mod webrtc/go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY webrtc/ ./
+
+# Build statically linked binary
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /build/webrtc-server ./cmd/server
+
+# Production image
+FROM alpine:3.21
+
+RUN apk --no-cache add ca-certificates tzdata
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN uv pip install --system --no-cache -r requirements.txt
+# Copy binary from builder
+COPY --from=builder /build/webrtc-server /app/webrtc-server
 
-# Copy WebRTC code
-COPY webrtc/ /app/webrtc/
-
-RUN useradd --create-home appuser
+# Non-root user for security
+RUN adduser -D -u 10001 appuser
 USER appuser
-
-WORKDIR /app
 
 EXPOSE 5000
 
-# Продовый запуск асинхронного ASGI приложения через gunicorn + uvicorn worker
-CMD ["python", "-m", "gunicorn", "-k", "uvicorn.workers.UvicornWorker", "-w", "1", "-b", "0.0.0.0:5000", "webrtc.main:asgi_app"]
+ENTRYPOINT ["/app/webrtc-server"]
